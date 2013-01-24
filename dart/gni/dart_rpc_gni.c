@@ -34,7 +34,7 @@
 #include <errno.h>
 #include "dart_rpc_gni.h"
 #include "gni_pub.h"
-#include "pmi.h"
+//#include "pmi.h"
 
 #define DEVICE_ID	0
 //#define RECVHEADER	sizeof(struct hdr_sys)
@@ -169,7 +169,7 @@ static uint32_t rpc_get_index(void)
 {
 	struct rr_index *ri, *tmp;
 	uint32_t current_index = -1;
-	list_for_each_entry_safe(ri, tmp, &index_list, index_entry)
+	list_for_each_entry_safe(ri, tmp, &index_list, struct rr_index, index_entry)
 	{
 		current_index = ri->index;
 		list_del(&ri->index_entry);
@@ -1295,7 +1295,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	{
 	  if(event_id == 0)
 	    return 0;
-	  list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, req_entry)
+	  list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry)
 	    {
 	      if(rr->index == event_id)
 		{
@@ -1309,7 +1309,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	  if(check == 0)
 	    {
 	      printf("Rank %d: SRC Indexing err with event_id (%d), rr_num (%d) in (%s).\n", rank_id_pmi, event_id, rpc_s->rr_num,  __func__);
-	      list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, req_entry)
+	      list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry)
 		{
 		  printf("Rank(%d):rest Index(%d) with rr_num(%d).\n",rank_id_pmi, rr->index, rpc_s->rr_num);
 		}
@@ -1424,7 +1424,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	   {
 	     while(!GNI_CQ_STATUS_OK(event_data));
 		       
-	     list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, req_entry)
+	     list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry)
 	       {
 		 if( rr->index == event_id - 65536 )
 		   {
@@ -1435,7 +1435,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 		     
 	     if(check == 0)
 	       {
-		 list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, req_entry)
+		 list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry)
 		   {
 		     printf("Rank(%d):Index(%d) with rr_num(%d).\n",rank_id_pmi, rr->index, rpc_s->rr_num);
 		   }
@@ -1687,7 +1687,7 @@ int rpc_server_free(struct rpc_server *rpc_s)
 	}
 
 	//Free memory to index_list
-	list_for_each_entry_safe(ri, ri_tmp, &index_list, index_entry)
+	list_for_each_entry_safe(ri, ri_tmp, &index_list, struct rr_index, index_entry)
 	{
 		list_del(&ri->index_entry);
 		free(ri);
@@ -1842,7 +1842,7 @@ void rpc_add_service(enum cmd_type rpc_cmd, rpc_service rpc_func)
 }
 
 //Added by Tong: to decouple DART layer and DataSpaces layer
-void rpc_mem_info_cache(struct node_id *peer, struct rpc_cmd *cmd)
+void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd)
 {
   peer->mdh_addr = cmd->mdh_addr;
 }

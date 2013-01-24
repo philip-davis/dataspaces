@@ -152,6 +152,7 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	struct hdr_register *hreg = (struct hdr_register *) (cmd->pad);
 	struct msg_buf *msg;
 	struct node_id *peer;
+
 	int err = -ENOMEM;
 	int i;
 	int in_charge = (ds->num_cp / ds->num_sp) + (ds->rpc_s->ptlmap.id < ds->num_cp % ds->num_sp);
@@ -159,6 +160,7 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	if(ds->f_stop != 1)
 		 {
 		num_unreg = num_unreg + hreg->num_cp;
+//		printf("%d %d %d\n",num_unreg, hreg->num_cp, ds->num_cp);
 		if(num_unreg == ds->num_cp)
 			ds->f_stop = 1;
 		
@@ -207,8 +209,8 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 					msg->msg_rpc->id = ds->self->ptlmap.id;
 					peer->f_unreg = 1;
 					
-						//                    printf("%d passing to  %d that %d is unreg\n",ds->self->ptlmap.id,peer->ptlmap.id,cmd->id );
-						err = rpc_send(rpc_s, peer, msg);
+//					printf("%d passing %d to  %d that %d is unreg\n",ds->self->ptlmap.id,msg->msg_rpc->cmd,peer->ptlmap.id,cmd->id );
+					err = rpc_send(rpc_s, peer, msg);
 					if(err < 0)
 						 {
 						free(msg);
@@ -391,6 +393,7 @@ static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 	struct dart_server *ds = ds_ref_from_rpc(rpc_s);
 	struct app_info *app;
 	struct node_id *peer;
+
 	struct ptlid_map *pm;
 	int i, err = 0;
 	int appid = 0;
@@ -452,8 +455,10 @@ static int dsrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Do
 		goto err_out;
 	}
 	msg->cb = announce_cp_completion;	//
-	peer->peer_mr.mr = cmd->mr;
-	peer->peer_mr.wrid = cmd->wr_id;
+
+	msg->id = cmd->wr_id;
+        msg->mr = cmd->mr;
+
 	
 //printf("In '%s()'.\n", __func__);
 		err = rpc_receive_direct(rpc_s, peer, msg);
@@ -590,33 +595,8 @@ int ds_boot_master(struct dart_server *ds)	//Done
 			connected++;
 		}
 		
-		else if(event_copy.event == RDMA_CM_EVENT_DISCONNECTED)
-			printf("Peer disconnected.\n");
-		else if(event_copy.event == RDMA_CM_EVENT_REJECTED)
-			printf("Connection Rejected.\n");
-		else if(event_copy.event == RDMA_CM_EVENT_ADDR_ERROR)
-			printf("Connection Address Error.\n");
-		else if(event_copy.event == RDMA_CM_EVENT_ROUTE_ERROR)
-			printf("Connection Route Error %s.\n", inet_ntoa(peer->ptlmap.address.sin_addr));
-		else if(event_copy.event == RDMA_CM_EVENT_CONNECT_RESPONSE)
-			printf("Connection Connect Response.\n");
-		else if(event_copy.event == RDMA_CM_EVENT_CONNECT_ERROR)
-			printf("Connection Connect Error.\n");
-		else if(event_copy.event == RDMA_CM_EVENT_UNREACHABLE)
-			printf("Connection Unreachable.\n");
-		else if(event_copy.event == RDMA_CM_EVENT_DEVICE_REMOVAL)
-			printf("Connection Device Removal.\n");
-		else if(event_copy.event == RDMA_CM_EVENT_MULTICAST_JOIN)
-			printf("Connection Multicast Join.\n");
-		else if(event_copy.event == RDMA_CM_EVENT_MULTICAST_ERROR)
-			printf("Connection Multicast Error.\n");
-		else if(event_copy.event == RDMA_CM_EVENT_ADDR_CHANGE)
-			printf("Connection Addr Changed.\n");
-		else if(event_copy.event == RDMA_CM_EVENT_TIMEWAIT_EXIT)
-			printf("Connection Timewait Exit.\n");
-		else if(event_copy.event == RDMA_CM_EVENT_CONNECT_REQUEST)
-			printf("Connection Timewait Exit.\n");
 		else {
+                        rpc_print_connection_err(ds->rpc_s,peer,event_copy);
 			printf("event is %d with status %d.\n", event_copy.event, event_copy.status);
 			err = event_copy.status;
 			goto err_out;
@@ -754,23 +734,34 @@ int ds_boot_slave(struct dart_server *ds)	//Done
 				greater_cid++;
 		}
 	}
-	for(i = 1; i < ds->rpc_s->ptlmap.id; i++) {
+	
+        int count;
+        for(i = 1; i < ds->rpc_s->ptlmap.id; i++) {
+                count = 0;
 		peer = ds_get_peer(ds, i);
-		if(1) {
-			err = rpc_connect(ds->rpc_s, peer);
-			if(err != 0) {
-				printf("rpc_connect err %d in %s.\n", err, __func__);
-				goto err_out;
-			}
-		}
-		if(check_sp[peer->ptlmap.id] == 1) {
-			err = sys_connect(ds->rpc_s, peer);
-			if(err != 0) {
-				printf("sys_connect err %d in %s.\n", err, __func__);
-				goto err_out;
-			}
-		}
-	}
+                if(1) {
+                        do{
+                                err = rpc_connect(ds->rpc_s, peer);
+                                count++;
+                        }while(count <3 && err !=0);
+                        if(err != 0) {
+                                printf("rpc_connect err %d in %s.\n", err, __func__);
+                                goto err_out;
+                        }
+                }
+                if(check_sp[peer->ptlmap.id] == 1) {
+                        count = 0;
+                        do{
+                                err = sys_connect(ds->rpc_s, peer);
+                                count++;
+                        }while(count <3 && err !=0);
+                        if(err != 0) {
+                                printf("sys_connect err %d in %s.\n", err, __func__);
+                                goto err_out;
+                        }
+                }
+        }
+
 	if(i == ds->rpc_s->ptlmap.id) {
 		peer = NULL;
 		while(rdma_get_cm_event(ds->rpc_s->rpc_ec, &event) == 0) {
@@ -826,33 +817,8 @@ int ds_boot_slave(struct dart_server *ds)	//Done
 			
 			else if(event_copy.event == RDMA_CM_EVENT_ESTABLISHED)
 				connected++;
-			else if(event_copy.event == RDMA_CM_EVENT_DISCONNECTED)
-				printf("Connection Disconnected.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_REJECTED)
-				printf("Connection Rejected.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_ADDR_ERROR)
-				printf("Connection Address Error.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_ROUTE_ERROR)
-				printf("Connection Route Error %s.\n", inet_ntoa(peer->ptlmap.address.sin_addr));
-			else if(event_copy.event == RDMA_CM_EVENT_CONNECT_RESPONSE)
-				printf("Connection Connect Response.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_CONNECT_ERROR)
-				printf("Connection Connect Error.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_UNREACHABLE)
-				printf("Connection Unreachable.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_DEVICE_REMOVAL)
-				printf("Connection Device Removal.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_MULTICAST_JOIN)
-				printf("Connection Multicast Join.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_MULTICAST_ERROR)
-				printf("Connection Multicast Error.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_ADDR_CHANGE)
-				printf("Connection Addr Changed.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_TIMEWAIT_EXIT)
-				printf("Connection Timewait Exit.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_CONNECT_REQUEST)
-				printf("Connection Timewait Exit.\n");
 			else {
+	                        rpc_print_connection_err(ds->rpc_s,peer,event_copy);
 				printf("event is %d with status %d.\n", event_copy.event, event_copy.status);
 				err = event_copy.status;
 				goto err_out;
@@ -962,10 +928,10 @@ static int ds_boot(struct dart_server *ds)	//Done
 */ 
 	
 /* 
-   Allocate and initialize dspaces server; the server initializes rpc
+   Allocate and initialize dart server; the server initializes rpc
    server. 
 */ 
-struct dart_server *ds_alloc(int num_sp, int num_cp, void *dspaces_ref) 
+struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref) 
 {
 	struct dart_server *ds = 0;
 	struct node_id *peer;
@@ -975,7 +941,7 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dspaces_ref)
 	ds = calloc(1, size);
 	if(!ds)
 		goto err_out;
-	ds->dspaces_ref = dspaces_ref;
+	ds->dart_ref = dart_ref;
 	ds->peer_tab = (struct node_id *) (ds + 1);
 	ds->cn_peers = ds->peer_tab + num_sp;
 	ds->peer_size = num_sp + num_cp;

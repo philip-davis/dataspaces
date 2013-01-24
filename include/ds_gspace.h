@@ -31,43 +31,41 @@
 *  tjin@cac.rutgers.edu
 */
 
-#ifndef __DATASPACES_H_
-#define __DATASPACES_H_
+#ifndef __DS_GSPACE_H_
+#define __DS_GSPACE_H_
 
-int dspaces_init(int num_peers, int appid);
-void dspaces_set_storage_type (int fst);
-int dspaces_rank(void);
-int dspaces_peers(void);
-void dspaces_barrier(void);
-void dspaces_lock_on_read(const char *lock_name, void *comm);
-void dspaces_unlock_on_read(const char *lock_name, void *comm);
-void dspaces_lock_on_write(const char *lock_name, void *comm);
-void dspaces_unlock_on_write(const char *lock_name, void *comm);
-int dspaces_get (const char *var_name, 
-        unsigned int ver, int size,
-        int xl, int yl, int zl, 
-        int xu, int yu, int zu, 
-        void *data);
-int dspaces_get_versions(int **);
-int dspaces_put (const char *var_name, 
-        unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu, 
-        void *data);
-int dspaces_select(char *var_name, unsigned int ver,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu, 
-        void *data);
-int dspaces_cq_register(char *var_name,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu, 
-        void *data);
-int dspaces_cq_update (void);
-int dspaces_put_sync(void);
-void dspaces_finalize (void);
+#include "dart.h"
+#include "ss_data.h"
 
-/* CCGrid'11 demo */
-int dspaces_collect_timing(double, double *);
-int dspaces_num_space_srv(void);
+struct ds_gspace {
+        struct dart_server      *ds;
 
-#endif
+        /* Shared space data structure. */
+        struct sspace           *ssd;
+
+        /* Continuous query list. */
+        struct list_head        cq_list;
+        int                     cq_num;
+
+        /* Pending object descriptors request list. */
+        struct list_head        obj_desc_req_list;
+
+        /* Pending object data request list. */
+        struct list_head        obj_data_req_list;
+
+        /* List of allocated locks. */
+        struct list_head        locks_list;
+};
+
+struct ds_gspace *dsg_alloc(int, int, char *);
+void dsg_free(struct ds_gspace *);
+int dsg_process(struct ds_gspace *);
+int dsg_complete(struct ds_gspace *);
+
+int dsghlp_obj_put(struct ds_gspace *, struct obj_data *);
+int dsghlp_get_rank(struct ds_gspace *);
+int dsghlp_all_sp_joined(struct ds_gspace *);
+
+int dsg_barrier(struct ds_gspace *);
+
+#endif /* __DS_GSPACE_H_ */

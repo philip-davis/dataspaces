@@ -48,7 +48,7 @@
 #include <sys/utsname.h>
 #include <errno.h>
 #include "pmi.h"
-#include "pmi_cray_ext.h"
+//#include "pmi_cray_ext.h"
 #include "gni_pub.h"
 #include "utility_functions.h"
 #include <sys/ioctl.h>
@@ -397,10 +397,10 @@ enum cmd_type {
 	ss_info,
 	ss_code_put,
 	ss_code_reply,
-#ifdef DIMES
+#ifdef DS_HAVE_DIMES
 	dimes_ss_info_msg,
 	dimes_get_desc_msg,
-	dimes_put_direct_msg,
+	dimes_put_msg,
 #endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,
@@ -474,6 +474,6 @@ int rpc_receivev(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf 
 void rpc_report_md_usage(struct rpc_server *rpc_s);
 struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *peer, int num_rpcs);
 
-void rpc_mem_info_cache(struct node_id *peer, struct rpc_cmd *cmd);
+void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 
 #endif

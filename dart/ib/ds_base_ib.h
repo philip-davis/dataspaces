@@ -49,16 +49,16 @@ struct dart_server {
 	int f_nacc:1;
 
 	/* Reference to the front end module used. */
-	void *dspaces_ref;
+	void *dart_ref;
 };				// //
 
-struct dart_server *ds_alloc(int num_sp, int num_cp, void *dspaces_ref);	// //
+struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref);	// //
 void ds_free(struct dart_server *ds);	// //
 int ds_process(struct dart_server *ds);
 
 static inline struct dart_server *ds_ref_from_rpc(struct rpc_server *rpc_s)
 {
-	return rpc_s->dspaces_ref;
+	return rpc_s->dart_ref;
 }				// //
 
 static inline int ds_get_rank(struct dart_server *ds)

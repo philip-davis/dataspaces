@@ -6,9 +6,6 @@
  *  The redistribution of the source code is subject to the terms of version 
  *  2 of the GNU General Public License: http://www.gnu.org/licenses/gpl.html.
  */
-#ifndef __DART_RPC_IB_H_
-#define __DART_RPC_IB_H_
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -246,6 +243,11 @@ struct msg_buf {
 	// Callback to customize completion; by default frees memory. 
 	completion_callback cb;
 
+	__u32 id;
+
+        struct ibv_mr mr;
+
+
 	void *private;
 
 	// Peer I should send this message to.
@@ -276,7 +278,7 @@ struct rpc_server {
 	struct rdma_event_channel *rpc_ec;
 	//struct rdma_event_channel *sys_ec;
 
-	// Reference  to peers  table; storage  space is  allocated in dspaces client or server.
+	// Reference  to peers  table; storage  space is  allocated in dart client or server.
 	int num_peers;		// total number of peers
 	struct node_id *peer_tab;
 
@@ -295,7 +297,7 @@ struct rpc_server {
 	int num_buf;
 	int max_num_msg;
 
-	void *dspaces_ref;
+	void *dart_ref;
 	enum rpc_component com_type;
 	int cur_num_peer;
 
@@ -422,14 +424,14 @@ Functions
 */
 int log2_ceil(int n);
 
-void build_context(struct ibv_context *verbs, struct connection *conn);	//new in IB TODO:try to encapsulate these 2 func in dspaces_rpc
+void build_context(struct ibv_context *verbs, struct connection *conn);	//new in IB TODO:try to encapsulate these 2 func in dart_rpc
 void build_qp_attr(struct ibv_qp_init_attr *qp_attr, struct connection *conn, struct rpc_server *rpc_s);	//new in IB
 int rpc_post_recv(struct rpc_server *rpc_s, struct node_id *peer);	//new in IB
 int sys_post_recv(struct rpc_server *rpc_s, struct node_id *peer);	//new in IB
 int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer);	//new in IB
 int sys_connect(struct rpc_server *rpc_s, struct node_id *peer);	//new in IB
 
-struct rpc_server *rpc_server_init(int option, char *ip, int port, int num_buff, int num_rpc_per_buff, void *dspaces_ref, enum rpc_component cmp_type);
+struct rpc_server *rpc_server_init(int option, char *ip, int port, int num_buff, int num_rpc_per_buff, void *dart_ref, enum rpc_component cmp_type);
 int rpc_server_free(struct rpc_server *rpc_s);
 void rpc_server_set_peer_ref(struct rpc_server *rpc_s, struct node_id peer_tab[], int num_peers);
 void rpc_server_set_rpc_per_buff(struct rpc_server *rpc_s, int num_rpc_per_buff);
@@ -453,7 +455,10 @@ int rpc_receive(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *
 int rpc_receivev(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg);	//API is here, but useless in InfiniBand version
 
 void rpc_report_md_usage(struct rpc_server *rpc_s);
+void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
+
 
 struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *peer, int num_rpcs);
 
-#endif
+void rpc_print_connection_err(struct rpc_server *rpc_s, struct node_id *peer, struct rdma_cm_event event);
+

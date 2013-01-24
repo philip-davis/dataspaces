@@ -587,7 +587,7 @@ static int dcrpc_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	msg->msg_data = remote_server_attr;
 	msg->size = dc->num_cp * sizeof(struct peer_attr_reg);
 
-	rpc_mem_info_cache(peer, cmd); //Modified by Tong Jin for decoupling DS and DART
+	rpc_mem_info_cache(peer, msg, cmd); //Modified by Tong Jin for decoupling DS and DART
 
         err = rpc_send_direct(rpc_s, peer, msg);
         if (err != 0){

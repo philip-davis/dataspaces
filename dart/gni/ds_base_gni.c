@@ -64,7 +64,7 @@ static struct app_info *app_find(struct dart_server *ds, int appid)
 {
 	struct app_info *app;
 
-	list_for_each_entry(app, &ds->app_list, app_entry) {
+	list_for_each_entry(app, &ds->app_list, struct app_info, app_entry) {
 		if (app->app_id == appid)
 			return app;
 	}
@@ -1037,7 +1037,7 @@ void ds_free(struct dart_server *ds)//not done
 	if(err!=0)
 		printf("(%s): rpc server free failed.\n", __func__);
 	//printf("Rank(%d): step2.1.\n",track);//debug
-	list_for_each_entry_safe(app, t, &ds->app_list, app_entry) 
+	list_for_each_entry_safe(app, t, &ds->app_list, struct app_info, app_entry) 
 	{
 		list_del(&app->app_entry);
 		free(app);

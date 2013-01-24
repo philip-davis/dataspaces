@@ -92,6 +92,7 @@ static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 	dc->peer_tab = rpc_s->peer_tab;
 	dc->cn_peers = dc_get_peer(dc, rpc_s->app_minid);
 	peer = dc->peer_tab;
+
 	peer++;
 	pm++;
 	for(i = 0; i < dc->num_sp + dc->num_cp - 1; i++) {
@@ -130,9 +131,13 @@ static int dcrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Do
 		goto err_out;
 	}
 	msg->cb = announce_cp_completion;	//
-	peer->peer_mr.mr = cmd->mr;
-	peer->peer_mr.wrid = cmd->wr_id;
+	
+	msg->id = cmd->wr_id;
+        msg->mr = cmd->mr;
+
+
 	err = rpc_receive_direct(rpc_s, peer, msg);
+
 	if(err < 0) {
 		free(msg);
 		goto err_out;
@@ -308,27 +313,37 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 	//printf("peeeer %d %d %d\n",dc->rpc_s->ptlmap.id,smaller_cid,greater_cid);
 
 	//Function: connect to all other nodes except MS_Server.
-	for(i = 1; i < dc->self->ptlmap.id; i++) {
-		if(i > dc->num_sp - 1 && i < dc->cp_min_rank)
-			continue;
 
-		peer = dc_get_peer(dc, i);
-		if(i < dc->cp_min_rank) {
-			err = rpc_connect(dc->rpc_s, peer);
-			if(err != 0) {
-				printf("rpc_connect err %d in %s.\n", err, __func__);
-				goto err_out;
-			}
-		}
-		//if(peer->ptlmap.id >=dc->num_sp){
-		if(check_cp[peer->ptlmap.id] == 1) {
-			err = sys_connect(dc->rpc_s, peer);
-			if(err != 0) {
-				printf("sys_connect err %d in %s.\n", err, __func__);
-				goto err_out;
-			}
-		}
-	}
+        for(i = 1; i < dc->self->ptlmap.id; i++) {
+                if(i > dc->num_sp - 1 && i < dc->cp_min_rank)
+                        continue;
+
+                int count = 0;
+                peer = dc_get_peer(dc, i);
+                if(i < dc->cp_min_rank) {
+                        do{
+                                err = rpc_connect(dc->rpc_s, peer);
+                                count++;
+                        }while(count <3 && err !=0);
+                        if(err != 0) {
+                                printf("rpc_connect err %d in %s.\n", err, __func__);
+                                goto err_out;
+                        }
+
+                }
+                //if(peer->ptlmap.id >=dc->num_sp){
+                if(check_cp[peer->ptlmap.id] == 1) {
+                        count = 0;
+                        do{
+                                err = sys_connect(dc->rpc_s, peer);
+                                count++;
+                        }while(count <3 && err !=0);
+                        if(err != 0) {
+                                printf("sys_connect err %d in %s.\n", err, __func__);
+                                goto err_out;
+                        }
+                }
+        }	
 
 	if(i == dc->self->ptlmap.id && dc->self->ptlmap.id != (dc->cp_min_rank + dc->num_cp - 1)) {
 		peer = NULL;
@@ -401,34 +416,8 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 				//printf("peer %d %d %d\n",dc->rpc_s->ptlmap.id, connected,2*(dc->num_cp-dc->self->ptlmap.id+dc->cp_min_rank-1));
 			}
 
-			else if(event_copy.event == RDMA_CM_EVENT_DISCONNECTED)
-				printf("Peer Disconnected.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_REJECTED)
-				printf("Connection Rejected.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_ADDR_ERROR)
-				printf("Connection Address Error.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_ROUTE_ERROR) {
-				printf("Connection Route Error %s .\n", inet_ntoa(peer->ptlmap.address.sin_addr));
-			} else if(event_copy.event == RDMA_CM_EVENT_CONNECT_RESPONSE)
-				printf("Connection Connect Response.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_CONNECT_ERROR)
-				printf("Connection Connect Error.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_UNREACHABLE)
-				printf("Connection Unreachable.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_DEVICE_REMOVAL)
-				printf("Connection Device Removal.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_MULTICAST_JOIN)
-				printf("Connection Multicast Join.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_MULTICAST_ERROR)
-				printf("Connection Multicast Error.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_ADDR_CHANGE)
-				printf("Connection Addr Changed.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_TIMEWAIT_EXIT)
-				printf("Connection Timewait Exit.\n");
-			else if(event_copy.event == RDMA_CM_EVENT_CONNECT_REQUEST)
-				printf("Connection Timewait Exit.\n");
-
 			else {
+				rpc_print_connection_err(dc->rpc_s,peer,event_copy);
 				printf("event is %d with status %d.\n", event_copy.event, event_copy.status);
 				err = event_copy.status;
 				goto err_out;
@@ -474,7 +463,7 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 /*
   Public API starts here.
 */
-struct dart_client *dc_alloc(int num_peers, int appid, void *dspaces_ref)
+struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
 {
 	struct dart_client *dc;
 
@@ -483,7 +472,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dspaces_ref)
 	dc = calloc(1, sizeof(*dc));
 	if(!dc)
 		return NULL;
-	dc->dspaces_ref = dspaces_ref;
+	dc->dart_ref = dart_ref;
 	dc->cp_in_job = num_peers;
 
 	// dc->peer_tab = (struct node_id *) (dc+1);
@@ -517,6 +506,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dspaces_ref)
 		free(dc);
 		goto err_out;
 	}
+
 //printf("barrier is ok.\n");
 	return dc;
       err_out:printf("'%s()': failed with %d.\n", __func__, err);

@@ -1,5 +1,5 @@
 #ifndef __DC_BASE_IB_H_
-#define __DC_BASE_IB_H_
+#define __DC_BASE__IB_H_
 
 #include "dart_rpc_ib.h"
 
@@ -25,7 +25,7 @@ struct dart_client {
 	int f_reg:1;
 	int f_bar:1;
 
-	void *dspaces_ref;
+	void *dart_ref;
 
 	int num_posted;
 };				// //
@@ -42,10 +42,10 @@ static inline struct node_id *dc_get_peer(struct dart_client *dc, int n)
 
 static inline struct dart_client *dc_ref_from_rpc(struct rpc_server *rpc_s)
 {
-	return rpc_s->dspaces_ref;
+	return rpc_s->dart_ref;
 }				// //
 
-struct dart_client *dc_alloc(int num_peers, int appid, void *dspaces_ref);	// //
+struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref);	// //
 void dc_free(struct dart_client *dc);	// //
 int dc_process(struct dart_client *dc);	// //
 
