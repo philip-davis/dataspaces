@@ -235,10 +235,32 @@ size_t obj_data_sizev(struct obj_descriptor *);
 
 int obj_desc_equals(const struct obj_descriptor *, const struct obj_descriptor *);
 int obj_desc_equals_no_owner(const struct obj_descriptor *, const struct obj_descriptor *);
-inline int obj_desc_equals_intersect(const struct obj_descriptor *, 
-                                     const struct obj_descriptor *);
-inline int obj_desc_by_name_intersect(const struct obj_descriptor *, 
-                                      const struct obj_descriptor *);
 
+/*
+  Test if two object descriptors have the same name and versions and
+  their bounding boxes intersect.
+*/
+inline int obj_desc_equals_intersect(const struct obj_descriptor *odsc1,
+                const struct obj_descriptor *odsc2)
+{
+        if (strcmp(odsc1->name, odsc2->name) == 0 &&
+            odsc1->version == odsc2->version &&
+            bbox_does_intersect(&odsc1->bb, &odsc2->bb))
+                return 1;
+        return 0;
+}
+
+/*
+  Test if two object descriptors have the same name and their bounding
+  boxes intersect.
+*/
+inline int obj_desc_by_name_intersect(const struct obj_descriptor *odsc1,
+                const struct obj_descriptor *odsc2)
+{
+        if (strcmp(odsc1->name, odsc2->name) == 0 &&
+            bbox_does_intersect(&odsc1->bb, &odsc2->bb))
+                return 1;
+        return 0;
+}
 
 #endif /* __SS_DATA_H_ */

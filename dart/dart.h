@@ -66,7 +66,7 @@
 #include "gni/dc_base_gni.h"
 #include "gni/ds_base_gni.h"
 
-#elif HAVE_CRAY_PORTALS
+#elif HAVE_PORTALS
 
 #include "portals/dart_rpc_portals.h"
 #include "portals/dc_base_portals.h"
@@ -78,7 +78,7 @@
 #include "ib/dc_base_ib.h"
 #include "ib/ds_base_ib.h"
 
-#elif HAVE_IBM_DCMF
+#elif HAVE_DCMF
 
 #include "dcmf/dart_rpc_dcmf.h"
 #include "dcmf/dc_base_dcmf.h"

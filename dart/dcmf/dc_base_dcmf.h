@@ -30,6 +30,10 @@
 #ifndef __DC_BASE_DCMF_H_
 #define __DC_BASE_DCMF_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "dart_rpc_dcmf.h"
 
 struct dart_client{
@@ -80,4 +84,9 @@ int dc_process(struct dart_client*);
 //For testing DART DCMF performance
 int dc_send_test(struct dart_client *dc, size_t size);
 int dc_read_test(struct dart_client *dc, size_t size);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

@@ -447,6 +447,7 @@ int dspaces_put_sync(void)
         return err;
 }
 
+#ifdef DS_HAVE_ACTIVESPACE
 int dspaces_code_load(void *fnaddr, // int off, int size_code, 
 	const char *var_name, unsigned int version, int size_elem,
 	int xl, int yl, int zl,
@@ -484,6 +485,7 @@ int dspaces_code_load(void *fnaddr, // int off, int size_code,
  err_out:
 	ERROR_TRACE();
 }
+#endif // end of #ifdef DS_HAVE_ACTIVESPACE
 
 void dspaces_finalize(void)
 {
@@ -682,6 +684,7 @@ void FC_FUNC(dspaces_put_sync, DSPACES_PUT_SYNC)(int *err)
 	*err = dspaces_put_sync();
 }
 
+#ifdef DS_HAVE_ACTIVESPACE
 /* This will never be directly used from Fortran code !!! */
 void FC_FUNC(dspaces_code_load, DSPACES_CODE_LOAD)(void *fnaddr, // int *off, int *size_code, 
 	const char *var_name, 
@@ -697,6 +700,7 @@ void FC_FUNC(dspaces_code_load, DSPACES_CODE_LOAD)(void *fnaddr, // int *off, in
 	*err = dspaces_code_load(fnaddr, vname, *ver, *size_elem, 
 			*xl, *yl, *zl, *xu, *yu, *zu, data);
 }
+#endif
 
 void FC_FUNC(dspaces_finalize, DSPACES_FINALIZE) (void)
 {

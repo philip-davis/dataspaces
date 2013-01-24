@@ -164,7 +164,7 @@ subroutine test_2d(n, loop)
      call dspaces_unlock_on_read
 
      tm_get = tm_end - tm_start
-     call timer_log(tm_get, 1)
+!     call timer_log(tm_get, 1)
 
      !! call matrix_inc(ref_mat, n)
   enddo
@@ -206,7 +206,7 @@ subroutine test_3d(n, loop)
      call dspaces_unlock_on_read
 
      tm_get = tm_end - tm_start
-     call timer_log(tm_get, 1)
+!     call timer_log(tm_get, 1)
   enddo
 
   deallocate(m3d)
@@ -287,7 +287,7 @@ subroutine couple_read_3d(comm)
   call dspaces_unlock_on_read("common_lock", comm)
 
   tm_get = tm_end - tm_start
-  call timer_log(tm_get, 1)
+!  call timer_log(tm_get, 1)
 end subroutine ! couple_read_3d
 
 subroutine test_equal_3d(a, b, n, m, p)

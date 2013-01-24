@@ -139,7 +139,7 @@ bitTranspose(	unsigned nDims,
  * Assumptions:
  *      nDims*nBits <= (sizeof index) * (bits_per_byte)
  */
-inline void
+void
 hilbert_i2c(	unsigned nDims, 
 		unsigned nBits, 
 		bitmask_t index, 
@@ -192,7 +192,7 @@ hilbert_i2c(	unsigned nDims,
  * Assumptions:
  *      nDims*nBits <= (sizeof bitmask_t) * (bits_per_byte)
  */
-inline bitmask_t
+bitmask_t
 hilbert_c2i(	unsigned nDims, 
 		unsigned nBits, 
 		bitmask_t const coord[])
@@ -263,7 +263,7 @@ typedef void (*BitWriter) (	unsigned d,
      memset(&dst[0],val,pos)
 #endif
 
-inline static bitmask_t
+static bitmask_t
 getIntBits(	unsigned nDims, 
 		unsigned nBytes, 
 		char const* c, 
@@ -281,7 +281,7 @@ getIntBits(	unsigned nDims,
 }
 
 #include <string.h>
-inline static void
+static void
 propogateIntBits(	unsigned d, 
 			unsigned nBytes,
 		 	char* c, 
@@ -338,7 +338,7 @@ typedef union ieee754_double{
       } ieee;
   } ieee754_double;
 
-inline static bitmask_t
+static bitmask_t
 getIEEESignBits(	unsigned nDims, 
 			double const* c){
   	unsigned d;
@@ -351,7 +351,7 @@ getIEEESignBits(	unsigned nDims,
   	return bits;
 }
 
-inline static bitmask_t
+static bitmask_t
 getIEEEBits(	unsigned nDims,
 	    	unsigned ignoreMe, /* ignored */
 	    	char const* cP,
@@ -378,7 +378,7 @@ getIEEEBits(	unsigned nDims,
   	return bits;
 }
 
-inline static void
+static void
 propogateIEEEBits(	unsigned d, 
 			unsigned nBytes,
 		  	char* cP, 
@@ -428,7 +428,7 @@ propogateIEEEBits(	unsigned d,
     	}
 }
 
-inline static unsigned
+static unsigned
 getIEEEexptMax(	unsigned nDims, 
 		double const* c)
 {
@@ -445,7 +445,7 @@ getIEEEexptMax(	unsigned nDims,
   	return max;
 }
 
-inline static void
+static void
 getIEEEinitValues(double const* c1,
 		  unsigned y,
 		  unsigned nDims,
@@ -526,7 +526,7 @@ getIEEEinitValues(double const* c1,
  *      nBits <= (sizeof bitmask_t) * (bits_per_byte)
  */
 
-inline static int
+static int
 hilbert_cmp_work(	unsigned nDims, 
 			unsigned nBytes, 
 			unsigned nBits,
@@ -567,7 +567,7 @@ hilbert_cmp_work(	unsigned nDims,
   	return 0;
 }
 
-inline int
+int
 hilbert_cmp(	unsigned nDims, 
 		unsigned nBytes, 
 		unsigned nBits,
@@ -582,7 +582,7 @@ hilbert_cmp(	unsigned nDims,
 			  	0, bits, bits, getIntBits);
 }
 
-inline int
+int
 hilbert_ieee_cmp(	unsigned nDims, 
 			double const* c1, 
 			double const* c2)
@@ -626,7 +626,7 @@ hilbert_ieee_cmp(	unsigned nDims,
  * Assumptions:
  *      nBits <= (sizeof bitmask_t) * (bits_per_byte)
  */
-inline static unsigned
+static unsigned
 hilbert_box_vtx_work(	unsigned nDims, 
 			unsigned nBytes, 
 			unsigned nBits,
@@ -690,7 +690,7 @@ hilbert_box_vtx_work(	unsigned nDims,
   	return y;
 }
 
-inline unsigned
+unsigned
 hilbert_box_vtx(	unsigned nDims, 
 			unsigned nBytes, 
 			unsigned nBits,
@@ -706,7 +706,7 @@ hilbert_box_vtx(	unsigned nDims,
 			      		0, bits, bits, getIntBits);
 }
 
-inline unsigned
+unsigned
 hilbert_ieee_box_vtx(	unsigned nDims,
 		     	int findMin, 
 			double* c1, 
@@ -745,7 +745,7 @@ hilbert_ieee_box_vtx(	unsigned nDims,
  * Assumptions:
  *      nBits <= (sizeof bitmask_t) * (bits_per_byte)
  */
-inline unsigned
+unsigned
 hilbert_box_pt_work(	unsigned nDims, 
 			unsigned nBytes, 
 			unsigned nBits,
@@ -810,7 +810,7 @@ hilbert_box_pt_work(	unsigned nDims,
   	return smearSum;
 }
 
-inline unsigned
+unsigned
 hilbert_box_pt(	unsigned nDims, 
 		unsigned nBytes, 
 		unsigned nBits,
@@ -826,7 +826,7 @@ hilbert_box_pt(	unsigned nDims,
 			     		getIntBits, propogateIntBits);
 }
 
-inline unsigned
+unsigned
 hilbert_ieee_box_pt(unsigned nDims,
 		    int findMin, 
 		    double* c1, 
@@ -885,7 +885,7 @@ hilbert_ieee_box_pt(unsigned nDims,
  * Assumptions:
  *      nBits <= (sizeof bitmask_t) * (bits_per_byte)
  */
-inline int
+int
 hilbert_nextinbox(	unsigned nDims, 
 			unsigned nBytes, 
 			unsigned nBits,
@@ -1095,7 +1095,7 @@ hilbert_nextinbox(	unsigned nDims,
  *      nBits <= (sizeof bitmask_t) * (bits_per_byte)
  */
 
-inline void
+void
 hilbert_incr(	unsigned nDims, 
 		unsigned nBits, 
 		bitmask_t coord[])

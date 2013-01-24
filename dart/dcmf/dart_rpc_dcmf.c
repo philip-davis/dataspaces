@@ -434,16 +434,16 @@ err_out:
 }
 
 /*
-Callback functions(handler) to invoke when DCMF_Get() is complete
+ Local callback functions(handler) to invoke when DCMF_Get() is complete
 */
 static void rpc_cb_get_completion(void *clientdata, DCMF_Error_t *err_dcmf)
 {
-	//for debug
-	//uloga("%s(): #%u\n", __func__, DCMF_Messager_rank());
-
-	struct client_data_rpc_get * ptr = (struct client_data_rpc_get *)clientdata;
-	if(!ptr)
-		return;
+	struct client_data_rpc_get * ptr =
+		(struct client_data_rpc_get *)clientdata;
+	if (!ptr) {
+		uloga("%s(): ptr to clientdata is NULL.\n", __func__);
+		goto err_out;
+	}
 
 	struct rpc_server *rpc_s = ptr->rpc_s;
 	struct rpc_request *rr = ptr->rr;
@@ -451,32 +451,33 @@ static void rpc_cb_get_completion(void *clientdata, DCMF_Error_t *err_dcmf)
 	DCMF_Memregion_t *local_memregion = ptr->local_memregion;
 	struct node_id *peer = ptr->peer;
 	
-	if(!rpc_s || !rr || !peer )
+	if (!rpc_s || !rr || !peer ) {
+		uloga("%s(): NULL value for rpc_s or rr or peer.\n", __func__);
 		return;
+	}
 	
 	rr->msg->refcont--;
 
-	if(rr->msg->refcont == 0){
+	if (rr->msg->refcont == 0){
 		/*Notify remote peer with RPC msg rpc_get_finish*/
 		struct msg_buf *msg = msg_buf_alloc(rpc_s, peer, 1);
 		int err;
-		if(msg){
+		if (msg){
 			msg->msg_rpc->cmd = rpc_get_finish;
-			memcpy(&msg->msg_rpc->mem_region, remote_memregion, sizeof(DCMF_Memregion_t));
+			memcpy(&msg->msg_rpc->mem_region,
+				remote_memregion,
+				sizeof(DCMF_Memregion_t));
 			err = rpc_send(rpc_s, peer, msg);
-			//for debug
-			//uloga("%s(): #%u, after rpc_send(), err=%d\n",
-			//	__func__, rpc_s->ptlmap.rank_dcmf, err);
-			if(err<0){
+			if (err<0) {
 				free(msg);
-				//for debug
-				uloga("%s(): #%u, rpc_send() of RPC msg rpg_get_finish failed\n",
+				uloga("%s(): #%u, rpc_send() of RPC msg "
+					"rpg_get_finish failed\n",
 					__func__, rpc_s->ptlmap.rank_dcmf);
 			}
 		}
 	
-		/*After a memory region is destroyed it is again legal to 
-		write into or deallocate the memory used by the memory region object*/
+		/* After a memory region is destroyed it is again legal to 
+		write into or deallocate the memory region */
 		DCMF_Memregion_destroy(local_memregion);
 		(*rr->msg->cb)(rpc_s, rr->msg);
 		if(rr)
@@ -493,10 +494,12 @@ static void rpc_cb_get_completion(void *clientdata, DCMF_Error_t *err_dcmf)
 		free(ptr->dcmf_req);
 	if(ptr)
 		free(ptr);
+err_out:
+	return;
 }
 
 /*
-Callback functions to invoke when DCMF_Put() is complete
+ Local callback functions to invoke when DCMF_Put() is complete
 */
 static void rpc_cb_put_completion(void *clientdata, DCMF_Error_t *err_dcmf)
 {
@@ -519,12 +522,14 @@ static void rpc_cb_put_completion(void *clientdata, DCMF_Error_t *err_dcmf)
 	rr->msg->refcont--;
 
 	if(rr->msg->refcont == 0){
-		/*Notify remote peer with RPC msg rpc_put_finish*/
+		/* Notify remote peer with RPC msg rpc_put_finish*/
 		struct msg_buf *msg = msg_buf_alloc(rpc_s, peer, 1);
 		int err;
 		if(msg){
 			msg->msg_rpc->cmd = rpc_put_finish;
-			memcpy(&msg->msg_rpc->mem_region, remote_memregion, sizeof(DCMF_Memregion_t));
+			memcpy(&msg->msg_rpc->mem_region,
+				remote_memregion,
+				sizeof(DCMF_Memregion_t));
 			err = rpc_send(rpc_s, peer, msg);
 			//for debug
 			//uloga("%s(): #%u, after rpc_send(), err=%d\n",
@@ -532,13 +537,14 @@ static void rpc_cb_put_completion(void *clientdata, DCMF_Error_t *err_dcmf)
 			if(err<0){
 				free(msg);
 				//for debug
-				uloga("%s(): #%u, rpc_send() of RPC msg rpg_get_finish failed\n",
+				uloga("%s(): #%u, rpc_send() of RPC msg "
+					"rpg_get_finish failed\n",
 					__func__, rpc_s->ptlmap.rank_dcmf);
 			}
 		}
 	
-		/*After a memory region is destroyed it is again legal to 
-		write into or deallocate the memory used by the memory region object*/
+		/* After a memory region is destroyed it is again legal to 
+		write into or deallocate the memory region*/
 		DCMF_Memregion_destroy(local_memregion);
 		(*rr->msg->cb)(rpc_s, rr->msg);
 		if(rr)
@@ -583,75 +589,69 @@ static void sys_cb_req_completion(void * clientdata, DCMF_Error_t *err_dcmf)
 }
 
 /*
-Callback function(handler) to invoke when DCMF_Send() for RPC msg is complete
+  Local callback function(handler) to invoke when DCMF_Send() for RPC msg is complete
 */
 static void rpc_cb_req_completion(void * clientdata, DCMF_Error_t * err_dcmf)
 {
-	//for debug
-	//uloga("%s(): #%u\n", __func__, DCMF_Messager_rank());
-
 	struct client_data_rpc_send * ptr = (struct client_data_rpc_send *)clientdata;
-	if(!ptr)
+	if (!ptr)
 		return;
 
 	struct rpc_server *rpc_s = ptr->rpc_s;
 	struct rpc_request *rr = ptr->rr;
 	struct node_id *peer = ptr->peer;
 
-	if(!rpc_s || !rr || !peer)
+	if (!rpc_s || !rr || !peer)
 		return;
 
 	rr->msg->refcont--;
 
-	if(rr->msg->refcont == 0){
+	if (rr->msg->refcont == 0){
 		//free the msg_buf
 		(*rr->msg->cb)(rpc_s,rr->msg);
 		//free the rpc_request
-		if(rr)
+		if (rr)
 			free(rr);
 		rpc_server_dec_reply(rpc_s);
 	}
 	
 	//Free the memory resource
-	if(ptr->dcmf_req)
+	if (ptr->dcmf_req)
 		free(ptr->dcmf_req);
 
-	if(ptr)
+	if (ptr)
 		free(ptr);
 }
 
 /*
-Callback function(handler) to invoke when DCMF_Send() for RPC msg(has data) is complete
+  Local callback function(handler) to invoke when DCMF_Send() for RPC msg(has data) is complete
 */
 static void rpc_cb_req_hasdata_completion(void * clientdata, DCMF_Error_t * err_dcmf)
 {
-	//for debug
-	//uloga("%s(): #%u\n", __func__, DCMF_Messager_rank());
-
 	struct client_data_rpc_send * ptr = (struct client_data_rpc_send *)clientdata;
-	if(!ptr)
+	if (!ptr)
 		return;
 
 	struct rpc_server *rpc_s = ptr->rpc_s;
 	struct rpc_request *rr = ptr->rr;
 	struct node_id *peer = ptr->peer;
 	
-	if(!rpc_s || !rr || !peer)
+	if (!rpc_s || !rr || !peer)
 		return;
 	
-	//Put the rpc_request into the peer's outgoing buffer for data objects
+	// Put the rpc_request into the peer's outgoing buffer for data objects
 	list_add_tail(&rr->req_entry, &rpc_s->out_rpc_list);
 	
-	//Free the memory resource
-	if(ptr->dcmf_req)
+	// Free the memory resource
+	if (ptr->dcmf_req)
 		free(ptr->dcmf_req);
 
-	if(ptr)
+	if (ptr)
 		free(ptr);
 }
 
 /*
-Routine to send/post a RPC message to remote peer node
+  Routine to send/post a RPC message to remote peer.
 */
 static int rpc_post_request(struct rpc_server *rpc_s, struct node_id *peer,
 			struct rpc_request *rr, const int msg_has_data)
@@ -664,17 +664,16 @@ static int rpc_post_request(struct rpc_server *rpc_s, struct node_id *peer,
 	ptr_clientdata->peer = peer;
 	ptr_clientdata->dcmf_req = request;	
 
-	//Is that safe to use calloc() and ptr_clientdata, do remember to free the memory
+	// Is that safe to use calloc() and ptr_clientdata, do remember to free the memory
 	DCMF_Callback_t cb_send_done;
-	if(msg_has_data){
+	cb_send_done.clientdata = (void*)ptr_clientdata;
+	if (msg_has_data) {
 		cb_send_done.function = rpc_cb_req_hasdata_completion;
-		cb_send_done.clientdata = (void*)ptr_clientdata;
-	}else{
+	} else {
 		cb_send_done.function = rpc_cb_req_completion;
-		cb_send_done.clientdata = (void*)ptr_clientdata;
 	}
 	
-	//Send rpc message to remote peer node
+	// Send rpc message to remote peer node
 	DCMF_Result ret = DCMF_Send(&rpc_s->rpc_send_protocol_dcmf,
 				request,
 				cb_send_done,
@@ -684,18 +683,18 @@ static int rpc_post_request(struct rpc_server *rpc_s, struct node_id *peer,
 				rr->data,
 				&msginfo,
 				1);
-	if(ret != DCMF_SUCCESS)
+	if (ret != DCMF_SUCCESS)
 		goto err_out;
 	
-	//After posting the rpc request message
+	// After posting the rpc request message
 	rr->msg->refcont++;
 	rpc_server_inc_reply(rpc_s);
 	
 	return 0;
 err_out:
-	if(ptr_clientdata)
+	if (ptr_clientdata)
 		free(ptr_clientdata); //release memory allocated
-	uloga("'%s()': failed with %d.\n", __func__, ret);
+	uloga("%s(): failed with %d.\n", __func__, ret);
 	return -EIO;
 }
 
@@ -828,8 +827,13 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 		}
 		
 		//for debug
-		//uloga("%s(): #%u remote peer: rank_dcmf=%u, dart_id=%d, num_msg_at_peer=%d, num_msg_ret=%d\n",
-		//	__func__, rpc_s->ptlmap.rank_dcmf, peer->ptlmap.rank_dcmf, peer->ptlmap.id, peer->num_msg_at_peer, peer->num_msg_ret);
+		/*
+		uloga("%s(): #%u remote peer: rank_dcmf=%u, dart_id=%d, "
+			"num_msg_at_peer=%d, num_msg_ret=%d\n",
+			__func__, rpc_s->ptlmap.rank_dcmf, 
+			peer->ptlmap.rank_dcmf, peer->ptlmap.id, 
+			peer->num_msg_at_peer, peer->num_msg_ret);
+		*/
 
 		//Retrun the credits we have for remote peer
 		int num_msg_ret = 0;
@@ -878,46 +882,32 @@ static int test_equal_memregion(DCMF_Memregion_t * left, DCMF_Memregion_t * righ
 }
 
 /*
-Handler function for RPC msg rpc_get_finish from remote node(which invokes DCMF_Get)
+  Handler function for RPC msg rpc_get_finish from remote peer.
 */
 static int rpc_service_get_finish(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	//for debug
-	//uloga("%s(): #%u, begin\n", __func__, rpc_s->ptlmap.rank_dcmf);
-
 	struct rpc_request *rr = NULL;
-	int flag=0;
+	int flag = 0;
 
-	//Search for the memory region
+	// Search for the memory region
 	list_for_each_entry(rr, &rpc_s->out_rpc_list, struct rpc_request, req_entry){
 		struct rpc_cmd	*msg_rpc = rr->msg->msg_rpc;
-		if(msg_rpc && msg_rpc->dstnid == cmd->srcnid 
-			&& test_equal_memregion(&msg_rpc->mem_region, &cmd->mem_region)){
+		if (msg_rpc && test_equal_memregion(
+				 &msg_rpc->mem_region, &cmd->mem_region)) {
 			flag = 1;
 			break;
 		}
 	}
 	
-	if(flag && rr){
-		//For debug
-		//uloga("%s(): #%u, matched memregion found\n", __func__, rpc_s->ptlmap.rank_dcmf);
-		list_del(&rr->req_entry);//remove from the list before free memory of rr!!
-
+	if (flag && rr) {
+		list_del(&rr->req_entry);
 		rr->msg->refcont--;
 
-		if(rr->msg->refcont == 0){
-			//For debug
-			/*
-			uloga("%s(): #%u begin to destroy previously allocated memory region\n",
-				 __func__, rpc_s->ptlmap.rank_dcmf);
-			*/
-			/*After a memory region is destroyed it is again legal to 
-			write into or deallocate the memory used by the memory region object*/
+		if (rr->msg->refcont == 0){
 			DCMF_Memregion_destroy(&(rr->msg->msg_rpc->mem_region));
-			//free the msg_buf
+			// Invoke the callback function associated with the rr.
 			(*rr->msg->cb)(rpc_s,rr->msg);
-			//free the rpc_request
-			if(rr)
+			if (rr)
 				free(rr);
 			rpc_server_dec_reply(rpc_s);
 		}
@@ -927,46 +917,32 @@ static int rpc_service_get_finish(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 }
 
 /*
-Handler function for RPC msg rpc_put_finish from remote node(which invokes DCMF_Put)
+  Handler function for RPC msg rpc_put_finish from remote node.
 */
 static int rpc_service_put_finish(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	//for debug
-	//uloga("%s(): #%u, begin\n", __func__, rpc_s->ptlmap.rank_dcmf);
-
 	struct rpc_request *rr = NULL;
-	int flag=0;
+	int flag = 0;
 
 	//Search for the memory region
-	list_for_each_entry(rr, &rpc_s->out_rpc_list, struct rpc_request, req_entry){
+	list_for_each_entry(rr, &rpc_s->out_rpc_list, struct rpc_request, req_entry) {
 		struct rpc_cmd	*msg_rpc = rr->msg->msg_rpc;
-		if(msg_rpc && msg_rpc->dstnid == cmd->srcnid 
-			&& test_equal_memregion(&msg_rpc->mem_region, &cmd->mem_region)){
+		if (msg_rpc && test_equal_memregion(
+				 &msg_rpc->mem_region, &cmd->mem_region)) {
 			flag = 1;
 			break;
 		}
 	}
 	
-	if(flag && rr){
-		//For debug
-		//uloga("%s(): #%u, matched memregion found\n", __func__, rpc_s->ptlmap.rank_dcmf);
-		list_del(&rr->req_entry);//remove from the list before free memory of rr!!
-
+	if (flag && rr) {
+		list_del(&rr->req_entry);
 		rr->msg->refcont--;
 
-		if(rr->msg->refcont == 0){
-			//For debug
-			/*
-			uloga("%s(): #%u begin to destroy previously allocated memory region\n",
-				 __func__, rpc_s->ptlmap.rank_dcmf);
-			*/
-			/*After a memory region is destroyed it is again legal to 
-			write into or deallocate the memory used by the memory region object*/
+		if (rr->msg->refcont == 0) {
 			DCMF_Memregion_destroy(&(rr->msg->msg_rpc->mem_region));
-			//free the msg_buf
+			// Invoke the callback function associated with the rr.
 			(*rr->msg->cb)(rpc_s,rr->msg);
-			//free the rpc_request
-			if(rr)
+			if (rr)
 				free(rr);
 			rpc_server_dec_reply(rpc_s);
 		}
@@ -1264,6 +1240,7 @@ err_out:
 	return err;
 }
 
+
 struct msg_buf* msg_buf_alloc(struct rpc_server *rpc_s, 
         const struct node_id *peer, int num_rpcs)
 {
@@ -1335,7 +1312,7 @@ void rpc_server_free(struct rpc_server *rpc_s)
 	uloga("'%s()': OK, bye.\n",__func__);
 }
 
-int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg, DCMF_Memregion_t *remote_memregion)
+int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)
 {
 	struct rpc_request *rr;
 	int err = -ENOMEM;
@@ -1343,45 +1320,56 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 	struct client_data_rpc_get *ptr_clientdata = NULL;
 	
 	rr = calloc(1, sizeof(struct rpc_request));
-	if(!rr)
+	if (!rr)
 		goto err_out;
 	
 	rr->msg = msg;
 	rr->data = msg->msg_data;
 	rr->size = msg->size;
 	
-	//Create local memory region for receiving data
-	DCMF_Memregion_t *local_memregion = (DCMF_Memregion_t*)calloc(1, sizeof(DCMF_Memregion_t));
+	// Create local memory region for receiving data
+	DCMF_Memregion_t *local_memregion =
+		(DCMF_Memregion_t*)calloc(1, sizeof(DCMF_Memregion_t));
 	size_t bytes_out;
-	ret = DCMF_Memregion_create(local_memregion, &bytes_out,
-				rr->size, rr->data, 0);
+	ret = DCMF_Memregion_create(
+				local_memregion,
+				&bytes_out,
+				rr->size,
+				rr->data,
+				0);
 	
-	if(ret != DCMF_SUCCESS)
+	if (ret != DCMF_SUCCESS)
 	{
-		uloga("%s(): DCMF_Memregion_create() failed with %d\n",__func__, ret);
+		uloga("%s(): DCMF_Memregion_create() failed with %d\n",
+			__func__, ret);
 		goto err_out;
 	}
 
-	DCMF_Request_t *request = (DCMF_Request_t*)calloc(1,sizeof(DCMF_Request_t));
-	//Get remote data
+	DCMF_Request_t *request =
+		(DCMF_Request_t*)calloc(1,sizeof(DCMF_Request_t));
+
+	// Get remote data
 	ptr_clientdata = (struct client_data_rpc_get*)calloc(1,sizeof(struct client_data_rpc_get));
 	ptr_clientdata->rpc_s = rpc_s;
 	ptr_clientdata->rr = rr;
-	ptr_clientdata->remote_memregion = (DCMF_Memregion_t*)calloc(1, sizeof(DCMF_Memregion_t));
-	memcpy(ptr_clientdata->remote_memregion, remote_memregion, sizeof(DCMF_Memregion_t));
+	ptr_clientdata->remote_memregion =
+		(DCMF_Memregion_t*)calloc(1, sizeof(DCMF_Memregion_t));
+	memcpy(ptr_clientdata->remote_memregion, 
+	       peer->cached_remote_memregion, sizeof(DCMF_Memregion_t));
 	ptr_clientdata->local_memregion = local_memregion;
 	ptr_clientdata->peer = peer;
 	ptr_clientdata->dcmf_req = request;
 	
-	DCMF_Callback_t cb_get_done = {rpc_cb_get_completion, (void*)ptr_clientdata};
+	DCMF_Callback_t cb_get_done =
+		{rpc_cb_get_completion, (void*)ptr_clientdata};
 	ret = DCMF_Get(&rpc_s->rpc_get_protocol_dcmf,
 			request,
 			cb_get_done,
 			DCMF_MATCH_CONSISTENCY,
 			peer->ptlmap.rank_dcmf,
 			rr->size,
-			remote_memregion,
-			local_memregion,
+			ptr_clientdata->remote_memregion,
+			ptr_clientdata->local_memregion,
 			0,
 			0);
 	if(ret != DCMF_SUCCESS){
@@ -1403,7 +1391,13 @@ err_out:
 	return -1;
 }
 
-int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg, DCMF_Memregion_t *remote_memregion)
+
+int rpc_send_directv(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg) {
+	uloga("%s(): Not supported in DCMF version!\n", __func__);
+	return -1;
+}
+
+int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)
 {
 	struct rpc_request *rr;
 	int err = -ENOMEM;
@@ -1436,7 +1430,8 @@ int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_b
 	ptr_clientdata->rpc_s = rpc_s;
 	ptr_clientdata->rr = rr;
 	ptr_clientdata->remote_memregion = (DCMF_Memregion_t*)calloc(1, sizeof(DCMF_Memregion_t));
-	memcpy(ptr_clientdata->remote_memregion, remote_memregion, sizeof(DCMF_Memregion_t));
+	memcpy(ptr_clientdata->remote_memregion, 
+	       peer->cached_remote_memregion, sizeof(DCMF_Memregion_t));
 	ptr_clientdata->local_memregion = local_memregion;
 	ptr_clientdata->peer = peer;
 	ptr_clientdata->dcmf_req = request;
@@ -1449,8 +1444,8 @@ int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_b
 			DCMF_MATCH_CONSISTENCY,
 			peer->ptlmap.rank_dcmf,
 			rr->size,
-			local_memregion,
-			remote_memregion,
+			ptr_clientdata->local_memregion,
+			ptr_clientdata->remote_memregion,
 			0,
 			0,
 			cb_ack);
@@ -1476,4 +1471,10 @@ err_out:
 void rpc_report_md_usage(struct rpc_server *rpc_s)
 {
 	uloga("%s(): Not supported.\n", __func__);
+}
+
+void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg,
+			struct rpc_cmd *cmd)
+{
+	peer->cached_remote_memregion = &cmd->mem_region;
 }

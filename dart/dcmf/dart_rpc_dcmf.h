@@ -1,5 +1,40 @@
-#ifndef __DART_RPC_DCMF_H_
-#define __DART_RPC_DCMF_H_
+/*
+ * Copyright (c) 2009, NSF Cloud and Autonomic Computing Center, Rutgers University
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification, are permitted provided
+ * that the following conditions are met:
+ *
+ * - Redistributions of source code must retain the above copyright notice, this list of conditions and
+ * the following disclaimer.
+ * - Redistributions in binary form must reproduce the above copyright notice, this list of conditions and
+ * the following disclaimer in the documentation and/or other materials provided with the distribution.
+ * - Neither the name of the NSF Cloud and Autonomic Computing Center, Rutgers University, nor the names of its
+ * contributors may be used to endorse or promote products derived from this software without specific prior
+ * written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+ * PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+/*
+*  Fan Zhang (2011) TASSL Rutgers University
+*  zhangfan@cac.rutgers.edu
+*/
+
+#ifndef __DART_RPC_DCMF_H__
+#define __DART_RPC_DCMF_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,7 +43,7 @@
 
 #include "dcmf.h"
 
-#include "list_bgp.h"
+#include "list.h"
 
 #define ALIGN_ADDR_QUAD_BYTES(a)                                \
         unsigned long _a = (unsigned long) (a);                 \
@@ -75,7 +110,6 @@ struct rpc_cmd {
         __u32           srcpid; //default is 0
         __u32           dstpid; //default is 0
         __u8            num_msg;
-        __u64           mbits; //??
         __u32           id; //Dart ID
 
         DCMF_Memregion_t	mem_region; //DCMF memory region created for remote node
@@ -135,7 +169,7 @@ struct rpc_request{
 	struct list_head req_entry;
 	//async_callback cb;
 	struct msg_buf	*msg;
-	void	*private;
+	void	*private_var;
 	enum 	io_dir iodir;
 	void	*data;
 	size_t	size;
@@ -225,11 +259,12 @@ struct node_id {
 	/* Number of messages I can send to this peer without blocking. */
 	int                     num_msg_at_peer;
 	int                     num_msg_ret;
+
+	/* Cached pointer value for remote memory region. */
+	DCMF_Memregion_t *	cached_remote_memregion;
 };
 
 enum cmd_type { 
-	_CMD_ERROR = -1,
-	_CMD_UNKNOWN,
         cn_data = 1,
         cn_init_read,
         cn_read,
@@ -257,12 +292,23 @@ enum cmd_type {
         ss_obj_get,
         ss_obj_filter,
         ss_obj_info,
-	ss_info,
-	//ss_code_put,
-	//ss_code_reply,
-        /*Newly Added*/
-        rpc_get_finish,
+	      ss_info,
+#ifdef DS_HAVE_ACTIVESPACE
+	ss_code_put,
+	ss_code_reply,
+#endif
+  /* Newly Added for DCMF version */
+  rpc_get_finish,
 	rpc_put_finish,
+#ifdef DS_HAVE_DIMES
+	dimes_ss_info_msg,
+	dimes_get_desc_msg,
+	dimes_put_msg,
+#endif
+#ifdef DS_HAVE_LUA_REXEC
+  ss_lua_rexec,
+  ss_lua_rexec_reply,
+#endif
 	/* Added for CCGrid Demo. */
 	CN_TIMING_AVG,
 	_CMD_COUNT
@@ -325,13 +371,21 @@ void rpc_add_service(enum cmd_type, rpc_service);
 int rpc_barrier(struct rpc_server *);
 
 int rpc_send(struct rpc_server *, struct node_id *, struct msg_buf *); 
-int rpc_send_direct(struct rpc_server *, const struct node_id *, struct msg_buf *, DCMF_Memregion_t *);
+int rpc_send_direct(struct rpc_server *, const struct node_id *, struct msg_buf *);
+int rpc_send_directv(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg); // Not implemented in DCMF version!
 int rpc_receive(struct rpc_server *, struct node_id *, struct msg_buf *);
-int rpc_receive_direct(struct rpc_server *, struct node_id *, struct msg_buf *, DCMF_Memregion_t *);
+int rpc_receive_direct(struct rpc_server *, struct node_id *, struct msg_buf *);
 
 void rpc_report_md_usage(struct rpc_server *);
 
 struct msg_buf* msg_buf_alloc(struct rpc_server *, const struct node_id *, int);
+
+void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg,
+			struct rpc_cmd *cmd);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif 
 

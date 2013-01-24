@@ -131,7 +131,8 @@ static int dcrpc_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		__func__, rpc_s->ptlmap.rank_dcmf, hreg->pm_cp.id, hreg->pm_sp.rank_dcmf, cmd->id);
 	*/        
 
-	err = rpc_receive_direct(rpc_s, peer, msg, &cmd->mem_region);
+	rpc_mem_info_cache(peer, msg, cmd);
+	err = rpc_receive_direct(rpc_s, peer, msg);
 	if(err<0)		
 		goto err_out_free;
 	

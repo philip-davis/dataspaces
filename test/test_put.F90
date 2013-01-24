@@ -180,7 +180,7 @@ subroutine test_3d(n, loop)
      call dspaces_unlock_on_write
 
      !! I have 2 timers to report
-     call timer_log(tm_tab, 2)
+!     call timer_log(tm_tab, 2)
   enddo
 
   deallocate(m3d)
@@ -236,7 +236,7 @@ subroutine test_2d(n, loop)
     call dspaces_unlock_on_write
 
     !! I have 2 timers to report
-    call timer_log(tm_tab, 2)
+!    call timer_log(tm_tab, 2)
 
     !! call matrix_inc(a, n)
  enddo
@@ -298,7 +298,7 @@ subroutine couple_write_3d(comm)
   tm_tab(2) = tm_end - tm_start
 
   call dspaces_unlock_on_write("common_lock", comm)
-  call timer_log(tm_tab, 2)
+!  call timer_log(tm_tab, 2)
 
   print *, 'min value written to the space is m3d(1,1,1): ', m3d(1,1,1)
 

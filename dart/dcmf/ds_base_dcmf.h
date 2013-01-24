@@ -1,6 +1,10 @@
 #ifndef __DS_BASE_DCMF_H_
 #define __DS_BASE_DCMF_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "dart_rpc_dcmf.h"
 
 struct app_info;
@@ -49,7 +53,7 @@ int ds_process(struct dart_server*);
 
 static inline struct dart_server* ds_ref_from_rpc(struct rpc_server *rpc_s)
 {
-	return rpc_s->dart_ref;
+	return (struct dart_server*)rpc_s->dart_ref;
 }
 
 static inline int ds_get_rank(struct dart_server *ds)
@@ -66,5 +70,9 @@ static inline int ds_stop(struct dart_server *ds)
 {
         return ds->f_stop;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

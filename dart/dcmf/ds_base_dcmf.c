@@ -56,7 +56,10 @@ static int ds_announce_cp(struct dart_server *ds, struct app_info *app)
 	struct ptlid_map *pptlmap;
 	int i, k, err;
 
+        //-------change by qiansun----------
 	cpeer = app->app_peer_tab;
+        //cpeer = ds->cn_peers;
+
 	for(i = 1; i< ds->num_sp; i++){
 		peer = ds_get_peer(ds, i);
 		
@@ -66,22 +69,31 @@ static int ds_announce_cp(struct dart_server *ds, struct app_info *app)
                         goto err_out;
 
                 msg->cb = default_completion_with_data_callback;
+
 		msg->size = sizeof(*pptlmap) * app->app_num_peers;
+		//msg->size = sizeof(*pptlmap) * ds->size_cp ;
+
 		pptlmap = msg->msg_data = calloc(1, msg->size);
 		if(!msg->msg_data)
 			goto err_out_free;
+
 		for(k=0; k<app->app_num_peers; k++){
+                //for(k=0; k<ds->size_cp; k++){
 			*pptlmap++ = (cpeer++)->ptlmap;
 		}
+
 		cpeer = app->app_peer_tab;
-		
+		//cpeer = ds->cn_peers;		
+
 		msg->msg_rpc->cmd = sp_announce_cp;
 		msg->msg_rpc->id = ds->self->ptlmap.id;
 		
                 hreg = (struct hdr_register *) msg->msg_rpc->pad;
                 hreg->pm_cp = cpeer->ptlmap;
+
                 hreg->num_cp = app->app_num_peers;
-                
+                //hreg->num_cp = ds->size_cp;
+
                 err = rpc_send(ds->rpc_s, peer, msg);
                 if(err<0){
                 	free(msg->msg_data);
@@ -108,14 +120,18 @@ static int ds_register_cp(struct dart_server *ds, struct app_info *app)
         struct ptlid_map *pptlmap;
         int err, i, k, id_min;
         
-        id_min = app->app_peer_tab[0].ptlmap.id;//Get dart id of the 1st compute node in the app
+        //--------------change by qiansun-------------
+        //id_min = app->app_peer_tab[0].ptlmap.id;//Get dart id of the 1st compute node in the app
         
         /* ds->self->id is used as an offset in the cn_peers tab, and
            each service peer will complete a compute peer request wich
            is a multiple of ds->num_sp, starting from its id/rank. */
         i = ds->self->ptlmap.id;
-        while(i < app->app_num_peers){
-        	peer = app->app_peer_tab + i;
+
+        //while(i < app->app_num_peers){
+        // 	peer = app->app_peer_tab + i;
+        while(i < ds->num_cp){
+   		peer = ds->cn_peers + i;
         	
         	err = -ENOMEM;
         	
@@ -146,8 +162,15 @@ static int ds_register_cp(struct dart_server *ds, struct app_info *app)
 			hreg->maxsize = 4 * 10124 * 1024;
 			hreg->num_sp = ds->size_sp;
 			hreg->num_cp = ds->size_cp;
-			hreg->id_min = id_min;
-        	
+
+			//hreg->id_min = id_min;
+			list_for_each_entry(app, &ds->app_list, struct app_info, app_entry){
+				if(app->app_id == peer->ptlmap.appid) { //find which app this dc belongs to
+					hreg->id_min = app->app_peer_tab[0].ptlmap.id;
+					//break;
+				}
+			}		 			
+       	
 			err = rpc_send(ds->rpc_s, peer, msg);
 
 			if(err < 0){
@@ -160,7 +183,8 @@ static int ds_register_cp(struct dart_server *ds, struct app_info *app)
 			i = i + ds->num_sp;
         }
         
-        if(i < app->app_num_peers)
+        //if(i < app->app_num_peers)
+	if(i < ds->num_cp)
         	goto err_out;
         return 0;
 err_out:
@@ -213,13 +237,35 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	uloga("%s(): all %d compute peers for app %d have joined.\n", 
 		__func__, app->app_num_peers, app->app_id);
 
+	
 	err = ds_announce_cp(ds, app);
 	if(err < 0)
 		goto err_out;
+
+        //--------change by qiansun--------------------------------------
+        if (ds->num_cp == ds->size_cp){ //all apps have joined
+
+   		uloga("All apps has registered in the master server!\n");         
+
+        	list_for_each_entry(app, &ds->app_list, struct app_info, app_entry){
+			if(app->app_cnt_peers != app->app_num_peers)
+				return 0;
+             	}
+                uloga("Ready to send all peers_info!\n");
 	
-	err = ds_register_cp(ds, app);
-	if(err < 0)
-		goto err_out;
+		err = ds_register_cp(ds, app);
+		if(err < 0)
+			goto err_out;
+        }
+        //------------------------------------------------------------
+
+	//err = ds_announce_cp(ds, app);
+	//if(err < 0)
+	//	goto err_out;
+
+	//err = ds_register_cp(ds, app);
+	//if(err < 0)
+	//	goto err_out;
 	
 	return 0;
 err_out:
@@ -257,11 +303,13 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	
 	/* Forwarding the unregister rpc message in a ring manner*/
 	hreg->num_sp--; //the rest number of forwarding
-	//for debug
+
+#ifdef DEBUG
 	uloga("%s(): #%u(dart_id=%d) get cn_unregister of #%u(dart_id=%d) ds->num_cp=%d, num_unreg=%d, num_to_forward_sp=%d\n",
 		__func__,ds->self->ptlmap.rank_dcmf,ds->self->ptlmap.id,
 		hreg->pm_cp.rank_dcmf,hreg->pm_cp.id,ds->num_cp,num_unreg,hreg->num_sp);
-	
+#endif	
+
 	if(hreg->num_sp){
 		peer = ds_get_peer(ds, (ds->self->ptlmap.id+1)%ds->num_sp);
 		msg = msg_buf_alloc(rpc_s, peer, 1);
@@ -346,7 +394,8 @@ static int dsrpc_cn_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	//Record START_TIME of cn_data transfer
 	//_transfer_start_time = DCMF_Timebase();
 	
-	err = rpc_receive_direct(rpc_s, peer, msg, &cmd->mem_region);
+	rpc_mem_info_cache(peer, msg, cmd);
+	err = rpc_receive_direct(rpc_s, peer, msg);
 	if(err<0){
 		free(msg->msg_data);
 		goto err_out_free;
@@ -390,7 +439,8 @@ static int dsrpc_cn_read(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	uloga("%s(): #%u(dart_id=%d), get cn_read(msg->size=%d) from compute node #%u(dart_id=%d)\n",
 		__func__,rpc_s->ptlmap.rank_dcmf,msg->size,rpc_s->ptlmap.id,peer->ptlmap.rank_dcmf,peer->ptlmap.id); 
 		
-	err = rpc_send_direct(rpc_s, peer, msg, &cmd->mem_region);
+	rpc_mem_info_cache(peer, msg, cmd);
+	err = rpc_send_direct(rpc_s, peer, msg);
 	if(err<0){
 		free(msg->msg_data);
 		goto err_out_free;
@@ -545,7 +595,8 @@ static int dsrpc_sp_ack_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		goto err_out;
 	msg->cb = sp_ack_register_completion;
 	
-	err = rpc_receive_direct(rpc_s, peer, msg, &cmd->mem_region);
+	rpc_mem_info_cache(peer, msg, cmd);
+	err = rpc_receive_direct(rpc_s, peer, msg);
 	if(err<0)		
 		goto err_out_free;
 	
@@ -573,8 +624,9 @@ static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
         }
         free(msg->msg_data);
         free(msg);
-	
-	ds_register_cp(ds, app);        
+
+	if(ds->num_cp == ds->size_cp){	
+		ds_register_cp(ds, app);}        
 
         //for debug
         //uloga("%s(): #%u OK\n", __func__, rpc_s->ptlmap.rank_dcmf);
@@ -620,7 +672,8 @@ static int dsrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	msg->cb = announce_cp_completion;
 	msg->private = app;
         
-	err = rpc_receive_direct(rpc_s, peer, msg, &cmd->mem_region);
+	rpc_mem_info_cache(peer, msg, cmd);
+	err = rpc_receive_direct(rpc_s, peer, msg);
 	if(err<0){
 		free(msg->msg_data);
 		goto err_out_free;
@@ -746,8 +799,10 @@ static int ds_boot(struct dart_server *ds)
 
         return 0;
 err_flock:
+	uloga("%s(): failed with err_flock.\n");
         file_lock(fd, 0);
 err_fd:
+	uloga("%s(): failed with err_fd.\n");
 	close(fd);
 	remove(lck_file);
 err:
@@ -833,8 +888,6 @@ void ds_free(struct dart_server *ds)
 	uloga("%s(): OK\n", __func__);
 }
 
-int ds_process(struct dart_server *ds)
-{
-        return rpc_process_event(ds->rpc_s);
+int ds_process(struct dart_server *ds){
+	return rpc_process_event(ds->rpc_s);
 }
-

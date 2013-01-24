@@ -41,7 +41,9 @@
 #include "dart.h"
 #include "ds_gspace.h"
 #include "ss_data.h"
+#ifdef DS_HAVE_ACTIVESPACE
 #include "rexec.h"
+#endif
 #include "timer.h"
 
 #define DSG_ID                  dsg->ds->self->ptlmap.id
@@ -211,7 +213,7 @@ static inline struct ds_gspace * dsg_ref_from_rpc(struct rpc_server *rpc_s)
         return ds->dart_ref;
 }
 
-
+#ifdef DS_HAVE_ACTIVESPACE
 static int bin_code_local_bind(void *pbuf, int offset)
 {
 	PLT_TAB;
@@ -417,6 +419,7 @@ static int dsgrpc_bin_code_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
  err_out:
 	ERROR_TRACE();
 }
+#endif // end of #ifdef DS_HAVE_ACTIVESPACE
 
 /*
   Generic lock service.
@@ -1951,8 +1954,9 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         rpc_add_service(ss_obj_cq_register, dsgrpc_obj_cq_register);
         rpc_add_service(cp_lock, dsgrpc_lock_service);
 	rpc_add_service(ss_info, dsgrpc_ss_info);
+#ifdef DS_HAVE_ACTIVESPACE
 	rpc_add_service(ss_code_put, dsgrpc_bin_code_put);
-
+#endif
         INIT_LIST_HEAD(&dsg_l->cq_list);
         INIT_LIST_HEAD(&dsg_l->obj_desc_req_list);
         INIT_LIST_HEAD(&dsg_l->obj_data_req_list);

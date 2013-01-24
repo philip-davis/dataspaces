@@ -666,6 +666,7 @@ static inline struct node_id * dcg_which_peer(void)
         return peer;
 }
 
+#ifdef DS_HAVE_ACTIVESPACE
 /*
   RPC routine to receive results from code executed in the space.
 */
@@ -692,6 +693,8 @@ static int dcgrpc_code_reply(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
  err_out:
 	ERROR_TRACE();
 }
+#endif // end of #ifdef DS_HAVE_ACTIVESPACE
+
 
 /*
   RPC routine to collect timing info from non-master app nodes.
@@ -1501,7 +1504,9 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid)
         rpc_add_service(cp_lock, dcgrpc_lock_service);
         rpc_add_service(cn_timing, dcgrpc_time_log);
 	rpc_add_service(ss_info, dcgrpc_ss_info);
+#ifdef DS_HAVE_ACTIVESPACE
 	rpc_add_service(ss_code_reply, dcgrpc_code_reply);
+#endif
 	/* Added for ccgrid demo. */
 	rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);	
 
@@ -2093,7 +2098,7 @@ int dcg_unlock_on_write(const char *lock_name, void *comm)
 	ERROR_TRACE();
 }
 
-
+#ifdef DS_HAVE_ACTIVESPACE
 // TODO: move this to the non public API area !
 static int 
 dcg_code_rexec_at_peers(const void *fn_addr, int size, int off, 
@@ -2203,6 +2208,7 @@ int dcg_rexe_voidfunc_exec(const void *addr)
 	// TODO : continue from here ... 
 	return 0;
 }
+#endif // end of #ifdef DS_HAVE_ACTIVESPACE
 
 /*
   Collect timing information to master  node of app. And calculate the
