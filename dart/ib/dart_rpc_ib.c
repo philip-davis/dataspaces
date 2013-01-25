@@ -1287,7 +1287,7 @@ int rpc_server_free(struct rpc_server *rpc_s)
 	}
 */
 
-	list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, req_entry) {
+	list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry) {
 		err = ibv_dereg_mr(rr->rpc_mr);
 		if(err != 0) {
 			printf("ibv_dereg_mr fail with err %d.\n", err);

@@ -39,7 +39,7 @@ static struct app_info *app_alloc()
 static struct app_info *app_find(struct dart_server *ds, int appid) 
 {
 	struct app_info *app;
-	list_for_each_entry(app, &ds->app_list, app_entry) {
+	list_for_each_entry(app, &ds->app_list, struct app_info, app_entry) {
 		if(app->app_id == appid)
 			return app;
 	}
@@ -346,7 +346,7 @@ static int ds_disseminate(struct dart_server *ds)	//Done
 	}
 	
 		//send to clients info of all the servers + clients in the same APP
-		list_for_each_entry(app, &ds->app_list, app_entry) {
+		list_for_each_entry(app, &ds->app_list, struct app_info, app_entry) {
 		for(i = app->app_peer_tab[0].ptlmap.id; i < app->app_peer_tab[0].ptlmap.id + app->app_num_peers; i++) {
 			cpeer = ds->peer_tab;
 			peer = ds_get_peer(ds, i);
@@ -996,7 +996,7 @@ void ds_free(struct dart_server *ds)
 	err = rpc_server_free(ds->rpc_s);
 	if(err != 0)
 		printf("rpc_server_free err in %s.\n", __func__);
-	list_for_each_entry_safe(app, t, &ds->app_list, app_entry) {
+	list_for_each_entry_safe(app, t, &ds->app_list, struct app_info, app_entry) {
 		list_del(&app->app_entry);
 		free(app);
 	}
