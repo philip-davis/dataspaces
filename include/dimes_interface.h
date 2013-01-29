@@ -25,53 +25,43 @@
  */
 
 /*
-*  Ciprian Docan (2009)  TASSL Rutgers University
-*  docan@cac.rutgers.edu
-*  Tong Jin (2011) TASSL Rutgers University
-*  tjin@cac.rutgers.edu
+*  Fan Zhang (2012)  TASSL Rutgers University
+*  zhangfan@cac.rutgers.edu
 */
+#ifndef __DIMES_H__
+#define __DIMES_H__
 
-#ifndef __DATASPACES_H_
-#define __DATASPACES_H_
-
-#ifdef DS_HAVE_DIMES
-#include "dimes_interface.h"
+#ifdef __cplusplus
+extern "C" {
 #endif
 
-int dspaces_init(int num_peers, int appid);
-void dspaces_set_storage_type (int fst);
-int dspaces_rank(void);
-int dspaces_peers(void);
-void dspaces_barrier(void);
-void dspaces_lock_on_read(const char *lock_name, void *comm);
-void dspaces_unlock_on_read(const char *lock_name, void *comm);
-void dspaces_lock_on_write(const char *lock_name, void *comm);
-void dspaces_unlock_on_write(const char *lock_name, void *comm);
-int dspaces_get (const char *var_name, 
-        unsigned int ver, int size,
-        int xl, int yl, int zl, 
-        int xu, int yu, int zu, 
-        void *data);
-int dspaces_get_versions(int **);
-int dspaces_put (const char *var_name, 
-        unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu, 
-        void *data);
-int dspaces_select(char *var_name, unsigned int ver,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu, 
-        void *data);
-int dspaces_cq_register(char *var_name,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu, 
-        void *data);
-int dspaces_cq_update (void);
-int dspaces_put_sync(void);
-void dspaces_finalize (void);
+// int dimes_init(int num_peers, int appid);
+int dimes_alloc(void *);
+void dimes_set_storage_type (int fst);
+// int dimes_rank(void);
+// int dimes_peers(void);
+// void dimes_barrier(void);
+// void dimes_lock_on_read(const char *lock_name);
+// void dimes_unlock_on_read(const char *lock_name);
+// void dimes_lock_on_write(const char *lock_name);
+// void dimes_unlock_on_write(const char *lock_name);
+int dimes_put_sync(void);
+// void dimes_finalize (void);
+void dimes_free(void);
 
-/* CCGrid'11 demo */
-int dspaces_collect_timing(double, double *);
-int dspaces_num_space_srv(void);
+int dimes_get (const char *var_name,
+        unsigned int ver, int size,
+        int xl, int yl, int zl,
+        int xu, int yu, int zu,
+        void *data);
+int dimes_put (const char *var_name,
+        unsigned int ver, int size,
+        int xl, int yl, int zl,
+        int xu, int yu, int zu,
+        void *data);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

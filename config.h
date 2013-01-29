@@ -1,14 +1,20 @@
 /* config.h.  Generated from config.h.in by configure.  */
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
+/* Fixed Gemini cookie */
+/* #undef GNI_COOKIE */
+
+/* Fixed Gemini ptag */
+/* #undef GNI_PTAG */
+
 /* Define if you have CRAY_PMI. */
-/* #undef HAVE_CRAY_PMI */
+#define HAVE_CRAY_PMI 1
 
 /* Define if you have Cray Portals. */
 /* #undef HAVE_CRAY_PORTALS */
 
 /* Define if you have CRAY_UGNI. */
-/* #undef HAVE_CRAY_UGNI */
+#define HAVE_CRAY_UGNI 1
 
 /* Define if you have the DCMF. */
 /* #undef HAVE_DCMF */
@@ -20,7 +26,7 @@
 #define HAVE_IBVERBS_H 1
 
 /* Define if you have the Infiniband. */
-#define HAVE_INFINIBAND 1
+/* #undef HAVE_INFINIBAND */
 
 /* Define to 1 if you have the <inttypes.h> header file. */
 #define HAVE_INTTYPES_H 1

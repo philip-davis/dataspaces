@@ -395,8 +395,10 @@ enum cmd_type {
 	ss_obj_filter,
 	ss_obj_info,
 	ss_info,
+#ifdef DS_HAVE_ACTIVESPACE
 	ss_code_put,
 	ss_code_reply,
+#endif
 #ifdef DS_HAVE_DIMES
 	dimes_ss_info_msg,
 	dimes_get_desc_msg,

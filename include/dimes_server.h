@@ -25,53 +25,46 @@
  */
 
 /*
-*  Ciprian Docan (2009)  TASSL Rutgers University
-*  docan@cac.rutgers.edu
-*  Tong Jin (2011) TASSL Rutgers University
-*  tjin@cac.rutgers.edu
+*  Fan Zhang (2012)  TASSL Rutgers University
+*  zhangfan@cac.rutgers.edu
 */
 
-#ifndef __DATASPACES_H_
-#define __DATASPACES_H_
+#ifndef __DIMES_SERVER_H__
+#define __DIMES_SERVER_H__
 
-#ifdef DS_HAVE_DIMES
-#include "dimes_interface.h"
+#ifdef __cplusplus
+extern "C" {
 #endif
 
-int dspaces_init(int num_peers, int appid);
-void dspaces_set_storage_type (int fst);
-int dspaces_rank(void);
-int dspaces_peers(void);
-void dspaces_barrier(void);
-void dspaces_lock_on_read(const char *lock_name, void *comm);
-void dspaces_unlock_on_read(const char *lock_name, void *comm);
-void dspaces_lock_on_write(const char *lock_name, void *comm);
-void dspaces_unlock_on_write(const char *lock_name, void *comm);
-int dspaces_get (const char *var_name, 
-        unsigned int ver, int size,
-        int xl, int yl, int zl, 
-        int xu, int yu, int zu, 
-        void *data);
-int dspaces_get_versions(int **);
-int dspaces_put (const char *var_name, 
-        unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu, 
-        void *data);
-int dspaces_select(char *var_name, unsigned int ver,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu, 
-        void *data);
-int dspaces_cq_register(char *var_name,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu, 
-        void *data);
-int dspaces_cq_update (void);
-int dspaces_put_sync(void);
-void dspaces_finalize (void);
+#include "ds_gspace.h"
+#include "dimes_data.h"
 
-/* CCGrid'11 demo */
-int dspaces_collect_timing(double, double *);
-int dspaces_num_space_srv(void);
+struct dimes_server {
+        struct ds_gspace *dsg;
+        /* local storage for rpc_cmd */
+        struct cmd_storage *cmd_store;
+};
+
+struct dimes_server * dimes_server_alloc(int num_sp, int num_cp, char *);
+void dimes_server_free(struct dimes_server *dimes_s_l);
+
+inline int dimes_server_process(struct dimes_server *dimes_s_l)
+{
+	return dsg_process(dimes_s_l->dsg);
+}
+
+inline int dimes_server_complete(struct dimes_server *dimes_s_l)
+{
+	return dsg_complete(dimes_s_l->dsg);	
+}
+
+inline int dimes_server_barrier(struct dimes_server *dimes_s_l)
+{
+	return dsg_barrier(dimes_s_l->dsg);
+}
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

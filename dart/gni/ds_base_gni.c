@@ -38,10 +38,13 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include "ds_base_gni.h"
+#include <netdb.h>
 #include "sys/socket.h"
 #include "netinet/in.h"
 #include "arpa/inet.h"
 #include "sys/ioctl.h"
+#include <sys/types.h>
+#include <ifaddrs.h>
 
 #define PEER_ID(peer)	peer->ptlmap.id
 #define CONNMAX 1000
@@ -157,6 +160,47 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	return err;
 }
 
+#if 1
+static char* ip_search(void)
+{
+
+    /* 1. get my GNI IP address */
+    struct ifaddrs *ifaddr, *ifa;
+    int s;
+    char host[NI_MAXHOST], *ibip = NULL;
+
+    if (getifaddrs(&ifaddr) == -1) {
+        return NULL;
+    }
+
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next)
+    {
+        if(ifa->ifa_addr == NULL)
+            continue;
+
+        if (ifa->ifa_addr->sa_family == AF_INET)
+        {
+
+            s = getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in),
+                    host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+            // fprintf(stderr, "%s: %s\n", ifa->ifa_name, host);
+            if (s != 0)
+            {
+                perror("getnameinfo");
+            }
+            else{
+                if (!strncmp(ifa->ifa_name,"ipogif", 6)) {
+                    ibip = host;
+                    break;
+                }
+            }
+        }
+    }
+
+    return ibip;
+}
+
+#else 
 static char *ip_search(void)
 {
 	int sfd, intr;
@@ -178,6 +222,7 @@ static char *ip_search(void)
 	close(sfd);
 	return inet_ntoa(((struct sockaddr_in*)(&buf[intr].ifr_addr))-> sin_addr);
 }
+#endif
 
 int listen_sock_init(int option, const char *ip, int port, int *SocketPri)
 {

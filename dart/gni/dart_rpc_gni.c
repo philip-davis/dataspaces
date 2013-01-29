@@ -28,12 +28,16 @@
 *  Tong Jin (2011) TASSL Rutgers University
 *  tjin@cac.rutgers.edu
 */
+
+#include "config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include "dart_rpc_gni.h"
-#include "gni_pub.h"
+#include "debug.h"
+//#include "gni_pub.h"
 //#include "pmi.h"
 
 #define DEVICE_ID	0
@@ -206,26 +210,40 @@ static int init_gni (struct rpc_server *rpc_s)
 	int device_id = DEVICE_ID;
 	gni_return_t status;
 
-	//ptag = get_ptag();
-	//cookie = get_cookie();
+#ifdef GNI_PTAG
+        ptag = GNI_PTAG;
+        cookie = GNI_COOKIE;
+        //uloga(" ****** (%s) from configure: ptag=%d  cookie=%x.\n", __func__, ptag, cookie);
+#else
+	/* Try from environment first DSPACES_GNI_PTAG (decimal) and DSPACES_GNI_COOKIE (hexa)*/
+	ptag = get_ptag_env("DSPACES_GNI_PTAG");
+	if (ptag != 0)
+		cookie = get_cookie_env("DSPACES_GNI_COOKIE");
+        //uloga(" ****** (%s) from env: ptag=%d  cookie=%x.\n", __func__, ptag, cookie);
 
-	err = get_named_dom("ADIOS", &ptag, &cookie);
-        if(err != 0){
-                printf("Fail: ptag and cookie returned error. %d.\n", err);
-                goto err_out;
+	if (ptag == 0 || cookie == 0) {
+		err = get_named_dom("ADIOS", &ptag, &cookie);
+		if(err != 0){
+			printf("Fail: ptag and cookie returned error. %d.\n", err);
+			goto err_out;
+		}
+            //uloga(" ****** (%s) from apstat: ptag=%d  cookie=%x.\n", __func__, ptag, cookie);
         }
+#endif
 
 	status = GNI_CdmCreate(rank_id_pmi, ptag, cookie, modes, &rpc_s->cdm_handle);
 	if (status != GNI_RC_SUCCESS) 
 	{
-		printf("Fail: GNI_CdmCreate returned error. %d.\n", status);
+		printf("Fail: GNI_CdmCreate returned error. Used ptag=%d cookie=%x status=%d.\n", 
+                        ptag, cookie, status);
 		goto err_out;
 	}
 
 	status = GNI_CdmAttach(rpc_s->cdm_handle, device_id, &rpc_s->ptlmap.nid, &rpc_s->nic_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
-		printf("Fail: GNI_CdmAttach returned error. %d.\n", status);
+		printf("Fail: GNI_CdmAttach returned error. Used ptag=%d cookie=%x status=%d.\n", 
+                        ptag, cookie, status);
 		goto err_out;
 	}
 

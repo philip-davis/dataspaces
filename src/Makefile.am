@@ -7,12 +7,16 @@ lib_LIBRARIES =  libdspaces.a
 libdspaces_a_SOURCES = dataspaces.c \
 			ds_gspace.c \
 			dc_gspace.c \
+			dimes_interface.c \
+			dimes_server.c \
+			dimes_data.c \
 			ss_data.c \
 			bbox.c \
 			timer.c
 #libdspaces_a_DEPENDENCIES = libdart.a
 
-include_HEADERS = ../include/dataspaces.h
+include_HEADERS = ../include/dataspaces.h \
+		  ../include/dimes_interface.h
 
 noinst_HEADERS = ../include/sfc.h \
 		 ../include/timer.h \
@@ -21,5 +25,6 @@ noinst_HEADERS = ../include/sfc.h \
 		 ../include/ds_gspace.h \
 		 ../include/dc_gspace.h \
 		 ../include/ss_data.h \
-		 ../include/bbox.h
-
+		 ../include/bbox.h \
+		 ../include/dimes_server.h \
+		 ../include/dimes_data.h

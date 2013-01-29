@@ -8,12 +8,12 @@ AC_PROG_CXX
 AC_PROG_FC
 AC_PROG_RANLIB
 
-
 AC_CRAY_PMI
 AC_CRAY_UGNI
 AC_PORTALS
 AC_INFINIBAND
 AC_DCMF
+AC_GNI_PTAG
 
 dnl Generate flags for dataspaces lib creation which depends on the particular network transport layer. DSPACESLIB_* is used for compiling the lib, and linking testing codes.
 DSPACESLIB_CFLAGS=
