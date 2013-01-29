@@ -1001,8 +1001,8 @@ static int dsgrpc_obj_update(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	 char *str;
 
 	 asprintf(&str, "S%2d: update obj_desc '%s' ver %d from S%2d for  ",
-                DSG_ID, oh->odsc.name, oh->odsc.version, cmd->id);
-	 str = str_append(str, bbox_sprint(&oh->odsc.bb));
+                DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version, cmd->id);
+	 str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
 
 	 uloga("'%s()': %s\n", __func__, str);
 	 free(str);
@@ -1572,7 +1572,7 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		char *str = 0;
 
                 asprintf(&str, "S%2d: obj_desc not found for ", DSG_ID); 
-		str = str_append(str, obj_desc_sprint(&oh->odsc));
+		str = str_append(str, obj_desc_sprint(&oh->u.o.odsc));
 
 		uloga("'%s()': %s\n", __func__, str);
 		free(str);
@@ -1744,8 +1744,8 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	 char *str;
 	 
 	 asprintf(&str, "S%2d: request for obj_desc '%s' ver %d from C%2d for  ",
-		  DSG_ID, oh->odsc.name, oh->odsc.version, cmd->id);
-	 str = str_append(str, bbox_sprint(&oh->odsc.bb));
+		  DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version, cmd->id);
+	 str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
 
  	 uloga("'%s()': %s\n", __func__, str);
 	 free(str);

@@ -66,7 +66,8 @@ AC_CONFIG_FILES([
 		Makefile
 		dart/Makefile
 		src/Makefile
-		test/Makefile
+		tests/Makefile
+		tests/C/Makefile
 		])
 
 AC_OUTPUT
