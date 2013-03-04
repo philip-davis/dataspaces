@@ -395,14 +395,12 @@ enum cmd_type {
 	ss_obj_filter,
 	ss_obj_info,
 	ss_info,
-#ifdef DS_HAVE_ACTIVESPACE
 	ss_code_put,
 	ss_code_reply,
-#endif
-#ifdef DS_HAVE_DIMES
+#ifdef DIMES
 	dimes_ss_info_msg,
 	dimes_get_desc_msg,
-	dimes_put_msg,
+	dimes_put_direct_msg,
 #endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,

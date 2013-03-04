@@ -1817,7 +1817,22 @@ void rpc_server_set_rpc_per_buff(struct rpc_server *rpc_s, int num_rpc_per_buff)
 /*
   System barrier implementation.
 */
+// PMI barrier
+int rpc_barrier(struct rpc_server *rpc_s)
+{
+  int err = PMI_Barrier();
+  if(err == PMI_SUCCESS)
+    return 0;
+  else
+    goto err_out;
 
+ err_out:
+  printf("Rank %d: (%s) failed (%d).\n", rank_id_pmi, __func__, err);
+  return err;
+}
+
+// original barrier
+/*
 int rpc_barrier(struct rpc_server *rpc_s)
 {
 	//	struct node_id *peer;
@@ -1850,6 +1865,7 @@ int rpc_barrier(struct rpc_server *rpc_s)
 	printf("Rank %d: (%s) failed (%d).\n", rank_id_pmi, __func__, err);
 	return err;
 }
+*/
 
 //rpc operation
 void rpc_add_service(enum cmd_type rpc_cmd, rpc_service rpc_func)

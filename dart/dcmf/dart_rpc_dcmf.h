@@ -298,17 +298,8 @@ enum cmd_type {
 	ss_code_reply,
 #endif
   /* Newly Added for DCMF version */
-  rpc_get_finish,
+	rpc_get_finish,
 	rpc_put_finish,
-#ifdef DS_HAVE_DIMES
-	dimes_ss_info_msg,
-	dimes_get_desc_msg,
-	dimes_put_msg,
-#endif
-#ifdef DS_HAVE_LUA_REXEC
-  ss_lua_rexec,
-  ss_lua_rexec_reply,
-#endif
 	/* Added for CCGrid Demo. */
 	CN_TIMING_AVG,
 	_CMD_COUNT

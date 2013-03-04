@@ -27,6 +27,12 @@
 * POSSIBILITY OF SUCH DAMAGE.
 *
 */
+
+/*
+*  Fan Zhang (2011) TASSL Rutgers University
+*  zhangfan@cac.rutgers.edu
+*/
+
 #ifndef __DC_BASE_DCMF_H_
 #define __DC_BASE_DCMF_H_
 

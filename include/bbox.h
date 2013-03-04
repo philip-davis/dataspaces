@@ -35,6 +35,7 @@
 #define __BBOX_H_
 
 #include <stdio.h>
+#include "strutil.h"
 
 #define max(a,b) (a) > (b) ? (a):(b)
 #define min(a,b) (a) < (b) ? (a):(b)

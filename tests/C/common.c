@@ -46,28 +46,53 @@ err_out:
 	return -1;
 }
 
-int common_run_server(int num_sp, int num_cp) {
+int common_run_server(int num_sp, int num_cp, enum transport_type type) {
 	int err;
-	struct dimes_server *dsg;
-	dsg = dimes_server_alloc(num_sp, num_cp, "dataspaces.conf");
-	if(!dsg)
+	if (type == USE_DSPACES) {
+		struct ds_gspace *dsg;
+		dsg = dsg_alloc(num_sp, num_cp, "dataspaces.conf");
+		if (!dsg)
+			return -1;
+
+		while (!dsg_complete(dsg)){
+			err = dsg_process(dsg);
+			if(err<0)
+				break;
+		}
+
+		dsg_barrier(dsg);
+		dsg_free(dsg); 
+
+		if (err = 0)
+			uloga("All ok.\n");
+		return 0;
+	} else if (type == USE_DIMES) {
+#ifdef DS_HAVE_DIMES
+		struct dimes_server *dsg;
+		dsg = dimes_server_alloc(num_sp, num_cp, "dataspaces.conf");
+		if (!dsg)
+			return -1;
+
+		while (!dimes_server_complete(dsg)){
+			err = dimes_server_process(dsg);
+			if(err<0)
+				break;
+		}
+
+		dimes_server_barrier(dsg);
+		dimes_server_free(dsg); 
+
+		if (err = 0)
+			uloga("All ok.\n");
+		return 0;
+#else
+		uloga("%s(): Dataspaces DIMES is not enabled!\n", __func__);
 		return -1;
-
-	while(!dimes_server_complete(dsg)){
-		err = dimes_server_process(dsg);
-		if(err<0)
-			break;
+#endif
 	}
-
-	dimes_server_barrier(dsg);
-	dimes_server_free(dsg); 
-
-	if(err = 0)
-		uloga("All ok.\n");
-	return 0;
 }
 
-void check_data(double *buf, int num_elem, int rank)
+void check_data(const char *var_name, double *buf, int num_elem, int rank, int ts)
 {
         double max, min, sum, avg;
         int i;
@@ -83,9 +108,13 @@ void check_data(double *buf, int num_elem, int rank)
                 if (min > buf [i])
                         min = buf[i];
                 sum += buf[i];
+		if (buf[i] != ts) {
+			uloga("%s(): var= %s, rank= %d, check data error buf[i]=%f, ts=%d\n",
+				__func__, var_name, rank, buf[i], ts);
+		}
         }
         avg = sum / num_elem;
-        uloga("%s(): rank= %d, max= %f, min= %f, avg= %f\n",
-                __func__, rank, max, min, avg);
+        uloga("%s(): var= %s, rank= %d, max= %f, min= %f, avg= %f\n",
+                __func__, var_name, rank, max, min, avg);
         return;
 }

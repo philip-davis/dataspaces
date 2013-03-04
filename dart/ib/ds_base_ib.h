@@ -45,6 +45,8 @@ struct dart_server {
 	int f_unreg;
 	int num_charge;
 
+	int f_s_unreg;
+
 	/* Flag to accept new requests or drom exsiting ones. */
 	int f_nacc:1;
 

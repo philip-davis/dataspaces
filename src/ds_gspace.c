@@ -45,6 +45,7 @@
 #include "rexec.h"
 #endif
 #include "timer.h"
+#include "strutil.h"
 
 #define DSG_ID                  dsg->ds->self->ptlmap.id
 
@@ -939,36 +940,6 @@ static int cq_check_match(struct obj_descriptor *odsc)
         return 0;
  err_out:
         ERROR_TRACE();
-}
-
-size_t str_len(const char *str)
-{
-	if (str)
-		return strlen(str);
-	else	return 0;
-}
-
-char * str_append_const(char *str, const char *msg)
-{
-	int len, fix_str;
-
-	len = str_len(str) + str_len(msg) + 1;
-	fix_str = (str == 0);
-	str = realloc(str, len);
-	if (fix_str)
-		*str = '\0';
-	if (str) 
-		strcat(str, msg);
-
-	return str;
-}
-
-char * str_append(char *str, char *msg)
-{
-	str = str_append_const(str, msg);
-
-	free(msg);
-	return str;
 }
 
 static char * obj_desc_sprint(const struct obj_descriptor *odsc)

@@ -110,14 +110,6 @@ int dspaces_init(int num_peers, int appid)
 		return err;
 	}
 
-#ifdef DS_HAVE_DIMES
-	err = dimes_alloc(dcg);
-	if (err < 0) {
-		uloga("%s(): failed to init DIMES.\n", __func__);
-		return err;
-	}
-#endif
-
 	return 0;
 }
 
@@ -497,9 +489,6 @@ void dspaces_finalize(void)
 
         dcg_free(dcg);
         dcg = 0;
-#ifdef DS_HAVE_DIMES
-	dimes_free();
-#endif
 }
 
 int dspaces_collect_timing(double time, double *sum_ptr)

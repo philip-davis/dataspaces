@@ -82,6 +82,7 @@ static int dcrpc_barrier(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
       err_out:printf("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
+
 static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)	//Done
 {
 	struct dart_client *dc = dc_ref_from_rpc(rpc_s);
@@ -111,6 +112,7 @@ static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 	free(msg);
 	return 0;
 }
+
 static int dcrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Done
 {
 	struct dart_client *dc = dc_ref_from_rpc(rpc_s);
@@ -131,9 +133,9 @@ static int dcrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Do
 		goto err_out;
 	}
 	msg->cb = announce_cp_completion;	//
-	
+
 	msg->id = cmd->wr_id;
-        msg->mr = cmd->mr;
+	msg->mr = cmd->mr;
 
 
 	err = rpc_receive_direct(rpc_s, peer, msg);
@@ -155,6 +157,7 @@ static int dcrpc_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Don
 	dc->f_reg = 0;
 	return 0;
 }
+
 static int dc_unregister(struct dart_client *dc)	//Done
 {
 	struct msg_buf *msg;
@@ -314,36 +317,36 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 
 	//Function: connect to all other nodes except MS_Server.
 
-        for(i = 1; i < dc->self->ptlmap.id; i++) {
-                if(i > dc->num_sp - 1 && i < dc->cp_min_rank)
-                        continue;
+	for(i = 1; i < dc->self->ptlmap.id; i++) {
+		if(i > dc->num_sp - 1 && i < dc->cp_min_rank)
+			continue;
 
-                int count = 0;
-                peer = dc_get_peer(dc, i);
-                if(i < dc->cp_min_rank) {
-                        do{
-                                err = rpc_connect(dc->rpc_s, peer);
-                                count++;
-                        }while(count <3 && err !=0);
-                        if(err != 0) {
-                                printf("rpc_connect err %d in %s.\n", err, __func__);
-                                goto err_out;
-                        }
+		int count = 0;
+		peer = dc_get_peer(dc, i);
+		if(i < dc->cp_min_rank) {
+			do {
+				err = rpc_connect(dc->rpc_s, peer);
+				count++;
+			} while(count < 3 && err != 0);
+			if(err != 0) {
+				printf("rpc_connect err %d in %s.\n", err, __func__);
+				goto err_out;
+			}
 
-                }
-                //if(peer->ptlmap.id >=dc->num_sp){
-                if(check_cp[peer->ptlmap.id] == 1) {
-                        count = 0;
-                        do{
-                                err = sys_connect(dc->rpc_s, peer);
-                                count++;
-                        }while(count <3 && err !=0);
-                        if(err != 0) {
-                                printf("sys_connect err %d in %s.\n", err, __func__);
-                                goto err_out;
-                        }
-                }
-        }	
+		}
+		//if(peer->ptlmap.id >=dc->num_sp){
+		if(check_cp[peer->ptlmap.id] == 1) {
+			count = 0;
+			do {
+				err = sys_connect(dc->rpc_s, peer);
+				count++;
+			} while(count < 3 && err != 0);
+			if(err != 0) {
+				printf("sys_connect err %d in %s.\n", err, __func__);
+				goto err_out;
+			}
+		}
+	}
 
 	if(i == dc->self->ptlmap.id && dc->self->ptlmap.id != (dc->cp_min_rank + dc->num_cp - 1)) {
 		peer = NULL;
@@ -365,7 +368,7 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 				build_qp_attr(&con->qp_attr, con, dc->rpc_s);
 				err = rdma_create_qp(event_copy.id, con->pd, &con->qp_attr);
 				if(err != 0) {
-                                printf("Peer %d couldnot connect to peer %d. Current number of qp is  %d\n rdma_create_qp %d in %s %s.\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, dc->rpc_s->num_qp, err, __func__, strerror(errno));
+					printf("Peer %d couldnot connect to peer %d. Current number of qp is  %d\n rdma_create_qp %d in %s %s.\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, dc->rpc_s->num_qp, err, __func__, strerror(errno));
 					goto err_out;
 				}
 				dc->rpc_s->num_qp++;
@@ -417,7 +420,7 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 			}
 
 			else {
-				rpc_print_connection_err(dc->rpc_s,peer,event_copy);
+				rpc_print_connection_err(dc->rpc_s, peer, event_copy);
 				printf("event is %d with status %d.\n", event_copy.event, event_copy.status);
 				err = event_copy.status;
 				goto err_out;
@@ -506,12 +509,12 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
 		free(dc);
 		goto err_out;
 	}
-
 //printf("barrier is ok.\n");
 	return dc;
       err_out:printf("'%s()': failed with %d.\n", __func__, err);
 	return NULL;
 }
+
 void dc_free(struct dart_client *dc)
 {
 	int err;
@@ -528,6 +531,7 @@ void dc_free(struct dart_client *dc)
 		free(dc->peer_tab);
 	free(dc);
 }
+
 int dc_process(struct dart_client *dc)
 {
 	return rpc_process_event(dc->rpc_s);

@@ -34,10 +34,6 @@
 #ifndef __DATASPACES_H_
 #define __DATASPACES_H_
 
-#ifdef DS_HAVE_DIMES
-#include "dimes_interface.h"
-#endif
-
 int dspaces_init(int num_peers, int appid);
 void dspaces_set_storage_type (int fst);
 int dspaces_rank(void);

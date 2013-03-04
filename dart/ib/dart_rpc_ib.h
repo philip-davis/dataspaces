@@ -6,9 +6,6 @@
  *  The redistribution of the source code is subject to the terms of version 
  *  2 of the GNU General Public License: http://www.gnu.org/licenses/gpl.html.
  */
-#ifndef __DART_RPC_IB_H__
-#define __DART_RPC_IB_H__
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -246,9 +243,9 @@ struct msg_buf {
 	// Callback to customize completion; by default frees memory. 
 	completion_callback cb;
 
-	__u32 id;
+	uint64_t id;
 
-        struct ibv_mr mr;
+	struct ibv_mr mr;
 
 
 	void *private;
@@ -309,6 +306,8 @@ struct rpc_server {
 	pthread_t comm_thread;
 	int thread_alive;
 	char *localip;
+	int no_more;
+	int p_count;
 
 };
 
@@ -368,6 +367,7 @@ enum cmd_type {
 	cn_unregister,
 	cn_resume_transfer,	/* Hint for server to start async transfers. */
 	cn_suspend_transfer,	/* Hint for server to stop async transfers. */
+
 	sp_reg_request,
 	sp_reg_reply,
 	peer_rdma_done,		/* Added in IB version 12 */
@@ -392,7 +392,8 @@ enum cmd_type {
 	ss_code_reply,
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,
-	_CMD_COUNT
+	_CMD_COUNT,
+	cn_s_unregister
 };
 
 enum lock_type {
@@ -454,6 +455,7 @@ int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg
 int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg);
 int rpc_send_directv(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg);	//API is here, but useless in InfiniBand version
 int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg);
+
 int rpc_receive(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg);
 int rpc_receivev(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg);	//API is here, but useless in InfiniBand version
 
@@ -464,5 +466,3 @@ void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cm
 struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *peer, int num_rpcs);
 
 void rpc_print_connection_err(struct rpc_server *rpc_s, struct node_id *peer, struct rdma_cm_event event);
-
-#endif  

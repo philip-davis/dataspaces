@@ -1,0 +1,16 @@
+#!/bin/sh
+#PBS -N test-dspaces-Titan 
+#PBS -A csc025ewk
+#PBS -q batch 
+#PBS -j oe
+#PBS -l walltime=00:45:00
+#PBS -l nodes=19
+
+cd $PBS_O_WORKDIR
+
+aprun -n 16 ./test_server -s 16 -c 288  &
+sleep 15 
+aprun -n 256 ./test_writer &
+aprun -n 32 ./test_reader &
+
+wait

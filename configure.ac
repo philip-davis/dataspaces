@@ -8,11 +8,12 @@ AC_PROG_CXX
 AC_PROG_FC
 AC_PROG_RANLIB
 
-AC_CRAY_PMI
-AC_CRAY_UGNI
+dnl AC_CRAY_PMI
+dnl AC_CRAY_UGNI
 AC_PORTALS
 AC_INFINIBAND
 AC_DCMF
+AC_UGNI
 AC_GNI_PTAG
 
 dnl Generate flags for dataspaces lib creation which depends on the particular network transport layer. DSPACESLIB_* is used for compiling the lib, and linking testing codes.
@@ -21,18 +22,28 @@ DSPACESLIB_CPPFLAGS=
 DSPACESLIB_LDFLAGS=
 DSPACESLIB_LDADD=
 
-if test -z "${HAVE_CRAY_PMI_TRUE}";  then
-  DSPACESLIB_CPPFLAGS+=" ${CRAY_PMI_CPPFLAGS}"
-  DSPACESLIB_CFLAGS+=""
-  DSPACESLIB_LDFLAGS+=" ${CRAY_PMI_LDFLAGS}"
-  DSPACESLIB_LDADD+=" ${CRAY_PMI_LIBS}"
-fi
+dnl if test -z "${HAVE_CRAY_PMI_TRUE}";  then
+dnl   DSPACESLIB_CPPFLAGS+=" ${CRAY_PMI_CPPFLAGS}"
+dnl   DSPACESLIB_CFLAGS+=""
+dnl   DSPACESLIB_LDFLAGS+=" ${CRAY_PMI_LDFLAGS}"
+dnl   DSPACESLIB_LDADD+=" ${CRAY_PMI_LIBS}"
+dnl fi
 
-if test -z "${HAVE_CRAY_UGNI_TRUE}"; then
-  DSPACESLIB_CPPFLAGS+=" ${CRAY_UGNI_CPPFLAGS}"
+dnl if test -z "${HAVE_CRAY_UGNI_TRUE}"; then
+dnl   DSPACESLIB_CPPFLAGS+=" ${CRAY_UGNI_CPPFLAGS}"
+dnl   DSPACESLIB_CFLAGS+=""
+dnl   DSPACESLIB_LDFLAGS+=" ${CRAY_UGNI_LDFLAGS}"
+dnl   DSPACESLIB_LDADD+=" ${CRAY_UGNI_LIBS}"
+dnl fi
+if test -z "${HAVE_UGNI_TRUE}"; then
+  DSPACESLIB_CPPFLAGS+=" ${PMI_CPPFLAGS}"
   DSPACESLIB_CFLAGS+=""
-  DSPACESLIB_LDFLAGS+=" ${CRAY_UGNI_LDFLAGS}"
-  DSPACESLIB_LDADD+=" ${CRAY_UGNI_LIBS}"
+  DSPACESLIB_LDFLAGS+=" ${PMI_LDFLAGS}"
+  DSPACESLIB_LDADD+=" ${PMI_LIBS}"
+  DSPACESLIB_CPPFLAGS+=" ${UGNI_CPPFLAGS}"
+  DSPACESLIB_CFLAGS+=""
+  DSPACESLIB_LDFLAGS+=" ${UGNI_LDFLAGS}"
+  DSPACESLIB_LDADD+=" ${UGNI_LIBS}"
 fi
 
 if test -z "${HAVE_PORTALS_TRUE}"; then
@@ -74,14 +85,22 @@ AC_OUTPUT
 
 
 echo "Network transport layer"
-if test -z "${HAVE_CRAY_UGNI_TRUE}"; then
+dnl if test -z "${HAVE_CRAY_UGNI_TRUE}"; then
+dnl   echo "Cray UGNI enabled.";
+dnl   echo "	- CRAY_PMI_CPPFLAGS = $CRAY_PMI_CPPFLAGS";
+dnl   echo "	- CRAY_PMI_LDFLAGS = $CRAY_PMI_LDFLAGS";
+dnl   echo "	- CRAY_PMI_LIBS = $CRAY_PMI_LIBS";
+dnl   echo "	- CRAY_UGNI_CPPFLAGS = $CRAY_UGNI_CPPFLAGS";
+dnl   echo "	- CRAY_UGNI_LDFLAGS = $CRAY_UGNI_LDFLAGS";
+dnl   echo "	- CRAY_UGNI_LIBS = $CRAY_UGNI_LIBS";
+if test -z "${HAVE_UGNI_TRUE}"; then
   echo "Cray UGNI enabled.";
-  echo "	- CRAY_PMI_CPPFLAGS = $CRAY_PMI_CPPFLAGS";
-  echo "	- CRAY_PMI_LDFLAGS = $CRAY_PMI_LDFLAGS";
-  echo "	- CRAY_PMI_LIBS = $CRAY_PMI_LIBS";
-  echo "	- CRAY_UGNI_CPPFLAGS = $CRAY_UGNI_CPPFLAGS";
-  echo "	- CRAY_UGNI_LDFLAGS = $CRAY_UGNI_LDFLAGS";
-  echo "	- CRAY_UGNI_LIBS = $CRAY_UGNI_LIBS";
+  echo "	- CRAY_PMI_CPPFLAGS = $PMI_CPPFLAGS";
+  echo "	- CRAY_PMI_LDFLAGS = $PMI_LDFLAGS";
+  echo "	- CRAY_PMI_LIBS = $PMI_LIBS";
+  echo "	- CRAY_UGNI_CPPFLAGS = $UGNI_CPPFLAGS";
+  echo "	- CRAY_UGNI_LDFLAGS = $UGNI_LDFLAGS";
+  echo "	- CRAY_UGNI_LIBS = $UGNI_LIBS";
 else
   echo "No Cray UGNI."
 fi

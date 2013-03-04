@@ -1,5 +1,5 @@
 #ifndef __DC_BASE_IB_H_
-#define __DC_BASE_IB_H_
+#define __DC_BASE__IB_H_
 
 #include "dart_rpc_ib.h"
 

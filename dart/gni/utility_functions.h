@@ -35,6 +35,7 @@
 #ifndef __UTILITY_FUNC_H__
 #define __UTILITY_FUNC_H__
 
+#include <stdlib.h>
 #include <sched.h>
 #ifdef CRAY_CONFIG_GHAL_ARIES
 #include "aries/misc/exceptions.h"
@@ -307,6 +308,37 @@ get_cookie(void)
 }
 
 /*
+ * get_cookie_env will get the cookie value from environment variable DSPACES_GNI_COOKIE
+ * it expects a hexadecimal value
+ *
+ * Returns: the cookie value.
+ */
+#include "debug.h"
+static          uint32_t
+get_cookie_env(char * envvar)
+{
+    uint32_t        cookie;
+    char           *p_ptr;
+    char           *ep;
+
+    p_ptr = getenv(envvar);
+
+    if (p_ptr) {
+        // Hexa convert 0x... numbers
+        cookie = (uint32_t) strtol(p_ptr,&ep,16);
+        //uloga("---- cookieenv: ptr=%u str=%s, ep=%u, epstr=%s, cookie=%d, cookiex=%x\n", 
+        //    p_ptr, p_ptr, ep, ep, cookie, cookie);
+        if (ep != NULL && *ep != '\0')
+            cookie = 0;
+    } else {
+        cookie = 0;
+    }
+
+    return cookie;
+}
+
+
+/*
  * get_cq_event will process events from the completion queue.
  *
  *   cq_handle is the completion queue handle.
@@ -543,6 +575,31 @@ get_ptag(void)
     return ptag;
 }
 
+/*
+ * get_ptag_env will get the ptag value from environment variable DSPACES_GNI_PTAG
+ *
+ * Returns: the ptag value.
+ */
+
+static          uint8_t
+get_ptag_env(char * envvar)
+{
+    char           *p_ptr;
+    uint8_t         ptag;
+    char           *ep;
+
+    p_ptr = getenv(envvar);
+
+    if (p_ptr) { 
+        ptag = (uint8_t) strtol(p_ptr, &ep, 10);
+        if (ep == NULL)
+            ptag = 0;
+    } else {
+        ptag = 0;
+    }
+
+    return ptag;
+}
 /*
  * print_results will determine if the test was successful or not
  *               and then print a message according to this result.

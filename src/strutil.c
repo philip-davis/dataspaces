@@ -25,43 +25,45 @@
  */
 
 /*
-*  Fan Zhang (2012)  TASSL Rutgers University
-*  zhangfan@cac.rutgers.edu
+*  Ciprian Docan (2009)  TASSL Rutgers University
+*  docan@cac.rutgers.edu
+*  Tong Jin (2011) TASSL Rutgers University
+*  tjin@cac.rutgers.edu
 */
-#ifndef __DIMES_H__
-#define __DIMES_H__
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-// int dimes_init(int num_peers, int appid);
-int dimes_alloc(void *);
-void dimes_set_storage_type (int fst);
-// int dimes_rank(void);
-// int dimes_peers(void);
-// void dimes_barrier(void);
-// void dimes_lock_on_read(const char *lock_name);
-// void dimes_unlock_on_read(const char *lock_name);
-// void dimes_lock_on_write(const char *lock_name);
-// void dimes_unlock_on_write(const char *lock_name);
-int dimes_put_sync(void);
-// void dimes_finalize (void);
-void dimes_free(void);
+#include "strutil.h"
 
-int dimes_get (const char *var_name,
-        unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
-        void *data);
-int dimes_put (const char *var_name,
-        unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
-        void *data);
-
-#ifdef __cplusplus
+size_t str_len(const char *str)
+{
+	if(str)
+		return strlen(str);
+	else
+		return 0;
 }
-#endif
 
-#endif
+char *str_append_const(char *str, const char *msg)
+{
+	int len, fix_str;
+
+	len = str_len(str) + str_len(msg) + 1;
+	fix_str = (str == 0);
+	str = realloc(str, len);
+	if(fix_str)
+		*str = '\0';
+	if(str)
+		strcat(str, msg);
+
+	return str;
+}
+
+char *str_append(char *str, char *msg)
+{
+	str = str_append_const(str, msg);
+
+	free(msg);
+	return str;
+}

@@ -9,7 +9,7 @@ include_HEADERS = dart.h
 noinst_HEADERS = debug.h \
 		 list.h
 
-if HAVE_CRAY_UGNI
+if HAVE_UGNI
 libdart_a_SOURCES = gni/dart_rpc_gni.c \
 		    gni/ds_base_gni.c \
                     gni/dc_base_gni.c
@@ -17,7 +17,7 @@ noinst_HEADERS += gni/utility_functions.h \
 		  gni/dart_rpc_gni.h \
                   gni/ds_base_gni.h \
 		  gni/dc_base_gni.h
-endif # HAVE_CRAY_UGNI
+endif # HAVE_UGNI
 if HAVE_PORTALS
 libdart_a_SOURCES = portals/dart_rpc_portals.c \
 		    portals/ds_base_portals.c \

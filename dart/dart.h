@@ -60,7 +60,7 @@
  int ds_stop(struct dart_server *ds);
 */
 
-#if HAVE_CRAY_UGNI
+#if HAVE_UGNI
 
 #include "gni/dart_rpc_gni.h"
 #include "gni/dc_base_gni.h"

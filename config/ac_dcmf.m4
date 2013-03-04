@@ -17,7 +17,7 @@ AC_MSG_NOTICE([=== checking for IBM DCMF ===])
 AM_CONDITIONAL(HAVE_DCMF,true)
 
 AC_ARG_WITH(dcmf,
-            [ --with-dcmf=<location of IBM DCMF>],
+            [ --with-dcmf=DIR      location of IBM DCMF],
     	    [ DCMF_CPPFLAGS="-I$withval/arch/include -I$withval/comm/include";
               DCMF_LDFLAGS="-L$withval/comm/lib -L$withval/runtime/SPI";
 	      DCMF_LIBS="-ldcmf.cnk -ldcmfcoll.cnk -lpthread -lrt -lSPI.cna";])
