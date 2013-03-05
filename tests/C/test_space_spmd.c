@@ -37,8 +37,8 @@ int main(int argc, char **argv)
 	if (mpi_rank < num_sp){
 		MPI_Comm_split(MPI_COMM_WORLD, 0, mpi_rank, &gcomm);
 		// Run as data space servers
-		//common_run_server(num_sp, num_cp, USE_DSPACES);
-		common_run_server(num_sp, num_cp, USE_DIMES);
+		common_run_server(num_sp, num_cp, USE_DSPACES);
+		//common_run_server(num_sp, num_cp, USE_DIMES);
 	} else if (num_sp <= mpi_rank && mpi_rank < num_sp+num_writer) {
 		MPI_Comm_split(MPI_COMM_WORLD, 1, mpi_rank, &gcomm);
 		// Run as data writer
