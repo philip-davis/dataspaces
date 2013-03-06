@@ -1,0 +1,18 @@
+Quick Install Instructions
+==========================
+1. Generate configure file
+# Run following commands under project top dir
+$ aclocal -I config
+$ autoheader
+$ automake -a
+$ autoconf
+
+2. Configure (on different platforms)
+2.1 Titan - Cray XK7
+$ ./configure CC=cc FC=ftn --with-gni-cookie=0x5420000 --with-gni-ptag=250
+
+2.2 Sith - IB cluster
+$ ./configure CC=mpicc FC=mpif90
+
+2.3 BlueGene/P
+$ ./configure CC=/bgsys/drivers/ppcfloor/comm/default/bin/mpixlc FC=/bgsys/drivers/ppcfloor/comm/default/bin/mpif90 CFLAGS="-g -O0 -qarch=450 -qtune=450" --with-dcmf="/bgsys/drivers/ppcfloor"

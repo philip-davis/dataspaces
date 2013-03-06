@@ -2,10 +2,10 @@
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
 /* Fixed Gemini cookie */
-#define GNI_COOKIE 0x5420000
+/* #undef GNI_COOKIE */
 
 /* Fixed Gemini ptag */
-#define GNI_PTAG 250
+/* #undef GNI_PTAG */
 
 /* Define if you have Cray Portals. */
 /* #undef HAVE_CRAY_PORTALS */
@@ -17,13 +17,13 @@
 /* #undef HAVE_DCMF_H */
 
 /* Define to 1 if you have the <gni_pub.h> header file. */
-#define HAVE_GNI_PUB_H 1
+/* #undef HAVE_GNI_PUB_H */
 
 /* Define to 1 if you have <infiniband/verbs.h>. */
 #define HAVE_IBVERBS_H 1
 
 /* Define if you have the Infiniband. */
-/* #undef HAVE_INFINIBAND */
+#define HAVE_INFINIBAND 1
 
 /* Define to 1 if you have the <inttypes.h> header file. */
 #define HAVE_INTTYPES_H 1
@@ -38,7 +38,7 @@
 /* #undef HAVE_P3RT_P3RT_H */
 
 /* Define to 1 if you have the <pmi.h> header file. */
-#define HAVE_PMI_H 1
+/* #undef HAVE_PMI_H */
 
 /* Define if you have the Portals. */
 /* #undef HAVE_PORTALS */
@@ -98,7 +98,7 @@
 #define HAVE_SYS_TYPES_H 1
 
 /* Define if you have the Gemini. */
-#define HAVE_UGNI 1
+/* #undef HAVE_UGNI */
 
 /* Define to 1 if you have the <unistd.h> header file. */
 #define HAVE_UNISTD_H 1

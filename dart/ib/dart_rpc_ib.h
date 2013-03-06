@@ -6,6 +6,9 @@
  *  The redistribution of the source code is subject to the terms of version 
  *  2 of the GNU General Public License: http://www.gnu.org/licenses/gpl.html.
  */
+#ifndef __DART_RPC_IB_H__
+#define __DART_RPC_IB_H__
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -466,3 +469,5 @@ void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cm
 struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *peer, int num_rpcs);
 
 void rpc_print_connection_err(struct rpc_server *rpc_s, struct node_id *peer, struct rdma_cm_event event);
+
+#endif
