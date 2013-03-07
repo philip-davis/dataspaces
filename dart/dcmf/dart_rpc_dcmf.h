@@ -374,6 +374,11 @@ struct msg_buf* msg_buf_alloc(struct rpc_server *, const struct node_id *, int);
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg,
 			struct rpc_cmd *cmd);
 
+inline void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg,
+                        struct rpc_cmd *cmd) {
+	return;
+}
+
 #ifdef __cplusplus
 }
 #endif

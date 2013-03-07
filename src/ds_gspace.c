@@ -410,8 +410,8 @@ static int dsgrpc_bin_code_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	msg->cb = bin_code_put_completion;
 
 	rpc_mem_info_cache(peer, msg, cmd); 
-
 	err = rpc_receive_direct(rpc_s, peer, msg);
+	rpc_mem_info_reset(peer, msg, cmd);
 	if(err == 0)
 		return 0;
 
@@ -1131,13 +1131,14 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         msg->private = od;
         msg->cb = obj_put_completion;
 
-	rpc_mem_info_cache(peer, msg, cmd); 
-
 #ifdef DEBUG
 	uloga("'%s()': start receiving %s, version %d.\n", 
 		__func__, odsc->name, odsc->version);
 #endif
+	rpc_mem_info_cache(peer, msg, cmd); 
         err = rpc_receive_direct(rpc_s, peer, msg);
+	rpc_mem_info_reset(peer, msg, cmd);
+
         if (err < 0)
                 goto err_free_msg;
 
@@ -1311,8 +1312,8 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
         msg->cb = obj_send_dht_peers_completion;
 
 	rpc_mem_info_cache(peer, msg, cmd);
-
         err = rpc_send_direct(rpc_s, peer, msg);
+	rpc_mem_info_reset(peer, msg, cmd);
         if (err == 0)
                 return 0;
 
@@ -1772,9 +1773,9 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 
 	rpc_mem_info_cache(peer, msg, cmd); 
-
         // err = rpc_send_direct(rpc_s, peer, msg);
 	err = (fast_v)? rpc_send_directv(rpc_s, peer, msg) : rpc_send_direct(rpc_s, peer, msg);
+	rpc_mem_info_reset(peer, msg, cmd);
         if (err == 0)
                 return 0;
 
@@ -1825,8 +1826,8 @@ static int dsgrpc_obj_filter(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         msg->cb = default_completion_with_data_callback;
 
 	rpc_mem_info_cache(peer, msg, cmd);
-
         err = rpc_send_direct(rpc_s, peer, msg);
+	rpc_mem_info_reset(peer, msg, cmd);
         if (err < 0)
                 goto err_out;
 

@@ -65,7 +65,7 @@ static struct app_info *app_find(struct dart_server *ds, int appid)
 {
         struct app_info *app;
 
-        list_for_each_entry(app, &ds->app_list, app_entry) {
+        list_for_each_entry(app, &ds->app_list, struct app_info, app_entry) {
                 if (app->app_id == appid)
                         return app;
         }
@@ -397,7 +397,7 @@ static int sp_register_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 	   were delivered. */
 	ds->f_reg = 1;
 
-	list_for_each_entry(app, &ds->app_list, app_entry) {
+	list_for_each_entry(app, &ds->app_list, struct app_info, app_entry) {
 		/* Check if any  application finished the registration
 		   before the servers. */
 		if (app->app_num_peers == app->app_cnt_peers) {
@@ -837,7 +837,7 @@ void ds_free(struct dart_server *ds)
 
         rpc_server_free(ds->rpc_s);
 
-        list_for_each_entry_safe(app, t, &ds->app_list, app_entry) {
+        list_for_each_entry_safe(app, t, &ds->app_list, struct app_info, app_entry) {
                 list_del(&app->app_entry);
                 free(app);
         }

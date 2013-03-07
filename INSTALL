@@ -2,10 +2,7 @@ Quick Install Instructions
 ==========================
 1. Generate configure file
 # Run following commands under project top dir
-$ aclocal -I config
-$ autoheader
-$ automake -a
-$ autoconf
+$ ./autogen.sh
 
 2. Configure (on different platforms)
 2.1 Titan - Cray XK7
@@ -16,6 +13,9 @@ $ ./configure CC=mpicc FC=mpif90
 
 2.3 BlueGene/P
 $ ./configure CC=/bgsys/drivers/ppcfloor/comm/default/bin/mpixlc FC=/bgsys/drivers/ppcfloor/comm/default/bin/mpif90 CFLAGS="-g -O0 -qarch=450 -qtune=450" --with-dcmf="/bgsys/drivers/ppcfloor"
+
+2.4 Kraken - Cray XT5
+$ ./configure CC=cc FC=ftn
 
 3. Compile
 # Under project top dir

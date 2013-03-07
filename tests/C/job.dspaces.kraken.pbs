@@ -1,0 +1,21 @@
+#!/bin/bash
+#PBS -N test_dspaces
+#PBS -A XXXX 
+#PBS -j oe
+#PBS -q debug
+#PBS -l walltime=00:50:00,size=1368
+
+cd $PBS_O_WORKDIR
+
+aprun -n 64 ./test_server -s 64 -c 1280 &
+
+## Give some time for the servers to load and startup
+while [ ! -f conf ]; do
+    sleep 2s
+done
+
+aprun -n 1024 ./test_writer &
+sleep 5
+aprun -n 256 ./test_reader &
+
+wait

@@ -96,6 +96,7 @@ void check_data(const char *var_name, double *buf, int num_elem, int rank, int t
 {
         double max, min, sum, avg;
         int i;
+	int cnt = 0;
 
         if (num_elem <= 0) {
                 return;
@@ -109,12 +110,18 @@ void check_data(const char *var_name, double *buf, int num_elem, int rank, int t
                         min = buf[i];
                 sum += buf[i];
 		if (buf[i] != ts) {
-			uloga("%s(): var= %s, rank= %d, check data error buf[i]=%f, ts=%d\n",
-				__func__, var_name, rank, buf[i], ts);
+			cnt++;
 		}
         }
         avg = sum / num_elem;
         uloga("%s(): var= %s, rank= %d, max= %f, min= %f, avg= %f\n",
                 __func__, var_name, rank, max, min, avg);
+
+        if (cnt > 0) {
+                uloga("%s(): var= %s, rank= %d, ts= %d, "
+			"error elem cnt= %d, total elem= %d\n",
+                        __func__, var_name, rank, ts, cnt, num_elem);
+        }
+	
         return;
 }

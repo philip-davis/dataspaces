@@ -464,7 +464,10 @@ int rpc_receivev(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf 
 
 void rpc_report_md_usage(struct rpc_server *rpc_s);
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
-
+inline void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg,
+                        struct rpc_cmd *cmd) {
+        return;
+}
 
 struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *peer, int num_rpcs);
 

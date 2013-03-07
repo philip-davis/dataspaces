@@ -1,6 +1,6 @@
 #!/bin/sh
 #PBS -N test-dspaces-Titan 
-#PBS -A csc025ewk
+#PBS -A XXXX 
 #PBS -q batch 
 #PBS -j oe
 #PBS -l walltime=00:45:00

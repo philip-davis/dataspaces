@@ -1253,7 +1253,7 @@ void rpc_server_free(struct rpc_server *rpc_s)
 #endif
 	n = 0;
         /* Unlink RPC communication buffers posted for incomming requests. */
-        list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, req_entry) {
+        list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry) {
                 n++;
                 list_del(&rr->req_entry);
 
@@ -1654,4 +1654,14 @@ struct msg_buf* msg_buf_alloc(struct rpc_server *rpc_s,
         }
 
         return msg;
+}
+
+void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd)
+{
+	peer->mb = cmd->mbits;
+}
+
+void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd)
+{
+	peer->mb = MB_RPC_MSG;
 }

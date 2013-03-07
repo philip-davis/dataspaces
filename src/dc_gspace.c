@@ -1384,8 +1384,9 @@ static int dcgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         msg->private = oht;
 
 	rpc_mem_info_cache(peer, msg, cmd); 
-
         err = rpc_receive_direct(rpc_s, peer, msg);
+	rpc_mem_info_reset(peer, msg, cmd);	
+
         if (err == 0)
                 return 0;
 
