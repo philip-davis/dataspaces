@@ -83,6 +83,7 @@
 #include "dcmf/dart_rpc_dcmf.h"
 #include "dcmf/dc_base_dcmf.h"
 #include "dcmf/ds_base_dcmf.h"
+#include "dcmf/dart_rdma_dcmf.h"
 
 #endif
 

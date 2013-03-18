@@ -37,10 +37,12 @@ endif # HAVE_INFINIBAND
 if HAVE_DCMF
 libdart_a_SOURCES = dcmf/dart_rpc_dcmf.c \
 		    dcmf/ds_base_dcmf.c \
-                    dcmf/dc_base_dcmf.c
+                    dcmf/dc_base_dcmf.c \
+		    dcmf/dart_rdma_dcmf.c
 noinst_HEADERS += dcmf/dart_rpc_dcmf.h \
                   dcmf/ds_base_dcmf.h \
-		  dcmf/dc_base_dcmf.h
+		  dcmf/dc_base_dcmf.h \
+		  dcmf/dart_rdma_dcmf.h
 endif # HAVE_DCMF
 
 

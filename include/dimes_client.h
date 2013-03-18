@@ -25,53 +25,47 @@
  */
 
 /*
-*  Ciprian Docan (2009)  TASSL Rutgers University
-*  docan@cac.rutgers.edu
-*  Tong Jin (2011) TASSL Rutgers University
-*  tjin@cac.rutgers.edu
+*  Fan Zhang (2012)  TASSL Rutgers University
+*  zhangfan@cac.rutgers.edu
 */
+#ifndef __DIMES_CLIENT_H__
+#define __DIMES_CLIENT_H__
 
-#ifndef __DATASPACES_H_
-#define __DATASPACES_H_
-
-#ifdef DS_HAVE_DIMES
-#include "dimes_interface.h"
+#ifdef __cplusplus
+extern "C" {
 #endif
 
-int dspaces_init(int num_peers, int appid);
-void dspaces_set_storage_type (int fst);
-int dspaces_rank(void);
-int dspaces_peers(void);
-void dspaces_barrier(void);
-void dspaces_lock_on_read(const char *lock_name, void *comm);
-void dspaces_unlock_on_read(const char *lock_name, void *comm);
-void dspaces_lock_on_write(const char *lock_name, void *comm);
-void dspaces_unlock_on_write(const char *lock_name, void *comm);
-int dspaces_get (const char *var_name, 
-        unsigned int ver, int size,
-        int xl, int yl, int zl, 
-        int xu, int yu, int zu, 
-        void *data);
-int dspaces_get_versions(int **);
-int dspaces_put (const char *var_name, 
-        unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu, 
-        void *data);
-int dspaces_select(char *var_name, unsigned int ver,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu, 
-        void *data);
-int dspaces_cq_register(char *var_name,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu, 
-        void *data);
-int dspaces_cq_update (void);
-int dspaces_put_sync(void);
-void dspaces_finalize (void);
+#include "debug.h"
+#include "dart.h"
+#include "dc_gspace.h"
+#include "ss_data.h"
+#include "timer.h"
 
-/* CCGrid'11 demo */
-int dspaces_collect_timing(double, double *);
-int dspaces_num_space_srv(void);
+struct query_tran_d {
+        struct list_head        q_list;
+        int                     num_ent;
+};
+
+struct dimes_client {
+        struct dcg_space *dcg;
+        struct sspace *ssd; //only used for hashing
+        struct bbox domain;
+        struct query_tran_d qt;
+	
+	// Local memory storage
+	struct ss_storage *storage;
+	// List of pending object data requests (from peers of 
+	// other coupled apps)
+	struct list_head req_list;
+
+        int    f_ss_info;
+};
+
+struct dimes_client* dimes_alloc(void *);
+void dimes_free(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

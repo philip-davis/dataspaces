@@ -5,7 +5,7 @@ dnl
 dnl ######################################################################
 
 AC_DEFUN([AC_DCMF],[
-ac_with_dcmf=no
+ac_dcmf_lib_ok=no
 
 DCMF_CFLAGS=""
 DCMF_CPPFLAGS=""
@@ -17,7 +17,7 @@ AC_MSG_NOTICE([=== checking for IBM DCMF ===])
 AM_CONDITIONAL(HAVE_DCMF,true)
 
 AC_ARG_WITH(dcmf,
-            [ --with-dcmf=DIR      location of IBM DCMF],
+            [ --with-dcmf=DIR      Location of IBM DCMF],
     	    [ DCMF_CPPFLAGS="-I$withval/arch/include -I$withval/comm/include";
               DCMF_LDFLAGS="-L$withval/comm/lib -L$withval/runtime/SPI";
 	      DCMF_LIBS="-ldcmf.cnk -ldcmfcoll.cnk -lpthread -lrt -lSPI.cna";])
@@ -29,7 +29,7 @@ CPPFLAGS="$CPPFLAGS $DCMF_CPPFLAGS"
 LDFLAGS="$LDFLAGS $DCMF_LDFLAGS"
 LIBS="$LIBS $DCMF_LIBS"
 
-dnl check for the header file.
+dnl Check for the header file.
 if test -z "${HAVE_DCMF_TRUE}"; then
 	  AC_CHECK_HEADERS(dcmf.h,
 		  ,
@@ -37,9 +37,17 @@ if test -z "${HAVE_DCMF_TRUE}"; then
 fi
 
 dnl Check for the library.
-dnl if test -z "${HAVE_DCMF_TRUE}"; then
-dnl  	 AC_SEARCH_LIBS([DCMF_Messager_initialize], [dcmf.cnk], [], [AM_CONDITIONAL(HAVE_DCMF,false], [-ldcmfcoll.cnk -lSPI.cna -lrt])
-dnl fi
+if test -z "${HAVE_DCMF_TRUE}"; then
+	AC_MSG_CHECKING([if dcmf code can be linked])
+	AC_TRY_LINK([#include "dcmf.h"],
+		[unsigned ret;
+		 ret = DCMF_Messager_initialize();
+		 ret = DCMF_Messager_finalize();],
+		[DCMF_LIBS="-ldcmf.cnk -ldcmfcoll.cnk -lpthread -lrt -lSPI.cna"
+		 AC_MSG_RESULT(yes)],
+		[AM_CONDITIONAL(HAVE_DCMF, false)
+		 AC_MSG_RESULT(no)])
+fi
 
 LIBS="$save_LIBS"
 LDFLAGS="$save_LDFLAGS"
@@ -52,7 +60,7 @@ AC_SUBST(DCMF_LIBS)
 
 dnl Finally, execute ACTION-IF-FOUND/ACTION-IF-NOT-FOUND:
 if test -z "${HAVE_DCMF_TRUE}"; then
-	ac_with_dcmf=yes
+	ac_dcmf_lib_ok=yes
  	ifelse([$1],,[AC_DEFINE(HAVE_DCMF,1,[Define if you have the DCMF.])],[$1])
 	:
 else

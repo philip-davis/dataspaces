@@ -43,6 +43,10 @@
 #include "timer.h"
 #include "dataspaces.h"
 
+#ifdef DS_HAVE_DIMES
+#include "dimes_client.h"
+#endif
+
 /* Name mangling for C functions to adapt Fortran compiler */
 #define FC_FUNC(name,NAME) name ## _
 
@@ -53,6 +57,9 @@ static int cq_id = -1;
 static enum storage_type st = column_major;
 // TODO: 'num_dims' is hardcoded to 2.
 static int num_dims = 2;
+#ifdef DS_HAVE_DIMES
+static struct dimes_client *dimes_c;
+#endif
 
 static void lib_exit(void)
 {
@@ -109,6 +116,14 @@ int dspaces_init(int num_peers, int appid)
 			__func__, err);
 		return err;
 	}
+
+#ifdef DS_HAVE_DIMES
+        dimes_c = dimes_alloc(dcg);
+        if (dimes_c == NULL) {
+                uloga("%s(): failed to init DIMES.\n", __func__);
+                return err;
+        }
+#endif
 
 	return 0;
 }
@@ -486,6 +501,10 @@ void dspaces_finalize(void)
 			 __func__);
 		return;
 	}
+
+#ifdef DS_HAVE_DIMES
+        dimes_free();
+#endif
 
         dcg_free(dcg);
         dcg = 0;
