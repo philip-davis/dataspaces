@@ -22,6 +22,26 @@ DSPACESLIB_CPPFLAGS=
 DSPACESLIB_LDFLAGS=
 DSPACESLIB_LDADD=
 
+dnl Check if DIMES is enabled
+AC_ARG_ENABLE(dimes,
+    [AS_HELP_STRING([--enable-dimes],
+        [Include the dimes mechanism. By default this is not included])])
+AM_CONDITIONAL([DIMES], [test "x$enable_dimes" == "xyes"])
+
+if test "x$enable_dimes" == "xyes"; then
+        if test -z "${HAVE_UGNI_TRUE}"; then
+                DSPACESLIB_CFLAGS+="-DDS_HAVE_DIMES"
+		DSPACESLIB_CPPFLAGS+="-DDS_HAVE_DIMES"
+		echo "DIMES enabled!"
+        elif test -z "${HAVE_DCMF_TRUE}"; then
+                DSPACESLIB_CFLAGS+="-DDS_HAVE_DIMES"
+		DSPACESLIB_CPPFLAGS+="-DDS_HAVE_DIMES"
+		echo "DIMES enabled!"
+        else
+                echo "DIMES only supported on Cray UGNI, IBM DCMF"
+        fi
+fi
+
 dnl if test -z "${HAVE_CRAY_PMI_TRUE}";  then
 dnl   DSPACESLIB_CPPFLAGS+=" ${CRAY_PMI_CPPFLAGS}"
 dnl   DSPACESLIB_CFLAGS+=""

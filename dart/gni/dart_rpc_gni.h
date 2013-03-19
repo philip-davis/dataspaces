@@ -397,10 +397,20 @@ enum cmd_type {
 	ss_info,
 	ss_code_put,
 	ss_code_reply,
-#ifdef DIMES
-	dimes_ss_info_msg,
-	dimes_get_desc_msg,
-	dimes_put_direct_msg,
+#ifdef DS_HAVE_DIMES
+        dimes_ss_info_msg,
+        dimes_locate_data_msg,
+        dimes_locate_data_v2_msg,
+        dimes_locate_data_v3_msg,
+        dimes_put_msg,
+        dimes_put_v2_msg,
+        dimes_put_v2_1_msg,
+        dimes_put_v3_msg,
+        dimes_update_dht_msg,
+        dimes_get_dht_peers_msg,
+        dimes_get_location_peers_msg,
+        dimes_obj_get_msg,
+        dimes_obj_get_ack_v3_msg,
 #endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,

@@ -12,11 +12,13 @@ noinst_HEADERS = debug.h \
 if HAVE_UGNI
 libdart_a_SOURCES = gni/dart_rpc_gni.c \
 		    gni/ds_base_gni.c \
-                    gni/dc_base_gni.c
+                    gni/dc_base_gni.c \
+		    gni/dart_rdma_gni.c
 noinst_HEADERS += gni/utility_functions.h \
 		  gni/dart_rpc_gni.h \
                   gni/ds_base_gni.h \
-		  gni/dc_base_gni.h
+		  gni/dc_base_gni.h \
+		  gni/dart_rdma_gni.h
 endif # HAVE_UGNI
 if HAVE_PORTALS
 libdart_a_SOURCES = portals/dart_rpc_portals.c \

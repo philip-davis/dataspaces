@@ -65,6 +65,7 @@
 #include "gni/dart_rpc_gni.h"
 #include "gni/dc_base_gni.h"
 #include "gni/ds_base_gni.h"
+#include "gni/dart_rdma_gni.h"
 
 #elif HAVE_PORTALS
 
