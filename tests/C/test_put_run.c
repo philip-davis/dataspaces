@@ -241,10 +241,10 @@ int test_put_run(int num_ts,int num_process,int process_x,int process_y,
 		unsigned int ts;
 		for (ts = 1; ts <= timesteps_; ts++){
 			generate_2d(m2d, ts);
-			//if (ts % 2 == 0)		
-				//couple_write_2d(m2d, ts, USE_DIMES);
+			if (ts % 2 == 0)		
+				couple_write_2d(m2d, ts, USE_DIMES);
 				//couple_write_2d_multi_var(ts, USE_DIMES, 10);
-			//else if (ts % 2 == 1)
+			else if (ts % 2 == 1)
 				couple_write_2d(m2d, ts, USE_DSPACES);
 				//couple_write_2d_multi_var(ts, USE_DSPACES, 10);
 		}

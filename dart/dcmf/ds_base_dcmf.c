@@ -266,10 +266,10 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	/* Wait for all of the peers to join in. */
 	if (app->app_cnt_peers != app->app_num_peers)
 		return 0;
-
+#ifdef DEBUG
 	uloga("%s(): all %d compute peers for app %d have joined.\n", 
 		__func__, app->app_num_peers, app->app_id);
-
+#endif
 	
 	err = ds_announce_cp(ds, app);
 	if(err < 0)
@@ -277,15 +277,14 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
         //--------change by qiansun--------------------------------------
         if (ds->num_cp == ds->size_cp){ //all apps have joined
-
+#ifdef DEBUG
    		uloga("All apps has registered in the master server!\n");         
-
+#endif
         	list_for_each_entry(app, &ds->app_list, struct app_info, app_entry){
 			if(app->app_cnt_peers != app->app_num_peers)
 				return 0;
              	}
-                uloga("Ready to send all peers_info!\n");
-	
+
 		err = ds_register_cp(ds, app);
 		if(err < 0)
 			goto err_out;
@@ -325,7 +324,9 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 	if((++num_unreg) == ds->num_cp){
 		ds->f_stop = 1;
+#ifdef DEBUG
 		uloga("%s(): #%u ds->f_stop flag is set as %d\n", __func__, ds->self->ptlmap.rank_dcmf, ds->f_stop);
+#endif
 	}
 
 	/* 
@@ -519,8 +520,10 @@ static int dsrpc_sp_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	//Wait for all nodes to join in before sending back registration info
 	if(ds->num_sp < ds->size_sp)
 		return 0;
-	
+
+#ifdef DEBUG	
 	uloga("'%s()': all space peers joined.\n", __func__);
+#endif
 	
 	//Send back registration info to space peers(excluding itself)
 	int i, k, err;
@@ -812,9 +815,6 @@ static int ds_boot(struct dart_server *ds)
 
                 err = rpc_write_config(ds->rpc_s);
                 
-                //Debug codes
-                uloga("'%s()': #%u run as a master node.\n", __func__, ds->rpc_s->ptlmap.rank_dcmf);
-                
                 if (err < 0)
                         goto err_flock;
                 file_lock(fd, 0);
@@ -896,8 +896,10 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref)
         if(err<0)
         	goto err_free_dsrv;
         
+#ifdef DEBUG
         uloga("'%s()': rank=%u, init ok.\n", __func__, DCMF_Messager_rank());
-        
+#endif        
+
         return ds;
 err_free_dsrv:
 	if(ds)
@@ -918,7 +920,9 @@ void ds_free(struct dart_server *ds)
                 free(app);
         }
         free(ds);
+#ifdef DEBUG
 	uloga("%s(): OK\n", __func__);
+#endif
 }
 
 int ds_process(struct dart_server *ds){

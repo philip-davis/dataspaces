@@ -202,10 +202,10 @@ int test_get_run(int num_ts, int num_process,int process_x,int process_y,
 			memset(m2d, 0, sizeof(double)*spx_*spy_);
 			if (rank_ == 0)
 				uloga("%s: At timestep %u\n", __func__, ts);
-			//if (ts % 2 == 0)	
-			 	//couple_read_2d(m2d, ts, USE_DIMES);
+			if (ts % 2 == 0)	
+			 	couple_read_2d(m2d, ts, USE_DIMES);
 			 	//couple_read_2d_multi_var(ts, USE_DIMES, 10);
-			//else if (ts % 2 == 1)
+			else if (ts % 2 == 1)
 			  	couple_read_2d(m2d, ts, USE_DSPACES);
 			  	//couple_read_2d_multi_var(ts, USE_DSPACES, 10);
 		}

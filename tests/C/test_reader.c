@@ -56,6 +56,8 @@ int main(int argc, char **argv)
                 goto err_out;
         }
 
+	uloga("test_reader starts...\n");
+
         // Using SPMD style programming
         MPI_Init(&argc, &argv);
         MPI_Comm_size(MPI_COMM_WORLD, &mpi_nprocs);
@@ -64,6 +66,10 @@ int main(int argc, char **argv)
 	gcomm = MPI_COMM_WORLD;
 
 	if (mpi_nprocs == num_reader) {
+#ifdef HAVE_DCMF
+		MPI_Comm_split(MPI_COMM_WORLD, 2, mpi_rank, &gcomm);
+#endif 
+
                 // Run as data reader
                 test_get_run(iter,num_reader,reader_x,reader_y,reader_z,
                         dims,dim_x,dim_y,dim_z,gcomm);

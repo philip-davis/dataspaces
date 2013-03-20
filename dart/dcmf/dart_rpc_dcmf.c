@@ -188,9 +188,10 @@ static inline int sys_update_credits(struct rpc_server *rpc_s, struct hdr_sys *h
 */
 static int sys_credits_return(struct rpc_server *rpc_s, struct hdr_sys *hs)
 {
-	//for debug
+#ifdef DEBUG
 	uloga("%s(): #%u, from peer hs->sys_id=%d\n",
 		__func__, DCMF_Messager_rank(), hs->sys_id);
+#endif
 
 	struct node_id * to;
 	struct hdr_sys ret_hs;
@@ -420,7 +421,9 @@ Callback function(handler) to invoke when (short) RPC message is received
 static void rpc_cb_recv_short(void *clientdata, const DCQuad *msginfo, unsigned count,
 			size_t peer, const char *src, size_t bytes)
 {
+#ifdef DEBUG
 	uloga("'%s()': #%u, bytes_size=%u\n", __func__, DCMF_Messager_rank(), bytes);
+#endif
 }
 
 /*
@@ -1310,9 +1313,6 @@ void rpc_add_service(enum cmd_type rpc_cmd, rpc_service rpc_func)
 
 void rpc_server_free(struct rpc_server *rpc_s)
 {
-	int err;
-	err = rpc_process_event(rpc_s);
-
 	//free the out_rpc_list
 	struct rpc_request *rr = NULL, *t;
 	list_for_each_entry_safe(rr, t, &rpc_s->out_rpc_list, struct rpc_request, req_entry){
@@ -1332,7 +1332,8 @@ void rpc_server_free(struct rpc_server *rpc_s)
 		}
 	}
 
-	DCMF_Messager_finalize();
+	// TODO(fan): Why DCMF finalize function would stuck in some cases?
+	//DCMF_Messager_finalize();
 	
 	if(rpc_s->bar_tab)
 		free(rpc_s->bar_tab);
@@ -1340,7 +1341,9 @@ void rpc_server_free(struct rpc_server *rpc_s)
 	if(rpc_s)
 		free(rpc_s);
 
+#ifdef DEBUG
 	uloga("'%s()': OK, bye.\n",__func__);
+#endif
 }
 
 int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)

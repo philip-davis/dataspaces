@@ -100,6 +100,8 @@ int main(int argc, char **argv)
                 return -1;
         }
 
+	uloga("test_server starts...");
+
         MPI_Init(&argc, &argv);
         MPI_Comm_size(MPI_COMM_WORLD, &mpi_nprocs);
         MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
@@ -107,6 +109,11 @@ int main(int argc, char **argv)
 
         if (mpi_nprocs == num_sp) {
                 // Run as data space servers
+#ifdef HAVE_DCMF
+		// Can only run with MPMD mode on BG/P
+		MPI_Comm_split(MPI_COMM_WORLD, 0, mpi_rank, &gcomm);
+#endif
+
 #ifdef DS_HAVE_DIMES
                 common_run_server(num_sp, num_cp, USE_DIMES);
 #else

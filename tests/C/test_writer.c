@@ -56,6 +56,8 @@ int main(int argc, char **argv)
                 goto err_out;
         }
 
+	uloga("test_writer starts...\n");
+	
         // Using SPMD style programming
         MPI_Init(&argc, &argv);
         MPI_Comm_size(MPI_COMM_WORLD, &mpi_nprocs);
@@ -64,6 +66,9 @@ int main(int argc, char **argv)
 	gcomm = MPI_COMM_WORLD;
 
 	if (mpi_nprocs == num_writer) {
+#ifdef HAVE_DCMF
+		MPI_Comm_split(MPI_COMM_WORLD, 1, mpi_rank, &gcomm);
+#endif
 		// Run as data writer
                 test_put_run(iter,num_writer,writer_x,writer_y,writer_z,
                         dims,dim_x,dim_y,dim_z,gcomm);

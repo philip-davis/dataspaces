@@ -93,7 +93,7 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type) {
 		dsg_barrier(dsg);
 		dsg_free(dsg); 
 
-		if (err = 0)
+		if (err == 0)
 			uloga("All ok.\n");
 		return 0;
 	} else if (type == USE_DIMES) {
@@ -110,9 +110,10 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type) {
 		}
 
 		dimes_server_barrier(dsg);
+		uloga("%s(): to call dimes_server_free\n", __func__);
 		dimes_server_free(dsg); 
 
-		if (err = 0)
+		if (err == 0)
 			uloga("All ok.\n");
 		return 0;
 #else
