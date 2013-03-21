@@ -4,9 +4,10 @@ AM_LDFLAGS = $(DSPACESLIB_LDFLAGS) $(DSPACESLIB_LDADD)
 
 lib_LIBRARIES = libdart.a
 
-include_HEADERS = dart.h
+#include_HEADERS = dart.h
 
-noinst_HEADERS = debug.h \
+noinst_HEADERS = dart.h \
+		 debug.h \
 		 list.h
 
 if HAVE_UGNI

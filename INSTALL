@@ -1,22 +1,35 @@
-Quick Install Instructions
-==========================
+Quick Installation Instructions for DataSpaces Software
+=======================================================
+
+ The following steps are needed to configure, bulid and install DataSpaces.
+
 1. Generate configure file
 # Run following commands under project top dir
 $ ./autogen.sh
 
-2. Configure (on different platforms)
-2.1 Titan - Cray XK7
-$ ./configure CC=cc FC=ftn --with-gni-cookie=0x5420000 --with-gni-ptag=250
-
-2.2 Sith - IB cluster
-$ ./configure CC=mpicc FC=mpif90
-
-2.3 BlueGene/P
-$ ./configure CC=/bgsys/drivers/ppcfloor/comm/default/bin/mpixlc FC=/bgsys/drivers/ppcfloor/comm/default/bin/mpixlf90 CFLAGS="-g -O0 -qarch=450 -qtune=450" --with-dcmf="/bgsys/drivers/ppcfloor"
-
-2.4 Kraken - Cray XT5
+2. Configure
+# Examples for the configure command on supported architectures and networks. Please customize it according to your specific system configurations and environments.
+# Gemini for Cray XE and XK series
 $ ./configure CC=cc FC=ftn
 
-3. Compile
+# Infiniband cluster
+$ ./configure CC=mpicc FC=mpif90
+
+# DCMF for IBM BlueGene/P
+$ ./configure CC=/bgsys/drivers/ppcfloor/comm/default/bin/mpixlc FC=/bgsys/drivers/ppcfloor/comm/default/bin/mpixlf90 CFLAGS="-g -O0 -qarch=450 -qtune=450" --with-dcmf="/bgsys/drivers/ppcfloor"
+
+# Portals for Cray XT series
+$ ./configure CC=cc FC=ftn
+
+ Some of the useful configure options:
+ --preifx=/install/path - set the directory where DataSpaces will be installed
+ --enable-dimes - Build DataSpaces with DIstributed MEmory Space (DIMES) support.
+   This feature uses local RDMA memory buffers across application processes to build
+   a virtual shared data space in-situ, which can be queried and directly accessed by 
+   other applications in a data coupling workflow. Currently this feature is only 
+   supported on Cray Gemini and IBM DCMF networks. 
+
+3. Build & Install 
 # Under project top dir
 $ make
+$ make install

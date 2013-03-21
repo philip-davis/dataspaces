@@ -99,6 +99,7 @@ AC_CONFIG_FILES([
 		src/Makefile
 		tests/Makefile
 		tests/C/Makefile
+		tests/Fortran/Makefile
 		])
 
 AC_OUTPUT

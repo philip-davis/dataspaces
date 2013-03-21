@@ -106,7 +106,7 @@ int main(int argc, char **argv)
         MPI_Barrier(MPI_COMM_WORLD);
 
 #ifdef DEBUG
-	uloga("test_server starts...\n");
+	uloga("dataspaces server starts...\n");
 #endif
 
 #ifdef HAVE_DCMF
@@ -114,11 +114,7 @@ int main(int argc, char **argv)
 	MPI_Comm_split(MPI_COMM_WORLD, 0, rank, &gcomm);
 #endif
 
-#ifdef DS_HAVE_DIMES
-	common_run_server(num_sp, num_cp, USE_DIMES);
-#else
 	common_run_server(num_sp, num_cp, USE_DSPACES);
-#endif
 
         MPI_Barrier(MPI_COMM_WORLD);
         MPI_Finalize();
