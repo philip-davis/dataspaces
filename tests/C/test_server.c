@@ -92,7 +92,7 @@ static int parse_args(int argc, char *argv[])
 int main(int argc, char **argv)
 {
         int err;
-        int mpi_nprocs, mpi_rank;
+        int nprocs, rank;
         MPI_Comm gcomm;
 
         if (parse_args(argc, argv) < 0) {
@@ -100,28 +100,25 @@ int main(int argc, char **argv)
                 return -1;
         }
 
-	uloga("test_server starts...");
-
         MPI_Init(&argc, &argv);
-        MPI_Comm_size(MPI_COMM_WORLD, &mpi_nprocs);
-        MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
+        MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Barrier(MPI_COMM_WORLD);
 
-        if (mpi_nprocs == num_sp) {
-                // Run as data space servers
+#ifdef DEBUG
+	uloga("test_server starts...\n");
+#endif
+
 #ifdef HAVE_DCMF
-		// Can only run with MPMD mode on BG/P
-		MPI_Comm_split(MPI_COMM_WORLD, 0, mpi_rank, &gcomm);
+	// Can only run with MPMD mode on BG/P
+	MPI_Comm_split(MPI_COMM_WORLD, 0, rank, &gcomm);
 #endif
 
 #ifdef DS_HAVE_DIMES
-                common_run_server(num_sp, num_cp, USE_DIMES);
+	common_run_server(num_sp, num_cp, USE_DIMES);
 #else
-                common_run_server(num_sp, num_cp, USE_DSPACES);
+	common_run_server(num_sp, num_cp, USE_DSPACES);
 #endif
-        } else {
-                uloga("Error: wrong number of processes for test_space\n");
-        }
 
         MPI_Barrier(MPI_COMM_WORLD);
         MPI_Finalize();

@@ -45,8 +45,8 @@
 static struct dimes_client *dimes_c = NULL;
 static struct timer timer;
 //static int sync_op_id;
-static enum storage_type st = row_major;
-//static enum storage_type st = column_major;
+//static enum storage_type st = row_major;
+static enum storage_type st = column_major;
 static int num_dims = 2;
 
 static void lib_exit_d(void)

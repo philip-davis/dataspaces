@@ -40,7 +40,7 @@ extern int test_put_run(int num_ts, int num_process,int process_x,int process_y,
 int main(int argc, char **argv)
 {
         int err;
-        int mpi_nprocs, mpi_rank;
+        int nprocs, rank;
 
         int num_sp, num_cp, iter;
         int num_writer,writer_x,writer_y,writer_z;
@@ -56,25 +56,20 @@ int main(int argc, char **argv)
                 goto err_out;
         }
 
-	uloga("test_writer starts...\n");
-	
         // Using SPMD style programming
         MPI_Init(&argc, &argv);
-        MPI_Comm_size(MPI_COMM_WORLD, &mpi_nprocs);
-        MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
+        MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Barrier(MPI_COMM_WORLD);
 	gcomm = MPI_COMM_WORLD;
 
-	if (mpi_nprocs == num_writer) {
 #ifdef HAVE_DCMF
-		MPI_Comm_split(MPI_COMM_WORLD, 1, mpi_rank, &gcomm);
+	MPI_Comm_split(MPI_COMM_WORLD, 1, rank, &gcomm);
+	sleep(20);
 #endif
-		// Run as data writer
-                test_put_run(iter,num_writer,writer_x,writer_y,writer_z,
-                        dims,dim_x,dim_y,dim_z,gcomm);
-	} else {
-		uloga("Error: test_put_run wrong number of processes\n");
-	}
+	// Run as data writer
+	test_put_run(iter,num_writer,writer_x,writer_y,writer_z,
+		dims,dim_x,dim_y,dim_z,gcomm);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	MPI_Finalize();
