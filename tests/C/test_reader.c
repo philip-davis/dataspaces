@@ -65,7 +65,6 @@ int main(int argc, char **argv)
 
 #ifdef HAVE_DCMF
 	MPI_Comm_split(MPI_COMM_WORLD, 2, rank, &gcomm);
-	sleep(20);
 #endif 
 	// Run as data reader
 	test_get_run(iter,num_reader,reader_x,reader_y,reader_z,
@@ -79,4 +78,3 @@ err_out:
 	uloga("error out!\n");
 	return -1;	
 }
-

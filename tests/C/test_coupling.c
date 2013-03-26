@@ -75,7 +75,7 @@ int main(int argc, char **argv)
 	} else if (num_sp <= mpi_rank && mpi_rank < num_sp+num_writer) {
 		MPI_Comm_split(MPI_COMM_WORLD, 1, mpi_rank, &gcomm);
 		// Run as data writer
-		sleep(15); // wait for the dataspace servers to init.
+		// sleep(15); // wait for the dataspace servers to init.
 
 		test_put_run(iter,num_writer,writer_x,writer_y,writer_z,
 			dims,dim_x,dim_y,dim_z,gcomm);
@@ -83,7 +83,7 @@ int main(int argc, char **argv)
 		   mpi_rank < num_sp+num_writer+num_reader) {
 		MPI_Comm_split(MPI_COMM_WORLD, 2, mpi_rank, &gcomm);
 		// Run as data reader
-		sleep(15); // wait for the dataspace servers to init.
+		// sleep(15); // wait for the dataspace servers to init.
 	
 		test_get_run(iter,num_reader,reader_x,reader_y,reader_z,
 			dims,dim_x,dim_y,dim_z,gcomm);

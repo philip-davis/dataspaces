@@ -469,10 +469,11 @@ static int dsrpc_cn_read(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		*((char*)msg->msg_data + i) = 'A' + (i%len);
 	}
 
-	//for debug
+#ifdef DEBUG
 	uloga("%s(): #%u(dart_id=%d), get cn_read(msg->size=%d) from compute node #%u(dart_id=%d)\n",
 		__func__,rpc_s->ptlmap.rank_dcmf,msg->size,rpc_s->ptlmap.id,peer->ptlmap.rank_dcmf,peer->ptlmap.id); 
-		
+#endif	
+	
 	rpc_mem_info_cache(peer, msg, cmd);
 	err = rpc_send_direct(rpc_s, peer, msg);
 	if(err<0){
@@ -511,12 +512,6 @@ static int dsrpc_sp_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	//Incremental
 	ds->num_sp = ds->num_sp + 1;
 
-	// for debug	
-	// uloga("'%s()': #%u get reg_request from #%u(dart id=%u), "
-	//      "space has %d nodes\n", 
-	//	__func__, ds->self->ptlmap.rank_dcmf, peer->ptlmap.rank_dcmf,
-	//	peer->ptlmap.id, ds->num_sp);
-	
 	//Wait for all nodes to join in before sending back registration info
 	if(ds->num_sp < ds->size_sp)
 		return 0;
@@ -561,6 +556,13 @@ static int dsrpc_sp_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 			goto err_out_free;
 		}
 	}
+
+	// Rename file "conf.srv" -> "conf"
+	err = rename("conf.srv", "conf");
+	if (err < 0) {
+		uloga("%s(): failed to rename the config file!\n", __func__);
+		goto err_out;
+	} 
 	
 	return 0;
 err_out_free:
@@ -731,17 +733,13 @@ static int ds_register_at_master(struct dart_server *ds)
 	struct hdr_register *hreg;
 	int err;
 	
-	err = rpc_read_config(&peer->ptlmap.rank_dcmf);
-	if(err<0)
+	err = rpc_read_config(&peer->ptlmap.rank_dcmf, "conf.srv");
+	if (err<0)
 		goto err_out;
-	
-	//Debug
-	//uloga("%s(): #%u run as a slave node, and the master node is #%u.\n",
-	// __func__, ds->rpc_s->ptlmap.rank_dcmf, peer->ptlmap.rank_dcmf);
 	
 	err = -ENOMEM;
 	msg = msg_buf_alloc(ds->rpc_s, peer, 1);
-	if(!msg)
+	if (!msg)
 		goto err_out;
 	
 	msg->msg_rpc->cmd = sp_reg_request;
@@ -751,17 +749,17 @@ static int ds_register_at_master(struct dart_server *ds)
 	hreg->pm_sp = peer->ptlmap;
 	
 	err = rpc_send(ds->rpc_s, peer, msg);
-	if(err<0)
+	if (err<0)
 		goto err_out_free;
-	while(!ds->f_reg){
+	while (!ds->f_reg){
 		err = rpc_process_event(ds->rpc_s);
-		if(err<0)
+		if (err<0)
 			goto err_out;
 	}
 
 	return 0;
 err_out_free:
-	if(msg)
+	if (msg)
 		free(msg);
 err_out:
 	uloga("'%s()': failed with %d.\n", __func__, err);	
@@ -791,6 +789,7 @@ static int ds_boot(struct dart_server *ds)
 {
         struct stat st_buff;
         char lck_file[] = "srv.lck";
+        char conf_file[] = "conf.srv";
         int fd, err;
 
         memset(&st_buff, 0, sizeof(st_buff));
@@ -804,7 +803,7 @@ static int ds_boot(struct dart_server *ds)
         if (err < 0)
                 goto err_fd;
 
-        err = stat("conf", &st_buff);
+        err = stat(conf_file, &st_buff);
         if (err < 0 && errno != ENOENT)
                 goto err_flock;
 
@@ -813,7 +812,7 @@ static int ds_boot(struct dart_server *ds)
                 ds->self = ds->peer_tab;
                 ds->self->ptlmap = ds->rpc_s->ptlmap;
 
-                err = rpc_write_config(ds->rpc_s);
+                err = rpc_write_config(ds->rpc_s, conf_file);
                 
                 if (err < 0)
                         goto err_flock;
@@ -889,8 +888,8 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref)
         rpc_add_service(sp_reg_reply, dsrpc_sp_ack_register);
         rpc_add_service(sp_announce_cp, dsrpc_announce_cp);
 	//For testing DART DCMF performance
-	rpc_add_service(cn_data, dsrpc_cn_data);       
-	rpc_add_service(cn_read, dsrpc_cn_read);
+	//rpc_add_service(cn_data, dsrpc_cn_data);       
+	//rpc_add_service(cn_read, dsrpc_cn_read);
  
         err = ds_boot(ds);
         if(err<0)

@@ -65,7 +65,6 @@ int main(int argc, char **argv)
 
 #ifdef HAVE_DCMF
 	MPI_Comm_split(MPI_COMM_WORLD, 1, rank, &gcomm);
-	sleep(20);
 #endif
 	// Run as data writer
 	test_put_run(iter,num_writer,writer_x,writer_y,writer_z,

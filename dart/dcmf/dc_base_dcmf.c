@@ -31,6 +31,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <errno.h>
 
 #include "debug.h"
@@ -169,15 +171,35 @@ err_out:
         return err;        
 }
 
+static int file_exist_nonempty(const char *path)
+{
+	int err;
+	struct stat st_buf;
+	err = stat(path, &st_buf);
+	if (err != 0)
+		return 0;
+
+	if (st_buf.st_size == 0)
+		return 0;
+
+	return 1;
+}
+
 static int dc_register_at_master(struct dart_client *dc, int appid)
 {
 	struct msg_buf *msg;
 	struct hdr_register *hr;
 	struct node_id peer;
+	char conf_file[] = "conf";
 	int err;
 
+	// Check if the file "conf" exists 
+	while (!file_exist_nonempty(conf_file)) {
+		usleep(1000); // Sleep for 1ms
+	}	
+
 	memset(&peer, 0, sizeof(struct node_id));
-	err = rpc_read_config(&(peer.ptlmap.rank_dcmf));
+	err = rpc_read_config(&(peer.ptlmap.rank_dcmf), conf_file);
 	if (err < 0) 
 		goto err_out;
 
@@ -209,9 +231,6 @@ static int dc_register_at_master(struct dart_client *dc, int appid)
 		rpc_process_event(dc->rpc_s);
 	}
 	while (!dc->f_reg);
-
-	//for debug
-	//uloga("%s(): #%u successfull.\n", __func__, dc->rpc_s->ptlmap.rank_dcmf);
 
 	return 0;
  err_out_free:

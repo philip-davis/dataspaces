@@ -985,12 +985,12 @@ static int rpc_service_put_finish(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	return 0;
 }
 
-int rpc_read_config(size_t *rank_dcmf)
+int rpc_read_config(size_t *rank_dcmf, const char *fname)
 {
 	FILE *f;
 	int err;
 	
-	f = fopen("conf","rt");
+	f = fopen(fname,"rt");
 	if(!f){
 		uloga("%s(): failed.\n", __func__);
 		return -1;
@@ -1005,12 +1005,12 @@ int rpc_read_config(size_t *rank_dcmf)
 	return -EIO;
 }
 
-int rpc_write_config(struct rpc_server *rpc_s)
+int rpc_write_config(struct rpc_server *rpc_s, const char *fname)
 {
         FILE *f;
         int err;
 
-        f = fopen("conf", "wt");
+        f = fopen(fname, "wt");
         if (!f)
                 goto err_out;
 

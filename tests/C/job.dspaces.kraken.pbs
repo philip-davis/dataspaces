@@ -7,7 +7,7 @@
 
 cd $PBS_O_WORKDIR
 
-aprun -n 64 ./test_server -s 64 -c 1280 &
+aprun -n 64 ./dataspaces_server -s 64 -c 1280 &
 
 ## Give some time for the servers to load and startup
 while [ ! -f conf ]; do

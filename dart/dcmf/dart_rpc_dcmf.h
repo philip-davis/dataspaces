@@ -361,8 +361,8 @@ struct rpc_server* rpc_server_init(int, int, void *, enum rpc_component);
 void rpc_server_set_peer_ref(struct rpc_server *, struct node_id [], int);
 void rpc_server_set_rpc_per_buff(struct rpc_server *, int);
 void rpc_server_free(struct rpc_server *);
-int rpc_read_config(size_t *rank_dcmf);
-int rpc_write_config(struct rpc_server *);
+int rpc_read_config(size_t *rank_dcmf, const char *);
+int rpc_write_config(struct rpc_server *, const char *);
 int rpc_process_event(struct rpc_server *);
 
 int rpc_server_start(struct rpc_server *);

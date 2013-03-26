@@ -30,7 +30,6 @@
 !  Tong Jin (2011) TASSL Rutgers University
 !  tjin@cac.rutgers.edu
 !!
-
 module couple_comm
 
   integer :: npx, npy, npz  ! # of processors in x-y-z direction
