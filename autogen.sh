@@ -1,4 +1,5 @@
-aclocal --force -I ./config
-autoheader --force
-automake --add-missing
-autoconf --force
+aclocal -I config
+libtoolize --force --copy
+autoconf
+autoheader
+automake --add-missing --copy
