@@ -570,42 +570,50 @@ void FC_FUNC(dspaces_barrier, DSPACES_BARRIER)(void)
 
 void FC_FUNC(dspaces_lock_on_read, DSPACES_LOCK_ON_READ)(const char *lock_name, void *comm, int len)
 {
-	char c_lock_name[64];
+        char c_lock_name[64];
 
-	if (!fstrncpy(c_lock_name, lock_name, (size_t) len, sizeof(c_lock_name)))
-		strcpy(c_lock_name, "default");
+        if (!fstrncpy(c_lock_name, lock_name, (size_t) len, sizeof(c_lock_name)))
+                strcpy(c_lock_name, "default");
 
-	dspaces_lock_on_read(c_lock_name, comm);
+        MPI_Comm c_comm;
+        c_comm = MPI_Comm_f2c(*(MPI_Fint*)comm);
+        dspaces_lock_on_read(c_lock_name, &c_comm);
 }
 
 void FC_FUNC(dspaces_unlock_on_read, DSPACES_UNLOCK_ON_READ)(const char *lock_name, void *comm, int len)
 {
-	char c_lock_name[64];
+        char c_lock_name[64];
 
-	if (!fstrncpy(c_lock_name, lock_name, (size_t) len, sizeof(c_lock_name)))
-		strcpy(c_lock_name, "default");
+        if (!fstrncpy(c_lock_name, lock_name, (size_t) len, sizeof(c_lock_name)))
+                strcpy(c_lock_name, "default");
 
-	dspaces_unlock_on_read(c_lock_name, comm);
+        MPI_Comm c_comm;
+        c_comm = MPI_Comm_f2c(*(MPI_Fint*)comm);
+        dspaces_unlock_on_read(c_lock_name, &c_comm);
 }
 
 void FC_FUNC(dspaces_lock_on_write, DSPACES_LOCK_ON_WRITE)(const char *lock_name, void *comm, int len)
 {
-	char c_lock_name[64];
+        char c_lock_name[64];
 
-	if (!fstrncpy(c_lock_name, lock_name, (size_t) len, sizeof(c_lock_name)))
-		strcpy(c_lock_name, "default");
-	
-	dspaces_lock_on_write(c_lock_name, comm);
+        if (!fstrncpy(c_lock_name, lock_name, (size_t) len, sizeof(c_lock_name)))
+                strcpy(c_lock_name, "default");
+
+        MPI_Comm c_comm;
+        c_comm = MPI_Comm_f2c(*(MPI_Fint*)comm);
+        dspaces_lock_on_write(c_lock_name, &c_comm);
 }
 
 void FC_FUNC(dspaces_unlock_on_write, DSPACES_UNLOCK_ON_WRITE)(const char *lock_name, void *comm, int len)
 {
-	char c_lock_name[64];
+        char c_lock_name[64];
 
-	if (!fstrncpy(c_lock_name, lock_name, (size_t) len, sizeof(c_lock_name)))
-		strcpy(c_lock_name, "default");
+        if (!fstrncpy(c_lock_name, lock_name, (size_t) len, sizeof(c_lock_name)))
+                strcpy(c_lock_name, "default");
 
-	dspaces_unlock_on_write(c_lock_name, comm);
+        MPI_Comm c_comm;
+        c_comm = MPI_Comm_f2c(*(MPI_Fint*)comm);
+        dspaces_unlock_on_write(c_lock_name, &c_comm);
 }
 
 void FC_FUNC(dspaces_get, DSPACES_GET) (const char *var_name, 
