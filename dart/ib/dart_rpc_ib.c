@@ -2338,6 +2338,10 @@ void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cm
 	return;
 }
 
+void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg,
+                        struct rpc_cmd *cmd) {
+        return;
+}
 
 void rpc_cache_msg(struct msg_buf *msg, struct rpc_cmd *cmd)
 {

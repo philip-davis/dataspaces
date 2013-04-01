@@ -1298,6 +1298,32 @@ int obj_desc_equals(const struct obj_descriptor *odsc1,
         else    return 0;
 }
 
+/*
+ *   Test if two object descriptors have the same name and versions and
+ *     their bounding boxes intersect.
+ *     */
+int obj_desc_equals_intersect(const struct obj_descriptor *odsc1,
+                const struct obj_descriptor *odsc2)
+{
+        if (strcmp(odsc1->name, odsc2->name) == 0 &&
+            odsc1->version == odsc2->version &&
+            bbox_does_intersect(&odsc1->bb, &odsc2->bb))
+                return 1;
+        return 0;
+}
+
+/*
+ *   Test if two object descriptors have the same name and their bounding
+ *     boxes intersect.
+ *     */
+int obj_desc_by_name_intersect(const struct obj_descriptor *odsc1,
+                const struct obj_descriptor *odsc2)
+{
+        if (strcmp(odsc1->name, odsc2->name) == 0 &&
+            bbox_does_intersect(&odsc1->bb, &odsc2->bb))
+                return 1;
+        return 0;
+}
 
 /*
 int main(void)

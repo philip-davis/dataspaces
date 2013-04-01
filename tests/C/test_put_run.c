@@ -74,7 +74,8 @@ static int generate_2d(double *m2d, unsigned int ts)
 	// double value = 1.0*(rank_) + 0.0001*ts;
 	double value = ts;
 	int m2d_size = spx_ * spy_;
-	for(int i=0; i<m2d_size; i++){
+	int i;
+	for(i=0; i<m2d_size; i++){
 		*(m2d+i) = value;
 	}
 
