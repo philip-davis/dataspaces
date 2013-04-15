@@ -29,6 +29,9 @@
 *  docan@cac.rutgers.edu
 *  Tong Jin (2011) TASSL Rutgers University
 *  tjin@cac.rutgers.edu
+*  Hoang Bui (2012-2013) TASSL Rutgers University
+*  hbui@cac.rutgers.edu
+*
 */
 
 #include <stdio.h>
@@ -322,6 +325,17 @@ int dspaces_put(const char *var_name,
 
         return 0;
 }
+
+int dspaces_put_pi(const char *var_name, unsigned int ver, int size, int xl, int yl, int zl, int xu, int yu, int zu, void  *wbuffer, size_t len){
+	return dspaces_put(var_name,ver,size,xl,yl,zl,xu,yu,zu,wbuffer);
+
+}
+
+int dspaces_get_pi(const char *var_name, unsigned int ver, int size, int xl, int yl, int zl, int xu, int yu, int zu, int *rbuffer, size_t len){
+        dspaces_get(var_name,ver,size,xl,yl,zl,xu,yu,zu,rbuffer);
+        printf("%s\n",rbuffer);
+}
+
 
 int dspaces_select(char *var_name, unsigned int vers,
         int xl, int yl, int zl,

@@ -29,6 +29,9 @@
 *  docan@cac.rutgers.edu
 *  Tong Jin (2011) TASSL Rutgers University
 *  tjin@cac.rutgers.edu
+*   Hoang Bui (2012-2013) TASSL Rutgers University
+*   hbui@cac.rutgers.edu
+*
 */
 
 #ifndef __DATASPACES_H_
@@ -42,7 +45,7 @@ void dspaces_barrier(void);
 void dspaces_lock_on_read(const char *lock_name, void *comm);
 void dspaces_unlock_on_read(const char *lock_name, void *comm);
 void dspaces_lock_on_write(const char *lock_name, void *comm);
-void dspaces_unlock_on_write(const char *lock_name, void *comm);
+void dspaces_unlock_on_write(const char *lock_name,void *comm);
 int dspaces_get (const char *var_name, 
         unsigned int ver, int size,
         int xl, int yl, int zl, 
@@ -54,6 +57,11 @@ int dspaces_put (const char *var_name,
         int xl, int yl, int zl,
         int xu, int yu, int zu, 
         void *data);
+
+int dspaces_put_pi(const char *var_name, unsigned int ver, int size, int xl, int yl, int zl, int xu, int yu, int zu, void *wbuffer,size_t len);
+
+int dspaces_get_pi(const char *var_name, unsigned int ver, int size, int xl, int yl, int zl, int xu, int yu, int zu, void *rbuffer,size_t len);
+
 int dspaces_select(char *var_name, unsigned int ver,
         int xl, int yl, int zl,
         int xu, int yu, int zu, 

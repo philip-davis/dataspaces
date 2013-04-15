@@ -3,7 +3,9 @@
  *
  *  Tong Jin 
  *  TASSL Rutgers University
- *
+ *  Hoang Bui (2012-2013) TASSL Rutgers University
+ *  hbui@cac.rutgers.edu
+ * 
  *  The redistribution of the source code is subject to the terms of version 
  *  2 of the GNU General Public License: http://www.gnu.org/licenses/gpl.html.
  */
