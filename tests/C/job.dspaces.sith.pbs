@@ -1,0 +1,19 @@
+#!/bin/bash
+#PBS -N test-sith
+#PBS -A csc025ewk
+#PBS -j oe
+#PBS -q batch
+#PBS -l nodes=12:ppn=24,walltime=00:30:00
+
+cd $PBS_O_WORKDIR
+
+rm -f conf srv.lck
+
+mpirun -n 16 ./dataspaces_server -s 16 -c 272 &
+sleep 10
+
+mpirun -n 16 ./test_writer &
+mpirun -n 256 ./test_reader &
+
+
+wait
