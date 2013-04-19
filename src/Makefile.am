@@ -2,20 +2,28 @@ AM_CFLAGS = -DLINUX -g
 AM_CPPFLAGS = -I../dart/ -I../include/ $(DSPACESLIB_CPPFLAGS)
 AM_LDFLAGS = -L../dart -ldart $(DSPACESLIB_LDFLAGS) $(DSPACESLIB_LDADD)
 
-lib_LIBRARIES =  libdscommon.a libdspaces.a
+lib_LIBRARIES =  libdscommon.a libdspaces.a libdspacesf.a
 
 libdscommon_a_SOURCES = bbox.c \
 			ss_data.c \
 			timer.c \
 			strutil.c 
 
-libdspaces_a_SOURCES = dataspaces.c \
+libdspaces_a_SOURCES =  dataspaces.c \
+			common_dataspaces.c \
 			ds_gspace.c \
 			dc_gspace.c \
 			dimes_data.c \
 			dimes_server.c \
 			dimes_client.c 
-#libdspaces_a_DEPENDENCIES = libdart.a
+
+libdspacesf_a_SOURCES = dataspaces_fortran.c \
+			common_dataspaces.c \
+			ds_gspace.c \
+			dc_gspace.c \
+			dimes_data.c \
+			dimes_server.c \
+			dimes_client.c 
 
 include_HEADERS = ../include/dataspaces.h \
 		  ../include/dimes_interface.h
@@ -31,4 +39,5 @@ noinst_HEADERS = ../include/sfc.h \
 		 ../include/strutil.h \
 		 ../include/dimes_data.h \
 		 ../include/dimes_server.h \
-		 ../include/dimes_client.h
+		 ../include/dimes_client.h \
+		 ../include/common_dataspaces.h

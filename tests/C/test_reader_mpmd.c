@@ -46,6 +46,7 @@ int main(int argc, char **argv)
         int num_writer,writer_x,writer_y,writer_z;
         int num_reader,reader_x,reader_y,reader_z;
         int dims, dim_x, dim_y, dim_z;
+	int color;
         MPI_Comm gcomm;
 
         if(read_config_file("computenode.conf",
@@ -62,6 +63,9 @@ int main(int argc, char **argv)
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Barrier(MPI_COMM_WORLD);
 	gcomm = MPI_COMM_WORLD;
+
+	color = 2;
+	MPI_Comm_split(MPI_COMM_WORLD, color, rank, &gcomm);
 
 	// Run as data reader
 	test_get_run(iter,num_reader,reader_x,reader_y,reader_z,

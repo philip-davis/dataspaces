@@ -29,49 +29,101 @@
 *  zhangfan@cac.rutgers.edu
 */
 #include <stdio.h>
+#include <getopt.h>
+#include "unistd.h"
 
-#include "debug.h"
 #include "common.h"
 
 #include "mpi.h"
 
-extern int test_get_run(int num_ts, int num_process,int process_x,int process_y,int process_z, int dims, int dim_x, int dim_y, int dim_z, MPI_Comm);
+static int num_sp;
+static int num_cp;
+static char *conf;
+
+static void usage(void)
+{
+        printf("Usage: server OPTIONS\n"
+                "OPTIONS: \n"
+                "--server, -s    Number of server instance/staging nodes\n"
+                "--cnodes, -c    Number of compute nodes\n"
+                "--conf, -f      Define configuration file\n");
+}
+
+static int parse_args(int argc, char *argv[])
+{
+        const char opt_short[] = "s:c:f:";
+        const struct option opt_long[] = {
+                {"server",      1,      NULL,   's'},
+                {"cnodes",      1,      NULL,   'c'},
+                {"conf",        1,      NULL,   'f'},
+                {NULL,          0,      NULL,   0}
+        };
+
+        int opt;
+
+        while ((opt = getopt_long(argc, argv, opt_short, opt_long, NULL)) != -1) {
+                switch (opt) {
+                case 's':
+                        num_sp = (optarg) ? atoi(optarg) : -1;
+                        break;
+
+                case 'c':
+                        num_cp = (optarg) ? atoi(optarg) : -1;
+                        break;
+
+                case 'f':
+                        conf = (optarg) ? optarg : NULL;
+                        break;
+
+                default:
+                        printf("Unknown argument \n");
+                }
+        }
+
+        if (num_sp <= 0)
+                num_sp = 1;
+        if (num_cp == 0)
+                num_cp = 0;
+        if (!conf)
+                conf = "dataspaces.conf";
+        return 0;
+}
 
 int main(int argc, char **argv)
 {
         int err;
         int nprocs, rank;
-
-        int num_sp, num_cp, iter;
-        int num_writer,writer_x,writer_y,writer_z;
-        int num_reader,reader_x,reader_y,reader_z;
-        int dims, dim_x, dim_y, dim_z;
         MPI_Comm gcomm;
+	int color;
 
-        if(read_config_file("computenode.conf",
-                &num_sp, &num_cp, &iter,
-                &num_writer, &writer_x, &writer_y, &writer_z,
-                &num_reader, &reader_x, &reader_y, &reader_z,
-                &dims, &dim_x, &dim_y, &dim_z) != 0) {
-                goto err_out;
+        if (parse_args(argc, argv) < 0) {
+                usage();
+                return -1;
         }
 
-        // Using SPMD style programming
         MPI_Init(&argc, &argv);
         MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Barrier(MPI_COMM_WORLD);
-	gcomm = MPI_COMM_WORLD;
 
-	// Run as data reader
-	test_get_run(iter,num_reader,reader_x,reader_y,reader_z,
-		dims,dim_x,dim_y,dim_z,gcomm);
-	
+#ifdef DEBUG
+	uloga("dataspaces server starts...\n");
+#endif
+
+	color = 0;
+	MPI_Comm_split(MPI_COMM_WORLD, 0, rank, &gcomm);
+
+#ifdef DS_HAVE_DIMES
+	common_run_server(num_sp, num_cp, USE_DIMES);
+#else
+	common_run_server(num_sp, num_cp, USE_DSPACES);
+#endif
+
         MPI_Barrier(MPI_COMM_WORLD);
         MPI_Finalize();
 
-	return 0;
+        return 0;
 err_out:
-	uloga("error out!\n");
-	return -1;	
+        uloga("error out!\n");
+        return -1;
 }

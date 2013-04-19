@@ -2577,9 +2577,9 @@ err_out:
 }
 
 /*
-  C interface for DIMES.
+  DIMES client public APIs.
 */
-struct dimes_client* dimes_alloc(void * ptr)
+struct dimes_client* dimes_client_alloc(void * ptr)
 {
         int err = -ENOMEM;
 
@@ -2633,7 +2633,26 @@ struct dimes_client* dimes_alloc(void * ptr)
         return dimes_c;
 }
 
-void dimes_set_storage_type(int fst)
+void dimes_client_free(void) {
+        if (!dimes_c) {
+                uloga("'%s()': library was not properly initialized!\n",
+                         __func__);
+                return;
+        }
+
+        // Free local storage
+        if (dimes_c->storage) {
+                dimes_ls_free(dimes_c->storage);
+                free(dimes_c->storage);
+        }
+
+        free(dimes_c);
+        dimes_c = NULL;
+
+        dart_rdma_finalize();
+}
+
+void common_dimes_set_storage_type(int fst)
 {
         if (fst == 0)
                 st = row_major;
@@ -2641,7 +2660,7 @@ void dimes_set_storage_type(int fst)
                 st = column_major;
 }
 
-int dimes_get(const char *var_name,
+int common_dimes_get(const char *var_name,
         unsigned int ver, int size,
         int xl, int yl, int zl,
         int xu, int yu, int zu,
@@ -2690,7 +2709,7 @@ err_out:
 	ERROR_TRACE();
 }
 
-int dimes_put(const char *var_name,
+int common_dimes_put(const char *var_name,
         unsigned int ver, int size,
         int xl, int yl, int zl,
         int xu, int yu, int zu,
@@ -2741,7 +2760,7 @@ err_out:
 	ERROR_TRACE();
 }
 
-int dimes_put_sync_all(void)
+int common_dimes_put_sync_all(void)
 {
         int err;
 
@@ -2782,74 +2801,6 @@ int dimes_put_sync_all(void)
 	} while (1);
 
         return err;
-}
-
-void dimes_free(void) {
-        if (!dimes_c) {
-                uloga("'%s()': library was not properly initialized!\n",
-                         __func__);
-                return;
-        }
-
-	// Free local storage
-	if (dimes_c->storage) {
-		dimes_ls_free(dimes_c->storage);
-		free(dimes_c->storage);
-	}
-
-        free(dimes_c);
-        dimes_c = NULL;
-	
-	dart_rdma_finalize();	
-}
-
-/*
-  Fortran interface to DIMES
-*/
-void FC_FUNC(dimes_set_storage_type, DIMES_SET_STORAGE_TYPE) (int *fst)
-{
-        dimes_set_storage_type(*fst);
-}
-
-void FC_FUNC(dimes_get, DIMES_GET) (const char *var_name,
-        unsigned int *ver, int *size,
-        int *xl, int *yl, int *zl,
-        int *xu, int *yu, int *zu,
-        void *data, int *err, int len)
-{
-        char vname[256];
-
-        if (!fstrncpy(vname, var_name, (size_t) len, sizeof(vname))) {
-                uloga("'%s()': failed, can not copy Fortran var of len %d.\n",
-                        __func__, len);
-                *err = -ENOMEM;
-        }
-
-        *err = dimes_get(vname, *ver, *size, 
-				*xl, *yl, *zl, *xu, *yu, *zu, data);
-}
-
-void FC_FUNC(dimes_put, DIMES_PUT) (const char *var_name,
-        unsigned int *ver, int *size,
-        int *xl, int *yl, int *zl,
-        int *xu, int *yu, int *zu,
-        void *data, int *err, int len)
-{
-        char vname[256];
-
-        if (!fstrncpy(vname, var_name, (size_t) len, sizeof(vname))) {
-                uloga("'%s': failed, can not copy Fortran var of len %d.\n",
-                        __func__, len);
-                *err = -ENOMEM;
-        }
-
-        *err =  dimes_put(vname, *ver, *size,
-				 *xl, *yl, *zl, *xu, *yu, *zu, data);
-}
-
-void FC_FUNC(dimes_put_sync_all, DIMES_PUT_SYNC_ALL)(int *err)
-{
-        *err = dimes_put_sync_all();
 }
 
 #endif // end of #ifdef DS_HAVE_DIMES

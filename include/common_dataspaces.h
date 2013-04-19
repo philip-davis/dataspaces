@@ -25,60 +25,55 @@
  */
 
 /*
-*  Fan Zhang (2012)  TASSL Rutgers University
+*  Ciprian Docan (2009)  TASSL Rutgers University
+*  docan@cac.rutgers.edu
+*  Tong Jin (2011) TASSL Rutgers University
+*  tjin@cac.rutgers.edu
+*  Hoang Bui (2012-2013) TASSL Rutgers University
+*  hbui@cac.rutgers.edu
+*  Fan Zhang (2013) TASSL Rutgers University
 *  zhangfan@cac.rutgers.edu
+*
 */
-#ifndef __DIMES_CLIENT_H__
-#define __DIMES_CLIENT_H__
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#ifndef __COMMON_DATASPACES_H_
+#define __COMMON_DATASPACES_H_
 
-#include "debug.h"
-#include "dart.h"
-#include "dc_gspace.h"
-#include "ss_data.h"
-#include "timer.h"
-
-struct query_tran_d {
-        struct list_head        q_list;
-        int                     num_ent;
-};
-
-struct dimes_client {
-        struct dcg_space *dcg;
-        struct sspace *ssd; //only used for hashing
-        struct bbox domain;
-        struct query_tran_d qt;
-	
-	// Local memory storage
-	struct ss_storage *storage;
-	// List of pending object data requests (from peers of 
-	// other coupled apps)
-	struct list_head req_list;
-
-        int    f_ss_info;
-};
-
-struct dimes_client* dimes_client_alloc(void *);
-void dimes_client_free(void);
-
-void common_dimes_set_storage_type (int fst);
-int common_dimes_put_sync_all(void);
-int common_dimes_get (const char *var_name,
+int common_dspaces_init(int num_peers, int appid);
+void common_dspaces_set_storage_type (int fst);
+int common_dspaces_rank(void);
+int common_dspaces_peers(void);
+void common_dspaces_barrier(void);
+void common_dspaces_lock_on_read(const char *lock_name, void *comm);
+void common_dspaces_unlock_on_read(const char *lock_name, void *comm);
+void common_dspaces_lock_on_write(const char *lock_name, void *comm);
+void common_dspaces_unlock_on_write(const char *lock_name,void *comm);
+int common_dspaces_get (const char *var_name, 
+        unsigned int ver, int size,
+        int xl, int yl, int zl, 
+        int xu, int yu, int zu, 
+        void *data);
+int common_dspaces_get_versions(int **);
+int common_dspaces_put (const char *var_name, 
         unsigned int ver, int size,
         int xl, int yl, int zl,
-        int xu, int yu, int zu,
-        void *data);
-int common_dimes_put (const char *var_name,
-        unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+        int xu, int yu, int zu, 
         void *data);
 
-#ifdef __cplusplus
-}
-#endif
+int common_dspaces_select(char *var_name, unsigned int ver,
+        int xl, int yl, int zl,
+        int xu, int yu, int zu, 
+        void *data);
+int common_dspaces_cq_register(char *var_name,
+        int xl, int yl, int zl,
+        int xu, int yu, int zu, 
+        void *data);
+int common_dspaces_cq_update (void);
+int common_dspaces_put_sync(void);
+void common_dspaces_finalize (void);
+
+/* CCGrid'11 demo */
+int common_dspaces_collect_timing(double, double *);
+int common_dspaces_num_space_srv(void);
 
 #endif

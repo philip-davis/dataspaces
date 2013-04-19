@@ -47,6 +47,7 @@ program test_put
   implicit none
   include 'mpif.h'
   integer comm, mpi_rank
+  integer color, key 
 
   integer :: err
 
@@ -59,12 +60,15 @@ program test_put
 
   call parse_args()
 
-  print *, "USE MPI."
-  comm = MPI_COMM_WORLD
   call MPI_INIT(err)
+  call MPI_BARRIER(MPI_COMM_WORLD, err)
+  call MPI_COMM_RANK(MPI_COMM_WORLD, key, err)
+  
+  color = 1
+  call MPI_COMM_SPLIT(MPI_COMM_WORLD, color, key, comm, err)
   call MPI_COMM_RANK(comm, mpi_rank, err)
 
-  call dspaces_init(npapp,1, err)
+  call dspaces_init(npapp, 1, err)
   call dspaces_rank(rank)
   call dspaces_peers(nproc)
   call ftimer_init()
@@ -83,6 +87,7 @@ program test_put
   call dspaces_finalize
 
   call MPI_BARRIER(comm, err)
+  call MPI_BARRIER(MPI_COMM_WORLD, err)
   call MPI_FINALIZE(err)
 
 end program

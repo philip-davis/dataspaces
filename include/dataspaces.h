@@ -29,8 +29,10 @@
 *  docan@cac.rutgers.edu
 *  Tong Jin (2011) TASSL Rutgers University
 *  tjin@cac.rutgers.edu
-*   Hoang Bui (2012-2013) TASSL Rutgers University
-*   hbui@cac.rutgers.edu
+*  Hoang Bui (2012-2013) TASSL Rutgers University
+*  hbui@cac.rutgers.edu
+*  Fan Zhang (2013) TASSL Rutgers University
+*  zhangfan@cac.rutgers.edu
 *
 */
 
@@ -38,44 +40,39 @@
 #define __DATASPACES_H_
 
 int dspaces_init(int num_peers, int appid);
+
+void dspaces_finalize (void);
+
 void dspaces_set_storage_type (int fst);
+
 int dspaces_rank(void);
+
 int dspaces_peers(void);
+
 void dspaces_barrier(void);
+
 void dspaces_lock_on_read(const char *lock_name, void *comm);
+
 void dspaces_unlock_on_read(const char *lock_name, void *comm);
+
 void dspaces_lock_on_write(const char *lock_name, void *comm);
+
 void dspaces_unlock_on_write(const char *lock_name,void *comm);
+
 int dspaces_get (const char *var_name, 
         unsigned int ver, int size,
         int xl, int yl, int zl, 
         int xu, int yu, int zu, 
         void *data);
-int dspaces_get_versions(int **);
+
 int dspaces_put (const char *var_name, 
         unsigned int ver, int size,
         int xl, int yl, int zl,
         int xu, int yu, int zu, 
         void *data);
 
-int dspaces_put_pi(const char *var_name, unsigned int ver, int size, int xl, int yl, int zl, int xu, int yu, int zu, void *wbuffer,size_t len);
-
-int dspaces_get_pi(const char *var_name, unsigned int ver, int size, int xl, int yl, int zl, int xu, int yu, int zu, void *rbuffer,size_t len);
-
-int dspaces_select(char *var_name, unsigned int ver,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu, 
-        void *data);
-int dspaces_cq_register(char *var_name,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu, 
-        void *data);
-int dspaces_cq_update (void);
 int dspaces_put_sync(void);
-void dspaces_finalize (void);
 
-/* CCGrid'11 demo */
-int dspaces_collect_timing(double, double *);
-int dspaces_num_space_srv(void);
+void dspaces_finalize (void);
 
 #endif

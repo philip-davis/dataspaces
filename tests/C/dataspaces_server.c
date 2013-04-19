@@ -109,11 +109,6 @@ int main(int argc, char **argv)
 	uloga("dataspaces server starts...\n");
 #endif
 
-#ifdef HAVE_DCMF
-	// Can only run with MPMD mode on BG/P
-	MPI_Comm_split(MPI_COMM_WORLD, 0, rank, &gcomm);
-#endif
-
 #ifdef DS_HAVE_DIMES
 	common_run_server(num_sp, num_cp, USE_DIMES);
 #else

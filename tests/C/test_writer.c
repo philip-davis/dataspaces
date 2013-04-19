@@ -63,9 +63,6 @@ int main(int argc, char **argv)
         MPI_Barrier(MPI_COMM_WORLD);
 	gcomm = MPI_COMM_WORLD;
 
-#ifdef HAVE_DCMF
-	MPI_Comm_split(MPI_COMM_WORLD, 1, rank, &gcomm);
-#endif
 	// Run as data writer
 	test_put_run(iter,num_writer,writer_x,writer_y,writer_z,
 		dims,dim_x,dim_y,dim_z,gcomm);

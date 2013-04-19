@@ -252,7 +252,15 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		  
 			list_add(&app->app_entry, &ds->app_list);
 	}
-	
+
+#ifdef DEBUG	
+	// TODO: to remove
+	uloga("%s(): app_id= %d app_num_peers= %d app_cnt_peers= %d, ds->peer_size= %d "
+	      "ds->num_sp= %d ds->num_cp= %d\n",
+		__func__, app->app_id, app->app_num_peers, app->app_cnt_peers,
+		ds->peer_size, ds->num_sp, ds->num_cp);
+#endif
+
 	cn_peer = app->app_peer_tab + app->app_cnt_peers;
 	cn_peer->ptlmap = hreg->pm_cp;//Important copy
 	cn_peer->ptlmap.id = cn_peer - ds->peer_tab; //global dart id?
