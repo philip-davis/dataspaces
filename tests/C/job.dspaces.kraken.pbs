@@ -3,19 +3,23 @@
 #PBS -A XXXX 
 #PBS -j oe
 #PBS -q debug
-#PBS -l walltime=00:50:00,size=1368
+#PBS -l walltime=00:50:00,size=72
 
 cd $PBS_O_WORKDIR
 
-aprun -n 64 ./dataspaces_server -s 64 -c 1280 &
+rm -f conf
+
+aprun -n 4 ./dataspaces_server -s 4 -c 48 &
 
 ## Give some time for the servers to load and startup
 while [ ! -f conf ]; do
     sleep 2s
 done
 
-aprun -n 1024 ./test_writer &
+aprun -n 16 ./test_writer 16 4 4 1 32 32 128 10 &
+
 sleep 5
-aprun -n 256 ./test_reader &
+
+aprun -n 32 ./test_reader 32 4 4 2 32 32 64 10 &
 
 wait

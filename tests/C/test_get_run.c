@@ -39,7 +39,7 @@ static int npx_, npy_, npz_;
 //block size per processor per direction
 static int spx_, spy_, spz_;
 //# of iterations
-static int timesteps_;
+static int timestep_;
 //# of processors in the application
 static int npapp_;
 
@@ -61,7 +61,6 @@ v (y)
 static double* allocate_2d()
 {
 	double* tmp = NULL;
-	//init off_x_ and off_y_ values
 	offx_ = (rank_ % npx_) * spx_;
 	offy_ = (rank_ / npx_) * spy_;
 
@@ -69,6 +68,16 @@ static double* allocate_2d()
 	return tmp;
 }
 
+static double* allocate_3d()
+{
+        double *tmp = NULL;
+        offx_ = (rank_ % npx_) * spx_;
+        offy_ = (rank_ / npx_ % npy_) * spy_;
+        offz_ = (rank_ / npx_ / npy_) * spz_;
+
+        tmp = (double*)malloc(sizeof(double)*spx_*spy_*spz_);
+        return tmp;
+}
 
 static int couple_read_2d_multi_var(unsigned int ts, enum transport_type type,
 					int num_vars)
@@ -169,21 +178,63 @@ static int couple_read_2d(double *m2d, unsigned int ts, enum transport_type type
 	return 0;
 }
 
-int test_get_run(int num_ts, int num_process,int process_x,int process_y,
-	int process_z,int dims,int dim_x,int dim_y,int dim_z,MPI_Comm gcomm)
+static int couple_read_3d(double *m3d, unsigned int ts, enum transport_type type)
+{
+	common_lock_on_read("m3d_lock", &gcomm_);
+
+	//get data from space
+	int elem_size = sizeof(double);
+	int xl = offx_;
+	int yl = offy_;
+	int zl = offz_;
+	int xu = offx_ + spx_ - 1;
+	int yu = offy_ + spy_ - 1;
+	int zu = offz_ + spz_ - 1;
+	double tm_st, tm_end1, tm_end2;
+
+	uloga("Timestep=%u, %d read m3d: {(%d,%d,%d),(%d,%d,%d)} from space\n",
+		ts, rank_, xl,yl,zl, xu,yu,zu);
+
+	MPI_Barrier(gcomm_);
+	tm_st = timer_read(&timer_);
+
+	common_get("m3d", ts, elem_size,
+		xl, yl, zl, xu, yu, zu,
+		m3d, type);	
+	tm_end1 = timer_read(&timer_);
+	
+	MPI_Barrier(gcomm_);
+	tm_end2 = timer_read(&timer_);
+
+	uloga("TS= %u TRANSPORT_TYPE= %d RANK= %d read time= %lf\n",
+		ts, type, rank_, tm_end1-tm_st);	
+	if (rank_ == 0) {
+		uloga("TS= %u TRANSPORT_TYPE= %d read MAX time= %lf\n",
+			ts, type, tm_end2-tm_st);
+	}
+
+	common_unlock_on_read("m3d_lock", &gcomm_);
+
+	check_data("m3d", m3d, spx_*spy_*spz_, rank_, ts);
+
+	return 0;
+}
+
+int test_get_run(int npapp, int npx, int npy, int npz,
+        int spx, int spy, int spz, int timestep, int dims, MPI_Comm gcomm)
 {
 	gcomm_ = gcomm;
-	timesteps_ = num_ts;
-	npapp_ = num_process;
-	npx_ = process_x;
-	npy_ = process_y;
-	npz_ = process_z;
-	if(process_x)
-		spx_ = dim_x/process_x;
-	if(process_y)
-		spy_ = dim_y/process_y;
-	if(process_z)
-		spz_ = dim_z/process_z;
+	timestep_ = timestep;
+	npapp_ = npapp;
+	npx_ = npx;
+	npy_ = npy;
+	npz_ = npz; 
+	if(npx_)
+		spx_ = spx;
+	if(npy_)
+		spy_ = spy;
+	if(npz_)
+		spz_ = spz;
 
 	timer_init(&timer_, 1);
 	timer_start(&timer_);
@@ -194,29 +245,46 @@ int test_get_run(int num_ts, int num_process,int process_x,int process_y,
 	rank_ = common_rank();
 	nproc_ = common_peers();
 
-	double *m2d = NULL;
-	m2d = allocate_2d();
-	if (m2d) {
-		unsigned int ts;
-		for (ts = 1; ts <= timesteps_; ts++){
-			memset(m2d, 0, sizeof(double)*spx_*spy_);
-			if (rank_ == 0)
-				uloga("%s: At timestep %u\n", __func__, ts);
+	double *databuf = NULL;
+	if (dims == 2) {
+		databuf = allocate_2d();
+		if (databuf) {
+			unsigned int ts;
+			for (ts = 1; ts <= timestep_; ts++){
+				memset(databuf, 0, sizeof(double)*spx_*spy_);
 #ifdef DS_HAVE_DIMES
-			if (ts % 2 == 0)	
-			 	couple_read_2d(m2d, ts, USE_DIMES);
-			else if (ts % 2 == 1)
-			  	couple_read_2d(m2d, ts, USE_DSPACES);
+				if (ts % 2 == 0)	
+					couple_read_2d(databuf, ts, USE_DIMES);
+				else if (ts % 2 == 1)
+					couple_read_2d(databuf, ts, USE_DSPACES);
 #else
-			couple_read_2d(m2d, ts, USE_DSPACES);
+				couple_read_2d(databuf, ts, USE_DSPACES);
 #endif
+			}
+		}
+	} else if (dims == 3) {
+		databuf = allocate_3d();
+		if (databuf) {
+			unsigned int ts;
+			for (ts = 1; ts <= timestep_; ts++) {
+				memset(databuf, 0, sizeof(double)*spx_*spy_*spz_);
+#ifdef DS_HAVE_DIMES
+				if (ts % 2 == 0)	
+					couple_read_3d(databuf, ts, USE_DIMES);
+				else if (ts % 2 == 1)
+					couple_read_3d(databuf, ts, USE_DSPACES);
+#else
+				couple_read_3d(databuf, ts, USE_DSPACES);
+#endif
+			}
 		}
 	}
 
 	common_barrier();
 	common_finalize();
-	if (m2d)
-		free(m2d);	
+
+	if (databuf)
+		free(databuf);	
 
 	return 0;
 }

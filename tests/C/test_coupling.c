@@ -35,23 +35,27 @@
 
 #include "mpi.h"
 
-extern int test_put_run(int num_ts, int num_process,int process_x,int process_y,int process_z, int dims, int dim_x, int dim_y, int dim_z, MPI_Comm);
-
-extern int test_get_run(int num_ts, int num_process,int process_x,int process_y,int process_z, int dims, int dim_x, int dim_y, int dim_z, MPI_Comm);
+extern int test_put_run(int npapp, int npx, int npy, int npz,
+                int spx, int spy, int spz, int timestep, int dims, MPI_Comm);
+extern int test_get_run(int npapp, int npx, int npy, int npz,
+                int spx, int spy, int spz, int timestep, int dims, MPI_Comm);
 
 int main(int argc, char **argv)
 {
 	int err;
 	int mpi_nprocs, mpi_rank;
+
+        int npapp, npx, npy, npz;
+        int spx, spy, spz;
 	
-	int num_sp, num_cp, iter;
+	int num_sp, num_cp;
 	int num_writer,writer_x,writer_y,writer_z; 
 	int num_reader,reader_x,reader_y,reader_z;
-	int dims, dim_x, dim_y, dim_z;
+	int timestep, dims, dim_x, dim_y, dim_z;
 	MPI_Comm gcomm;
 
         if(read_config_file("computenode.conf",
-                &num_sp, &num_cp, &iter,
+                &num_sp, &num_cp, &timestep,
                 &num_writer, &writer_x, &writer_y, &writer_z,
                 &num_reader, &reader_x, &reader_y, &reader_z,
                 &dims, &dim_x, &dim_y, &dim_z) != 0) {
@@ -63,30 +67,54 @@ int main(int argc, char **argv)
 	MPI_Comm_size(MPI_COMM_WORLD, &mpi_nprocs);
 	MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);	
 	MPI_Barrier(MPI_COMM_WORLD);
-	
+
 	if (mpi_rank < num_sp){
-		MPI_Comm_split(MPI_COMM_WORLD, 0, mpi_rank, &gcomm);
 		// Run as data space servers
+		MPI_Comm_split(MPI_COMM_WORLD, 0, mpi_rank, &gcomm);
 #ifdef DS_HAVE_DIMES
 		common_run_server(num_sp, num_cp, USE_DIMES);
 #else
 		common_run_server(num_sp, num_cp, USE_DSPACES);
 #endif
 	} else if (num_sp <= mpi_rank && mpi_rank < num_sp+num_writer) {
-		MPI_Comm_split(MPI_COMM_WORLD, 1, mpi_rank, &gcomm);
 		// Run as data writer
-		// sleep(15); // wait for the dataspace servers to init.
+		MPI_Comm_split(MPI_COMM_WORLD, 1, mpi_rank, &gcomm);
 
-		test_put_run(iter,num_writer,writer_x,writer_y,writer_z,
-			dims,dim_x,dim_y,dim_z,gcomm);
+		npapp = num_writer;
+		npx = writer_x;
+		npy = writer_y;
+		npz = writer_z;
+		if (dims >= 2) {
+			spx = dim_x / npx;
+			spy = dim_y / npy;
+		}
+
+		if (dims >= 3) {
+			spz = dim_z/ npz;
+		}
+
+		test_put_run(npapp, npx, npy, npz,
+			spx, spy, spz, timestep, dims, gcomm);
 	} else if (num_sp+num_writer <= mpi_rank &&
 		   mpi_rank < num_sp+num_writer+num_reader) {
-		MPI_Comm_split(MPI_COMM_WORLD, 2, mpi_rank, &gcomm);
 		// Run as data reader
-		// sleep(15); // wait for the dataspace servers to init.
-	
-		test_get_run(iter,num_reader,reader_x,reader_y,reader_z,
-			dims,dim_x,dim_y,dim_z,gcomm);
+		MPI_Comm_split(MPI_COMM_WORLD, 2, mpi_rank, &gcomm);
+
+		npapp = num_reader;
+		npx = writer_x;
+		npy = writer_y;
+		npz = writer_z;
+		if (dims >= 2) {
+			spx = dim_x / npx;
+			spy = dim_y / npy;
+		}
+
+		if (dims >= 3) {
+			spz = dim_z/ npz;
+		}
+
+		test_get_run(npapp, npx, npy, npz,
+			spx, spy, spz, timestep, dims, gcomm);	
 	} else {
 		MPI_Comm_split(MPI_COMM_WORLD, 3, mpi_rank, &gcomm);
 		uloga("Idle process!\n");

@@ -76,6 +76,26 @@ err_out:
 	return -1;
 }
 
+int parse_args(int argc, char **argv, int *npapp, int *npx, int *npy, int *npz,
+	int *spx, int *spy, int *spz, int *timestep)
+{
+	if (argc < 9) {
+		uloga("Wrong number of arguments!\n");
+		return -1;
+	}
+
+	*npapp = atoi(argv[1]);
+	*npx = atoi(argv[2]);	
+	*npy = atoi(argv[3]);	
+	*npz = atoi(argv[4]);	
+	*spx = atoi(argv[5]);	
+	*spy = atoi(argv[6]);	
+	*spz = atoi(argv[7]);	
+	*timestep = atoi(argv[8]);	
+
+	return 0;
+}
+
 int common_init(int num_peers, int appid) {
         return dspaces_init(num_peers, appid);
 }

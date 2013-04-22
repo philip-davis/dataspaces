@@ -4,13 +4,17 @@
 #PBS -q batch 
 #PBS -j oe
 #PBS -l walltime=00:45:00
-#PBS -l nodes=19
+#PBS -l nodes=4
 
 cd $PBS_O_WORKDIR
 
-aprun -n 16 ./dataspaces_server -s 16 -c 288  &
-sleep 15 
-aprun -n 256 ./test_writer &
-aprun -n 32 ./test_reader &
+rm -f conf
+
+aprun -n 4 ./dataspaces_server -s  -c 48  &
+sleep 10
+ 
+aprun -n 16 ./test_writer 16 4 4 1 32 32 128 10 &
+
+aprun -n 32 ./test_reader 32 4 4 2 32 32 64 10 &
 
 wait
