@@ -16,15 +16,15 @@ $ ./configure CC=cc FC=ftn
 $ ./configure CC=mpicc FC=mpif90
 
 # DCMF for IBM BlueGene/P
-$ ./configure CC=/bgsys/drivers/ppcfloor/comm/default/bin/mpixlc FC=/bgsys/drivers/ppcfloor/comm/default/bin/mpixlf90 CFLAGS="-g -O0 -qarch=450 -qtune=450" --with-dcmf="/bgsys/drivers/ppcfloor"
+$ ./configure CC=mpixlc FC=mpixlf90 CFLAGS="-g -O0 -qarch=450 -qtune=450" --with-dcmf="/bgsys/drivers/ppcfloor"
 
 # Portals for Cray XT series
 $ ./configure CC=cc FC=ftn
 
  Some of the useful configure options:
- --preifx=/install/path - set the directory where DataSpaces will be installed
+ --preifx=/install/path - Set the directory where DataSpaces will be installed.
  --enable-dimes - Build DataSpaces with DIstributed MEmory Space (DIMES) support.
-   This feature uses local RDMA memory buffers across application processes to build
+   DIMES feature uses local RDMA memory buffers across application processes to build
    a virtual shared data space in-situ, which can be queried and directly accessed by 
    other applications in a data coupling workflow. Currently this feature is only 
    supported on Cray Gemini and IBM DCMF networks. 

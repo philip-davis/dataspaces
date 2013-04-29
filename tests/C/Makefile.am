@@ -26,3 +26,5 @@ test_reader_mpmd_LDADD = -L../../src -ldspaces -ldscommon -L../../dart -ldart $(
 test_coupling_SOURCES = common.c test_put_run.c test_get_run.c \
 				test_coupling.c 
 test_coupling_LDADD = -L../../src -ldspaces -ldscommon -L../../dart -ldart $(DSPACESLIB_LDADD)
+
+noinst_HEADERS = common.h
