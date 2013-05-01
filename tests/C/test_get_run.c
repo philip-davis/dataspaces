@@ -121,12 +121,14 @@ static int couple_read_2d_multi_var(unsigned int ts, enum transport_type type,
         MPI_Barrier(gcomm_);
         tm_end2 = timer_read(&timer_);
 
+#ifdef DEBUG
         uloga("TS= %u TRANSPORT_TYPE= %d RANK= %d read time= %lf\n",
                 ts, type, rank_, tm_end1-tm_st);
         if (rank_ == 0) {
                 uloga("TS= %u TRANSPORT_TYPE= %d read MAX time= %lf\n",
                         ts, type, tm_end2-tm_st);
         }
+#endif
 
         common_unlock_on_read("m2d_lock", &gcomm_);
 
@@ -150,8 +152,10 @@ static int couple_read_2d(double *m2d, unsigned int ts, enum transport_type type
 	int zu = 0;
 	double tm_st, tm_end1, tm_end2;
 
+#ifdef DEBUG
 	uloga("Timestep=%u, %d read m2d: {(%d,%d,%d),(%d,%d,%d)} from space\n",
 		ts, rank_, xl,yl,zl, xu,yu,zu);
+#endif
 
 	MPI_Barrier(gcomm_);
 	tm_st = timer_read(&timer_);
@@ -164,12 +168,14 @@ static int couple_read_2d(double *m2d, unsigned int ts, enum transport_type type
 	MPI_Barrier(gcomm_);
 	tm_end2 = timer_read(&timer_);
 
+#ifdef DEBUG
 	uloga("TS= %u TRANSPORT_TYPE= %d RANK= %d read time= %lf\n",
 		ts, type, rank_, tm_end1-tm_st);	
 	if (rank_ == 0) {
 		uloga("TS= %u TRANSPORT_TYPE= %d read MAX time= %lf\n",
 			ts, type, tm_end2-tm_st);
 	}
+#endif
 
 	common_unlock_on_read("m2d_lock", &gcomm_);
 
@@ -192,8 +198,10 @@ static int couple_read_3d(double *m3d, unsigned int ts, enum transport_type type
 	int zu = offz_ + spz_ - 1;
 	double tm_st, tm_end1, tm_end2;
 
+#ifdef DEBUG
 	uloga("Timestep=%u, %d read m3d: {(%d,%d,%d),(%d,%d,%d)} from space\n",
 		ts, rank_, xl,yl,zl, xu,yu,zu);
+#endif
 
 	MPI_Barrier(gcomm_);
 	tm_st = timer_read(&timer_);
@@ -206,12 +214,14 @@ static int couple_read_3d(double *m3d, unsigned int ts, enum transport_type type
 	MPI_Barrier(gcomm_);
 	tm_end2 = timer_read(&timer_);
 
+#ifdef DEBUG
 	uloga("TS= %u TRANSPORT_TYPE= %d RANK= %d read time= %lf\n",
 		ts, type, rank_, tm_end1-tm_st);	
 	if (rank_ == 0) {
 		uloga("TS= %u TRANSPORT_TYPE= %d read MAX time= %lf\n",
 			ts, type, tm_end2-tm_st);
 	}
+#endif
 
 	common_unlock_on_read("m3d_lock", &gcomm_);
 

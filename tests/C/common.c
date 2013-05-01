@@ -225,7 +225,6 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type) {
 		}
 
 		dimes_server_barrier(dsg);
-		uloga("%s(): to call dimes_server_free\n", __func__);
 		dimes_server_free(dsg); 
 
 		if (err == 0)
@@ -260,8 +259,10 @@ void check_data(const char *var_name, double *buf, int num_elem, int rank, int t
 		}
         }
         avg = sum / num_elem;
+#ifdef DEBUG
         uloga("%s(): var= %s, rank= %d, max= %f, min= %f, avg= %f\n",
                 __func__, var_name, rank, max, min, avg);
+#endif
 
         if (cnt > 0) {
                 uloga("%s(): var= %s, rank= %d, ts= %d, "
