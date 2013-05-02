@@ -1893,7 +1893,7 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
                 ds_conf.dimz = 4096;
 
 		uloga("'%s()' error loading config file, starting "
-			"with defaults.", __func__);
+			"with defaults.\n", __func__);
         }
         else
                 uloga("'%s()' config file loaded.\n", __func__);
