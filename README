@@ -1,20 +1,57 @@
-Test applications:
-=================================
+Contents of this README file:
+ * About DataSpaces
+ * Building and Installing DataSpaces
+ * DataSpaces APIs
+ * Testing Applications
 
-We include two set of test code in the package. They are under tests directory
-The test is a simple workflow composed of two
-applications  (a data producer  and a  data consumer),  which interact
-through DataSpaces at runtime. The workflow works as follow:
-The producer processes generates array of floating points number, obtain
-the write lock, write it to the staging area, then release the write lock.
-The consumer processes first obtain the read lock, read data
-from the staging area, and release the read lock.
-This produce/consume processes can go on for a number of iteration defined
-by user.
 
-The producer/consumer programs are written
-in C and Fortran and are located in C and Fortran directory respectively.
-The DataSpaces staging server code is written in C and in C directory.
+About DataSpaces
+=================
+
+This package  contains the source  code and two test  applications for
+DataSpaces  run-time library, which  is  a  flexible interaction  and
+coordination framework to support coupled applications.
+
+DataSpaces is a distributed framework  build on a dynamic set of nodes
+of a HPC cluster,  which implements a virtual shared-space abstraction
+that can  be accessed  concurrently by all  applications in  a coupled
+simulation  workflow.  The  coupled  applications can  coordinate  and
+interact using  DataSpaces by publishing and  fetching scientific data
+of interest through the distributed in-memory space.
+
+DataSpaces provides  a simple, yet  powerful interface similar  to the
+tuple-space model, e.g., dspaces_put()/dspaces_get() to insert/retrieve data
+objects into/from the virtual space.
+
+
+Building and Installing DataSpaces
+==================================
+
+Please read the INSTALL file.
+
+
+DataSpaces APIs
+===============
+
+Please read header files include/dataspaces.h and include/dimes_interface.h for
+detailed API documentation. 
+
+
+Test applications
+=================
+
+We include two set of test code in the package. They are under tests directory.
+The test is a simple workflow composed of two applications  (a data producer
+and a  data consumer),  which interact through DataSpaces at runtime. The
+workflow works as follow: The producer processes generates array of floating
+points number, obtain the write lock, write it to the staging area, then
+release the write lock. The consumer processes first obtain the read lock, read
+data from the staging area, and release the read lock. This produce/consume
+processes can go on for a number of iteration defined by user.
+
+The producer/consumer programs are written in C and Fortran and are located in
+C and Fortran directory respectively. The DataSpaces staging server code is
+written in C and in C directory.
 
 The test workflow include the following main source files:
 
@@ -32,20 +69,21 @@ Under the tests directory (tests/C or tests/Fortran execute
 
         $ make
 
-to   create  the   the following  binary   executables   '/tests/C/dataspaces_server',  '/tests/C/test_reader',
-'tests/C/test_writer', 'tests/Fortran/test_put' and '/tests/Fortran/test_get'
-Before running Fortran test code, user needs to copy the staging server executable (dataspaces_server ) to
-Fortran directory. 
+to   create  the   the following  binary   executables
+'/tests/C/dataspaces_server',  '/tests/C/test_reader', 'tests/C/test_writer',
+'tests/Fortran/test_put' and '/tests/Fortran/test_get'. Before running Fortran
+test code, user needs to copy the staging server executable (dataspaces_server
+) to Fortran directory. 
 
 
 2. Preparing the configuration file for DataSpaces
 ---------------------------------------------------
 
-User can create a  configuration  file: 'dataspaces.conf' under C or Fotran test directory.
-This is optional because without the config file, DataSpaces server will use the default configuration
-'dataspaces.conf'  file should  be  editted  according to  the
-specific  requirements for  DataSpaces  before running  any jobs.  The
-configuration parameters are:
+User can create a  configuration  file: 'dataspaces.conf' under C or Fotran
+test directory. This is optional because without the config file, DataSpaces
+server will use the default configuration 'dataspaces.conf'  file should  be
+editted  according to the specific  requirements for  DataSpaces  before
+running  any jobs. The configuration parameters are:
 
   ndim : number of  dimensions for the application data domain
   dimx : size of x dimension
@@ -76,9 +114,9 @@ lock_type = 2
 3. How to compile and run test workflow
 ----------------------------------
 
-In the tests/C and test/Fortran directory, we provide a number of PBS  job script  files
-'job.sith'.   This file  should be  editted according  to  the specific
-workflow scenario.
+In the tests/C and test/Fortran directory, we provide a number of PBS  job
+script  files 'job.sith'. This file  should be  editted according  to  the
+specific workflow scenario.
 
 The DataSpaces server executable has three command line options:
 
@@ -86,8 +124,8 @@ The DataSpaces server executable has three command line options:
   --cnodes, -c    number of compute nodes
 
 
-The test application executables  "test_put" and "test_get" (or 'test_writer' and 'test_reader') require 8
-arguments as arg1-arg8:
+The test application executables  "test_put" and "test_get" (or 'test_writer'
+and 'test_reader') require 8 arguments as arg1-arg8:
 
   arg1 : number of total application processes
   arg2 : number of processes in x direction (of the process layout)
@@ -102,6 +140,5 @@ dataspaces_server -s 4 -c 72
 test_put 64 4 4 4 256 256 256 50 
 test_get 8 4 2 1 256 512 1024 50 
 
-If you would like to write your own job script, please add command
-rm -f conf srv.lck to your script in order to remove config files from
-previous run.
+If you would like to write your own job script, please add command rm -f conf
+srv.lck to your script in order to remove config files from previous run.
