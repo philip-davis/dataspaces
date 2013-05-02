@@ -59,7 +59,6 @@ program test_put
 
   call parse_args()
 
-  print *, "USE MPI."
   comm = MPI_COMM_WORLD
   call MPI_INIT(err)
   call MPI_COMM_RANK(comm, mpi_rank, err)
