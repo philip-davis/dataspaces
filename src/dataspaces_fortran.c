@@ -83,8 +83,8 @@ char *fstrncpy(char *cstr, const char *fstr, size_t len, size_t maxlen)
 void FC_FUNC(dspaces_init, DSPACES_INIT)(int *num_peers, int *appid, int *err)
 {
 	// TODO: to remove uloga
-	uloga("%s(): num_peers= %d, appid= %d\n",
-		__func__, *num_peers, *appid);
+	//uloga("%s(): num_peers= %d, appid= %d\n",
+	//	__func__, *num_peers, *appid);
 
 	*err = common_dspaces_init(*num_peers, *appid);
 }
