@@ -1,3 +1,7 @@
+Requirements
+============
+1. DataSpaces requires MPI. 
+
 Quick Installation Instructions
 ===============================
 The following steps are needed to configure, bulid and install DataSpaces.
@@ -24,7 +28,7 @@ $ ./configure CC=cc FC=ftn
 
 
 
-3. Some of the useful configure options:
+3. Some of the useful configure options
  --preifx=/install/path - Set the directory where DataSpaces will be installed.
 
  --enable-dimes - Build DataSpaces with DIstributed MEmory Space (DIMES) support.
