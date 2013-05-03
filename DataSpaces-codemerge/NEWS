@@ -1,0 +1,11 @@
+1.2.0 Released May 2013
+	- Added network support: DCMF for IBM BlueGene/P
+	- Added new feature: DIMES APIs for RDMA-enabled memory-to-memory redistribution of global arrays between coupled applications 
+	- Added coupled writer/reader testing applications in C
+
+1.1.0 Released November 2012
+	- Added network support: Infiniband
+	- Added support for sub-group lock/unlock using application defined MPI communicator
+
+1.0.0 Released July 2012
+	- Network support: Portals for Cray XT series, Gemini for Cray XE/XK series
