@@ -1,8 +1,7 @@
 1.2.0 Released May 2013
-	- XXXXXXXXXX
-	- Added coupled writer/reader testing applications in C
-	- Added new feature: DIMES - RDMA-enabled memory-to-memory data redistribution of global arrays between tightly coupled parallel applications
 	- Added network support: DCMF for IBM BlueGene/P
+	- Added new feature: DIMES APIs for RDMA-enabled memory-to-memory redistribution of global arrays between coupled applications 
+	- Added coupled writer/reader testing applications in C
 
 1.1.0 Released November 2012
 	- Added network support: Infiniband
