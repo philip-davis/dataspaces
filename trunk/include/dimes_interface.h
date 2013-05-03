@@ -36,8 +36,8 @@ extern "C" {
 #endif
 
 /** @file dimes_interface.h
- *  @brief DIMES APIs for performing memory-to-memory redistribution of
- *   global array data between tightly coupled applications.
+ *  @brief DIMES data coupling APIs for performing RDMA-based memory-to-memory
+ *  redistribution of global array between tightly coupled applications.
  *  
  *  DataSpaces APIs dspaces_put and dspaces_get enable memroy-to-memory data sharing
  *  using dedicated staging servers. DIMES APIs provides the same high-level 
