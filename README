@@ -122,7 +122,7 @@ The DataSpaces server executable has three command line options:
 
   --server, -s    number of server instance/staging nodes
   --cnodes, -c    number of compute nodes
-
+  --conf, -f      path to the configuration file
 
 The test application executables  "test_put" and "test_get" (or 'test_writer'
 and 'test_reader') require 8 arguments as arg1-arg8:
