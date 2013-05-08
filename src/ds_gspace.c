@@ -1946,7 +1946,9 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
                 goto err_out;
         tm_end = timer_read(&timer);
 
+#ifdef DEBUG
         printf("SRV %d %d %lf\n", DSG_ID, -1, tm_end-tm_start);
+#endif
 
         err = ssd_init(dsg_l->ssd, ds_get_rank(dsg_l->ds));
         if (err < 0)
