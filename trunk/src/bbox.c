@@ -360,7 +360,9 @@ void bbox_to_intv(const struct bbox *bb, int dim_virt, int bpd,
         n = queue_size(&q_good);
         i_tab = malloc(n * sizeof(struct intv));
 
+#ifdef DEBUG
         printf("total # boxes to decompose is %d.\n", n);
+#endif
         n = 0;
         while (! queue_is_empty(&q_good)) {
                 i_tmp = queue_dequeue(&q_good);
