@@ -253,14 +253,6 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 			list_add(&app->app_entry, &ds->app_list);
 	}
 
-#ifdef DEBUG	
-	// TODO: to remove
-	uloga("%s(): app_id= %d app_num_peers= %d app_cnt_peers= %d, ds->peer_size= %d "
-	      "ds->num_sp= %d ds->num_cp= %d\n",
-		__func__, app->app_id, app->app_num_peers, app->app_cnt_peers,
-		ds->peer_size, ds->num_sp, ds->num_cp);
-#endif
-
 	cn_peer = app->app_peer_tab + app->app_cnt_peers;
 	cn_peer->ptlmap = hreg->pm_cp;//Important copy
 	cn_peer->ptlmap.id = cn_peer - ds->peer_tab; //global dart id?
@@ -346,11 +338,11 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	/* Forwarding the unregister rpc message in a ring manner*/
 	hreg->num_sp--; //the rest number of forwarding
 
-#ifdef DEBUG
-	uloga("%s(): #%u(dart_id=%d) get cn_unregister of #%u(dart_id=%d) ds->num_cp=%d, num_unreg=%d, num_to_forward_sp=%d\n",
-		__func__,ds->self->ptlmap.rank_dcmf,ds->self->ptlmap.id,
-		hreg->pm_cp.rank_dcmf,hreg->pm_cp.id,ds->num_cp,num_unreg,hreg->num_sp);
-#endif	
+//#ifdef DEBUG
+//	uloga("%s(): #%u(dart_id=%d) get cn_unregister of #%u(dart_id=%d) ds->num_cp=%d, num_unreg=%d, num_to_forward_sp=%d\n",
+//		__func__,ds->self->ptlmap.rank_dcmf,ds->self->ptlmap.id,
+//		hreg->pm_cp.rank_dcmf,hreg->pm_cp.id,ds->num_cp,num_unreg,hreg->num_sp);
+//#endif	
 
 	if(hreg->num_sp){
 		peer = ds_get_peer(ds, (ds->self->ptlmap.id+1)%ds->num_sp);

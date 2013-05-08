@@ -188,10 +188,10 @@ static inline int sys_update_credits(struct rpc_server *rpc_s, struct hdr_sys *h
 */
 static int sys_credits_return(struct rpc_server *rpc_s, struct hdr_sys *hs)
 {
-#ifdef DEBUG
-	uloga("%s(): #%u, from peer hs->sys_id=%d\n",
-		__func__, DCMF_Messager_rank(), hs->sys_id);
-#endif
+//#ifdef DEBUG
+//	uloga("%s(): #%u, from peer hs->sys_id=%d\n",
+//		__func__, DCMF_Messager_rank(), hs->sys_id);
+//#endif
 
 	struct node_id * to;
 	struct hdr_sys ret_hs;
