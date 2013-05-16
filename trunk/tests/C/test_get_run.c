@@ -29,6 +29,7 @@
 *  zhangfan@cac.rutgers.edu
 */
 #include <stdio.h>
+#include <stdlib.h>
 #include "common.h"
 #include "debug.h"
 #include "ss_data.h"
