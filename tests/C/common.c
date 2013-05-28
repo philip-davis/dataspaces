@@ -208,8 +208,6 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type) {
 		dsg_barrier(dsg);
 		dsg_free(dsg); 
 
-		if (err == 0)
-			uloga("All ok.\n");
 		return 0;
 	} else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
@@ -227,8 +225,6 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type) {
 		dimes_server_barrier(dsg);
 		dimes_server_free(dsg); 
 
-		if (err == 0)
-			uloga("All ok.\n");
 		return 0;
 #else
 		uloga("%s(): Dataspaces DIMES is not enabled!\n", __func__);

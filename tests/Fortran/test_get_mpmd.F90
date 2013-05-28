@@ -88,7 +88,6 @@ program test_gss
   call dspaces_finalize()
 
   call MPI_BARRIER(comm, err)
-  call MPI_BARRIER(MPI_COMM_WORLD, err)
   call MPI_FINALIZE(err)
 
 end program
