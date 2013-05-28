@@ -119,7 +119,7 @@ int main(int argc, char **argv)
 	common_run_server(num_sp, num_cp, USE_DSPACES);
 #endif
 
-        MPI_Barrier(MPI_COMM_WORLD);
+        MPI_Barrier(gcomm);
         MPI_Finalize();
 
         return 0;

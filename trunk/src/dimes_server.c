@@ -564,7 +564,9 @@ struct dimes_server *dimes_server_alloc(int num_sp, int num_cp, char *conf_name)
 
 	dimes_s = dimes_s_l;
 
+#ifdef DEBUG
 	uloga("%s(): #%d complete!\n", __func__, DIMES_SID);
+#endif
 	return dimes_s;
 err_out:
 	uloga("%s(): failed with %d.\n", __func__, err);

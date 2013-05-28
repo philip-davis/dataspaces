@@ -68,7 +68,7 @@ int main(int argc, char **argv)
         test_put_run(npapp, npx, npy, npz,
                 spx, spy, spz, timestep, dims, gcomm);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Barrier(gcomm);
 	MPI_Finalize();
 
 	return 0;	
