@@ -75,12 +75,12 @@ struct dart_client{
 
 static inline struct node_id * dc_get_peer(struct dart_client *dc, int n)
 {
-        return dc->peer_tab + n;
+	return dc->peer_tab + n;
 }
 
 static inline struct dart_client *dc_ref_from_rpc(struct rpc_server *rpc_s)
 {
-        return rpc_s->dart_ref;
+	return rpc_s->dart_ref;
 }
 
 struct dart_client* dc_alloc(int,int,void*);

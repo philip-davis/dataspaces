@@ -44,15 +44,15 @@ struct app_info;
   Structure to represent an application that uses the Spaces.
 */
 struct app_info {
-        struct list_head        app_entry;
+	struct list_head        app_entry;
 
-        char                    *app_name;      /* Application name */
-        int                     app_id;         /* Application identifier */
+	char                    *app_name;      /* Application name */
+	int                     app_id;         /* Application identifier */
 
-        int                     app_num_peers;  /* Total number of peers in app */
-        struct node_id          *app_peer_tab;  /* Reference to app nodes info */
+	int                     app_num_peers;  /* Total number of peers in app */
+	struct node_id          *app_peer_tab;  /* Reference to app nodes info */
 
-        int                     app_cnt_peers;  /* Peers so far */
+	int                     app_cnt_peers;  /* Peers so far */
 };
 
 struct dart_server{
@@ -89,17 +89,17 @@ static inline struct dart_server* ds_ref_from_rpc(struct rpc_server *rpc_s)
 
 static inline int ds_get_rank(struct dart_server *ds)
 {
-        return ds->self->ptlmap.id;
+	return ds->self->ptlmap.id;
 }
 
 static inline struct node_id * ds_get_peer(struct dart_server *ds, int n)
 {
-        return (ds->peer_tab + n);
+	return (ds->peer_tab + n);
 }
 
 static inline int ds_stop(struct dart_server *ds)
 {
-        return ds->f_stop;
+	return ds->f_stop;
 }
 
 #ifdef __cplusplus

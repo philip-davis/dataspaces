@@ -38,7 +38,6 @@
 #include "debug.h"
 #include "dc_base_dcmf.h"
 
-/*using consistent hashing to get Data Space server id*/
 static inline struct node_id * dc_which_peer(struct dart_client *dc)
 {
 	int peer_id;
@@ -105,16 +104,16 @@ static int dcrpc_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	size_peertab = sizeof(*peer) * dc->peer_size;
 	dc->peer_tab = malloc(size_peertab);
 	if (!dc->peer_tab)
-			goto err_out;
+		goto err_out;
 	memset(dc->peer_tab, 0, size_peertab);
 	dc->cn_peers = dc->peer_tab + dc->num_sp;
 
 	peer = dc->peer_tab;
 	for (i = 0; i < dc->peer_size; i++) {
-			INIT_LIST_HEAD(&peer->req_list);
-			peer->num_msg_at_peer = rpc_s->max_num_msg;
-			peer->num_msg_ret = 0;
-			peer++;
+		INIT_LIST_HEAD(&peer->req_list);
+		peer->num_msg_at_peer = rpc_s->max_num_msg;
+		peer->num_msg_ret = 0;
+		peer++;
 	}
 
 	peer = dc->peer_tab;
@@ -136,7 +135,7 @@ static int dcrpc_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	peer->ptlmap = hreg->pm_sp;
 	peer->num_msg_ret++;
 	if (peer == dc->peer_tab)
-			dc->peer_tab->num_msg_at_peer++;
+		dc->peer_tab->num_msg_at_peer++;
 	
 	msg = msg_buf_alloc(rpc_s, peer, 0);
 	if(!msg)
@@ -151,12 +150,6 @@ static int dcrpc_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	msg->size = size_peertab;
 	msg->cb = register_completion;
 	
-	//for debug
-	/*
-	uloga("%s(): #%u(dart_id=%d), get cn_register reply from server node #%u(dart_id=%d)\n",
-		__func__, rpc_s->ptlmap.rank_dcmf, hreg->pm_cp.id, hreg->pm_sp.rank_dcmf, cmd->id);
-	*/        
-
 	rpc_mem_info_cache(peer, msg, cmd);
 	err = rpc_receive_direct(rpc_s, peer, msg);
 	if(err<0)		
@@ -164,11 +157,11 @@ static int dcrpc_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	
 	return 0;
 err_out_free:
-        free(msg->msg_data);
-        free(msg);
+	free(msg->msg_data);
+	free(msg);
 err_out:
-        uloga("'%s()': failed with %d.\n", __func__, err);
-        return err;        
+	uloga("'%s()': failed with %d.\n", __func__, err);
+	return err;        
 }
 
 static int file_exist_nonempty(const char *path)
@@ -234,11 +227,10 @@ static int dc_register_at_master(struct dart_client *dc, int appid)
 
 	return 0;
  err_out_free:
-        free(msg);
+	free(msg);
  err_out:
-        uloga("'%s()': failed.\n", __func__);
-        return -1;
-	
+	uloga("'%s()': failed.\n", __func__);
+	return -1;
 }
 
 static int dc_unregister(struct dart_client *dc)
@@ -273,10 +265,10 @@ static int dc_unregister(struct dart_client *dc)
 
 	return 0;	
  err_out_free:
-        free(msg);
+	free(msg);
  err_out:
-        uloga("'%s()': failed.\n", __func__);
-        return err;
+	uloga("'%s()': failed.\n", __func__);
+	return err;
 }
 
 /*
@@ -316,17 +308,17 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
 void dc_free(struct dart_client *dc)
 {
 #ifdef DEBUG
-        uloga("'%s()': #%u num_posted = %d.\n", __func__,dc->self->ptlmap.rank_dcmf, dc->num_posted);
+	uloga("'%s()': #%u num_posted = %d.\n", __func__,dc->self->ptlmap.rank_dcmf, dc->num_posted);
 #endif
-        while (dc->num_posted)
-                rpc_process_event(dc->rpc_s);
+	while (dc->num_posted)
+			rpc_process_event(dc->rpc_s);
 
-        dc_unregister(dc);
+	dc_unregister(dc);
 
-        rpc_server_free(dc->rpc_s);
-        if (dc->peer_tab)
-                free(dc->peer_tab);
-        free(dc);	
+	rpc_server_free(dc->rpc_s);
+	if (dc->peer_tab)
+		free(dc->peer_tab);
+	free(dc);	
 }
 
 int dc_process(struct dart_client *dc)

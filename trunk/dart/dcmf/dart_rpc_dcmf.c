@@ -76,8 +76,8 @@ struct client_data_rpc_put{
 };
 
 static struct {
-        enum cmd_type   rpc_cmd;
-        rpc_service     rpc_func;
+	enum cmd_type   rpc_cmd;
+	rpc_service     rpc_func;
 } rpc_commands[64];
 
 static int num_service = 0;
@@ -97,13 +97,13 @@ static int log2_ceil(int n)
 
 	i = ~(~0U >> 1);
 	while (i && !(i & n))
-			i = i >> 1;
+		i = i >> 1;
 	if (i != n)
-			i = i << 1;
+		i = i << 1;
 
 	while (i) {
-			k++;
-			i = i >> 1;
+		k++;
+		i = i >> 1;
 	}
 
 	return k;
@@ -116,9 +116,6 @@ static void rpc_decode(struct rpc_server* rpc_s, struct rpc_request *rr)
 {
 	struct rpc_cmd *cmd;
 	int err,i;
-
-	//for debug
-	//uloga("'%s()': #%u\n", __func__, DCMF_Messager_rank());	
 
 	//Check the validity of the pointers
 	if(!rpc_s || !rr)
@@ -156,24 +153,13 @@ static inline int sys_update_credits(struct rpc_server *rpc_s, struct hdr_sys *h
 		peer->num_msg_at_peer += hs->sys_msg;
 		peer->num_msg_ret += num_return;
 			
-		//for debug
-		//uloga("%s(): #%u(dart_id=%d), get hs->sys_msg=%d, hs->sys_id=%d, peer->num_msg_at_peer=%d, peer->num_msg_ret=%d\n",
-		//	__func__, rpc_s->ptlmap.id, rpc_s->ptlmap.rank_dcmf, hs->sys_msg, hs->sys_id,
-		//	peer->num_msg_at_peer, peer->num_msg_ret);
-	
 		if(peer->f_need_msg && peer->num_msg_ret){
 			/*Send back some credits*/
-			//for debug
-			//uloga("%s(): #%u, sys_credits_return()\n",
-			//	__func__, rpc_s->ptlmap.rank_dcmf);
 			sys_credits_return(rpc_s, hs);
 			peer->f_need_msg = 0;
 		}
 		
 		if(peer->f_req_msg && peer->num_msg_at_peer){
-			//for debug
-			//uloga("%s(): #%u, peer_process_send_list()\n",
-			//	__func__, rpc_s->ptlmap.rank_dcmf);
 			peer->f_req_msg = 0;
 			return peer_process_send_list(rpc_s, peer);
 		}
@@ -236,7 +222,7 @@ static int sys_bar_arrive(struct rpc_server *rpc_s, struct hdr_sys *hs)
 	//uloga("%s(): #%u, get sys_bar_enter msg\n", __func__, rpc_s->ptlmap.rank_dcmf);
 	rpc_s->bar_tab[hs->sys_id] = hs->sys_pad1;
 
-        return 0;
+	return 0;
 }
 
 static int sys_bar_send(struct rpc_server *rpc_s, int peerid)
@@ -262,26 +248,26 @@ static int sys_bar_send(struct rpc_server *rpc_s, int peerid)
 */
 static int sys_dispatch_event(struct rpc_server *rpc_s, struct hdr_sys *hs)
 {
-        int err = 0;
+	int err = 0;
 
-        switch (hs->sys_cmd) {
-        case sys_none:
-                break;
+	switch (hs->sys_cmd) {
+	case sys_none:
+		break;
 
-        case sys_msg_ret:
-                err = sys_update_credits(rpc_s, hs, 0);
-                break;
+	case sys_msg_ret:
+		err = sys_update_credits(rpc_s, hs, 0);
+		break;
 
-        case sys_msg_req:
-                err = sys_credits_return(rpc_s, hs);
-                break;
+	case sys_msg_req:
+		err = sys_credits_return(rpc_s, hs);
+		break;
 
-        case sys_bar_enter:
-                err = sys_bar_arrive(rpc_s, hs);
-                break;
-        }
+	case sys_bar_enter:
+		err = sys_bar_arrive(rpc_s, hs);
+		break;
+	}
 
-        return err;
+	return err;
 }
 
 static int sys_process_event(struct rpc_server *rpc_s)
@@ -291,8 +277,6 @@ static int sys_process_event(struct rpc_server *rpc_s)
 	struct sys_request *sys_req;
 	while(!list_empty(&rpc_s->sys_list)){
 		sys_req = list_entry(rpc_s->sys_list.next, struct sys_request, req_entry);
-		//for debug
-		//uloga("'%s()': #%u get one sys msg from list\n", __func__, DCMF_Messager_rank());
 
 		list_del(&sys_req->req_entry);//Delete it from list here
 
@@ -320,9 +304,6 @@ static void sys_cb_recv_done(void * clientdata, DCMF_Error_t * err_dcmf)
 	if(!rpc_s || !sys_req)
 		return;
 	
-	//for debug
-	//uloga("'%s()': #%u, rpc_s=%x, rr=%x\n", __func__, DCMF_Messager_rank(), rpc_s, sys_req);
-
 	//Add the new message at the tail of incoming sys list
 	list_add_tail(&sys_req->req_entry, &rpc_s->sys_list);
 	
@@ -348,9 +329,6 @@ static void rpc_cb_recv_done(void * clientdata, DCMF_Error_t * err_dcmf)
 	if(!rpc_s || !rr)
 		return;
 	
-	//for debug
-	//uloga("'%s()': #%u\n", __func__, rpc_s->ptlmap.rank_dcmf);
-
 	//Add the new message at the tail of incoming rpc list
 	list_add_tail(&rr->req_entry, &rpc_s->rpc_list);
 	
@@ -438,9 +416,6 @@ static DCMF_Request_t* rpc_cb_recv(void *clientdata, const DCQuad *msginfo, unsi
 	DCMF_Request_t *dcmf_req = (DCMF_Request_t *)calloc(1, sizeof(DCMF_Request_t));
 	if(!rr || !msg || !rpc_s)
 		goto err_out;
-
-	//for debug
-	//uloga("%s(): #%u\n", __func__, rpc_s->ptlmap.rank_dcmf);
 
 	rr->msg = msg;
 	rr->iodir = io_receive;
@@ -537,9 +512,6 @@ err_out:
 */
 static void rpc_cb_put_completion(void *clientdata, DCMF_Error_t *err_dcmf)
 {
-	//for debug
-	//uloga("%s(): #%u\n", __func__, DCMF_Messager_rank());
-
 	struct client_data_rpc_put * ptr = (struct client_data_rpc_put *)clientdata;
 	if(!ptr)
 		return;
@@ -565,12 +537,8 @@ static void rpc_cb_put_completion(void *clientdata, DCMF_Error_t *err_dcmf)
 				remote_memregion,
 				sizeof(DCMF_Memregion_t));
 			err = rpc_send(rpc_s, peer, msg);
-			//for debug
-			//uloga("%s(): #%u, after rpc_send(), err=%d\n",
-			//	__func__, rpc_s->ptlmap.rank_dcmf, err);
 			if(err<0){
 				free(msg);
-				//for debug
 				uloga("%s(): #%u, rpc_send() of RPC msg "
 					"rpg_get_finish failed\n",
 					__func__, rpc_s->ptlmap.rank_dcmf);
@@ -602,9 +570,6 @@ Callback function(handler) to invoke when DCMF_Send() for SYS msg is complete
 */
 static void sys_cb_req_completion(void * clientdata, DCMF_Error_t *err_dcmf)
 {
-	//for debug
-	//uloga("%s(): #%u\n", __func__, DCMF_Messager_rank());
-	
 	struct client_data_sys_send *ptr = (struct client_data_sys_send *)clientdata;
 	if(!ptr)
 		return;
@@ -831,9 +796,6 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 	while(!list_empty(&peer->req_list)){
 		/*
 		if(peer->num_msg_at_peer == 0){
-			//for debug
-			uloga("%s(): #%u, peer->num_msg_at_peer == 0\n",
-				__func__, rpc_s->ptlmap.rank_dcmf);
 			//request for credits
 			if(!peer->f_req_msg){
 				err = sys_credits_request(rpc_s, peer);
@@ -860,15 +822,6 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 				goto err_out;
 		}
 		
-		//for debug
-		/*
-		uloga("%s(): #%u remote peer: rank_dcmf=%u, dart_id=%d, "
-			"num_msg_at_peer=%d, num_msg_ret=%d\n",
-			__func__, rpc_s->ptlmap.rank_dcmf, 
-			peer->ptlmap.rank_dcmf, peer->ptlmap.id, 
-			peer->num_msg_at_peer, peer->num_msg_ret);
-		*/
-
 		//Retrun the credits we have for remote peer
 		int num_msg_ret = 0;
 		num_msg_ret = rr->msg->msg_rpc->num_msg = peer->num_msg_ret;
@@ -1007,25 +960,25 @@ int rpc_read_config(size_t *rank_dcmf, const char *fname)
 
 int rpc_write_config(struct rpc_server *rpc_s, const char *fname)
 {
-        FILE *f;
-        int err;
+	FILE *f;
+	int err;
 
-        f = fopen(fname, "wt");
-        if (!f)
-                goto err_out;
+	f = fopen(fname, "wt");
+	if (!f)
+		goto err_out;
 
-        err = fprintf(f, "DCMFRANK=%u\n", 
-                        rpc_s->ptlmap.rank_dcmf);
-        if (err < 0)
-                goto err_out_close;
-        fclose(f);
+	err = fprintf(f, "DCMFRANK=%u\n", 
+					rpc_s->ptlmap.rank_dcmf);
+	if (err < 0)
+		goto err_out_close;
+	fclose(f);
 
-        return 0;
+	return 0;
  err_out_close:
-        fclose(f);
+	fclose(f);
  err_out:
-        uloga("'%s()': failed with %d.\n", __func__, err);
-        return -1;
+	uloga("'%s()': failed with %d.\n", __func__, err);
+	return -1;
 }
 
 int rpc_process_event(struct rpc_server *rpc_s)
@@ -1035,8 +988,6 @@ int rpc_process_event(struct rpc_server *rpc_s)
 	struct sys_request *sys_req;
 	while(!list_empty(&rpc_s->sys_list)){
 		sys_req = list_entry(rpc_s->sys_list.next, struct sys_request, req_entry);
-		//for debug
-		//uloga("'%s()': #%u get one sys msg from list\n", __func__, DCMF_Messager_rank());
 
 		list_del(&sys_req->req_entry);//Delete it from list here
 
@@ -1052,8 +1003,6 @@ int rpc_process_event(struct rpc_server *rpc_s)
 	while(!list_empty(&rpc_s->rpc_list)){
 		//Get the first rpc msg in the list
 		rr = list_entry(rpc_s->rpc_list.next, struct rpc_request, req_entry);
-		//for debug
-		//uloga("'%s()': #%u get one rpc msg from list\n", __func__, DCMF_Messager_rank());
 
 		list_del(&rr->req_entry);
 		rpc_decode(rpc_s, rr);
@@ -1206,10 +1155,6 @@ int rpc_barrier(struct rpc_server *rpc_s)
 		next = (myrank(rpc_s) + (1 << round)) % rpc_s->app_num_peers;
 		prev = (rpc_s->app_num_peers + 
 			myrank(rpc_s) - (1 << round)) % rpc_s->app_num_peers;
-
-		//for debug
-		//uloga("'%s()': #%u, round %d, next %d, prev %d.\n",
-		//	__func__, rpc_s->ptlmap.rank_dcmf, round, next, prev);
 
 		err = sys_bar_send(rpc_s, rank2id(rpc_s, next));
 		if (err < 0)
