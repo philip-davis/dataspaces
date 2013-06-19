@@ -36,32 +36,32 @@
 #include "dart_rpc_dcmf.h"
 
 struct dart_rdma_mem_handle {
-        DCMF_Memregion_t memregion;
-        size_t size;
+	DCMF_Memregion_t memregion;
+	size_t size;
 };
 
 struct dart_rdma_read_op {
-        struct list_head entry;
-        int tran_id;
-        size_t src_offset;
-        size_t dst_offset;
-        size_t bytes;
-        int ret;
+	struct list_head entry;
+	int tran_id;
+	size_t src_offset;
+	size_t dst_offset;
+	size_t bytes;
+	int ret;
 };
 
 struct dart_rdma_read_tran {
-        struct list_head entry;
-        struct list_head read_ops_list;
-        int tran_id;
-        struct node_id *remote_peer;
-        struct dart_rdma_mem_handle src;
-        struct dart_rdma_mem_handle dst;
+	struct list_head entry;
+	struct list_head read_ops_list;
+	int tran_id;
+	struct node_id *remote_peer;
+	struct dart_rdma_mem_handle src;
+	struct dart_rdma_mem_handle dst;
 };
 
 struct dart_rdma_handle {
-        struct rpc_server *rpc_s;
-        DCMF_Protocol_t dcmf_get_protocol;
-        struct list_head read_tran_list;
+	struct rpc_server *rpc_s;
+	DCMF_Protocol_t dcmf_get_protocol;
+	struct list_head read_tran_list;
 };
 
 int dart_rdma_init(struct rpc_server *rpc_s);
