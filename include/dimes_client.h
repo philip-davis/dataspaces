@@ -42,15 +42,15 @@ extern "C" {
 #include "timer.h"
 
 struct query_tran_d {
-        struct list_head        q_list;
-        int                     num_ent;
+	struct list_head        q_list;
+	int                     num_ent;
 };
 
 struct dimes_client {
-        struct dcg_space *dcg;
-        struct sspace *ssd; //only used for hashing
-        struct bbox domain;
-        struct query_tran_d qt;
+	struct dcg_space *dcg;
+	struct sspace *ssd; //only used for hashing
+	struct bbox domain;
+	struct query_tran_d qt;
 	
 	// Local memory storage
 	struct ss_storage *storage;
@@ -58,7 +58,7 @@ struct dimes_client {
 	// other coupled apps)
 	struct list_head req_list;
 
-        int    f_ss_info;
+	int    f_ss_info;
 };
 
 struct dimes_client* dimes_client_alloc(void *);

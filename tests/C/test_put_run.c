@@ -108,81 +108,81 @@ static int generate_3d(double *m3d, unsigned int ts)
 static int couple_write_2d_multi_var(unsigned int ts,
 				enum transport_type type, int num_vars)
 {
-        char var_name[128];
-        double *data = NULL;
-        int i;
+	char var_name[128];
+	double *data = NULL;
+	int i;
 
-        common_lock_on_write("m2d_lock", &gcomm_);
+	common_lock_on_write("m2d_lock", &gcomm_);
 
-        //put the m2d into the space
-        int elem_size = sizeof(double);
-        /*set the two coordinates for the box*/
-        int xl = offx_;
-        int yl = offy_;
-        int zl = 0;
-        int xu = offx_ + spx_ - 1;
-        int yu = offy_ + spy_ - 1;
-        int zu = 0;
-        double tm_st, tm_end1, tm_end2;
+	//put the m2d into the space
+	int elem_size = sizeof(double);
+	/*set the two coordinates for the box*/
+	int xl = offx_;
+	int yl = offy_;
+	int zl = 0;
+	int xu = offx_ + spx_ - 1;
+	int yu = offy_ + spy_ - 1;
+	int zu = 0;
+	double tm_st, tm_end1, tm_end2;
 
 #ifdef DEBUG
-        uloga("TS=%u, %d write m2d:{(%d,%d,%d),(%d,%d,%d)} into space\n",
-                ts, rank_, xl,yl,zl,xu,yu,zu);
+	uloga("TS=%u, %d write m2d:{(%d,%d,%d),(%d,%d,%d)} into space\n",
+			ts, rank_, xl,yl,zl,xu,yu,zu);
 #endif
 
-        MPI_Barrier(gcomm_);
-        tm_st = timer_read(&timer_);
+	MPI_Barrier(gcomm_);
+	tm_st = timer_read(&timer_);
 
-        for (i = 0; i < num_vars; i++) {
-                sprintf(var_name, "m2d_%d", i);
-                data = allocate_2d();
-                if (data == NULL) {
-                        uloga("%s(): failed to alloc buffer, i=%d\n",
-                                __func__, i);
-                        return -1;
-                }
+	for (i = 0; i < num_vars; i++) {
+		sprintf(var_name, "m2d_%d", i);
+		data = allocate_2d();
+		if (data == NULL) {
+			uloga("%s(): failed to alloc buffer, i=%d\n",
+					__func__, i);
+			return -1;
+		}
 
-                generate_2d(data, ts);
+		generate_2d(data, ts);
 
-                common_put(var_name, ts, elem_size,
-                        xl, yl, zl, xu, yu, zu,
-                        data, type);
+		common_put(var_name, ts, elem_size,
+				xl, yl, zl, xu, yu, zu,
+				data, type);
 
-                if (type == USE_DSPACES) {
-                        common_put_sync(type);
-                }
+		if (type == USE_DSPACES) {
+			common_put_sync(type);
+		}
 
-                if (data)
-                        free(data);
+		if (data)
+			free(data);
 
-        }
+	}
 
-        if ( type == USE_DSPACES ) {
-                tm_end1 = timer_read(&timer_);
-                MPI_Barrier(gcomm_);
-                tm_end2 = timer_read(&timer_);
+	if ( type == USE_DSPACES ) {
+		tm_end1 = timer_read(&timer_);
+		MPI_Barrier(gcomm_);
+		tm_end2 = timer_read(&timer_);
 
-                common_unlock_on_write("m2d_lock", &gcomm_);
-        } else if (type == USE_DIMES) {
-                tm_end1 = timer_read(&timer_);
-                MPI_Barrier(gcomm_);
-                tm_end2 = timer_read(&timer_);
+		common_unlock_on_write("m2d_lock", &gcomm_);
+	} else if (type == USE_DIMES) {
+		tm_end1 = timer_read(&timer_);
+		MPI_Barrier(gcomm_);
+		tm_end2 = timer_read(&timer_);
 
 		sleep(2);
-                common_unlock_on_write("m2d_lock", &gcomm_);
+		common_unlock_on_write("m2d_lock", &gcomm_);
 		common_put_sync(type);
-        }
+	}
 
 #ifdef DEBUG
-        uloga("TS= %u TRANSPORT_TYPE= %d RANK= %d write time= %lf\n",
-                ts, type, rank_, tm_end1-tm_st);
-        if (rank_ == 0) {
-                uloga("TS= %u TRANSPORT_TYPE= %d write MAX time= %lf\n",
-                        ts, type, tm_end2-tm_st);
-        }
+	uloga("TS= %u TRANSPORT_TYPE= %d RANK= %d write time= %lf\n",
+		ts, type, rank_, tm_end1-tm_st);
+	if (rank_ == 0) {
+		uloga("TS= %u TRANSPORT_TYPE= %d write MAX time= %lf\n",
+			ts, type, tm_end2-tm_st);
+	}
 #endif
 
-        return 0;
+	return 0;
 }
 
 static int couple_write_2d(double *m2d, unsigned int ts, enum transport_type type)
@@ -304,16 +304,16 @@ int test_put_run(int npapp, int npx, int npy, int npz,
 {
 	gcomm_ = gcomm;
 	timestep_ = timestep;
-        npapp_ = npapp;
-        npx_ = npx;
-        npy_ = npy;
-        npz_ = npz;
-        if (npx_)
-                spx_ = spx;
-        if (npy_)
-                spy_ = spy;
-        if (npz_)
-                spz_ = spz;
+	npapp_ = npapp;
+	npx_ = npx;
+	npy_ = npy;
+	npz_ = npz;
+	if (npx_)
+		spx_ = spx;
+	if (npy_)
+		spy_ = spy;
+	if (npz_)
+		spz_ = spz;
 
 	timer_init(&timer_, 1);
 	timer_start(&timer_);
@@ -349,7 +349,8 @@ int test_put_run(int npapp, int npx, int npy, int npz,
 				generate_3d(databuf, ts);
 #ifdef DS_HAVE_DIMES
 				if (ts % 2 == 0)
-					couple_write_3d(databuf, ts, USE_DIMES);				else if (ts % 2 == 1)
+					couple_write_3d(databuf, ts, USE_DIMES);
+				else if (ts % 2 == 1)
 					couple_write_3d(databuf, ts, USE_DSPACES);
 #else
 				couple_write_3d(databuf, ts, USE_DSPACES);

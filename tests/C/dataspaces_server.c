@@ -51,59 +51,56 @@ static void usage(void)
 
 static int parse_args(int argc, char *argv[])
 {
-        const char opt_short[] = "s:c:f:";
-        const struct option opt_long[] = {
-                {"server",      1,      NULL,   's'},
-                {"cnodes",      1,      NULL,   'c'},
-                {"conf",        1,      NULL,   'f'},
-                {NULL,          0,      NULL,   0}
-        };
+	const char opt_short[] = "s:c:f:";
+	const struct option opt_long[] = {
+		{"server",      1,      NULL,   's'},
+		{"cnodes",      1,      NULL,   'c'},
+		{"conf",        1,      NULL,   'f'},
+		{NULL,          0,      NULL,   0}
+	};
 
-        int opt;
+	int opt;
 
-        while ((opt = getopt_long(argc, argv, opt_short, opt_long, NULL)) != -1) {
-                switch (opt) {
-                case 's':
-                        num_sp = (optarg) ? atoi(optarg) : -1;
-                        break;
+	while ((opt = getopt_long(argc, argv, opt_short, opt_long, NULL)) != -1) {
+		switch (opt) {
+		case 's':
+			num_sp = (optarg) ? atoi(optarg) : -1;
+			break;
+		case 'c':
+			num_cp = (optarg) ? atoi(optarg) : -1;
+			break;
+		case 'f':
+			conf = (optarg) ? optarg : NULL;
+			break;
+		default:
+			printf("Unknown argument \n");
+		}
+	}
 
-                case 'c':
-                        num_cp = (optarg) ? atoi(optarg) : -1;
-                        break;
-
-                case 'f':
-                        conf = (optarg) ? optarg : NULL;
-                        break;
-
-                default:
-                        printf("Unknown argument \n");
-                }
-        }
-
-        if (num_sp <= 0)
-                num_sp = 1;
-        if (num_cp == 0)
-                num_cp = 0;
-        if (!conf)
-                conf = "dataspaces.conf";
-        return 0;
+	if (num_sp <= 0)
+		num_sp = 1;
+	if (num_cp == 0)
+		num_cp = 0;
+	if (!conf)
+		conf = "dataspaces.conf";
+	return 0;
 }
 
 int main(int argc, char **argv)
 {
-        int err;
-        int nprocs, rank;
-        MPI_Comm gcomm;
+	int err;
+	int nprocs, rank;
+	MPI_Comm gcomm;
 
-        if (parse_args(argc, argv) < 0) {
-                usage();
-                return -1;
-        }
+	if (parse_args(argc, argv) < 0) {
+		usage();
+		return -1;
+	}
 
-        MPI_Init(&argc, &argv);
-        MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
-        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-        MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Init(&argc, &argv);
+	MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 #ifdef DEBUG
 	uloga("dataspaces server starts...\n");
@@ -115,11 +112,11 @@ int main(int argc, char **argv)
 	common_run_server(num_sp, num_cp, USE_DSPACES);
 #endif
 
-        MPI_Barrier(MPI_COMM_WORLD);
-        MPI_Finalize();
+	MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Finalize();
 
-        return 0;
+	return 0;
 err_out:
-        uloga("error out!\n");
-        return -1;
+	uloga("error out!\n");
+	return -1;
 }

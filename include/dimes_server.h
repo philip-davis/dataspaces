@@ -40,9 +40,9 @@ extern "C" {
 #include "dimes_data.h"
 
 struct dimes_server {
-        struct ds_gspace *dsg;
-        /* local storage for rpc_cmd */
-        struct cmd_storage *cmd_store;
+	struct ds_gspace *dsg;
+	/* local storage for rpc_cmd */
+	struct cmd_storage *cmd_store;
 };
 
 struct dimes_server * dimes_server_alloc(int num_sp, int num_cp, char *);

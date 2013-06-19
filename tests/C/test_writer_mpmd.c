@@ -40,24 +40,24 @@ extern int test_put_run(int npapp, int npx, int npy, int npz,
 
 int main(int argc, char **argv)
 {
-        int err;
-        int nprocs, rank;
+	int err;
+	int nprocs, rank;
 
-        int npapp, npx, npy, npz;
-        int spx, spy, spz;
-        int dims, timestep;
-        MPI_Comm gcomm;
+	int npapp, npx, npy, npz;
+	int spx, spy, spz;
+	int dims, timestep;
+	MPI_Comm gcomm;
 
-        if (parse_args(argc, argv, &npapp, &npx, &npy, &npz,
-                &spx, &spy, &spz, &timestep) != 0) {
-                goto err_out;
-        }
+	if (parse_args(argc, argv, &npapp, &npx, &npy, &npz,
+		&spx, &spy, &spz, &timestep) != 0) {
+		goto err_out;
+	}
 
-        // Using SPMD style programming
-        MPI_Init(&argc, &argv);
-        MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
-        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-        MPI_Barrier(MPI_COMM_WORLD);
+	// Using SPMD style programming
+	MPI_Init(&argc, &argv);
+	MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Barrier(MPI_COMM_WORLD);
 	gcomm = MPI_COMM_WORLD;
 
 	int color = 1;
@@ -65,8 +65,8 @@ int main(int argc, char **argv)
 
 	// Run as data writer
 	dims = 3;
-        test_put_run(npapp, npx, npy, npz,
-                spx, spy, spz, timestep, dims, gcomm);
+	test_put_run(npapp, npx, npy, npz,
+		spx, spy, spz, timestep, dims, gcomm);
 
 	MPI_Barrier(gcomm);
 	MPI_Finalize();
