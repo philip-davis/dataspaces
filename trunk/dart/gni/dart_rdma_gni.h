@@ -35,34 +35,34 @@
 #include "dart_rpc_gni.h"
 
 struct dart_rdma_mem_handle {
-        gni_mem_handle_t mdh;
-        uint64_t base_addr;
-        size_t size;
+	gni_mem_handle_t mdh;
+	uint64_t base_addr;
+	size_t size;
 };
 
 struct dart_rdma_read_op {
-        struct list_head entry;
-        int tran_id;
-        gni_post_descriptor_t post_desc;
-        size_t src_offset;
-        size_t dst_offset;
-        size_t bytes;
-        int ret; // TODO(fan): Need this?
+	struct list_head entry;
+	int tran_id;
+	gni_post_descriptor_t post_desc;
+	size_t src_offset;
+	size_t dst_offset;
+	size_t bytes;
+	int ret; // TODO(fan): Need this?
 };
 
 struct dart_rdma_read_tran {
-        struct list_head entry;
-        struct list_head read_ops_list;
-        int tran_id;
-        struct node_id *remote_peer;
-        struct dart_rdma_mem_handle src;
-        struct dart_rdma_mem_handle dst;
+	struct list_head entry;
+	struct list_head read_ops_list;
+	int tran_id;
+	struct node_id *remote_peer;
+	struct dart_rdma_mem_handle src;
+	struct dart_rdma_mem_handle dst;
 };
 
 struct dart_rdma_handle {
-        struct rpc_server *rpc_s;
-        gni_cq_handle_t post_cq_hndl;
-        struct list_head read_tran_list;
+	struct rpc_server *rpc_s;
+	gni_cq_handle_t post_cq_hndl;
+	struct list_head read_tran_list;
 };
 
 int dart_rdma_init(struct rpc_server *rpc_s);

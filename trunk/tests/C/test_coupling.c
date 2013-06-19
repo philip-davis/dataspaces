@@ -45,8 +45,8 @@ int main(int argc, char **argv)
 	int err;
 	int mpi_nprocs, mpi_rank;
 
-        int npapp, npx, npy, npz;
-        int spx, spy, spz;
+	int npapp, npx, npy, npz;
+	int spx, spy, spz;
 	
 	int num_sp, num_cp;
 	int num_writer,writer_x,writer_y,writer_z; 
@@ -54,13 +54,13 @@ int main(int argc, char **argv)
 	int timestep, dims, dim_x, dim_y, dim_z;
 	MPI_Comm gcomm;
 
-        if(read_config_file("computenode.conf",
-                &num_sp, &num_cp, &timestep,
-                &num_writer, &writer_x, &writer_y, &writer_z,
-                &num_reader, &reader_x, &reader_y, &reader_z,
-                &dims, &dim_x, &dim_y, &dim_z) != 0) {
-                goto err_out;
-        }
+	if(read_config_file("computenode.conf",
+			&num_sp, &num_cp, &timestep,
+			&num_writer, &writer_x, &writer_y, &writer_z,
+			&num_reader, &reader_x, &reader_y, &reader_z,
+			&dims, &dim_x, &dim_y, &dim_z) != 0) {
+		goto err_out;
+	}
 
 	// Using SPMD style programming
 	MPI_Init(&argc, &argv);
@@ -96,7 +96,7 @@ int main(int argc, char **argv)
 		test_put_run(npapp, npx, npy, npz,
 			spx, spy, spz, timestep, dims, gcomm);
 	} else if (num_sp+num_writer <= mpi_rank &&
-		   mpi_rank < num_sp+num_writer+num_reader) {
+			mpi_rank < num_sp+num_writer+num_reader) {
 		// Run as data reader
 		MPI_Comm_split(MPI_COMM_WORLD, 2, mpi_rank, &gcomm);
 

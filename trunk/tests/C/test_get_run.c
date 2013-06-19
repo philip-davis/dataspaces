@@ -71,72 +71,72 @@ static double* allocate_2d()
 
 static double* allocate_3d()
 {
-        double *tmp = NULL;
-        offx_ = (rank_ % npx_) * spx_;
-        offy_ = (rank_ / npx_ % npy_) * spy_;
-        offz_ = (rank_ / npx_ / npy_) * spz_;
+	double *tmp = NULL;
+	offx_ = (rank_ % npx_) * spx_;
+	offy_ = (rank_ / npx_ % npy_) * spy_;
+	offz_ = (rank_ / npx_ / npy_) * spz_;
 
-        tmp = (double*)malloc(sizeof(double)*spx_*spy_*spz_);
-        return tmp;
+	tmp = (double*)malloc(sizeof(double)*spx_*spy_*spz_);
+	return tmp;
 }
 
 static int couple_read_2d_multi_var(unsigned int ts, enum transport_type type,
 					int num_vars)
 {
-        char var_name[128];
-        double *data = NULL;
-        int i;
+	char var_name[128];
+	double *data = NULL;
+	int i;
 
-        data = allocate_2d();
-        if (data == NULL) {
-                uloga("%s(): failed to alloc buffer\n", __func__);
-                return -1;
-        }
+	data = allocate_2d();
+	if (data == NULL) {
+		uloga("%s(): failed to alloc buffer\n", __func__);
+		return -1;
+	}
 
-        common_lock_on_read("m2d_lock", &gcomm_);
+	common_lock_on_read("m2d_lock", &gcomm_);
 
-        //get data from space
-        int elem_size = sizeof(double);
-        int xl = offx_;
-        int yl = offy_;
-        int zl = 0;
-        int xu = offx_ + spx_ - 1;
-        int yu = offy_ + spy_ - 1;
-        int zu = 0;
-        double tm_st, tm_end1, tm_end2;
+	//get data from space
+	int elem_size = sizeof(double);
+	int xl = offx_;
+	int yl = offy_;
+	int zl = 0;
+	int xu = offx_ + spx_ - 1;
+	int yu = offy_ + spy_ - 1;
+	int zu = 0;
+	double tm_st, tm_end1, tm_end2;
 
-        MPI_Barrier(gcomm_);
-        tm_st = timer_read(&timer_);
+	MPI_Barrier(gcomm_);
+	tm_st = timer_read(&timer_);
 
-        for (i = 0; i < num_vars; i++) {
-                sprintf(var_name, "m2d_%d", i);
+	for (i = 0; i < num_vars; i++) {
+		sprintf(var_name, "m2d_%d", i);
 		memset(data, 0, sizeof(double)*spx_*spy_);
-                common_get(var_name, ts, elem_size,
-                        xl, yl, zl, xu, yu, zu,
-                        data, type);
-                check_data(var_name, data, spx_*spy_, rank_, ts);
-        }
+		common_get(var_name, ts, elem_size,
+				xl, yl, zl, xu, yu, zu,
+				data, type);
+		check_data(var_name, data, spx_*spy_, rank_, ts);
+	}
 
-        tm_end1 = timer_read(&timer_);
+	tm_end1 = timer_read(&timer_);
 
-        MPI_Barrier(gcomm_);
-        tm_end2 = timer_read(&timer_);
+	MPI_Barrier(gcomm_);
+	tm_end2 = timer_read(&timer_);
 
 #ifdef DEBUG
-        uloga("TS= %u TRANSPORT_TYPE= %d RANK= %d read time= %lf\n",
-                ts, type, rank_, tm_end1-tm_st);
-        if (rank_ == 0) {
-                uloga("TS= %u TRANSPORT_TYPE= %d read MAX time= %lf\n",
-                        ts, type, tm_end2-tm_st);
-        }
+	uloga("TS= %u TRANSPORT_TYPE= %d RANK= %d read time= %lf\n",
+			ts, type, rank_, tm_end1-tm_st);
+	if (rank_ == 0) {
+		uloga("TS= %u TRANSPORT_TYPE= %d read MAX time= %lf\n",
+				ts, type, tm_end2-tm_st);
+	}
 #endif
 
-        common_unlock_on_read("m2d_lock", &gcomm_);
+	common_unlock_on_read("m2d_lock", &gcomm_);
 
-        if (data)
-                free(data);
+	if (data)
+		free(data);
 
-        return 0;
+	return 0;
 }
 
 static int couple_read_2d(double *m2d, unsigned int ts, enum transport_type type)

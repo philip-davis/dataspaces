@@ -41,22 +41,22 @@ extern "C" {
 struct ptlid_map;
 
 struct box_2pointers{
-        void *ptr1;
-        void *ptr2;
+	void *ptr1;
+	void *ptr2;
 };
 
 struct obj_data_wrapper {
-        struct list_head obj_entry;
-        struct obj_data *od;
-        struct rpc_cmd cmd;
-        int q_id;
-        size_t size_forwarded;
+	struct list_head obj_entry;
+	struct obj_data *od;
+	struct rpc_cmd cmd;
+	int q_id;
+	size_t size_forwarded;
 };
 
 /****************************************************************************/
 // Header structure for dimes_put request.
 struct hdr_dimes_put { // TODO(fan): more comments
-        __u8 has_rdma_data;
+	__u8 has_rdma_data;
 	__u8 has_new_owner;
 	int new_owner_id;
 	int location_peer_id;
@@ -66,35 +66,35 @@ struct hdr_dimes_put { // TODO(fan): more comments
 
 // Header structure for dimes_obj_get request.
 struct hdr_dimes_obj_get {
-        int qid;
-        int rank;
-        int rc;
-        union {
-                struct {
-                        /* Number of directory entries. */
-                        int                     num_de;
-                        struct obj_descriptor   odsc;
-                } o;
-                struct {
-                        /* Number of versions available. */
-                        int                     num_vers;
-                        int                     versions[1];
-                } v;
-        } u;
+	int qid;
+	int rank;
+	int rc;
+	union {
+		struct {
+			/* Number of directory entries. */
+			int                     num_de;
+			struct obj_descriptor   odsc;
+		} o;
+		struct {
+			/* Number of versions available. */
+			int                     num_vers;
+			int                     versions[1];
+		} v;
+	} u;
 } __attribute__((__packed__));
 
 /****************************************************************************/
 
 struct cmd_data {
-        struct  list_head       entry;
-        struct  rpc_cmd         cmd;
+	struct  list_head       entry;
+	struct  rpc_cmd         cmd;
 };
 
 struct cmd_storage {
-        int     num_cmd;
-        int     size_hash;
-        /* List of rpc_cmd objects */
-        struct list_head        cmd_hash[1];
+	int     num_cmd;
+	int     size_hash;
+	/* List of rpc_cmd objects */
+	struct list_head        cmd_hash[1];
 };
 
 struct cmd_storage *cmd_s_alloc(int max_versions);

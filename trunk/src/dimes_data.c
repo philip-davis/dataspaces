@@ -43,26 +43,26 @@
 static struct cmd_data *
 cmd_s_find_no_version(struct cmd_storage *s, struct obj_descriptor *odsc)
 {
-        struct cmd_data *cmd;
-        struct list_head *list;
-        int index;
+	struct cmd_data *cmd;
+	struct list_head *list;
+	int index;
 
-        if (s->size_hash <= 0 ) {
-                uloga("%s(): cmd_storage not init.\n", __func__);
-                return NULL;
-        }
+	if (s->size_hash <= 0 ) {
+		uloga("%s(): cmd_storage not init.\n", __func__);
+		return NULL;
+	}
 
-        index = odsc->version % s->size_hash;
-        list = &s->cmd_hash[index];
+	index = odsc->version % s->size_hash;
+	list = &s->cmd_hash[index];
 
-        list_for_each_entry(cmd, list, struct cmd_data, entry) {
-                struct hdr_dimes_put *hdr = (struct hdr_dimes_put *)
-                                        (cmd->cmd.pad);
-                if (obj_desc_by_name_intersect(odsc, &hdr->odsc))
-                        return cmd;
-        }
+	list_for_each_entry(cmd, list, struct cmd_data, entry) {
+		struct hdr_dimes_put *hdr = (struct hdr_dimes_put *)
+														(cmd->cmd.pad);
+		if (obj_desc_by_name_intersect(odsc, &hdr->odsc))
+			return cmd;
+	}
 
-        return NULL;
+	return NULL;
 }
 
 
@@ -104,27 +104,27 @@ int cmd_s_free(struct cmd_storage *s)
 }
 
 int cmd_s_find_all_with_update(struct cmd_storage *s,
-			struct obj_descriptor *odsc,
-			int peer_id,
-			struct list_head *out_list,
-			int *out_num_cmd) {
-        struct cmd_data *cmd;
-        struct list_head *list;
-        int index;
+		struct obj_descriptor *odsc,
+		int peer_id,
+		struct list_head *out_list,
+		int *out_num_cmd) {
+	struct cmd_data *cmd;
+	struct list_head *list;
+	int index;
 
-        if (s->size_hash <= 0) {
-                uloga("%s(): cmd_storage not init.\n", __func__);
-                return -1;
-        }
+	if (s->size_hash <= 0) {
+		uloga("%s(): cmd_storage not init.\n", __func__);
+		return -1;
+	}
 
-        index = odsc->version % s->size_hash;
-        list = &s->cmd_hash[index];
+	index = odsc->version % s->size_hash;
+	list = &s->cmd_hash[index];
 
-        *out_num_cmd = 0;
-        list_for_each_entry(cmd, list, struct cmd_data, entry) {
-                struct hdr_dimes_put *hdr = (struct hdr_dimes_put *)
-                                        (cmd->cmd.pad);
-                if (obj_desc_equals_intersect(odsc, &hdr->odsc)) {
+	*out_num_cmd = 0;
+	list_for_each_entry(cmd, list, struct cmd_data, entry) {
+		struct hdr_dimes_put *hdr = (struct hdr_dimes_put *)
+														(cmd->cmd.pad);
+		if (obj_desc_equals_intersect(odsc, &hdr->odsc)) {
 			if (!hdr->has_new_owner) {
 				// Assign the new owner for the rdma buffer
 				hdr->has_new_owner = 1;
@@ -133,13 +133,13 @@ int cmd_s_find_all_with_update(struct cmd_storage *s,
 
 			struct cmd_data *tmp_cmd =
 					malloc(sizeof(struct cmd_data));
-                        memcpy(tmp_cmd, cmd, sizeof(struct cmd_data));
-                        list_add(&tmp_cmd->entry, out_list);
-                        (*out_num_cmd)++;
-                }
-        }
+			memcpy(tmp_cmd, cmd, sizeof(struct cmd_data));
+			list_add(&tmp_cmd->entry, out_list);
+			(*out_num_cmd)++;
+		}
+	}
 
-        return 0;
+	return 0;
 }
 
 int cmd_s_find_all(struct cmd_storage *s, struct obj_descriptor *odsc,
@@ -207,21 +207,21 @@ void cmd_s_add(struct cmd_storage *s, struct rpc_cmd *cmd)
 */
 struct ss_storage *dimes_ls_alloc(int max_versions)
 {
-        struct ss_storage *ls = 0;
-        int i;
+	struct ss_storage *ls = 0;
+	int i;
 
-        ls = malloc(sizeof(*ls) + sizeof(struct list_head) * max_versions);
-        if (!ls) {
-                        errno = ENOMEM;
-                        return ls;
-        }
+	ls = malloc(sizeof(*ls) + sizeof(struct list_head) * max_versions);
+	if (!ls) {
+		errno = ENOMEM;
+		return ls;
+	}
 
-        memset(ls, 0, sizeof(*ls));
-        for (i = 0; i < max_versions; i++)
-                        INIT_LIST_HEAD(&ls->obj_hash[i]);
-        ls->size_hash = max_versions;
+	memset(ls, 0, sizeof(*ls));
+	for (i = 0; i < max_versions; i++)
+		INIT_LIST_HEAD(&ls->obj_hash[i]);
+	ls->size_hash = max_versions;
 
-        return ls;
+	return ls;
 }
 
 /*
@@ -229,20 +229,20 @@ struct ss_storage *dimes_ls_alloc(int max_versions)
 */
 int dimes_ls_free(struct ss_storage *ls)
 {
-        int max_versions = ls->size_hash;
-        int i;
+	int max_versions = ls->size_hash;
+	int i;
 
-        for ( i = 0; i < max_versions; i++) {
-                struct obj_data_wrapper *od_w, *tmp;
-                list_for_each_entry_safe(od_w, tmp, &ls->obj_hash[i],
-					 struct obj_data_wrapper, obj_entry){
-                        list_del(&od_w->obj_entry);
-                        obj_data_free(od_w->od);
+	for ( i = 0; i < max_versions; i++) {
+		struct obj_data_wrapper *od_w, *tmp;
+		list_for_each_entry_safe(od_w, tmp, &ls->obj_hash[i],
+				struct obj_data_wrapper, obj_entry){
+			list_del(&od_w->obj_entry);
+			obj_data_free(od_w->od);
 			free(od_w);
-                }
-        }
+		}
+	}
 
-        return 0;
+	return 0;
 }
 
 /*
@@ -252,57 +252,56 @@ int dimes_ls_free(struct ss_storage *ls)
 struct obj_data_wrapper*
 dimes_ls_find(struct ss_storage *ls, struct obj_descriptor *odsc)
 {
-        struct obj_data_wrapper *od_w;
-        struct list_head *list;
-        int index;
+	struct obj_data_wrapper *od_w;
+	struct list_head *list;
+	int index;
 
-        //obj versions start from 0 !
-        index = odsc->version % ls->size_hash;
-        list = &ls->obj_hash[index];
+	//obj versions start from 0 !
+	index = odsc->version % ls->size_hash;
+	list = &ls->obj_hash[index];
 
-        list_for_each_entry(od_w, list, struct obj_data_wrapper, obj_entry) {
-                if (obj_desc_equals_intersect(odsc, &od_w->od->obj_desc))
-                        return od_w;
-        }
+	list_for_each_entry(od_w, list, struct obj_data_wrapper, obj_entry) {
+		if (obj_desc_equals_intersect(odsc, &od_w->od->obj_desc))
+			return od_w;
+	}
 
-        return NULL;
+	return NULL;
 }
 
 void dimes_ls_add_obj(struct ss_storage *ls, struct obj_data_wrapper *od_w)
 {
-        int index;
-        struct list_head *bin;
-        struct obj_data_wrapper *od_w_existing;
+	int index;
+	struct list_head *bin;
+	struct obj_data_wrapper *od_w_existing;
 
-        od_w_existing = dimes_ls_find_no_version(ls, &od_w->od->obj_desc);
-        if (od_w_existing) {
+	od_w_existing = dimes_ls_find_no_version(ls, &od_w->od->obj_desc);
+	if (od_w_existing) {
 #ifdef DEBUG
-                uloga("%s(): to evict data obj, name=%s, version=%u\n", 
-                      __func__, od_w_existing->od->obj_desc.name,
-	              od_w_existing->od->obj_desc.version);
+		uloga("%s(): to evict data obj, name=%s, version=%u\n", 
+					__func__, od_w_existing->od->obj_desc.name,
+		od_w_existing->od->obj_desc.version);
 #endif
 
-                od_w_existing->od->f_free = 1;
-                if (od_w_existing->od->refcnt == 0){
-                        dimes_ls_remove_obj(ls, od_w_existing);
-                        obj_data_free(od_w_existing->od);
+		od_w_existing->od->f_free = 1;
+		if (od_w_existing->od->refcnt == 0){
+			dimes_ls_remove_obj(ls, od_w_existing);
+			obj_data_free(od_w_existing->od);
 			free(od_w_existing);
-                }
-                else {
-                        uloga("'%s()': object eviction delayed.\n", __func__);
-                }
-        }
+		} else {
+			uloga("'%s()': object eviction delayed.\n", __func__);
+		}
+	}
 
-        index = od_w->od->obj_desc.version % ls->size_hash;
-        bin = &ls->obj_hash[index];
+	index = od_w->od->obj_desc.version % ls->size_hash;
+	bin = &ls->obj_hash[index];
 
-        //NOTE: new object comes first in the list.
-        list_add(&od_w->obj_entry, bin);
-        ls->num_obj++;
+	//NOTE: new object comes first in the list.
+	list_add(&od_w->obj_entry, bin);
+	ls->num_obj++;
 #ifdef DEBUG
-        uloga("%s(): add new obj, name=%s, version=%u, ls->num_obj=%d\n",
-              __func__, od_w->od->obj_desc.name, od_w->od->obj_desc.version,
-	      ls->num_obj);
+	uloga("%s(): add new obj, name=%s, version=%u, ls->num_obj=%d\n",
+				__func__, od_w->od->obj_desc.name, od_w->od->obj_desc.version,
+	ls->num_obj);
 #endif
 }
 
@@ -314,25 +313,25 @@ void dimes_ls_add_obj(struct ss_storage *ls, struct obj_data_wrapper *od_w)
 struct obj_data_wrapper *
 dimes_ls_find_no_version(struct ss_storage *ls, struct obj_descriptor *odsc)
 {
-        struct obj_data_wrapper *od_w;
-        struct list_head *list;
-        int index;
+	struct obj_data_wrapper *od_w;
+	struct list_head *list;
+	int index;
 
-        index = odsc->version % ls->size_hash;
-        list = &ls->obj_hash[index];
+	index = odsc->version % ls->size_hash;
+	list = &ls->obj_hash[index];
 
-        list_for_each_entry(od_w, list, struct obj_data_wrapper, obj_entry) {
-                if (obj_desc_by_name_intersect(odsc, &od_w->od->obj_desc))
-                        return od_w;
-        }
+	list_for_each_entry(od_w, list, struct obj_data_wrapper, obj_entry) {
+		if (obj_desc_by_name_intersect(odsc, &od_w->od->obj_desc))
+		return od_w;
+	}
 
-        return NULL;
+	return NULL;
 }
 
 void dimes_ls_remove_obj(struct ss_storage *ls, struct obj_data_wrapper *od_w)
 {      
-        list_del(&od_w->obj_entry);
-        ls->num_obj--;
+	list_del(&od_w->obj_entry);
+	ls->num_obj--;
 }
 
 int dimes_ls_count_obj_no_version(struct ss_storage *ls, int query_tran_id)
