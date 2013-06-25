@@ -1,0 +1,58 @@
+SHELL   = /bin/sh
+CC = cc 
+FTN = ftn
+
+DSPACES_DIR=/ccs/home/zhangfan/DataSpaces/branches/dataspaces-hybrid-staging
+INCLUDES=-I. \
+	-I$(DSPACES_DIR) \
+	-I$(DSPACES_DIR)/include \
+	-I$(DSPACES_DIR)/dart \
+	-I$(DSPACES_DIR)/dart/gni \
+	-I/opt/cray/rca/default/include \
+	-I/opt/cray-hss-devel/6.0.0/include     \
+	-I/opt/cray/krca/1.0.0-2.0400.29855.4.28.gem/include
+
+PMI_CFLAGS = $(shell pkg-config --cflags cray-pmi)
+PMI_LIBS = $(shell pkg-config --libs cray-pmi)
+UGNI_CFLAGS = $(shell pkg-config --cflags cray-ugni)
+UGNI_LIBS = $(shell pkg-config --libs cray-ugni)
+LIBS= -L./ -lhstaging \
+	-L$(DSPACES_DIR)/src -ldspaces -ldscommon \
+	-L$(DSPACES_DIR)/dart -ldart \
+	${PMI_LIBS} ${UGNI_LIBS} \
+	-L/opt/cray/rca/default/lib64 -lrca
+
+CFLAGS= -g ${UGNI_CFLAGS} ${PMI_CLFASG} -DDEBUG -DDS_HAVE_HYBRID_STAGING
+
+SRC = common.c hybrid_staging_partition.c dummy_simulation_worker.c dummy_staging_worker.c
+SRC1 = intransit_driver.c 
+SRC2 = scheduler_driver.c
+SRC3 = insitu_driver.c 
+
+OBJ = $(SRC:.c=.o)
+OBJ1 = $(SRC1:.c=.o)
+OBJ2 = $(SRC2:.c=.o)
+OBJ3 = $(SRC3:.c=.o)
+
+OUT1 = ./intransit_driver
+OUT2 = ./scheduler_driver
+OUT3 = ./insitu_driver
+
+default: $(OUT1) $(OUT2) $(OUT3)
+
+.c.o:
+	$(CC) $(INCLUDES) $(CFLAGS) -c $< -o $@
+
+$(OUT1): $(OBJ1) $(OBJ)
+	$(CC) $(CFLAGS) $(INCLUDES) $(OBJ1) $(OBJ) -o $(OUT1) $(LIBS)
+
+$(OUT2): $(OBJ2) $(OBJ)
+	$(CC) $(CFLAGS) $(INCLUDES) $(OBJ2) $(OBJ) -o $(OUT2) $(LIBS)
+
+$(OUT3): $(OBJ3) $(OBJ)
+	$(CC) $(CFLAGS) $(INCLUDES) $(OBJ3) $(OBJ) -o $(OUT3) $(LIBS)
+
+clean:
+	rm -f *.o $(OUT1) $(OUT2) $(OUT3)
+
+
