@@ -412,6 +412,14 @@ enum cmd_type {
 	dimes_obj_get_msg,
 	dimes_obj_get_ack_v3_msg,
 #endif
+#ifdef DS_HAVE_HYBRID_STAGING
+	rr_data_desc,
+	rr_req_bk,
+	intran_req_job,
+	rr_req_bk_reply,
+	insitu_data_desc,
+	insitu_unreg,
+#endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,
 	_CMD_COUNT
