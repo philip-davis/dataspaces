@@ -4,9 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "debug.h"
-#include "dart_rpc_gni.h"
+#include "dart.h"
 #include "dc_gspace.h"
-#include "dc_base_gni.h"
 #include "ss_data.h"
 #include "timer.h"
 
@@ -51,6 +50,7 @@ static struct {
 	struct	list_head	intran_job_list;
 } g_info;
 
+#ifdef HAVE_UGNI
 static int process_event(struct dcg_space *dcg)
 {
 	int err;
@@ -62,6 +62,21 @@ static int process_event(struct dcg_space *dcg)
 err_out:
 	ERROR_TRACE();
 }
+#endif
+
+#ifdef HAVE_DCMF
+static int process_event(struct dcg_space *dcg)
+{
+	int err;
+	err = rpc_process_event(dcg->dc->rpc_s);
+	if (err < 0)
+		goto err_out;
+
+	return 0;
+err_out:
+	ERROR_TRACE();
+}
+#endif
 
 static int get_app_num_peers(int appid)
 {
@@ -150,9 +165,14 @@ static int get_insitu_data(struct rdma_data_descriptor *rdma_desc)
 	msg->private = item;
 	msg->cb = get_insitu_data_completion;
 
-	//TODO: peer->mdh_addr is platform specific
+#ifdef HAVE_UGNI
 	peer->mdh_addr = rdma_desc->mdh_addr;
 	err = rpc_receive_direct(dc->rpc_s, peer, msg);
+#endif
+#ifdef HAVE_DCMF
+	peer->cached_remote_memregion = &rdma_desc->mem_region;
+	err = rpc_receive_direct(dc->rpc_s, peer, msg);
+#endif
 	if (err < 0) {
 		free(item->buf);
 		free(item);

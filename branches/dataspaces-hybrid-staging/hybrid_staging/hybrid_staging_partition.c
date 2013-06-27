@@ -5,10 +5,12 @@
 #include "common.h"
 #include "debug.h"
 
+#ifdef HAVE_UGNI
 #include "assert.h"
 #include "pmi.h"
 #include "gni_pub.h"
 #include "utility_functions.h"
+#endif
 
 static int nprocs_, rank_;
 
@@ -27,7 +29,7 @@ struct worker_info {
 	unsigned int pid;
 };
 
-#define CORES_PER_NODE 16
+#define CORES_PER_NODE 4 
 #define INSITU_STAGING_CORES_PER_NODE 2 
 static struct worker_info local_worker_tab_[CORES_PER_NODE];
 
@@ -38,10 +40,24 @@ int hs_comm_init(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &rank_);
     MPI_Barrier(MPI_COMM_WORLD);
 
-	int resultlen = 0;
+#ifdef HAVE_UGNI
 	int device_id = 0;
 	nid_ = get_gni_nic_address(device_id);
 	pid_ = getpid();
+#endif
+
+#ifdef HAVE_DCMF
+	size_t dcmf_rank = DCMF_Messager_rank();
+	size_t x, y, z, t;
+	DCMF_Result ret = DCMF_Messager_rank2torus(dcmf_rank,
+		&x, &y, &z, &t);
+	nid_ = 100*z + 100*100*y + 100*100*100*x;
+	pid_ = t;
+	uloga("dcmf_rank= %u, (x,y,z,t)= (%u,%u,%u,%u)\n", dcmf_rank,
+		x, y, z, t);
+#endif
+
+	int resultlen = 0;
 	MPI_Get_processor_name(name_, &resultlen);
 	name_[resultlen] = 0;
 

@@ -3,15 +3,14 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include "arpa/inet.h"
+#include <getopt.h>
+#include <stdio.h>
+#include "unistd.h"
 
 #include "debug.h"
 #include "list.h"
-#include <getopt.h>
-#include "unistd.h"
-#include <stdio.h>
-#include "dart_rpc_gni.h"
+#include "dart.h"
 #include "ds_gspace.h"
-#include "ds_base_gni.h"
 
 #include "dataspaces_internal_def.h"
 #include "mpi.h"
@@ -646,7 +645,12 @@ static int callback_insitu_data_desc(struct rpc_server *rpc_s, struct rpc_cmd *c
 	
 	struct rdma_data_descriptor rdma_desc;
 	rdma_desc.desc  = *data_desc;
-	rdma_desc.mdh_addr = cmd->mdh_addr; //TODO: important!!
+#ifdef HAVE_UGNI
+	rdma_desc.mdh_addr = cmd->mdh_addr;
+#endif
+#ifdef HAVE_DCMF
+	memcpy(&rdma_desc.mem_region, &cmd->mem_region, sizeof(DCMF_Memregion_t));
+#endif
 	rdma_desc.dart_id = cmd->id; //TODO: important!!
 
 	/*
@@ -686,88 +690,87 @@ static int rr_init()
 
 static int rr_run()
 {
-        int err;
+	int err;
 
-        while (!dsg_complete(dsg)) {
-                err = dsg_process(dsg);
-                if (err < 0) {
-                        /* If there is an error on the execution path,
-                           I should stop the server. */
+	while (!dsg_complete(dsg)) {
+		err = dsg_process(dsg);
+		if (err < 0) {
+			/* If there is an error on the execution path,
+			   I should stop the server. */
 
-                        dsg_free(dsg);
+			dsg_free(dsg);
 
-                        /* TODO:  implement an  exit method  to signal
-                           other servers to stop. */
+			/* TODO:  implement an  exit method  to signal
+			   other servers to stop. */
 
-                        printf("Server exits due to error %d.\n", err);
+			printf("Server exits due to error %d.\n", err);
 
-                        return err;
-                }
-		
+			return err;
+		}
+
 		send_pending_jobq_desc();
-        }
+	}
 
-        return 0;
+	return 0;
 }
 
 static int rr_finish(void)
 {
-        dsg_barrier(dsg);
+	dsg_barrier(dsg);
+	dsg_free(dsg);
 
-        dsg_free(dsg);
-
-        return 0;
+	return 0;
 }
 
 
 static void usage(void)
 {
-        printf("Usage: server OPTIONS\n"
-                "OPTIONS: \n"
-                "--server, -s    Number of server instance/staging nodes\n"
-                "--cnodes, -c    Number of compute nodes\n"
-                "--conf, -f      Define configuration file\n");
+	printf("Usage: server OPTIONS\n"
+			"OPTIONS: \n"
+			"--server, -s    Number of server instance/staging nodes\n"
+			"--cnodes, -c    Number of compute nodes\n"
+			"--conf, -f      Define configuration file\n");
 }
 
 static int parse_args(int argc, char *argv[])
 {
-        const char opt_short[] = "s:c:f:";
-        const struct option opt_long[] = {
-                {"server",      1,      NULL,   's'},
-                {"cnodes",      1,      NULL,   'c'},
-                {"conf",        1,      NULL,   'f'},
-                {NULL,          0,      NULL,   0}
-        };
+	const char opt_short[] = "s:c:f:";
+	const struct option opt_long[] = {
+			{"server",      1,      NULL,   's'},
+			{"cnodes",      1,      NULL,   'c'},
+			{"conf",        1,      NULL,   'f'},
+			{NULL,          0,      NULL,   0}
+	};
 
-        int opt;
+	int opt;
 
-        while ((opt = getopt_long(argc, argv, opt_short, opt_long, NULL)) != -1) {
-                switch (opt) {
-                case 's':
-                        num_sp = (optarg) ? atoi(optarg) : -1;
-                        break;
+	while ((opt = getopt_long(argc, argv, opt_short, opt_long, NULL)) != -1) {
+		switch (opt) {
+		case 's':
+			num_sp = (optarg) ? atoi(optarg) : -1;
+			break;
 
-                case 'c':
-                        num_cp = (optarg) ? atoi(optarg) : -1;
-                        break;
+		case 'c':
+			num_cp = (optarg) ? atoi(optarg) : -1;
+			break;
 
-                case 'f':
-                        conf = (optarg) ? optarg : NULL;
-                        break;
+		case 'f':
+			conf = (optarg) ? optarg : NULL;
+			break;
 
-                default:
-                        printf("Unknown argument \n");
-                }
-        }
+		default:
+			printf("Unknown argument \n");
+		}
+	}
 
 
-        if (num_sp <= 0)
-                num_sp = 1;
-        if (num_cp == 0)
-                num_cp = 0;
-        if (!conf)
-                conf = "dataspaces.conf";
-        return 0;
+	if (num_sp <= 0)
+		num_sp = 1;
+	if (num_cp == 0)
+		num_cp = 0;
+	if (!conf)
+		conf = "dataspaces.conf";
+	return 0;
 }
 
 /* Public APIs */
