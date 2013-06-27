@@ -198,8 +198,8 @@ int dummy_s3d_staging(MPI_Comm comm, int num_buckets)
 			sleep(4);
 			break;
 		case DESCRIPTIVE_STATS:
-			//perform_intransit_stat(rank, &data_list);
-			perform_intransit_stat_v1(mpi_rank, &data_list);
+			perform_intransit_stat(mpi_rank, &data_list);
+			//perform_intransit_stat_v1(mpi_rank, &data_list);
 			sleep(3);
 			break;
 		default:

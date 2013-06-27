@@ -8,9 +8,9 @@
 
 static struct timer timer;
 
-#define SIZE_OBJ 512*1024
+#define SIZE_OBJ 16*1024
 #define NUM_ROWS 3
-#define FREQ 2 
+#define FREQ 1 
 
 static const int millisec = 1000;
 
@@ -196,8 +196,8 @@ int dummy_s3d_simulation(MPI_Comm comm, int num_peers, int num_ts)
 		/* Do insitu analysis */
 		perform_topology(num_peers, mpi_rank, i);
 
-		//perform_stat(num_peers, mpi_rank, i);
-		perform_stat_v1(num_peers, mpi_rank, i);
+		perform_stat(num_peers, mpi_rank, i);
+		//perform_stat_v1(num_peers, mpi_rank, i);
 
 		perform_viz(num_peers, mpi_rank, i);
 
