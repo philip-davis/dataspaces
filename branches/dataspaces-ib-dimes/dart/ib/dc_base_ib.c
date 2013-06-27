@@ -325,7 +325,7 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 
 		int count = 0;
 		peer = dc_get_peer(dc, i);
-		if(i < dc->cp_min_rank) {
+		//if(i < dc->cp_min_rank) {
 			do {
 				err = rpc_connect(dc->rpc_s, peer);
 				count++;
@@ -335,7 +335,7 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 				goto err_out;
 			}
 
-		}
+		//}
 		//if(peer->ptlmap.id >=dc->num_sp){
 		if(check_cp[peer->ptlmap.id] == 1) {
 			count = 0;
@@ -430,7 +430,7 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 
 			//if(connected == 2*(dc->num_cp-dc->self->ptlmap.id+dc->cp_min_rank-1)){
 			//if(connected == (dc->num_cp-dc->self->ptlmap.id+dc->cp_min_rank-1) + greater_cid){
-			if(connected == greater_cid) {
+			if(connected == greater_cid + dc->num_cp-dc->self->ptlmap.id+dc->cp_min_rank-1) {
 				break;
 			}
 		}
