@@ -276,6 +276,7 @@ static int couple_write_3d(double *m3d, unsigned int ts, enum transport_type typ
 		MPI_Barrier(gcomm_);
 		tm_end2 = timer_read(&timer_);
 
+		sleep(2);
 		common_unlock_on_write("m3d_lock", &gcomm_);
 	} else if (type == USE_DIMES) {
 		tm_end1 = timer_read(&timer_);
@@ -323,6 +324,77 @@ int test_put_run(int npapp, int npx, int npy, int npz,
 	common_set_storage_type(row_major);
 	rank_ = common_rank();
 	nproc_ = common_peers();
+
+	double *databuf = NULL;
+	if (dims == 2) {
+		databuf = allocate_2d();
+		if (databuf) {
+			unsigned int ts;
+			for (ts = 1; ts <= timestep_; ts++){
+				generate_2d(databuf, ts);
+#ifdef DS_HAVE_DIMES
+				if (ts % 2 == 0)		
+					couple_write_2d(databuf, ts, USE_DIMES);
+				else if (ts % 2 == 1)
+					couple_write_2d(databuf, ts, USE_DSPACES);
+#else
+				couple_write_2d(databuf, ts, USE_DSPACES);
+#endif
+			}
+		}
+	} else if (dims == 3) {
+		databuf = allocate_3d();
+		if (databuf) {
+			unsigned int ts;
+			for (ts = 1; ts <= timestep_; ts++) {
+				generate_3d(databuf, ts);
+#ifdef DS_HAVE_DIMES
+				if (ts % 2 == 0)
+					couple_write_3d(databuf, ts, USE_DIMES);
+				else if (ts % 2 == 1)
+					couple_write_3d(databuf, ts, USE_DSPACES);
+#else
+				couple_write_3d(databuf, ts, USE_DSPACES);
+#endif
+			}
+		}
+	}
+
+	common_barrier();
+	common_finalize();
+
+	if (databuf)
+		free(databuf);
+	
+	return 0;	
+}
+
+int test_put_run_ib_dimes(int npapp, int npx, int npy, int npz,
+    int spx, int spy, int spz, int timestep, int dims, MPI_Comm gcomm)
+{
+	gcomm_ = gcomm;
+	timestep_ = timestep;
+	npapp_ = npapp;
+	npx_ = npx;
+	npy_ = npy;
+	npz_ = npz;
+	if (npx_)
+		spx_ = spx;
+	if (npy_)
+		spy_ = spy;
+	if (npz_)
+		spz_ = spz;
+
+	timer_init(&timer_, 1);
+	timer_start(&timer_);
+
+	int app_id = 1;
+	common_init(npapp_, app_id);
+	common_set_storage_type(row_major);
+	//rank_ = common_rank();
+	//nproc_ = common_peers();
+	MPI_Comm_size(gcomm, &nproc_);
+	MPI_Comm_rank(gcomm, &rank_);
 
 	double *databuf = NULL;
 	if (dims == 2) {

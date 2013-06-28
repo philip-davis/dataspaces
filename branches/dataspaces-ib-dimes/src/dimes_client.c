@@ -688,9 +688,9 @@ static int locate_data_completion_client(struct rpc_server *rpc_s,
 				hdr->has_new_owner, hdr->new_owner_id, odsc.name,
 				odsc.owner, obj_data_size(&odsc), qte->size_od);
 #endif
-                        err = qt_add_obj_with_cmd_d(qte, &odsc, &cmd_tab[i]);
-                        if (err < 0)
-                                goto err_out_free;
+			err = qt_add_obj_with_cmd_d(qte, &odsc, &cmd_tab[i]);
+			if (err < 0)
+				goto err_out_free;
 		}
 		else {
 			uloga("%s(): duplicate obj descriptor detected.\n",
@@ -1053,7 +1053,6 @@ static int dimes_obj_put(struct obj_data *od)
 
 	// TODO(fan): We really need DART level APIs to explicitly
 	// allocate/deallocate RDMA send/recv buffers.
-
 	struct obj_sync_id *sync_id = (struct obj_sync_id*)malloc(sizeof(*sync_id));
 	sync_id->sid = sid;
 	sync_id->bytes_read = 0;
@@ -1071,11 +1070,11 @@ static int obj_data_get_direct_completion(struct rpc_server *rpc_s, struct msg_b
 	struct query_tran_entry_d *qte = msg->private;
 
 	if (++qte->num_parts_rec == qte->size_od) {
-			qte->f_complete = 1;
-	#ifdef DEBUG
+		qte->f_complete = 1;
+#ifdef DEBUG
 		uloga("%s(): #%d, qte->num_parts_rec = %d\n",
 				__func__, DIMES_CID, qte->num_parts_rec);
-	#endif
+#endif
 	}
 
 	free(msg);
@@ -1503,7 +1502,7 @@ static int dimes_obj_get(struct obj_data *od)
 	}
 
 	for ( i=0; i<num_de && i<qte->qh->qh_size; i++ )
-			qte->qh->qh_peerid_tab[i] = de_tab[i]->rank;
+		qte->qh->qh_peerid_tab[i] = de_tab[i]->rank;
 	qte->qh->qh_peerid_tab[i] = -1;
 	qte->qh->qh_num_peer = num_de;
 	qte->f_dht_peer_recv = 1;
@@ -2689,10 +2688,10 @@ int common_dimes_get(const char *var_name,
 		goto err_out;
 	}
 	
-	err = dimes_obj_get_v3(od);
+	//err = dimes_obj_get_v3(od);
 	//err = dimes_obj_get_v2_1(od);
 	//err = dimes_obj_get_v2(od);
-	//err = dimes_obj_get(od);
+	err = dimes_obj_get(od);
  
 	obj_data_free(od);
 	if (err < 0 && err != -EAGAIN)
@@ -2738,10 +2737,10 @@ int common_dimes_put(const char *var_name,
 		goto err_out;
 	}
 
-	err = dimes_obj_put_v3(od);
+	//err = dimes_obj_put_v3(od);
 	//err = dimes_obj_put_v2_1(od);
 	//err = dimes_obj_put_v2(od);
-	//err = dimes_obj_put(od);
+	err = dimes_obj_put(od);
 	if (err < 0) {
 		obj_data_free(od);
 
