@@ -29,8 +29,16 @@ struct worker_info {
 	unsigned int pid;
 };
 
+#ifdef HAVE_DCMF
 #define CORES_PER_NODE 4 
 #define INSITU_STAGING_CORES_PER_NODE 2 
+#endif
+
+#ifdef HAVE_UGNI
+#define CORES_PER_NODE 16 
+#define INSITU_STAGING_CORES_PER_NODE 2 
+#endif
+
 static struct worker_info local_worker_tab_[CORES_PER_NODE];
 
 int hs_comm_init(int argc, char **argv)

@@ -40,7 +40,8 @@
 extern int dummy_s3d_simulation(MPI_Comm comm, int num_peers, int num_ts);
 extern int dummy_s3d_staging(MPI_Comm comm, int num_buckets);
 
-static enum execution_mode exemode_ = hybrid_staging_mode;
+//static enum execution_mode exemode_ = hybrid_staging_mode;
+static enum execution_mode exemode_ = staging_mode;
 static enum location_type loctype_ = insitu;
 static enum core_type coretype_ = worker_core;
 static enum worker_type workertype_;

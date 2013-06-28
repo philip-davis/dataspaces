@@ -1,0 +1,19 @@
+#!/bin/sh
+#PBS -N test-hybrid-staging 
+#PBS -A csc025ewk
+#PBS -q debug
+#PBS -j oe
+#PBS -l walltime=00:30:00
+#PBS -l nodes=8
+
+cd $PBS_O_WORKDIR
+
+rm -f conf
+aprun -n 4 ./scheduler_driver -s 4 -c 80 &
+sleep 10
+
+aprun -n 64 ./insitu_driver 64 16 200 & 
+
+aprun -n 16 ./intransit_driver 64 16 200 &
+
+wait
