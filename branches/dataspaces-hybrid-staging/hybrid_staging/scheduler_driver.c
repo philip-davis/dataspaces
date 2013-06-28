@@ -38,9 +38,10 @@
 #include "common.h"
 #include "hybrid_staging_partition.h"
 
+//static enum execution_mode exemode = hybrid_staging_mode;
+static enum execution_mode exemode = staging_mode;
 static enum core_type coretype = manager_core;
 static enum worker_type workertype;
-static enum execution_mode exemode = hybrid_staging_mode;
 static enum location_type loctype = 0;
 
 int main(int argc, char **argv)
