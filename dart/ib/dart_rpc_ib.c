@@ -644,7 +644,7 @@ static int rpc_prepare_buffers(struct rpc_server *rpc_s, const struct node_id *p
 
 	return 0;
 
-      err_out:
+ err_out:
 	printf("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
@@ -731,7 +731,7 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
 	struct ibv_send_wr wr, *bad_wr = NULL;
 	struct ibv_sge sge;
 
-//printf("data to be fetched is size(%d) from peer(%d).\n", rr->size, peer->ptlmap.id);
+	printf("data to be fetched is size(%d) from peer(%d).\n", rr->size, peer->ptlmap.id);
 	if(rr->type == 1) {
 		rr->data_mr = ibv_reg_mr(peer->rpc_conn.pd, rr->data, rr->size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
 		if(rr->data_mr == NULL) {
@@ -747,7 +747,6 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
 		wr.sg_list = &sge;
 		wr.num_sge = 1;
 		wr.send_flags = IBV_SEND_SIGNALED;
-
 
 		wr.wr.rdma.remote_addr = (uintptr_t) rr->msg->mr.addr;
 		wr.wr.rdma.rkey = rr->msg->mr.rkey;
@@ -1181,8 +1180,6 @@ int rpc_post_recv(struct rpc_server *rpc_s, struct node_id *peer)
 
 	peer->rr = rr;
 
-
-
 	//rr = register_memory(peer);
 	rr->peerid = peer->ptlmap.id;
 
@@ -1401,12 +1398,21 @@ int rpc_server_get_id(void)	//Done
 /*
   Connection Service
 */
+static int alloc_pd_flag_ = 0;
+static struct ibv_pd* global_pd_ = NULL;
+static struct ibv_context* global_ctx_ = NULL;
 void build_context(struct ibv_context *verbs, struct connection *conn)
 {
 	int err, flags;
 	conn->ctx = verbs;
 
-	conn->pd = ibv_alloc_pd(conn->ctx);
+	if (!alloc_pd_flag_) {
+		global_pd_ = ibv_alloc_pd(conn->ctx);
+		global_ctx_ = verbs;
+		alloc_pd_flag_ = 1;
+	}
+	conn->pd = global_pd_;
+	uloga("%s(): conn->ctx= %x, conn->pd= %x, global_ctx_= %x, global_pd_= %x\n"		, __func__, conn->ctx, conn->pd, global_ctx_, global_pd_);
 	if(conn->pd == NULL)
 		printf("ibv_alloc_pd return NULL in %s.\n", __func__);
 	conn->comp_channel = ibv_create_comp_channel(conn->ctx);
@@ -2191,7 +2197,7 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 	if(err == 0)
 		return 0;
 
-      err_out:
+err_out:
 	printf("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }

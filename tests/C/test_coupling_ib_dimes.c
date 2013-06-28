@@ -35,9 +35,9 @@
 
 #include "mpi.h"
 
-extern int test_put_run(int npapp, int npx, int npy, int npz,
+extern int test_put_run_ib_dimes(int npapp, int npx, int npy, int npz,
                 int spx, int spy, int spz, int timestep, int dims, MPI_Comm);
-extern int test_get_run(int npapp, int npx, int npy, int npz,
+extern int test_get_run_ib_dimes(int npapp, int npx, int npy, int npz,
                 int spx, int spy, int spz, int timestep, int dims, MPI_Comm);
 
 int main(int argc, char **argv)
@@ -81,7 +81,7 @@ int main(int argc, char **argv)
 		MPI_Comm_split(MPI_COMM_WORLD, 1, mpi_rank, &gcomm);
 		sleep(10);
 
-		npapp = num_writer;
+		npapp = num_writer + num_reader;
 		npx = writer_x;
 		npy = writer_y;
 		npz = writer_z;
@@ -94,7 +94,7 @@ int main(int argc, char **argv)
 			spz = dim_z/ npz;
 		}
 
-		test_put_run(npapp, npx, npy, npz,
+		test_put_run_ib_dimes(npapp, npx, npy, npz,
 			spx, spy, spz, timestep, dims, gcomm);
 	} else if (num_sp+num_writer <= mpi_rank &&
 			mpi_rank < num_sp+num_writer+num_reader) {
@@ -102,7 +102,7 @@ int main(int argc, char **argv)
 		MPI_Comm_split(MPI_COMM_WORLD, 2, mpi_rank, &gcomm);
 		sleep(10);
 
-		npapp = num_reader;
+		npapp = num_reader + num_writer;
 		npx = reader_x;
 		npy = reader_y;
 		npz = reader_z;
@@ -115,7 +115,7 @@ int main(int argc, char **argv)
 			spz = dim_z/ npz;
 		}
 
-		test_get_run(npapp, npx, npy, npz,
+		test_get_run_ib_dimes(npapp, npx, npy, npz,
 			spx, spy, spz, timestep, dims, gcomm);	
 	} else {
 		MPI_Comm_split(MPI_COMM_WORLD, 3, mpi_rank, &gcomm);
