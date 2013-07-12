@@ -1095,6 +1095,10 @@ struct rpc_server *rpc_server_init(int option, char *ip, int port, int num_buff,
 	rpc_s->listen_id = NULL;
 	rpc_s->rpc_ec = NULL;
 
+	rpc_s->alloc_pd_flag = 0;
+	rpc_s->global_pd = NULL;
+	rpc_s->global_ctx = NULL;
+
 	if(option == 1) {
 		localip = ip;
 		rpc_s->ptlmap.address.sin_addr.s_addr = inet_addr(ip);
@@ -1398,21 +1402,18 @@ int rpc_server_get_id(void)	//Done
 /*
   Connection Service
 */
-static int alloc_pd_flag_ = 0;
-static struct ibv_pd* global_pd_ = NULL;
-static struct ibv_context* global_ctx_ = NULL;
 void build_context(struct ibv_context *verbs, struct connection *conn)
 {
 	int err, flags;
 	conn->ctx = verbs;
 
-	if (!alloc_pd_flag_) {
-		global_pd_ = ibv_alloc_pd(conn->ctx);
-		global_ctx_ = verbs;
-		alloc_pd_flag_ = 1;
+	if (!rpc_s_instance->alloc_pd_flag) {
+		rpc_s_instance->global_pd = ibv_alloc_pd(conn->ctx);
+		rpc_s_instance->global_ctx = verbs;
+		rpc_s_instance->alloc_pd_flag = 1;
 	}
-	conn->pd = global_pd_;
-	uloga("%s(): conn->ctx= %x, conn->pd= %x, global_ctx_= %x, global_pd_= %x\n"		, __func__, conn->ctx, conn->pd, global_ctx_, global_pd_);
+	conn->pd = rpc_s_instance->global_pd;
+	uloga("%s(): conn->ctx= %x, conn->pd= %x, global_ctx= %x, global_pd= %x\n"		, __func__, conn->ctx, conn->pd, rpc_s_instance->global_ctx, rpc_s_instance->global_pd);
 	if(conn->pd == NULL)
 		printf("ibv_alloc_pd return NULL in %s.\n", __func__);
 	conn->comp_channel = ibv_create_comp_channel(conn->ctx);

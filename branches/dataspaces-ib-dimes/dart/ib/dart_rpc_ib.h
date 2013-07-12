@@ -314,6 +314,9 @@ struct rpc_server {
 	int no_more;
 	int p_count;
 
+	int alloc_pd_flag;
+	struct ibv_pd *global_pd;
+	struct ibv_context *global_ctx;
 };
 
 struct rdma_mr {
