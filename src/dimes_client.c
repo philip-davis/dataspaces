@@ -2688,10 +2688,10 @@ int common_dimes_get(const char *var_name,
 		goto err_out;
 	}
 	
-	//err = dimes_obj_get_v3(od);
+	err = dimes_obj_get_v3(od);
 	//err = dimes_obj_get_v2_1(od);
 	//err = dimes_obj_get_v2(od);
-	err = dimes_obj_get(od);
+	//err = dimes_obj_get(od);
  
 	obj_data_free(od);
 	if (err < 0 && err != -EAGAIN)
@@ -2737,10 +2737,10 @@ int common_dimes_put(const char *var_name,
 		goto err_out;
 	}
 
-	//err = dimes_obj_put_v3(od);
+	err = dimes_obj_put_v3(od);
 	//err = dimes_obj_put_v2_1(od);
 	//err = dimes_obj_put_v2(od);
-	err = dimes_obj_put(od);
+	//err = dimes_obj_put(od);
 	if (err < 0) {
 		obj_data_free(od);
 

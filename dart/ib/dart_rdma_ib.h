@@ -10,15 +10,16 @@
 #include "dart_rpc_ib.h"
 
 struct dart_rdma_mem_handle {
-	//gni_mem_handle_t mdh;
-	uint64_t base_addr;
-	size_t size;
+	// TODO: fix using both mr and mr_ref
+	struct ibv_mr mr; // memory region 
+	struct ibv_mr *mr_ref; // keep the pointer value returned by ibv_reg_mr
 };
 
 struct dart_rdma_read_op {
 	struct list_head entry;
 	int tran_id;
-	//gni_post_descriptor_t post_desc;
+	struct ibv_sge sge; // describes a scatter/gather enry TODO: ??
+	struct ibv_send_wr wr; // describes the work request to the send queue of the queue pair
 	size_t src_offset;
 	size_t dst_offset;
 	size_t bytes;
@@ -32,11 +33,11 @@ struct dart_rdma_read_tran {
 	struct node_id *remote_peer;
 	struct dart_rdma_mem_handle src;
 	struct dart_rdma_mem_handle dst;
+	int avail_rdma_credit;
 };
 
 struct dart_rdma_handle {
 	struct rpc_server *rpc_s;
-	//gni_cq_handle_t post_cq_hndl;
 	struct list_head read_tran_list;
 };
 
