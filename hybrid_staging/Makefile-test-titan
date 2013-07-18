@@ -24,7 +24,7 @@ LIBS= -L./ -lhstaging \
 
 CFLAGS= -g ${UGNI_CFLAGS} ${PMI_CLFASG} -DDEBUG -DDS_HAVE_HYBRID_STAGING
 
-SRC = common.c hybrid_staging_partition.c dummy_simulation_worker.c dummy_staging_worker.c
+SRC = common.c hstaging_partition.c dummy_simulation_worker.c dummy_staging_worker.c
 SRC1 = intransit_driver.c 
 SRC2 = scheduler_driver.c
 SRC3 = insitu_driver.c 

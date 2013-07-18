@@ -12,7 +12,7 @@
 #include "dart.h"
 #include "ds_gspace.h"
 
-#include "dataspaces_internal_def.h"
+#include "hybrid_staging_internal_def.h"
 #include "mpi.h"
 
 static int num_sp;
@@ -264,15 +264,14 @@ static int reply_bucket_request_hit(int dart_id, struct bucket *bk)
 	hdr->bk_dart_id = bk->dart_id;
 
 	err =rpc_send(ds->rpc_s, peer, msg);
-        if (err < 0) {
-                free(msg);
-                goto err_out;
-        }
+	if (err < 0) {
+		free(msg);
+		goto err_out;
+	}
 
-        return 0;
+	return 0;
 err_out:
-        ERROR_TRACE();
-
+	ERROR_TRACE();
 }
 
 static int send_bucket_request(struct rdma_data_descriptor *rdma_desc)
@@ -383,6 +382,14 @@ static int callback_intran_req_job(struct rpc_server *rpc_s, struct rpc_cmd *cmd
 	struct bucket *bk = malloc(sizeof(struct bucket));	
 	struct job *job;
 
+/*
+if (jobq_empty()) {
+	idle_bk_list_add()
+} else {
+	// Do nothing?!
+}
+*/
+
 	bk->dart_id = cmd->id;
 
 	/* check if job queue is empty */
@@ -409,8 +416,8 @@ static int callback_intran_req_job(struct rpc_server *rpc_s, struct rpc_cmd *cmd
 		run_bk_list_remove(bk->dart_id);
 		run_bk_list_add(bk);
 
-   	        uloga("%s(): assign job (%d, %d) to bucket %d\n",
-                        __func__, job->id.type, job->id.tstep, bk->dart_id);
+		uloga("%s(): assign job (%d, %d) to bucket %d\n",
+			__func__, job->id.type, job->id.tstep, bk->dart_id);
 
 		/*process req_list of the job */
 		struct bucket_request *bk_req,*tmp1;
@@ -517,8 +524,8 @@ static int callback_rr_req_bk(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 			run_bk_list_remove(bk->dart_id);
 			run_bk_list_add(bk);
 
-               		uloga("%s(): assign job (%d, %d) to bucket %d\n",
-                        	__func__, jid.type, jid.tstep, bk->dart_id);
+			uloga("%s(): assign job (%d, %d) to bucket %d\n",
+					__func__, jid.type, jid.tstep, bk->dart_id);
 
 			/* Reply hit msg to slave server */
 			err = reply_bucket_request_hit(dart_id, bk);
@@ -539,6 +546,22 @@ static int process_insitu_data_desc_slave(struct rpc_server *rpc_s, struct rdma_
 	int err = -ENOMEM;
 	struct bucket *bk;
 	struct job_id jid = extract_job_id(&rdma_desc->desc);
+
+/*
+job = jobq_lookup(jid)
+if (job == NULL) {
+	job = jobq_add_job(jid)
+	send_allocation_request()
+}
+
+if (is_running(job)) {
+	send_rdma_data_desc()
+} else {
+	jobq_cache_data_desc()
+}
+
+return
+*/
 
 	/* any working bk in the run_bk_list for this job ID? */
 	bk = run_bk_list_lookup(&jid);
@@ -580,6 +603,22 @@ static int process_insitu_data_desc_master(struct rpc_server *rpc_s, struct rdma
 	int err = -ENOMEM;
 	struct bucket *bk;
 	struct job_id jid = extract_job_id(&rdma_desc->desc);
+
+/*
+job = jobq_lookup(jid)
+if (job == NULL) {
+	job = jobq_add_job(jid)
+	allocate_bk_for_job(job)	
+}
+
+if (is_running(job)) {
+	send_rdma_data_desc()
+} else {
+	jobq_cache_data_desc()
+}
+
+return
+*/
 
 	/* any working bk in run_bk_list for this job ID? */
 	bk = run_bk_list_lookup(&jid);
@@ -774,27 +813,27 @@ static int parse_args(int argc, char *argv[])
 }
 
 /* Public APIs */
-int dspaces_rr_parse_args(int argc, char** argv)
+int hstaging_scheduler_serial_parse_args(int argc, char** argv)
 {
 	return parse_args(argc, argv);
 }
 
-void dspaces_rr_usage()
+void hstaging_scheduler_serial_usage()
 {
 	usage();
 }
 
-int dspaces_rr_init()
+int hstaging_scheduler_serial_init()
 {
 	return rr_init();
 }
 
-int dspaces_rr_run()
+int hstaging_scheduler_serial_run()
 {
 	return rr_run();
 }
 
-int dspaces_rr_finish()
+int hstaging_scheduler_serial_finish()
 {
 	return rr_finish();
 }

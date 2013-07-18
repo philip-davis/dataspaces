@@ -1,5 +1,5 @@
 SHELL   = /bin/sh
-CC = cc
+CC = cc 
 FTN = ftn
 DSPACES_DIR = /ccs/home/zhangfan/DataSpaces/branches/dataspaces-hybrid-staging
 INCLUDES=-I. \
@@ -20,8 +20,8 @@ LIBS=${PMI_LIBS} ${UGNI_LIBS} \
 
 CFLAGS= -g ${UGNI_CFLAGS} ${PMI_CLFASG} -DDS_HAVE_HYBRID_STAGING
 
-SRC1 =  dataspaces_api.c \
-		dataspaces_rr_scheduler.c 
+SRC1 =  hybrid_staging_api.c \
+		hstaging_scheduler_serial_job.c 
 
 OBJ1 = $(SRC1:.c=.o)
 
