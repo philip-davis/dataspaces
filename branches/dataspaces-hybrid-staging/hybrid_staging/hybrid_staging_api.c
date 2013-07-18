@@ -1,5 +1,5 @@
-#include "dataspaces_api.h"
-#include "dataspaces_internal_def.h"
+#include "hybrid_staging_api.h"
+#include "hybrid_staging_internal_def.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -191,7 +191,7 @@ err_out:
 static int callback_rr_data_desc_msg(struct rpc_server *rpc_s, struct rpc_cmd *cmd) 
 {
 	int err = -ENOMEM;
-	int myrank = dcg_get_rank(dcg);
+	int dart_id = dcghlp_get_id(dcg);
 	struct rdma_data_descriptor *rdma_desc =
 			(struct rdma_data_descriptor *)cmd->pad;
 
@@ -224,14 +224,14 @@ static int callback_rr_data_desc_msg(struct rpc_server *rpc_s, struct rpc_cmd *c
 		list_add_tail(&job->job_entry, &g_info.intran_job_list);
 
 		uloga("%s(): Bucket %d get job (%d,%d) from %d\n",
-			__func__, myrank, g_info.type, g_info.tstep, cmd->id);
+			__func__, dart_id, g_info.type, g_info.tstep, cmd->id);
 	} else {
 		/*check if i'm getting obj for the same job*/
 		if ( g_info.type != rdma_desc->desc.type ||
 			g_info.tstep != rdma_desc->desc.tstep ) {
 			uloga("%s(): error! Bucket %d should get obj desc for job (%d,%d), "
 				"but get for job (%d,%d) from %d\n", 
-				__func__, myrank, g_info.type, g_info.tstep,
+				__func__, dart_id, g_info.type, g_info.tstep,
 				rdma_desc->desc.type, rdma_desc->desc.tstep,
 				cmd->id);
 			return 0;
@@ -240,7 +240,7 @@ static int callback_rr_data_desc_msg(struct rpc_server *rpc_s, struct rpc_cmd *c
 		if ( g_info.num_cb_call > g_info.num_obj) {
 			uloga("%s(): Bucket %d  g_info.num_cb_call= %d "
 				"rank= %d type= %d tstep= %d from %d\n",
-				__func__, myrank, g_info.num_cb_call,
+				__func__, dart_id, g_info.num_cb_call,
 				rdma_desc->desc.rank, g_info.type, g_info.tstep, cmd->id);
 		} 
 	}
@@ -410,10 +410,9 @@ static int obj_put_direct(struct obj_data *od, struct data_descriptor *desc)
 */
 
 /* Initialize the dataspaces library. */
-int ds_init(int num_peers, enum component_type type)
+int ds_init(int num_peers, enum component_type type, int appid)
 {
 	int err = -ENOMEM;
-	int appid = type;
 
 	/* Init the g_info */
 	g_info.cmp_type = type;
@@ -424,10 +423,8 @@ int ds_init(int num_peers, enum component_type type)
 		return 0;
 	}
 
-	if (type == IN_TRANSIT) {
-		rpc_add_service(rr_data_desc, callback_rr_data_desc_msg); //add callback func for msg
-		rpc_add_service(insitu_unreg, callback_insitu_unreg_msg);
-	}
+	rpc_add_service(rr_data_desc, callback_rr_data_desc_msg); //add callback func for msg
+	rpc_add_service(insitu_unreg, callback_insitu_unreg_msg);
 
 	dcg = dcg_alloc(num_peers, appid);	
 	if (!dcg) {
@@ -475,11 +472,11 @@ int ds_finalize()
 	}
 
 	if (g_info.cmp_type == IN_SITU ) {
-		/* TODO: the calculation below may not work when have more than 2 applications */
-		int num_peers_intransit = get_app_num_peers(IN_TRANSIT);
-		int min_dartid = get_app_min_dartid(IN_TRANSIT);	
-		int myrank = dcg_get_rank(dcg);
-		/* check if all pending RDMA operations completed */
+		// TODO: the calculation below may not work when have more than 2 applications 
+		//int num_peers_intransit = get_app_num_peers(IN_TRANSIT);
+		//int min_dartid = get_app_min_dartid(IN_TRANSIT);	
+		//int myrank = dcg_get_rank(dcg);
+		// check if all pending RDMA operations completed
 		while ( dcg->num_pending != 0 ) {
 			err = process_event(dcg);
 			if ( err < 0 ) {
@@ -488,11 +485,12 @@ int ds_finalize()
 			}
 		}
 
-		ds_do_barrier();
+		// ds_do_barrier();
 
 		/*
-		  In-situ processes send insitu_unreg msgs to mapped in-transit processes
+		  In-situ processes send insitu_unreg msgs to mapped in-transit process
 		*/
+		/*
 		if ( myrank < num_peers_intransit ) {
 			struct msg_buf *msg;
 			struct node_id *peer;
@@ -514,7 +512,7 @@ int ds_finalize()
 				goto err_out;
 			}			
 		}
-		
+		*/
 	}
 	
 	dcg_free(dcg);
@@ -531,7 +529,7 @@ err_out:
 int ds_put_obj_data(void * data, struct data_descriptor * desc)
 {
 	struct obj_data *od;
-	int i, err, rank = dcg_get_rank(dcg); //TODO: or use desc->rank??
+	int i, err, rank = desc->rank;
 
 	/* prepare dataspaces level object descriptor */
 	struct obj_descriptor odsc = {
@@ -635,6 +633,7 @@ int ds_free_data_list(struct list_head *head)
 	return 0;
 }
 
+/*
 void ds_do_barrier()
 {
 	int err;
@@ -656,3 +655,4 @@ int ds_rank()
 		return dcg_get_rank(dcg);
 	else return -1;
 }
+*/

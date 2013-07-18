@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 #include "common.h"
-#include "dataspaces_api.h"
+#include "hybrid_staging_api.h"
 #include "mpi.h"
 
 static struct timer timer;
@@ -167,16 +167,16 @@ static int perform_viz(int num_peers, int rank, int ts)
 	return 0;
 }
 
-int dummy_s3d_simulation(MPI_Comm comm, int num_peers, int num_ts)
+int dummy_s3d_simulation(MPI_Comm comm, int num_ts)
 {
 	int err, i;
 	int nprocs, mpi_rank;
 
 	MPI_Comm_size(comm, &nprocs);
 	MPI_Comm_rank(comm, &mpi_rank);
-	uloga("Dummy S3D: mpi_rank= %d of total %d\n", mpi_rank, nprocs);
-
-	err = ds_init(num_peers, IN_SITU);
+	if (mpi_rank == 0) {
+		uloga("Dummy S3D: total %d workers\n", nprocs);
+	}
 
 	double tm_st, tm_end;
 	timer_init(&timer, 1);
@@ -194,22 +194,21 @@ int dummy_s3d_simulation(MPI_Comm comm, int num_peers, int num_ts)
 				continue;
 
 		/* Do insitu analysis */
-		perform_topology(num_peers, mpi_rank, i);
+		perform_topology(nprocs, mpi_rank, i);
 
-		perform_stat(num_peers, mpi_rank, i);
+		perform_stat(nprocs, mpi_rank, i);
 		//perform_stat_v1(num_peers, mpi_rank, i);
 
-		perform_viz(num_peers, mpi_rank, i);
+		perform_viz(nprocs, mpi_rank, i);
 
 		tm_end = timer_read(&timer);
-		if (mpi_rank == 0)
+		if (mpi_rank == 0) {
 			uloga("Dummy S3D rank= %d ts= %d , time= %lf\n",
-					mpi_rank, i, tm_end-tm_st);
+				mpi_rank, i, tm_end-tm_st);
+		}
 	}
 
 	MPI_Barrier(comm);
-
-	ds_finalize();
 
 	return 0;
 err_out:

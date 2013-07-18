@@ -1,6 +1,6 @@
 //#include <sched.h>
 
-#include "hybrid_staging_partition.h"
+#include "hstaging_partition.h"
 
 #include "common.h"
 #include "debug.h"
@@ -148,23 +148,6 @@ int hs_comm_perform_split(enum execution_mode mode, enum core_type coretype, enu
 		l2_src_comm_ = l1_new_comm_;
 		l2_color_ = *workertype;
 		MPI_Comm_split(l2_src_comm_, l2_color_, rank_, &l2_new_comm_);
-
-		int num_worker = 0;
-		MPI_Comm_size(l2_new_comm_, &num_worker);
-		switch (*workertype) {
-		case simulation_worker:
-			uloga("simulation: num_worker= %d location= %u nid= %u, pid= %d\n",
-				num_worker, loc, nid_, pid_);
-			break;
-		case staging_worker:
-			uloga("staging: num_worker=%d location= %u nid= %u, pid= %d\n",
-				num_worker, loc, nid_, pid_);
-			break;
-		default:
-			uloga("wrong workertype as %u\n", *workertype);
-			return -1;
-		}
-
 	} else if (coretype == manager_core) {
 		*workertype = 0;
 	}

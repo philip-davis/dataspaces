@@ -35,13 +35,14 @@
 
 #include "mpi.h"
 
-#include "hybrid_staging_partition.h"
+#include "hstaging_partition.h"
+#include "hybrid_staging_api.h"
 
-extern int dummy_s3d_simulation(MPI_Comm comm, int num_peers, int num_ts);
-extern int dummy_s3d_staging(MPI_Comm comm, int num_buckets);
+extern int dummy_s3d_simulation(MPI_Comm comm, int num_ts);
+extern int dummy_s3d_staging(MPI_Comm comm);
 
-//static enum execution_mode exemode_ = hybrid_staging_mode;
-static enum execution_mode exemode_ = staging_mode;
+static enum execution_mode exemode_ = hybrid_staging_mode;
+//static enum execution_mode exemode_ = staging_mode;
 static enum location_type loctype_ = insitu;
 static enum core_type coretype_ = worker_core;
 static enum worker_type workertype_;
@@ -49,20 +50,20 @@ static enum worker_type workertype_;
 int main(int argc, char **argv)
 {
 	int err;
-	int nprocs, rank;
+	int appid, num_ts;
+	int nprocs, mpi_rank;
 
-	int num_simulation_worker, num_staging_worker, num_ts;
-	if (argc != 4) {
+	if (argc != 2) {
 		uloga("wrong number of args\n");
 		return -1;
 	}
-	num_simulation_worker = atoi(argv[1]);
-	num_staging_worker = atoi(argv[2]);
-	num_ts = atoi(argv[3]);
+	num_ts = atoi(argv[1]);
 
 	hs_comm_init(argc, argv);
-	rank = hs_comm_get_rank();
 	nprocs = hs_comm_get_nprocs();
+	mpi_rank = hs_comm_get_rank();
+	appid = 1;
+	err = ds_init(nprocs, IN_SITU, appid); 
 
 	err = hs_comm_perform_split(exemode_, coretype_, loctype_, &workertype_);
 	if (err < 0) {
@@ -70,14 +71,18 @@ int main(int argc, char **argv)
 	}
 
 	MPI_Comm comm = hs_get_communicator_l2();
+	int num_worker = 0;
+	MPI_Comm_size(comm, &num_worker);
 	switch (workertype_) {
 	case simulation_worker:
-		err = dummy_s3d_simulation(comm, num_simulation_worker, num_ts);
+		uloga("simulation: num_worker= %d\n", num_worker);
+		err = dummy_s3d_simulation(comm, num_ts);
 		if (err < 0)
 			goto err_out;
 		break;
 	case staging_worker:
-		err = dummy_s3d_staging(comm, num_staging_worker);
+		uloga("in-situ staging: num_worker= %d\n", num_worker);
+		err = dummy_s3d_staging(comm);
 		if (err < 0)
 			goto err_out;
 		break;
@@ -86,6 +91,7 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
+	ds_finalize();
 	hs_comm_fin();
 
 	return 0;	

@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 #include "common.h"
-#include "dataspaces_api.h"
+#include "hybrid_staging_api.h"
 #include "mpi.h"
 
 struct stats {
@@ -166,17 +166,16 @@ static int perform_intransit_stat(int rank, struct list_head *data_list)
 	return 0;
 }
 
-int dummy_s3d_staging(MPI_Comm comm, int num_buckets)
+int dummy_s3d_staging(MPI_Comm comm) 
 {
 	int i, err;
-	int nprocs, mpi_rank, dart_rank;
+	int nprocs, mpi_rank;
 	
 	MPI_Comm_size(comm, &nprocs);
 	MPI_Comm_rank(comm, &mpi_rank);
-	uloga("Dummy S3D staging: mpi_rank= %d of total %d\n", mpi_rank, nprocs);
-
-	err = ds_init(num_buckets, IN_TRANSIT);
-	dart_rank = ds_rank();
+	if (mpi_rank == 0) {
+		uloga("Dummy S3D staging: total %d workers\n", nprocs);
+	}
 
 	enum op_type type;
 	struct list_head data_list;
@@ -191,16 +190,16 @@ int dummy_s3d_staging(MPI_Comm comm, int num_buckets)
 				 (2) struct list_head is defined in list.h;
 			*/
 			perform_intransit_topology(mpi_rank, &data_list);
-			sleep(4); //TODO: why call sleep?
+			sleep(8); //TODO: why call sleep?
 			break;
 		case VISUALIZATION:
 			perform_intransit_viz(mpi_rank, &data_list);
-			sleep(4);
+			sleep(8);
 			break;
 		case DESCRIPTIVE_STATS:
 			perform_intransit_stat(mpi_rank, &data_list);
 			//perform_intransit_stat_v1(mpi_rank, &data_list);
-			sleep(3);
+			sleep(6);
 			break;
 		default:
 			uloga("error: unknown type...\n");
@@ -210,8 +209,6 @@ int dummy_s3d_staging(MPI_Comm comm, int num_buckets)
 		/*free the retrieved memroy blocks data*/
 		ds_free_data_list(&data_list);
 	}
-
-	ds_finalize();
 
 	return 0;
 err_out:

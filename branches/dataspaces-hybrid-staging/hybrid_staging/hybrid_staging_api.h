@@ -34,7 +34,7 @@ struct data_item {
 }; 
 
 /* Initialize the dataspaces library. */
-int ds_init(int num_peers, enum component_type type);
+int ds_init(int num_peers, enum component_type type, int appid);
 
 /* Finalize the dataspaces library. */
 int ds_finalize();
@@ -53,9 +53,6 @@ int ds_request_job(enum op_type *type, struct list_head *head);
 */
 int ds_free_data_list(struct list_head *head);
 
-//TO-DO: remove
-int ds_rank();
-void ds_do_barrier();
 #ifdef __cplusplus
 }
 #endif

@@ -33,10 +33,10 @@
 #include "unistd.h"
 #include "mpi.h"
 
-#include "dataspaces_rr_scheduler.h"
+#include "hstaging_scheduler_serial_job.h"
 
 #include "common.h"
-#include "hybrid_staging_partition.h"
+#include "hstaging_partition.h"
 
 //static enum execution_mode exemode = hybrid_staging_mode;
 static enum execution_mode exemode = staging_mode;
@@ -47,46 +47,35 @@ static enum location_type loctype = 0;
 int main(int argc, char **argv)
 {
 	int err;
-	int nprocs, rank;
 	int color;
 
 	hs_comm_init(argc, argv);
-	rank = hs_comm_get_rank();
-	nprocs = hs_comm_get_nprocs();
 
 	err = hs_comm_perform_split(exemode, coretype, loctype, &workertype);
 	if (err < 0) {
 		goto err_out;
 	}
 
-/*
 #ifdef DEBUG
 	uloga("dataspaces server starts...\n");
 #endif
 
-#ifdef DS_HAVE_DIMES
-	common_run_server(num_sp, num_cp, USE_DIMES);
-#else
-	common_run_server(num_sp, num_cp, USE_DSPACES);
-#endif
-*/
-
-	if (dspaces_rr_parse_args(argc, argv) < 0) {
-		dspaces_rr_usage();
+	if (hstaging_scheduler_serial_parse_args(argc, argv) < 0) {
+		hstaging_scheduler_serial_usage();
 		return -1;
 	}
 
-	if (dspaces_rr_init() < 0) {
+	if (hstaging_scheduler_serial_init() < 0) {
 		printf("DART server init failed!\n");
 		return -1;
 	}
 
-	if (dspaces_rr_run() < 0) {
+	if (hstaging_scheduler_serial_run() < 0) {
 		printf("DART server got an error at runtime!\n");
 		return -1;
 	}
 
-	dspaces_rr_finish();
+	hstaging_scheduler_serial_finish();
 
 	uloga("All ok.\n");	
 
