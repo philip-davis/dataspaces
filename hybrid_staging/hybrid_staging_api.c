@@ -21,18 +21,19 @@ static int num_dims = 2;
 const int NUM_TRYS = 20;
 const int RDMA_GET_CREDITS = 225;
 
-struct intran_job {
+struct parallel_job {
 	struct list_head job_entry;
 	int type;
 	int tstep;
 };
 
 static struct {
-	struct	list_head * data_list;
+	struct list_head * data_list;
 	int	has_job;
-	int	num_obj_recv;
+	int	num_obj_received;
+
 	/* keep basic info of current running job */
-	int type, tstep, num_obj;
+	int type, tstep, num_obj_to_receive;
 
 	/* info for performing adaptive RDMA get */
 	struct  list_head	desc_list;
@@ -42,12 +43,12 @@ static struct {
 	/* track data get time */
 	double tm_st, tm_end;
 
-	int cmp_type; //the component type of current process
+	enum worker_type workertype;
 	int f_done; //flag indicates that all insitu work is done
 	
 	/* track the number of function calls to process forwarded data desc from one job */
 	int num_cb_call;
-	struct	list_head	intran_job_list;
+	struct list_head parallel_job_list;
 } g_info;
 
 #ifdef HAVE_UGNI
@@ -122,7 +123,7 @@ static int get_insitu_data_completion(struct rpc_server *rpc_s, struct msg_buf *
 	list_add_tail(&item->item_entry, g_info.data_list);
 	
 	//count the number of received insitu data objects 
-	g_info.num_obj_recv++;
+	g_info.num_obj_received++;
 
 	/* */
 	g_info.num_get_credits++;
@@ -199,8 +200,8 @@ static int callback_rr_data_desc_msg(struct rpc_server *rpc_s, struct rpc_cmd *c
 	g_info.num_cb_call++;
 
 	if ( 0 == g_info.has_job ) {
-		struct intran_job *job;
-		list_for_each_entry(job, &g_info.intran_job_list, struct intran_job,
+		struct parallel_job *job;
+		list_for_each_entry(job, &g_info.parallel_job_list, struct parallel_job,
 				job_entry) {
 			if (job->type == rdma_desc->desc.type &&
 			    job->tstep == rdma_desc->desc.tstep ) {
@@ -210,18 +211,18 @@ static int callback_rr_data_desc_msg(struct rpc_server *rpc_s, struct rpc_cmd *c
 			}
 		}
 
-		/*get a new job ... */
-		g_info.num_obj = rdma_desc->desc.num_obj;
+		/* get a new job ... */
+		g_info.num_obj_to_receive = rdma_desc->num_obj_to_receive;
 		g_info.type = rdma_desc->desc.type;
 		g_info.tstep = rdma_desc->desc.tstep;
 		g_info.has_job = 1;
 
 		g_info.tm_st = timer_read(&timer);
 
-		job = (struct intran_job*)malloc(sizeof(*job));
+		job = (struct parallel_job*)malloc(sizeof(*job));
 		job->type = g_info.type;
 		job->tstep = g_info.tstep;
-		list_add_tail(&job->job_entry, &g_info.intran_job_list);
+		list_add_tail(&job->job_entry, &g_info.parallel_job_list);
 
 		uloga("%s(): Bucket %d get job (%d,%d) from %d\n",
 			__func__, dart_id, g_info.type, g_info.tstep, cmd->id);
@@ -237,7 +238,7 @@ static int callback_rr_data_desc_msg(struct rpc_server *rpc_s, struct rpc_cmd *c
 			return 0;
 		}
 
-		if ( g_info.num_cb_call > g_info.num_obj) {
+		if ( g_info.num_cb_call > g_info.num_obj_to_receive) {
 			uloga("%s(): Bucket %d  g_info.num_cb_call= %d "
 				"rank= %d type= %d tstep= %d from %d\n",
 				__func__, dart_id, g_info.num_cb_call,
@@ -327,7 +328,7 @@ static int is_ready()
 		}
 	}
 		
-	if (g_info.has_job && (g_info.num_obj == g_info.num_obj_recv)) {
+	if (g_info.has_job && (g_info.num_obj_to_receive == g_info.num_obj_received)) {
 		g_info.tm_end = timer_read(&timer);
 		return 1;
 	}
@@ -410,20 +411,20 @@ static int obj_put_direct(struct obj_data *od, struct data_descriptor *desc)
 */
 
 /* Initialize the dataspaces library. */
-int ds_init(int num_peers, enum component_type type, int appid)
+int ds_init(int num_peers, enum worker_type type, int appid)
 {
 	int err = -ENOMEM;
 
 	/* Init the g_info */
-	g_info.cmp_type = type;
+	g_info.workertype = type;
 	g_info.f_done = 0;
-	INIT_LIST_HEAD(&g_info.intran_job_list);
+	INIT_LIST_HEAD(&g_info.parallel_job_list);
 
 	if (dcg) {
 		return 0;
 	}
 
-	rpc_add_service(rr_data_desc, callback_rr_data_desc_msg); //add callback func for msg
+	rpc_add_service(rr_data_desc, callback_rr_data_desc_msg);
 	rpc_add_service(insitu_unreg, callback_insitu_unreg_msg);
 
 	dcg = dcg_alloc(num_peers, appid);	
@@ -464,18 +465,14 @@ int ds_finalize()
 		return;
 	}
 
-	/* free the intran_job_list */
-	struct intran_job *job, *t;
-	list_for_each_entry_safe(job,t,&g_info.intran_job_list, struct intran_job, job_entry) {
+	/* free the parallel_job_list */
+	struct parallel_job *job, *t;
+	list_for_each_entry_safe(job,t,&g_info.parallel_job_list, struct parallel_job, job_entry) {
 		list_del(&job->job_entry);
 		free(job);
 	}
 
-	if (g_info.cmp_type == IN_SITU ) {
-		// TODO: the calculation below may not work when have more than 2 applications 
-		//int num_peers_intransit = get_app_num_peers(IN_TRANSIT);
-		//int min_dartid = get_app_min_dartid(IN_TRANSIT);	
-		//int myrank = dcg_get_rank(dcg);
+	if ( g_info.workertype == hs_simulation_worker ) {
 		// check if all pending RDMA operations completed
 		while ( dcg->num_pending != 0 ) {
 			err = process_event(dcg);
@@ -485,34 +482,28 @@ int ds_finalize()
 			}
 		}
 
-		// ds_do_barrier();
+		// TODO: make it more scalable...
+/*
+		struct msg_buf *msg;
+		struct node_id *peer;
+		peer = dc_get_peer(dc, min_dartid + myrank);
 
-		/*
-		  In-situ processes send insitu_unreg msgs to mapped in-transit process
-		*/
-		/*
-		if ( myrank < num_peers_intransit ) {
-			struct msg_buf *msg;
-			struct node_id *peer;
-			peer = dc_get_peer(dc, min_dartid + myrank);
+		msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+		if (!msg)
+			goto err_out;
 
-			msg = msg_buf_alloc(dc->rpc_s, peer, 1);
-			if (!msg)
-				goto err_out;
+		msg->msg_rpc->cmd = insitu_unreg;
+		msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
 
-			msg->msg_rpc->cmd = insitu_unreg;
-			msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
-
-			uloga("%s(): %d send unreg msg to %d\n",
-				__func__, dc->rpc_s->ptlmap.id, min_dartid + myrank);
+		uloga("%s(): %d send unreg msg to %d\n",
+			__func__, dc->rpc_s->ptlmap.id, min_dartid + myrank);
 		
-			err = rpc_send(dc->rpc_s, peer, msg);
-			if (err < 0) {
-				free(msg);
-				goto err_out;
-			}			
-		}
-		*/
+		err = rpc_send(dc->rpc_s, peer, msg);
+		if (err < 0) {
+			free(msg);
+			goto err_out;
+		}			
+*/
 	}
 	
 	dcg_free(dcg);
@@ -581,11 +572,11 @@ int ds_request_job(enum op_type *type, struct list_head *head)
 
 	/* init */
 	g_info.data_list = head;
-	g_info.num_obj_recv = 0;
+	g_info.num_obj_received = 0;
 	g_info.has_job = 0;
 	g_info.type = 0;
 	g_info.tstep = 0;
-	g_info.num_obj = 0;	
+	g_info.num_obj_to_receive = 0;	
 	INIT_LIST_HEAD(&g_info.desc_list);
 	g_info.num_get_credits = RDMA_GET_CREDITS;
 	g_info.bytes_recv = 0;

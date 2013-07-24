@@ -34,32 +34,43 @@
 #include "mpi.h"
 
 #include "hstaging_scheduler_serial_job.h"
+#include "hstaging_scheduler_parallel_job.h"
 
 #include "common.h"
 #include "hstaging_partition.h"
 
-//static enum execution_mode exemode = hybrid_staging_mode;
-static enum execution_mode exemode = staging_mode;
-static enum core_type coretype = manager_core;
-static enum worker_type workertype;
-static enum location_type loctype = 0;
+//static enum execution_mode exemode = hs_hybrid_staging_mode;
+static enum execution_mode exemode_ = hs_staging_mode;
+static enum core_type coretype_ = hs_manager_core;
+static enum worker_type workertype_;
+static enum location_type loctype_ = 0;
 
-int main(int argc, char **argv)
-{
-	int err;
-	int color;
-
-	hs_comm_init(argc, argv);
-
-	err = hs_comm_perform_split(exemode, coretype, loctype, &workertype);
-	if (err < 0) {
-		goto err_out;
+// Run parallel jobs scheduler
+int run_scheduler_parallel(int argc, char **argv) {
+	if (hstaging_scheduler_parallel_parse_args(argc, argv) < 0) {
+		hstaging_scheduler_parallel_usage();
+		return -1;
 	}
 
-#ifdef DEBUG
-	uloga("dataspaces server starts...\n");
-#endif
+	if (hstaging_scheduler_parallel_init() < 0) {
+		printf("DART server init failed!\n");
+		return -1;
+	}
 
+	if (hstaging_scheduler_parallel_run() < 0) {
+		printf("DART server got an error at runtime!\n");
+		return -1;
+	}
+
+	hstaging_scheduler_parallel_finish();
+
+	uloga("All ok.\n");	
+
+	return 0;
+}
+
+// Run serial jobs scheduler
+int run_scheduler_serial(int argc, char **argv) {
 	if (hstaging_scheduler_serial_parse_args(argc, argv) < 0) {
 		hstaging_scheduler_serial_usage();
 		return -1;
@@ -76,6 +87,25 @@ int main(int argc, char **argv)
 	}
 
 	hstaging_scheduler_serial_finish();
+
+	uloga("All ok.\n");	
+
+	return 0;
+}
+
+int main(int argc, char **argv)
+{
+	int err;
+	int color;
+
+	hs_comm_init(argc, argv);
+	err = hs_comm_perform_split(exemode_, coretype_, loctype_, &workertype_);
+	if (err < 0) {
+		goto err_out;
+	}
+
+	//err = run_scheduler_serial(argc, argv);
+	err = run_scheduler_parallel(argc, argv);
 
 	uloga("All ok.\n");	
 

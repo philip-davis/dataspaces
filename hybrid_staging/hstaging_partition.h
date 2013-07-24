@@ -8,30 +8,31 @@
 #include "mpi.h"
 
 enum core_type {
-	manager_core = 1,
-	worker_core
+	hs_manager_core = 1,
+	hs_worker_core
 };
 
 enum worker_type {
-	simulation_worker = 1, 
-	staging_worker
+	hs_simulation_worker = 1, 
+	hs_staging_worker
 };
 
 enum location_type {
-	insitu = 1,
-	intransit
+	hs_insitu = 1,
+	hs_intransit
 };
 
 enum execution_mode {
-	staging_mode = 1,
-	hybrid_staging_mode
+	hs_staging_mode = 1,
+	hs_hybrid_staging_mode
 };
 
 int hs_comm_init(int, char **);
 int hs_comm_fin();
 
-int hs_comm_get_rank();
-int hs_comm_get_nprocs();
+// TODO: are these functions useful at all?
+// int hs_comm_get_rank();
+// int hs_comm_get_nprocs();
 
 int hs_comm_perform_split(enum execution_mode mode, enum core_type coretype, enum location_type loc, enum worker_type* workertype);
 

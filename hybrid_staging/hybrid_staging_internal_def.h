@@ -10,12 +10,13 @@ extern "C" {
 
 /* structure to keep rdma memory address and descriptor of a data object */
 struct rdma_data_descriptor {
-	int                     dart_id;
+	int	dart_id;
+	int num_obj_to_receive;
 #ifdef HAVE_UGNI
-	struct mdh_addr_t       mdh_addr;
+	struct mdh_addr_t	mdh_addr;
 #endif
 #ifdef HAVE_DCMF
-	DCMF_Memregion_t		mem_region;
+	DCMF_Memregion_t	mem_region;
 #endif
 	struct data_descriptor  desc;
 };

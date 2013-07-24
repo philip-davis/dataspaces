@@ -119,18 +119,18 @@ static enum worker_type get_worker_type(MPI_Comm comm, enum execution_mode mode,
 	uloga("nid= %u pid= %u pid_local_rank= %d local_worker_tab %d entries!\n",
 		nid_, pid_, pid_local_rank_, cnt);
 
-	if (loc == intransit) {
-		return staging_worker;
+	if (loc == hs_intransit) {
+		return hs_staging_worker;
 	}
 
-	if (mode == staging_mode && loc == insitu) {
-		return simulation_worker;
+	if (mode == hs_staging_mode && loc == hs_insitu) {
+		return hs_simulation_worker;
 	}
 
-	if (mode == hybrid_staging_mode && loc == insitu) {
+	if (mode == hs_hybrid_staging_mode && loc == hs_insitu) {
 		if (pid_local_rank_ < INSITU_STAGING_CORES_PER_NODE)
-			return staging_worker;
-		else return simulation_worker;	
+			return hs_staging_worker;
+		else return hs_simulation_worker;	
 	} 
 }
 
@@ -142,13 +142,13 @@ int hs_comm_perform_split(enum execution_mode mode, enum core_type coretype, enu
 	MPI_Comm_split(l1_src_comm_, l1_color_, rank_, &l1_new_comm_);
 
 	// Decide the worker type
-	if (coretype == worker_core) {
+	if (coretype == hs_worker_core) {
 		*workertype = get_worker_type(l1_new_comm_, mode, loc);
 		// Perform level 2 split
 		l2_src_comm_ = l1_new_comm_;
 		l2_color_ = *workertype;
 		MPI_Comm_split(l2_src_comm_, l2_color_, rank_, &l2_new_comm_);
-	} else if (coretype == manager_core) {
+	} else if (coretype == hs_manager_core) {
 		*workertype = 0;
 	}
 

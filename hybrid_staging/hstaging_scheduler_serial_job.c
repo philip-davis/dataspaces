@@ -226,7 +226,7 @@ static inline void idle_bk_list_add(struct bucket *bk)
 
 /************/
 static int timestamp_ = 0;
-void print_rr_count()
+static void print_rr_count()
 {
 	int num_job_in_queue = 0;
 	int num_idle_bucket = 0;
@@ -665,7 +665,7 @@ static int callback_insitu_data_desc(struct rpc_server *rpc_s, struct rpc_cmd *c
 }
 
 
-static int rr_init()
+int hstaging_scheduler_serial_init()
 {
 	dsg = dsg_alloc(num_sp, num_cp, conf);
 	if (!dsg) {
@@ -687,7 +687,7 @@ static int rr_init()
 	return 0;
 }
 
-static int rr_run()
+int hstaging_scheduler_serial_run()
 {
 	int err;
 
@@ -713,7 +713,7 @@ static int rr_run()
 	return 0;
 }
 
-static int rr_finish(void)
+int hstaging_scheduler_serial_finish(void)
 {
 	dsg_barrier(dsg);
 	dsg_free(dsg);
@@ -722,7 +722,7 @@ static int rr_finish(void)
 }
 
 
-static void usage(void)
+void hstaging_scheduler_serial_usage(void)
 {
 	printf("Usage: server OPTIONS\n"
 			"OPTIONS: \n"
@@ -731,7 +731,7 @@ static void usage(void)
 			"--conf, -f      Define configuration file\n");
 }
 
-static int parse_args(int argc, char *argv[])
+int hstaging_scheduler_serial_parse_args(int argc, char *argv[])
 {
 	const char opt_short[] = "s:c:f:";
 	const struct option opt_long[] = {
@@ -770,30 +770,4 @@ static int parse_args(int argc, char *argv[])
 	if (!conf)
 		conf = "dataspaces.conf";
 	return 0;
-}
-
-/* Public APIs */
-int hstaging_scheduler_serial_parse_args(int argc, char** argv)
-{
-	return parse_args(argc, argv);
-}
-
-void hstaging_scheduler_serial_usage()
-{
-	usage();
-}
-
-int hstaging_scheduler_serial_init()
-{
-	return rr_init();
-}
-
-int hstaging_scheduler_serial_run()
-{
-	return rr_run();
-}
-
-int hstaging_scheduler_serial_finish()
-{
-	return rr_finish();
 }
