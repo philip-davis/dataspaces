@@ -40,6 +40,7 @@ static int perform_intransit_topology(int rank, struct list_head *data_list)
 	struct data_item *item;
 	int count=0, is_valid = 1;
 	int type, tstep;
+
 	list_for_each_entry(item, data_list, struct data_item, item_entry) {
 		if ( count == 0 ) {
 			type = item->desc.type;
@@ -60,7 +61,7 @@ static int perform_intransit_topology(int rank, struct list_head *data_list)
 		count++;
 	}
 
-	uloga("%s(): Bucket %d, tstep=%d, is_valid=%d, get %d data objs\n",
+	uloga("%s(): Bucket %d tstep= %d is_valid= %d get %d data objs\n",
 			__func__, rank, tstep, is_valid, count);
 	return 0;
 }
@@ -89,7 +90,7 @@ static int perform_intransit_viz(int rank, struct list_head *data_list)
 		count++;
 	}
 
-	uloga("%s(): Bucket %d, tstep=%d, is_valid=%d, get %d data objs\n",
+	uloga("%s(): Bucket %d tstep= %d is_valid= %d get %d data objs\n",
 			__func__, rank, tstep, is_valid, count);
 	return 0;
 }
@@ -131,7 +132,7 @@ static int perform_intransit_stat_v1(int rank, struct list_head *data_list)
 		count++;
 	}
 
-	uloga("%s(): Bucket %d, tstep=%d, is_valid=%d, get %d data objs\n",
+	uloga("%s(): Bucket %d tstep= %d is_valid= %d get %d data objs\n",
 			__func__, rank, tstep, is_valid, count);
 
 	return 0;
@@ -161,12 +162,12 @@ static int perform_intransit_stat(int rank, struct list_head *data_list)
 		count++;
 	}
 
-	uloga("%s(): Bucket %d, tstep=%d, is_valid=%d, get %d data objs\n",
+	uloga("%s(): Bucket %d tstep= %d is_valid= %d get %d data objs\n",
 			__func__, rank, tstep, is_valid, count);
 	return 0;
 }
 
-int dummy_s3d_staging(MPI_Comm comm) 
+int dummy_s3d_staging_serial_job(MPI_Comm comm) 
 {
 	int i, err;
 	int nprocs, mpi_rank;
@@ -185,9 +186,9 @@ int dummy_s3d_staging(MPI_Comm comm)
 		switch (type) {
 		case TOPOLOGY:
 			/* 
-				 (1) User function should not attempt to free data blocks chained 
+			 (1) User function should not attempt to free data blocks chained 
 				 by the list;
-				 (2) struct list_head is defined in list.h;
+			 (2) struct list_head is defined in list.h;
 			*/
 			perform_intransit_topology(mpi_rank, &data_list);
 			sleep(8); //TODO: why call sleep?
@@ -198,7 +199,6 @@ int dummy_s3d_staging(MPI_Comm comm)
 			break;
 		case DESCRIPTIVE_STATS:
 			perform_intransit_stat(mpi_rank, &data_list);
-			//perform_intransit_stat_v1(mpi_rank, &data_list);
 			sleep(6);
 			break;
 		default:
@@ -212,5 +212,53 @@ int dummy_s3d_staging(MPI_Comm comm)
 
 	return 0;
 err_out:
+	return -1;
+}
+
+int dummy_s3d_staging_parallel_job(MPI_Comm comm)
+{
+	int i, err;
+	int nprocs, mpi_rank;
+	
+	MPI_Comm_size(comm, &nprocs);
+	MPI_Comm_rank(comm, &mpi_rank);
+	if (mpi_rank == 0) {
+		uloga("Dummy S3D staging: total %d workers\n", nprocs);
+	}
+
+	enum op_type type;
+	struct list_head data_list;
+	INIT_LIST_HEAD(&data_list);
+
+	while ( !ds_request_job(&type, &data_list)) {
+		switch (type) {
+		case TOPOLOGY:
+			/* 
+			 (1) User function should not attempt to free data blocks chained 
+				 by the list;
+			 (2) struct list_head is defined in list.h;
+			*/
+			perform_intransit_topology(mpi_rank, &data_list);
+			sleep(8); //TODO: why call sleep?
+			break;
+		case VISUALIZATION:
+			perform_intransit_viz(mpi_rank, &data_list);
+			sleep(8);
+			break;
+		case DESCRIPTIVE_STATS:
+			perform_intransit_stat(mpi_rank, &data_list);
+			sleep(6);
+			break;
+		default:
+			uloga("error: unknown type...\n");
+			break;
+		}
+
+		/*free the retrieved memroy blocks data*/
+		ds_free_data_list(&data_list);
+	}
+
+	return 0;
+ err_out:
 	return -1;
 }

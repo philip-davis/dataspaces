@@ -1,5 +1,5 @@
-#ifndef __DATASPACES_RR_SCHEDULER_H__
-#define __DATASPACES_RR_SCHEDULER_H__
+#ifndef __HSTAGING_SCHEDULER_SERIAL_H__
+#define __HSTAGING_SCHEDULER_SERIAL_H__
 
 #ifdef __cplusplus
 extern "C" {

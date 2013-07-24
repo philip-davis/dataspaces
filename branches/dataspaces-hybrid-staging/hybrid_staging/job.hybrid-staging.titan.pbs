@@ -12,8 +12,8 @@ rm -f conf
 aprun -n 4 ./scheduler_driver -s 4 -c 80 &
 sleep 10
 
-aprun -n 64 ./insitu_driver 64 16 200 & 
+aprun -n 64 ./insitu_driver 200 & 
 
-aprun -n 16 ./intransit_driver 64 16 200 &
+aprun -n 16 ./intransit_driver 200 &
 
 wait

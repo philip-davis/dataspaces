@@ -15,11 +15,20 @@
 #include "hybrid_staging_internal_def.h"
 #include "mpi.h"
 
+
+const int BK_TAB_SIZE = 1024;
+
 static int num_sp;
 static int num_cp;
 static char *conf;
 static struct dart_server *ds;
 static struct ds_gspace *dsg;
+
+enum job_state {
+	pending = 1,
+	running,
+	finish
+};
 
 struct job_id {
 	int type;
@@ -29,34 +38,43 @@ struct job_id {
 /*
  TODO: this file will be merged into ds_gspace.c ??
 */
-struct hdr_req_bk_reply {
-	int	flag;
-	struct	job_id	jid;
-	int	bk_dart_id;
-};
+// Header for messages that request bucket allocation from master srv
+struct hdr_req_allocation {
+	struct job_id jid;
+} __attribute__((__packed__));
 
-struct bucket_request {
+// Header for messages that reply bucket allocation requests
+struct hdr_req_allocation_reply {
+	int flag;
+	struct job_id jid;
+	int num_bk;
+} __attribute__((__packed__));
+
+struct allocation_request {
 	struct list_head req_entry;
-	int	dart_id; /*which slave srv*/
+	int	dart_id; /* which slave srv */
 };
 
 struct job {
 	struct list_head job_entry;
 	struct job_id id;
+	enum job_state state;
+	int num_finish; // number of buckets that finish the execution
+	int	num_bk; // number of buckets required for job execution
+	int *bk_tab;
 	struct list_head req_list;
 	struct list_head data_desc_list; 
 };
 
 struct bucket {
-	struct list_head	bucket_entry;
-	int			dart_id; /*which peer*/
-	struct	job_id		current_jid;
+	struct	list_head	bucket_entry;
+	int	dart_id; /*which peer*/
+	struct	job_id	current_jid;
 };
 
 static struct list_head jobq;
 static struct list_head idle_bk_list;
 static struct list_head run_bk_list;
-static struct list_head pending_jobq;
 
 static inline int is_master()
 {
@@ -67,7 +85,6 @@ static inline int is_master()
 static inline void jobq_init()
 {
 	INIT_LIST_HEAD(&jobq);
-	INIT_LIST_HEAD(&pending_jobq);
 }
 
 static inline void idle_bk_list_init()
@@ -94,109 +111,7 @@ static inline int equal_job_id(struct job_id *a, struct job_id *b)
 	return (a->type == b->type) && (a->tstep == b->tstep);
 }
 
-static int run_bk_list_count()
-{
-	int cnt = 0;
-	struct bucket *bk;
-	list_for_each_entry(bk, &run_bk_list, struct bucket, bucket_entry) {
-		cnt++;
-	}
-
-	return cnt;
-}
-
-static struct bucket * run_bk_list_lookup(struct job_id *jid)
-{
-	struct bucket *bk;
-	list_for_each_entry(bk, &run_bk_list, struct bucket, bucket_entry) {
-		if ( equal_job_id(jid, &bk->current_jid) )
-			return bk;
-	}
-
-	return NULL;	
-}
-
-static void run_bk_list_remove(int dart_id)
-{
-	struct bucket *bk, *tmp;
-	list_for_each_entry_safe(bk, tmp, &run_bk_list, struct bucket,
-			bucket_entry) {
-		if ( dart_id ==  bk->dart_id ) {
-			list_del(&bk->bucket_entry);
-			free(bk);
-			return;
-		}
-	}
-}
-
-static inline void run_bk_list_add(struct bucket *bk)
-{
-	list_add_tail(&bk->bucket_entry, &run_bk_list);
-}
-
-
-static int jobq_count()
-{
-	int cnt = 0;
-	struct job *j;
-	list_for_each_entry(j, &jobq, struct job, job_entry) {
-		cnt++;
-	}
-
-	return cnt;
-}
-
-static struct job * jobq_lookup(struct job_id *jid)
-{
-	struct job *j;
-	list_for_each_entry(j,&jobq,struct job,job_entry) {
-		if ( equal_job_id(jid, &j->id) )
-			return j;
-	}
-
-	return NULL;
-}
-
-static struct job * jobq_add_job(struct job_id *jid)
-{
-	struct job *j = malloc(sizeof(*j));
-	INIT_LIST_HEAD(&j->req_list);
-	INIT_LIST_HEAD(&j->data_desc_list);
-	j->id = *jid;
-	list_add_tail(&j->job_entry, &jobq);	
-	
-	return j;
-}
-
-static inline void jobq_cache_data_desc(struct job *j, struct rdma_data_descriptor *rdma_desc)
-{
-	struct data_desc *d = malloc(sizeof(*d));
-	d->desc = *rdma_desc;
-	list_add_tail(&d->desc_entry, &j->data_desc_list);
-}
-
-static inline void jobq_cache_bk_req(struct job *j, struct bucket_request *bk_req)
-{
-	list_add_tail(&bk_req->req_entry, &j->req_list);
-} 
-
-static inline int jobq_empty()
-{
-	return list_empty(&jobq);
-}
-
-static struct job * jobq_remove_head()
-{
-	struct job *j, *t;
-	list_for_each_entry_safe(j,t,&jobq,struct job,job_entry) {
-		list_del(&j->job_entry);
-		return j;
-	}
-	
-	return NULL;
-}
-
-static  int idle_bk_list_count()
+static int idle_bk_list_count()
 {
 	int cnt = 0;
 	struct bucket *bk;
@@ -223,10 +138,180 @@ static inline void idle_bk_list_add(struct bucket *bk)
 	list_add_tail(&bk->bucket_entry, &idle_bk_list);
 }
 
+static int run_bk_list_count()
+{
+	int cnt = 0;
+	struct bucket *bk;
+	list_for_each_entry(bk, &run_bk_list, struct bucket, bucket_entry) {
+		cnt++;
+	}
+
+	return cnt;
+}
+
+static struct bucket* run_bk_list_lookup(int dart_id)
+{
+	struct bucket *bk;
+	list_for_each_entry(bk, &run_bk_list, struct bucket, bucket_entry) {
+		if ( dart_id == bk->dart_id )
+			return bk;
+	}
+
+	return NULL;	
+}
+
+static void run_bk_list_remove(int dart_id)
+{
+	struct bucket *bk, *tmp;
+	list_for_each_entry_safe(bk, tmp, &run_bk_list, struct bucket,
+			bucket_entry) {
+		if ( dart_id ==  bk->dart_id ) {
+			list_del(&bk->bucket_entry);
+			free(bk);
+			return;
+		}
+	}
+}
+
+static inline void run_bk_list_add(struct bucket *bk)
+{
+	list_add_tail(&bk->bucket_entry, &run_bk_list);
+}
+
+static int jobq_count()
+{
+	int cnt = 0;
+	struct job *j;
+	list_for_each_entry(j, &jobq, struct job, job_entry) {
+		cnt++;
+	}
+
+	return cnt;
+}
+
+static struct job * jobq_lookup(struct job_id *jid)
+{
+	struct job *j;
+	list_for_each_entry(j,&jobq,struct job,job_entry) {
+		if ( equal_job_id(jid, &j->id) )
+			return j;
+	}
+
+	return NULL;
+}
+
+static struct job * jobq_create_job(struct job_id *jid)
+{
+	struct job *j = malloc(sizeof(*j));
+	INIT_LIST_HEAD(&j->req_list);
+	INIT_LIST_HEAD(&j->data_desc_list);
+	j->id = *jid;
+	j->state = pending; 
+	j->num_finish = 0;
+	j->num_bk = 16;
+	j->bk_tab = NULL;
+	list_add_tail(&j->job_entry, &jobq);	
+	
+	return j;
+}
+
+static inline int job_is_pending(struct job *j) {
+	return j->state == pending;
+}
+
+static inline int job_is_running(struct job *j) {
+	return j->state == running;
+}
+
+static inline int job_is_finish(struct job *j) {
+	return j->state == finish;
+}
+
+static void job_update_state(struct job *j, int dart_id)
+{
+	if (j->state == pending) {
+		uloga("%s(): j->state == pending should not happen\n", __func__);
+	}
+
+	if (j->state == running) {
+		j->num_finish++;
+		if (j->num_finish == j->num_bk)
+			j->state = finish;
+	}
+}
+
+static void job_allocate_bk(struct job *j)
+{
+	if (j->state != pending) {
+		return;
+	}
+
+	if (idle_bk_list_count() < j->num_bk) {
+		// Not enough free buckets available
+		return;
+	}
+
+	j->bk_tab = (int*)malloc(sizeof(int)*j->num_bk);
+	if (!j->bk_tab) {
+		uloga("%s(): malloc failed.\n", __func__);
+		return;
+	}
+
+	// Select the first num_bk buckets from the idle_bk_list
+	int i;
+	struct bucket *bk;
+	for (i = 0; i < j->num_bk;) {
+		bk = idle_bk_list_remove_head();
+		bk->current_jid = j->id;
+		j->bk_tab[i++] = bk->dart_id;
+		// Update run_bk_list
+		// TODO: why has to use two functions?
+		run_bk_list_remove(bk->dart_id);
+		run_bk_list_add(bk);
+	}
+
+	// Update job state
+	j->state = running;
+
+	uloga("%s(): assign job (%d, %d) to %d buckets\n",
+		__func__, j->id.type, j->id.tstep, j->num_bk);
+
+	return;	
+}
+
+static void job_cache_data_desc(struct job *j, struct rdma_data_descriptor *rdma_desc)
+{
+	struct data_desc *d = malloc(sizeof(*d));
+	d->desc = *rdma_desc;
+	list_add_tail(&d->desc_entry, &j->data_desc_list);
+}
+
+static void job_cache_allocation_req(struct job *j, int dart_id)
+{
+	struct allocation_request *req = malloc(sizeof(*req));
+	req->dart_id = dart_id;
+	list_add_tail(&req->req_entry, &j->req_list);
+}
+
+static inline int jobq_empty()
+{
+	return list_empty(&jobq);
+}
+
+static struct job * jobq_remove_head()
+{
+	struct job *j, *t;
+	list_for_each_entry_safe(j,t,&jobq,struct job,job_entry) {
+		list_del(&j->job_entry);
+		return j;
+	}
+	
+	return NULL;
+}
 
 /************/
 static int timestamp_ = 0;
-void print_rr_count()
+static void print_rr_count()
 {
 	int num_job_in_queue = 0;
 	int num_idle_bucket = 0;
@@ -245,36 +330,59 @@ void print_rr_count()
 
 /***********/
 
-static int reply_bucket_request_hit(int dart_id, struct bucket *bk)
+static int reply_allocation_request_hit_completion(struct rpc_server *rpc_s,
+	struct msg_buf *msg)
+{
+	free(msg->msg_data);
+	free(msg);
+
+	return 0;	
+}
+
+static int reply_allocation_request_hit(struct job *j, int dart_id)
 {
 	struct msg_buf *msg;
 	struct node_id *peer;
-	int err = -ENOMEM;
+	int *bk_tab, i, err = -ENOMEM;
+
+	bk_tab = malloc(sizeof(int) * BK_TAB_SIZE);
+	if (!bk_tab)
+		goto err_out;
 
 	peer = ds_get_peer(ds, dart_id);
 	msg = msg_buf_alloc(ds->rpc_s, peer, 1);
 	if (!msg)
 		goto err_out;
 
-	msg->msg_rpc->cmd = rr_req_bk_reply;
-	msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
-	struct hdr_req_bk_reply *hdr = (struct hdr_req_bk_reply *)msg->msg_rpc->pad;
-	hdr->flag = 1;
-	hdr->jid = bk->current_jid;
-	hdr->bk_dart_id = bk->dart_id;
+	for (i = 0; i < j->num_bk; i++) {
+		bk_tab[i] = j->bk_tab[i];	
+	}	
 
-	err =rpc_send(ds->rpc_s, peer, msg);
+	msg->msg_data = (void*) bk_tab;
+	msg->size = sizeof(int) * BK_TAB_SIZE;
+	msg->cb = reply_allocation_request_hit_completion;
+
+	msg->msg_rpc->cmd = rr_req_allocation_reply;
+	msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
+	struct hdr_req_allocation_reply *hdr =
+		(struct hdr_req_allocation_reply *)msg->msg_rpc->pad;
+	hdr->flag = 1;
+	hdr->jid = j->id;
+	hdr->num_bk = j->num_bk;
+	
+	err = rpc_send(ds->rpc_s, peer, msg);
 	if (err < 0) {
+		free(msg->msg_data);
 		free(msg);
 		goto err_out;
 	}
 
 	return 0;
-err_out:
+ err_out:
 	ERROR_TRACE();
 }
 
-static int send_bucket_request(struct rdma_data_descriptor *rdma_desc)
+static int send_allocation_request(struct job_id *jid)
 {
 	struct msg_buf *msg;
 	struct node_id *peer;
@@ -285,9 +393,11 @@ static int send_bucket_request(struct rdma_data_descriptor *rdma_desc)
 	if (!msg)
 		goto err_out;
 	
-	msg->msg_rpc->cmd = rr_req_bk;
+	msg->msg_rpc->cmd = rr_req_allocation;
 	msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
-	memcpy(msg->msg_rpc->pad, rdma_desc, sizeof(struct rdma_data_descriptor));
+	struct hdr_req_allocation *hdr = 
+		(struct hdr_req_allocation*)msg->msg_rpc->pad;
+	hdr->jid = *jid;
 
 	err = rpc_send(ds->rpc_s, peer, msg);
 	if (err < 0) {
@@ -300,20 +410,42 @@ err_out:
 	ERROR_TRACE();
 }
 
-static int send_rdma_data_desc(struct bucket *bk, struct rdma_data_descriptor *rdma_desc)
+static int map_data_to_bk(struct job *j, struct rdma_data_descriptor *rdma_desc)
+{
+	// index value is in the range of 0 ~ j->num_bk-1
+	int index = rdma_desc->desc.rank % j->num_bk;
+	int dart_id = j->bk_tab[index];
+
+	// Update the num_obj_to_receive field for peer
+	int num_obj = rdma_desc->desc.num_obj;
+	int quotient = num_obj / j->num_bk;
+	int remainder = num_obj % j->num_bk;
+	if (remainder == 0) {
+		rdma_desc->num_obj_to_receive = quotient;
+	} else {
+		if ( index < remainder )
+			rdma_desc->num_obj_to_receive = quotient + 1;
+		else
+			rdma_desc->num_obj_to_receive = quotient;
+	}
+
+	return dart_id;
+}
+
+static int send_rdma_data_desc(struct job *j, struct rdma_data_descriptor *rdma_desc)
 {
 	struct msg_buf *msg;
 	struct node_id *peer;
 	int err = -ENOMEM;
 
-	/*
+	int dart_id = map_data_to_bk(j, rdma_desc);
+	peer = ds_get_peer(ds, dart_id);
+
+	// for debug
 	uloga("%s(): #%d send obj desc for job (%d,%d) to #%d\n",
 		__func__, ds->rpc_s->ptlmap.id, rdma_desc->desc.type,
-		rdma_desc->desc.tstep, bk->dart_id);
-	*/
+		rdma_desc->desc.tstep, dart_id);
 
-	peer = ds_get_peer(ds, bk->dart_id);
-	
 	msg = msg_buf_alloc(ds->rpc_s, peer, 1);
 	if (!msg)
 		goto err_out;
@@ -335,204 +467,207 @@ err_out:
 
 /*
 */
-static int send_pending_jobq_desc()
+static int process_jobq()
 {
 	struct job *j, *t;
-	struct bucket *bk;
-	struct data_desc *desc, *tmp;
-	struct node_id *peer;
-	int err;
+	int err = -ENOMEM;
 
-	list_for_each_entry_safe(j, t, &pending_jobq, struct job, job_entry) {
-		bk = run_bk_list_lookup(&j->id);
-		if (bk) {
-			list_for_each_entry_safe(desc,tmp,&j->data_desc_list,
+	// 1. process pending jobs (if any) in the queue
+	list_for_each_entry_safe(j, t, &jobq, struct job, job_entry) {
+		if (job_is_pending(j)) {
+			job_allocate_bk(j);
+		}
+	}	
+
+	// 2. process running jobs (if any) in the queue
+	list_for_each_entry_safe(j, t, &jobq, struct job, job_entry) {
+		if (job_is_running(j)) {
+			// handle data_desc_list
+			struct data_desc *desc, *desc_tmp;
+			list_for_each_entry_safe(desc,desc_tmp,&j->data_desc_list,
 					struct data_desc,desc_entry) {
-				peer = ds_get_peer(ds, bk->dart_id);
-				if (peer->num_msg_at_peer > 0) {
-					list_del(&desc->desc_entry);	
-					err = send_rdma_data_desc(bk, &desc->desc);
-					free(desc);
+				list_del(&desc->desc_entry);
+				err = send_rdma_data_desc(j, &desc->desc);	
+				free(desc);
 
-					if ( err < 0 ) {
-						printf("%s(): error\n", __func__);
-					}
-				} 
-				
-				break;
+				if ( err < 0 ) {
+					uloga("%s(): send_rdma_data_desc error\n", __func__);
+				}
+
+				break; // proceed to process next running job
 			}
 
-			if (list_empty(&j->data_desc_list) && list_empty(&j->req_list)) {
-				list_del(&j->job_entry);
-				free(j);
+			// handle req_list
+			struct allocation_request *req, *req_tmp;
+			list_for_each_entry_safe(req,req_tmp,&j->req_list,
+					struct allocation_request,req_entry) {
+				list_del(&req->req_entry);
+				err = reply_allocation_request_hit(j, req->dart_id);
+				free(req);
+
+				if (err < 0) {
+					uloga("%s(): reply_allocation_request_hit error\n", __func__);
+				}
 			}
+		}
+	}
+
+	// 3. process finish jobs (if any) in the queue
+	list_for_each_entry_safe(j, t, &jobq, struct job, job_entry) {
+		if (job_is_finish(j)) {
+			list_del(&j->job_entry);
+
+			if (!list_empty(&j->data_desc_list) ||
+				!list_empty(&j->req_list)) {
+				uloga("%s(): job not empty yet? should not happen\n", __func__);
+			}
+
+			int i;
+			for (i = 0; i < j->num_bk; i++) {
+				// Free the bucket
+				run_bk_list_remove(j->bk_tab[i]);		
+				struct bucket *bk = malloc(sizeof(*bk));
+				bk->dart_id = j->bk_tab[i];
+				idle_bk_list_add(bk);
+			}
+
+			free(j->bk_tab);
+			free(j);
 		}
 	}
 
 	return 0;
 }
 
-
 /*
-  RPC callback function for job request from in-transit bucket
+  RPC callback function for job request from bucket
 */
+// TODO: callback_intran_req_job -> callback_bk_req_job, the bucket can resides at either in-situ or in-transit...
 static int callback_intran_req_job(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
+	struct bucket *bk;
+	struct job *j;
+	int dart_id;
 	int err = -ENOMEM;
-	struct bucket *bk = malloc(sizeof(struct bucket));	
-	struct job *job;
 
-/*
-if (jobq_empty()) {
-	idle_bk_list_add()
-} else {
-	// Do nothing?!
-}
-*/
-
-	bk->dart_id = cmd->id;
-
-	/* check if job queue is empty */
-	if ( jobq_empty() ) {
-		/* yes.*/
-		/* remove if previously exisit in run_bk_list */
-		run_bk_list_remove(bk->dart_id);
-
-		/* update idle_bk_list */
-		idle_bk_list_add(bk);
-
-		/*
-		uloga("%s(): get intran_req_job msg from bucket= %d, jobq empty\n",
-			__func__, bk->dart_id);
-		*/
-	} 
-	else {
-		/* no. */
-		/*get job from job queue*/
-		job = jobq_remove_head();
-
-		/*update run_bk_list*/
-		bk->current_jid = job->id;
-		run_bk_list_remove(bk->dart_id);
-		run_bk_list_add(bk);
-
-		uloga("%s(): assign job (%d, %d) to bucket %d\n",
-			__func__, job->id.type, job->id.tstep, bk->dart_id);
-
-		/*process req_list of the job */
-		struct bucket_request *bk_req,*tmp1;
-		list_for_each_entry_safe(bk_req,tmp1,&job->req_list,
-				struct bucket_request,req_entry) {
-			list_del(&bk_req->req_entry);
-			err = reply_bucket_request_hit(bk_req->dart_id, bk);
-			free(bk_req);
-		}
-
-		/* add the job to the pending job queue */
-		list_add_tail(&job->job_entry, &pending_jobq);	
+	dart_id = cmd->id;
+	bk = run_bk_list_lookup(dart_id);
+	if (bk) {
+		j = jobq_lookup(&bk->current_jid);
+		job_update_state(j, dart_id);
+	} else {
+		bk = (struct bucket*) malloc(sizeof(*bk));
+		bk->dart_id = dart_id;
+		idle_bk_list_add(bk);	
+		uloga("%s(): should call idle_bk_list_add for #%d once\n",
+			__func__, dart_id);
 	}
 
+	print_rr_count();
+
 	return 0;
+}
+
+static int fetch_allocation_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+	int *bk_tab = (int*) msg->msg_data;
+	struct job* j = (struct job*) msg->private;
+	int i;
+	j->bk_tab = (int*)malloc(j->num_bk*sizeof(int));
+	for (i = 0; i < j->num_bk; i++)
+		j->bk_tab[i] = bk_tab[i];
+
+	// Update the job state
+	j->state = running;
+
+	free(msg->msg_data);
+	free(msg);
+
+	return 0;
+}
+
+static int fetch_allocation(struct job *j, struct rpc_cmd *cmd)
+{
+	struct node_id *peer = ds_get_peer(ds, 0);
+	struct msg_buf *msg;
+	int err = -ENOMEM;
+
+	msg = msg_buf_alloc(ds->rpc_s, peer, 1);
+	if (!msg)
+		goto err_out;
+
+	msg->private = j;
+	msg->msg_data = malloc(sizeof(int) * BK_TAB_SIZE);
+	msg->size = sizeof(int) * BK_TAB_SIZE;
+	msg->cb = fetch_allocation_completion;
+
+	rpc_mem_info_cache(peer, msg, cmd);
+	err = rpc_receive_direct(ds->rpc_s, peer, msg);
+	rpc_mem_info_reset(peer, msg, cmd);
+	if (err == 0)
+		return 0;
+
+	free(msg->private);
+	free(msg);
+ err_out:
+	ERROR_TRACE();
 }
 
 /*
   RPC callback function for reply msg from master server
 */
-static int callback_rr_req_bk_reply(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_rr_req_allocation_reply(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	struct hdr_req_bk_reply *hdr = (struct hdr_req_bk_reply *)cmd->pad;
+	struct hdr_req_allocation_reply *hdr = (struct hdr_req_allocation_reply *)cmd->pad;
 	struct bucket *bk;
-	struct job *job;
+	struct job *j;
 	int err;
 
-	if (hdr->flag) {
-		//Hit
-		bk = malloc(sizeof(struct bucket));
-		bk->dart_id = hdr->bk_dart_id;
-		bk->current_jid = hdr->jid;
-		
-		/*update run_bk_list*/
-		run_bk_list_remove(bk->dart_id);
-		run_bk_list_add(bk);
-
-		// search job queue for previously cached job
-		job = jobq_lookup(&bk->current_jid);
-
-		if (!job) {
-			uloga("%s() error failed to find job...\n", __func__);
-			return -1;
-		}
-
-		// remove the job from job queue and add to pending queue
-		list_del(&job->job_entry);
-		list_add_tail(&job->job_entry, &pending_jobq);
-	} else {
-		uloga("%s(): not possible...\n", __func__);
+	if (!hdr->flag) {
+		uloga("%s(): hdr->flag=%d should not happen...\n", hdr->flag, __func__);
+		return -1;
 	}
-	
+
+	j = jobq_lookup(&hdr->jid);
+	if (!j) {
+		uloga("%s(): jobq_lookup failed should not happen...\n", __func__);
+		return -1;
+	}
+
+	j->num_bk = hdr->num_bk;
+	err = fetch_allocation(j, cmd);
+	if (err < 0)
+		return -1;
+
 	return 0;
 }
 
 
 /*
-  RPC callback function for bucket request from slave servers
+  RPC callback function for bk allocation request from slave servers
 */
-static int callback_rr_req_bk(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_rr_req_allocation(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	struct rdma_data_descriptor *rdma_desc = (struct rdma_data_descriptor *)cmd->pad;
+	struct hdr_req_allocation *hdr =
+		(struct hdr_req_allocation*) cmd->pad;
 	int	dart_id = cmd->id;
-	struct job_id jid = extract_job_id(&rdma_desc->desc);
-	struct job *job;
+	struct job_id jid = hdr->jid;
+	struct job *j;
+
 	struct bucket_request *bk_req;
 	int err;
 
-	// jid in job queue ? 
-	job = jobq_lookup(&jid);
-	if (job) {
-		/* Yes, then add bucket request to req_list of job  */
-		bk_req = malloc(sizeof(struct bucket_request));
-		bk_req->dart_id = dart_id;
-		jobq_cache_bk_req(job, bk_req);
+	j = jobq_lookup(&jid);
+	if (j == NULL) {
+		j = jobq_create_job(&jid);
+		job_allocate_bk(j);
+	}
 
-		/* Reply miss msg to slave server */
-		//err = reply_bucket_request_miss();
-	} 
-	else {
-		/* working bk in run_bk_list (for job id)? */
-		struct bucket *bk = run_bk_list_lookup(&jid);
-		if ( bk ) {
-			err = reply_bucket_request_hit(dart_id, bk);	
-			return err;
-		}
-
-		bk = idle_bk_list_remove_head();
-		if ( !bk ) {
-			/* create new job queue entry */
-			job = jobq_add_job(&jid);
-			
-			/* add bucket request to req_list of job */
-			bk_req = malloc(sizeof(struct bucket_request));
-			bk_req->dart_id = dart_id;
-			jobq_cache_bk_req(job, bk_req);
-	
-			/* Reply miss msg to slave server */
-			//err = reply_bucket_request_miss();
-		}
-		else {
-			/* assign job id to the selected idle bucket */
-			bk->current_jid = jid;
-			run_bk_list_remove(bk->dart_id);
-			run_bk_list_add(bk);
-
-			uloga("%s(): assign job (%d, %d) to bucket %d\n",
-					__func__, jid.type, jid.tstep, bk->dart_id);
-
-			/* Reply hit msg to slave server */
-			err = reply_bucket_request_hit(dart_id, bk);
-		}
-
-		// Added for SC evaluation
-		print_rr_count();
+	if (job_is_running(j)) {
+		err = reply_allocation_request_hit(j, dart_id);
+	} else {
+		job_cache_allocation_req(j, dart_id);
+		err = 0;
 	}
 
 	return err;
@@ -546,53 +681,21 @@ static int process_insitu_data_desc_slave(struct rpc_server *rpc_s, struct rdma_
 	int err = -ENOMEM;
 	struct bucket *bk;
 	struct job_id jid = extract_job_id(&rdma_desc->desc);
+	struct job *j;
 
-/*
-job = jobq_lookup(jid)
-if (job == NULL) {
-	job = jobq_add_job(jid)
-	send_allocation_request()
-}
-
-if (is_running(job)) {
-	send_rdma_data_desc()
-} else {
-	jobq_cache_data_desc()
-}
-
-return
-*/
-
-	/* any working bk in the run_bk_list for this job ID? */
-	bk = run_bk_list_lookup(&jid);
-	
-	if (bk) {
-		/* try to regain credits to send msg */
-		struct node_id *peer = ds_get_peer(ds, bk->dart_id);
-		while ( peer->num_msg_at_peer <= 0 ) {
-			err = dsg_process(dsg);
-			if (err < 0)
-				uloga("%s(): dsg_process err\n", __func__);
-		}
-
-		err = send_rdma_data_desc(bk, rdma_desc);
-		return err;
+	j = jobq_lookup(&jid);
+	if (j == NULL) {
+		j = jobq_create_job(&jid);
+		send_allocation_request(&jid);
 	}
 
-	/* if job already in the job_queue, if yes insert data descriptor */
-	struct job *job = jobq_lookup(&jid);
-	if (!job) {
-		//No. create new job in job queue
-		job = jobq_add_job(&jid);
-	
-		//send bucket request
-		err = send_bucket_request(rdma_desc);
-	} 
-
-	//insert data descriptor into job queue
-	jobq_cache_data_desc(job, rdma_desc);
-
-	return err;
+	if (job_is_running(j)) {
+		err = send_rdma_data_desc(j, rdma_desc);
+		return err;
+	} else {
+		job_cache_data_desc(j, rdma_desc);
+		return 0;
+	}
 }
 
 /*
@@ -603,79 +706,21 @@ static int process_insitu_data_desc_master(struct rpc_server *rpc_s, struct rdma
 	int err = -ENOMEM;
 	struct bucket *bk;
 	struct job_id jid = extract_job_id(&rdma_desc->desc);
+	struct job *j;
 
-/*
-job = jobq_lookup(jid)
-if (job == NULL) {
-	job = jobq_add_job(jid)
-	allocate_bk_for_job(job)	
-}
+	j = jobq_lookup(&jid);
+	if (j == NULL) {
+		j = jobq_create_job(&jid);
+		job_allocate_bk(j);
+	}
 
-if (is_running(job)) {
-	send_rdma_data_desc()
-} else {
-	jobq_cache_data_desc()
-}
-
-return
-*/
-
-	/* any working bk in run_bk_list for this job ID? */
-	bk = run_bk_list_lookup(&jid);
-
-	if (bk) {
-		/* try to regain credits to send msg */
-		struct node_id *peer = ds_get_peer(ds, bk->dart_id);
-		while ( peer->num_msg_at_peer <= 0 ) {
-			err = dsg_process(dsg);
-			if (err < 0)
-				uloga("%s(): dsg_process err\n", __func__);
-		}
-
-		/* send data desc to that bucket */
-		err = send_rdma_data_desc(bk, rdma_desc);
+	if (job_is_running(j)) {
+		err = send_rdma_data_desc(j, rdma_desc);
 		return err;
+	} else {
+		job_cache_data_desc(j, rdma_desc);
+		return 0;
 	}
-
-	/* pull bucket from idle_bk_list*/
-	bk = idle_bk_list_remove_head();
-	if (bk) {
-		uloga("%s(): assign job (%d, %d) to bucket %d\n",
-			__func__, jid.type, jid.tstep, bk->dart_id);
-		/* get one ! */
-		bk->current_jid = jid;	
-		run_bk_list_remove(bk->dart_id);
-		run_bk_list_add(bk);
-
-		/* try to regain credits to send msg */
-		struct node_id *peer = ds_get_peer(ds, bk->dart_id);
-		while ( peer->num_msg_at_peer <= 0 ) {
-			err = dsg_process(dsg);
-			if (err < 0)
-				uloga("%s(): dsg_process err\n", __func__);
-		}
-
-		err = send_rdma_data_desc(bk, rdma_desc);
-
-		//Added for SC evaluation
-		print_rr_count();		
-	} 
-	else {
-		/* no idle ... */
-		struct job *job = jobq_lookup(&jid);
-		if (!job) {
-			/* create new job queue entry */
-			job = jobq_add_job(&jid);
-
-			//Added for SC evaluation
-			print_rr_count();
-		}
-
-		/* cache received data descriptor */
-		jobq_cache_data_desc(job, rdma_desc);		
-	}
-
-	return err;
 }
 
 static int callback_insitu_data_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
@@ -692,10 +737,9 @@ static int callback_insitu_data_desc(struct rpc_server *rpc_s, struct rpc_cmd *c
 #endif
 	rdma_desc.dart_id = cmd->id; //TODO: important!!
 
-	/*
+	// for debug
 	uloga("%s(): #%d get obj desc for job (%d,%d) from #%d\n",
-		__func__, rpc_s->ptlmap.id, data_desc->type, data_desc->tstep, cmd->id );
-	*/
+		__func__, rpc_s->ptlmap.id, data_desc->type, data_desc->tstep, cmd->id);
 
 	if (is_master())
 		process_insitu_data_desc_master(rpc_s, &rdma_desc);
@@ -705,7 +749,7 @@ static int callback_insitu_data_desc(struct rpc_server *rpc_s, struct rpc_cmd *c
 }
 
 
-static int rr_init()
+int hstaging_scheduler_parallel_init()
 {
 	dsg = dsg_alloc(num_sp, num_cp, conf);
 	if (!dsg) {
@@ -714,10 +758,11 @@ static int rr_init()
 
 	ds = dsg->ds;
 
-	rpc_add_service(intran_req_job, callback_intran_req_job);
-	rpc_add_service(rr_req_bk, callback_rr_req_bk);
 	rpc_add_service(insitu_data_desc, callback_insitu_data_desc);
-	rpc_add_service(rr_req_bk_reply, callback_rr_req_bk_reply);
+	rpc_add_service(intran_req_job, callback_intran_req_job);
+	rpc_add_service(rr_req_allocation, callback_rr_req_allocation);
+	rpc_add_service(rr_req_allocation_reply,
+				callback_rr_req_allocation_reply);
 
 	/*init the data structure */
 	jobq_init();
@@ -727,7 +772,7 @@ static int rr_init()
 	return 0;
 }
 
-static int rr_run()
+int hstaging_scheduler_parallel_run()
 {
 	int err;
 
@@ -747,13 +792,13 @@ static int rr_run()
 			return err;
 		}
 
-		send_pending_jobq_desc();
+		process_jobq();
 	}
 
 	return 0;
 }
 
-static int rr_finish(void)
+int hstaging_scheduler_parallel_finish(void)
 {
 	dsg_barrier(dsg);
 	dsg_free(dsg);
@@ -762,7 +807,7 @@ static int rr_finish(void)
 }
 
 
-static void usage(void)
+void hstaging_scheduler_parallel_usage(void)
 {
 	printf("Usage: server OPTIONS\n"
 			"OPTIONS: \n"
@@ -771,7 +816,7 @@ static void usage(void)
 			"--conf, -f      Define configuration file\n");
 }
 
-static int parse_args(int argc, char *argv[])
+int hstaging_scheduler_parallel_parse_args(int argc, char *argv[])
 {
 	const char opt_short[] = "s:c:f:";
 	const struct option opt_long[] = {
@@ -810,30 +855,4 @@ static int parse_args(int argc, char *argv[])
 	if (!conf)
 		conf = "dataspaces.conf";
 	return 0;
-}
-
-/* Public APIs */
-int hstaging_scheduler_serial_parse_args(int argc, char** argv)
-{
-	return parse_args(argc, argv);
-}
-
-void hstaging_scheduler_serial_usage()
-{
-	usage();
-}
-
-int hstaging_scheduler_serial_init()
-{
-	return rr_init();
-}
-
-int hstaging_scheduler_serial_run()
-{
-	return rr_run();
-}
-
-int hstaging_scheduler_serial_finish()
-{
-	return rr_finish();
 }

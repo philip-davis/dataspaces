@@ -14,13 +14,13 @@ INCLUDES=-I. \
 		-I$(DSPACES_DIR)/dart/dcmf \
 		${DCMF_CFLAGS}
 
-LIBS= ${DCMF_LIBS} \
-        -L/opt/cray/rca/default/lib64 -lrca
+LIBS= ${DCMF_LIBS} 
 
 CFLAGS= -g ${DCMF_CFLAGS} -DDS_HAVE_HYBRID_STAGING
 
-SRC1 =  dataspaces_api.c \
-		dataspaces_rr_scheduler.c 
+SRC1 =  hybrid_staging_api.c \
+		hstaging_scheduler_serial_job.c \
+		hstaging_scheduler_parallel_job.c 
 
 OBJ1 = $(SRC1:.c=.o)
 

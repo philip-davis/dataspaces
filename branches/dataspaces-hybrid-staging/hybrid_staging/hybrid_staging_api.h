@@ -6,11 +6,13 @@ extern "C" {
 #endif
 
 #include "list.h"
+#include "hstaging_partition.h"
 
-enum component_type {
-	IN_SITU = 1,
-	IN_TRANSIT
-};
+// TODO: remov this
+//enum component_type {
+//	IN_SITU = 1,
+//	IN_TRANSIT
+//};
 
 enum op_type {	
 	TOPOLOGY = 1,
@@ -34,7 +36,7 @@ struct data_item {
 }; 
 
 /* Initialize the dataspaces library. */
-int ds_init(int num_peers, enum component_type type, int appid);
+int ds_init(int num_peers, enum worker_type type, int appid);
 
 /* Finalize the dataspaces library. */
 int ds_finalize();

@@ -197,7 +197,6 @@ int dummy_s3d_simulation(MPI_Comm comm, int num_ts)
 		perform_topology(nprocs, mpi_rank, i);
 
 		perform_stat(nprocs, mpi_rank, i);
-		//perform_stat_v1(num_peers, mpi_rank, i);
 
 		perform_viz(nprocs, mpi_rank, i);
 

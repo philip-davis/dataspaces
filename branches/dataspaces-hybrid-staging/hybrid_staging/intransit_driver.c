@@ -39,48 +39,50 @@
 #include "hybrid_staging_api.h"
 
 extern int dummy_s3d_simulation(MPI_Comm comm, int num_ts);
-extern int dummy_s3d_staging(MPI_Comm comm);
+extern int dummy_s3d_staging_serial_job(MPI_Comm comm);
+extern int dummy_s3d_staging_parallel_job(MPI_Comm comm);
 
-static enum execution_mode exemode_ = hybrid_staging_mode;
-//static enum execution_mode exemode_ = staging_mode;
-static enum core_type coretype_ = worker_core;
-static enum location_type loctype_ = intransit;
+//static enum execution_mode exemode_ = hs_hybrid_staging_mode;
+static enum execution_mode exemode_ = hs_staging_mode;
+static enum core_type coretype_ = hs_worker_core;
+static enum location_type loctype_ = hs_intransit;
 static enum worker_type workertype_;
 
 int main(int argc, char **argv)
 {
 	int err;
 	int appid, num_ts;
-	int nprocs, mpi_rank;
+    int num_insitu_proc, num_intransit_proc;
 
-	if (argc != 2) {
-		uloga("wrong number of args\n");
-		return -1;
-	}
-	num_ts = atoi(argv[1]);
+    if (argc != 4) {
+        uloga("wrong number of args\n");
+        return -1;
+    }
+
+    num_insitu_proc = atoi(argv[1]);
+    num_intransit_proc = atoi(argv[2]);
+    num_ts = atoi(argv[3]);
 	
 	hs_comm_init(argc, argv);
-	nprocs = hs_comm_get_nprocs();
-	mpi_rank = hs_comm_get_rank();
-	appid = 2;
-	err = ds_init(nprocs, IN_TRANSIT, appid);	
-
 	err = hs_comm_perform_split(exemode_, coretype_, loctype_, &workertype_);
 	if (err < 0) {
 		goto err_out;
 	}
 
+	appid = 2;
+	err = ds_init(num_intransit_proc, workertype_, appid);	
+
 	MPI_Comm comm = hs_get_communicator_l2();
 	int num_worker = 0;
 	MPI_Comm_size(comm, &num_worker);
 	switch (workertype_) {
-	case simulation_worker:
+	case hs_simulation_worker:
 		uloga("in-transit driver: should not happen!\n");
 		goto err_out;
 		break;
-	case staging_worker:
+	case hs_staging_worker:
 		uloga("in-transit staging: num_worker= %d\n", num_worker);
-		err = dummy_s3d_staging(comm);
+		err = dummy_s3d_staging_parallel_job(comm);
 		if (err < 0)
 			goto err_out;
 		break;
