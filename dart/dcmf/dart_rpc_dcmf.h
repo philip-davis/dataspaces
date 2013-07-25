@@ -318,8 +318,10 @@ enum cmd_type {
 #ifdef DS_HAVE_HYBRID_STAGING
 	rr_data_desc,
 	rr_req_bk,
-	intran_req_job,
 	rr_req_bk_reply,
+	rr_req_allocation,
+	rr_req_allocation_reply,
+	intran_req_job,
 	insitu_data_desc,
 	insitu_unreg,
 #endif
