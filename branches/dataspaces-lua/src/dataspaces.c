@@ -171,3 +171,15 @@ int dimes_put (const char *var_name,
 	return common_dimes_put(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
 }
 #endif
+
+#ifdef DS_HAVE_LUA_REXEC
+int dspaces_lua_rexec(const char *lua_fname,
+        const char *var_name, unsigned int version, int size_elem,
+        int xl, int yl, int zl,
+        int xu, int yu, int zu,
+        void *data)
+{
+	return common_dspaces_lua_rexec(lua_fname, var_name, version, size_elem,
+		xl, yl, zl, xu, yu, zu, data);
+}
+#endif

@@ -15,7 +15,8 @@ libdspaces_a_SOURCES =  dataspaces.c \
 			dc_gspace.c \
 			dimes_data.c \
 			dimes_server.c \
-			dimes_client.c 
+			dimes_client.c \
+			lua_rexec.c 
 
 libdspacesf_a_SOURCES = dataspaces_fortran.c \
 			common_dataspaces.c \
@@ -23,7 +24,8 @@ libdspacesf_a_SOURCES = dataspaces_fortran.c \
 			dc_gspace.c \
 			dimes_data.c \
 			dimes_server.c \
-			dimes_client.c 
+			dimes_client.c \
+			lua_rexec.c 
 
 include_HEADERS = ../include/dataspaces.h \
 		  ../include/dimes_interface.h
@@ -40,4 +42,5 @@ noinst_HEADERS = ../include/sfc.h \
 		 ../include/dimes_data.h \
 		 ../include/dimes_server.h \
 		 ../include/dimes_client.h \
-		 ../include/common_dataspaces.h
+		 ../include/common_dataspaces.h \
+		../include/lua_rexec.h

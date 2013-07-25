@@ -695,6 +695,33 @@ static int dcgrpc_code_reply(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 }
 #endif // end of #ifdef DS_HAVE_ACTIVESPACE
 
+#ifdef DS_HAVE_LUA_REXEC
+static int dcgrpc_lua_rexec_reply(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+	struct hdr_lua_result *hdr = (struct hdr_lua_result*) cmd->pad;
+	struct query_tran_entry *qte;
+	int err = -ENOENT;
+
+	qte = qt_find(&dcg->qt, hdr->qid);
+	if (!qte)
+		goto err_out;
+
+	// Copy the returned results back.
+	memcpy((char*) qte->data_ref +
+			qte->num_parts_rec * LUA_BYTES_RESULT_PAD,
+			hdr->pad,
+			LUA_BYTES_RESULT_PAD);
+
+	// TODO(fan): Return the values of rc, num_elem.
+
+	if (++qte->num_parts_rec == qte->size_od)
+		qte->f_complete = 1;
+
+	return 0;
+ err_out:
+	ERROR_TRACE();
+}
+#endif
 
 /*
   RPC routine to collect timing info from non-master app nodes.
@@ -1476,6 +1503,48 @@ static int dcgrpc_time_log(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         return 0;
 }
 
+#ifdef DS_HAVE_LUA_REXEC
+static int dcg_lua_rexec_at_peers(const void *code_buff, size_t code_size,
+                                  struct query_tran_entry *qte)
+{
+		struct node_id *peer;
+        struct msg_buf *msg;
+        struct hdr_lua_code *hc;
+        struct obj_data *od;
+        int err;
+
+        list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
+                peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
+
+                err = -ENOMEM;
+                msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+                if (!msg)
+                        goto err_out;
+
+                msg->msg_rpc->cmd = ss_lua_rexec;
+                msg->msg_rpc->id = DCG_ID;
+                msg->msg_data = code_buff;
+                msg->size = code_size;
+
+                hc = (struct hdr_lua_code *) msg->msg_rpc->pad;
+                hc->size = code_size;
+                hc->odsc = od->obj_desc;
+                hc->qid = qte->q_id;
+
+                err = rpc_send(dcg->dc->rpc_s, peer, msg);
+                if (err < 0) {
+                        free(msg);
+                        goto err_out;
+                }
+        }
+
+        return 0;
+ err_out:
+        ERROR_TRACE();
+}
+#endif
+
+
 /*
   Public API starts here.
 */
@@ -1510,6 +1579,9 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid)
 #endif
 	/* Added for ccgrid demo. */
 	rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);	
+#ifdef DS_HAVE_LUA_REXEC
+	rpc_add_service(ss_lua_rexec_reply, dcgrpc_lua_rexec_reply);
+#endif
 
         dcg_l->dc = dc_alloc(num_nodes, appid, dcg_l);
         if (!dcg_l->dc) {
@@ -1517,7 +1589,7 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid)
                 goto err_out;
         }
 
-	INIT_LIST_HEAD(&dcg_l->locks_list);
+		INIT_LIST_HEAD(&dcg_l->locks_list);
 
         qc_init(&dcg_l->qc);
 
@@ -2210,6 +2282,50 @@ int dcg_rexe_voidfunc_exec(const void *addr)
 	return 0;
 }
 #endif // end of #ifdef DS_HAVE_ACTIVESPACE
+
+#ifdef DS_HAVE_LUA_REXEC
+int dcg_send_lua_script(const void *code_buff, size_t code_size,
+        struct obj_data *od)
+{
+        struct query_tran_entry *qte;
+        int n, err = -ENOMEM;
+
+        /* Do not allocate data for objects, e.g., 2nd param is 0. */
+        qte = qte_alloc(od, 0);
+        if (!qte)
+                goto err_out;
+
+        qt_add(&dcg->qt, qte);
+
+        err = get_dht_peers(qte);
+        if (err < 0)
+                goto err_qte_free;
+        DC_WAIT_COMPLETION(qte->f_peer_received == 1);
+
+        err = get_obj_descriptors(qte);
+        if (err < 0)
+                goto err_qte_free;
+        DC_WAIT_COMPLETION(qte->f_odsc_recv == 1);
+
+        err = dcg_lua_rexec_at_peers(code_buff, code_size, qte);
+        if (err < 0)
+                goto err_qte_free;
+        DC_WAIT_COMPLETION(qte->f_complete == 1);
+
+        n = qte->size_od;
+        qt_free_obj_data(qte, 1);
+
+        qt_remove(&dcg->qt, qte);
+        qte_free(qte);
+
+        return n;
+ err_qte_free:
+        qt_remove(&dcg->qt, qte);
+        qte_free(qte);
+ err_out:
+        ERROR_TRACE();
+}
+#endif
 
 /*
   Collect timing information to master  node of app. And calculate the

@@ -252,5 +252,13 @@ int dspaces_get (const char *var_name,
  */
 int dspaces_put_sync(void);
 
+#ifdef DS_HAVE_LUA_REXEC
+int dspaces_lua_rexec(const char *lua_fname,
+        const char *var_name, unsigned int version, int size_elem,
+        int xl, int yl, int zl,
+        int xu, int yu, int zu,
+        void *data);
+#endif
+
 #endif
 

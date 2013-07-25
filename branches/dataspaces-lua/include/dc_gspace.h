@@ -99,6 +99,10 @@ int dcg_ss_info(struct dcg_space *, int *);
 int dcg_time_log(double [], int);
 
 int dcg_code_send(const void *, /* int, int,*/ struct obj_data *);
+#ifdef DS_HAVE_LUA_REXEC
+int dcg_send_lua_script(const void *code_buff, size_t code_size,
+        struct obj_data *od);
+#endif
 
 int dcg_collect_timing(double, double *);
 int dcg_get_num_space_srv(struct dcg_space *);

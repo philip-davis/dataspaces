@@ -48,6 +48,10 @@
 #include "timer.h"
 #include "dataspaces.h"
 
+#ifdef DS_HAVE_LUA_REXEC
+#include "lua_rexec.h"
+#endif
+
 #ifdef DS_HAVE_DIMES
 #include "dimes_client.h"
 #endif
@@ -516,3 +520,54 @@ int common_dspaces_num_space_srv(void)
 
 	return dcg_get_num_space_srv(dcg);	
 }
+
+#ifdef DS_HAVE_LUA_REXEC
+int common_dspaces_lua_rexec(const char *lua_fname, 
+	const char *var_name, unsigned int version, int size_elem,
+	int xl, int yl, int zl,
+	int xu, int yu, int zu,
+	void *data)
+{
+	struct obj_descriptor odsc = {
+			.version = version, .owner = -1, 
+			.st = st,
+			.size = size_elem,
+			.bb = {.num_dims = num_dims, 
+				   .lb.c = {xl, yl, zl}, 
+				   .ub.c = {xu, yu, zu}}};
+	struct obj_data *od;
+	int err = -ENOMEM;
+
+	if (!dcg) {
+		uloga("'%s()': library was not properly initialized!\n",
+			 __func__);
+		return -EINVAL;
+	}
+
+	strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
+	odsc.name[sizeof(odsc.name)-1] = '\0';
+
+	od = obj_data_alloc_no_data(&odsc, data);
+	if (!od)
+		goto err_out;
+	
+	// Read lua script from file.
+	void *code_buf = NULL;
+	size_t code_size;
+	err = lua_load_script_file(lua_fname, &code_buf, &code_size);
+	if (err < 0)
+		goto err_out;
+
+	err = dcg_send_lua_script(code_buf, code_size, od);
+
+	obj_data_free(od);
+	free(code_buf);	
+
+	if (err >= 0)
+		return err;
+
+ err_out:
+	ERROR_TRACE();
+}
+#endif // end of #ifdef DS_HAVE_LUA_REXEC
+

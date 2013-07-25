@@ -44,6 +44,11 @@
 #ifdef DS_HAVE_ACTIVESPACE
 #include "rexec.h"
 #endif
+
+#ifdef DS_HAVE_LUA_REXEC
+#include "lua_rexec.h"
+#endif
+
 #include "timer.h"
 #include "strutil.h"
 
@@ -421,6 +426,113 @@ static int dsgrpc_bin_code_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	ERROR_TRACE();
 }
 #endif // end of #ifdef DS_HAVE_ACTIVESPACE
+
+#ifdef DS_HAVE_LUA_REXEC
+#define ALIGN_ADDR_AT_BYTES(addr, bytes)                        \
+do {                                                            \
+        unsigned long _a = (unsigned long) (addr);              \
+        _a = (_a + bytes-1) & ~(bytes-1);                       \
+        (addr) = (void *) _a;                                   \
+} while (0)
+
+static int lua_rexec_return_result(struct node_id *peer,
+        struct hdr_lua_result* result)
+{
+        struct msg_buf *msg;
+        struct hdr_lua_result *hdr;
+        int err = -ENOMEM;
+
+        msg = msg_buf_alloc(dsg->ds->rpc_s, peer, 1);
+        if (!msg)
+                goto err_out;
+
+        msg->msg_rpc->cmd = ss_lua_rexec_reply;
+        msg->msg_rpc->id = DSG_ID;
+        hdr = (struct hdr_lua_result*) msg->msg_rpc->pad;
+        // Copy the result.
+        memcpy(hdr, result, sizeof(struct hdr_lua_result));
+
+        err = rpc_send(dsg->ds->rpc_s, peer, msg);
+        if (err == 0 )
+                return 0;
+
+        free(msg);
+ err_out:
+        ERROR_TRACE();
+}
+
+static int lua_script_put_completion(struct rpc_server *rpc_s,
+                                     struct msg_buf *msg)
+{
+        struct hdr_lua_code* hc = (struct hdr_lua_code *)msg->msg_rpc->pad;
+        struct hdr_lua_result result;
+        struct node_id *peer;
+        int err;
+
+        struct obj_data *from_obj;
+        from_obj = ls_find(dsg->ssd->storage, &hc->odsc);
+
+        // set the input data.
+        int num_input_elem =
+                obj_data_size(&from_obj->obj_desc) / sizeof(double);
+        if (from_obj) {
+                lua_exec_set_input_data(from_obj->data, num_input_elem);
+                lua_exec_set_output_data(result.pad,
+                        LUA_BYTES_RESULT_PAD / sizeof(double));
+                // Execute the in-memory lua script.
+                result.num_elem = lua_exec(msg->msg_data, msg->size);
+                lua_exec_unset_input_data();
+                lua_exec_unset_output_data();
+
+                result.rc = result.num_elem < 0 ? -1 : 0;
+        } else {
+                uloga("%s(): from_obj is NULL.\n", __func__);
+                result.rc = -1;
+        }
+
+        // Return the results.
+        result.qid = hc->qid;
+        peer = ds_get_peer(dsg->ds, msg->peer->ptlmap.id);
+        err = lua_rexec_return_result(peer, &result);
+	
+        free(msg->private);
+        free(msg);
+
+        return 0;
+}
+
+static int dsgrpc_lua_rexec(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+        struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
+        struct hdr_lua_code *hc = (struct hdr_bin_code *) cmd->pad;
+        struct msg_buf *msg;
+        int err = -ENOMEM;
+
+        msg = msg_buf_alloc(rpc_s, peer, 1);
+        if (!msg)
+                goto err_out;
+
+        /* Copy  the  command request;  this  is  only  needed in  the
+           completion routine. */
+        memcpy(msg->msg_rpc, cmd, sizeof(*cmd));
+
+        msg->private =
+        msg->msg_data = malloc(4096 + hc->size);
+        ALIGN_ADDR_AT_BYTES(msg->msg_data, 4096);
+        msg->size = hc->size;
+        msg->cb = lua_script_put_completion;
+
+        rpc_mem_info_cache(peer, msg, cmd);
+        err = rpc_receive_direct(rpc_s, peer, msg);
+        if(err == 0)
+                return 0;
+
+        free(msg->private);
+        free(msg);
+ err_out:
+        ERROR_TRACE();
+}
+#endif
 
 /*
   Generic lock service.
@@ -1929,6 +2041,10 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
 #ifdef DS_HAVE_ACTIVESPACE
 	rpc_add_service(ss_code_put, dsgrpc_bin_code_put);
 #endif
+#ifdef DS_HAVE_LUA_REXEC
+	rpc_add_service(ss_lua_rexec, dsgrpc_lua_rexec);
+#endif
+
         INIT_LIST_HEAD(&dsg_l->cq_list);
         INIT_LIST_HEAD(&dsg_l->obj_desc_req_list);
         INIT_LIST_HEAD(&dsg_l->obj_data_req_list);

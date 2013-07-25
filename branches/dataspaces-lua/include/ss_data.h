@@ -188,6 +188,27 @@ struct hdr_bin_result {
 	unsigned char		pad[210]; // max is sizeof(struct rpc_cmd.pad == 218)
 } __attribute__((__packed__));
 
+#define LUA_BYTES_RESULT_PAD 200  
+#ifdef DS_HAVE_LUA_REXEC
+/* Header structure for sending lua script file. */
+struct hdr_lua_code {
+	// Size of the code to be sent.
+	int     size;
+	int     qid;
+	struct obj_descriptor odsc;
+}__attribute__((__packed__));
+
+/* Header struct for returning the result of the lua script execution. */
+// Returned result elements are directly padded into the hdr_lua_result when 
+// num_elem <= LUA_BYTES_RESULT_PAD / sizeof(elem_type).
+struct hdr_lua_result {
+	int     qid;
+	int     rc;
+	int     num_elem;
+	unsigned char   pad[LUA_BYTES_RESULT_PAD];
+}__attribute__((__packed__));
+#endif
+
 struct sspace * ssd_alloc(struct bbox *, int, int);
 int ssd_init(struct sspace *, int);
 void ssd_free(struct sspace *);

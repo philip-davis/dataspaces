@@ -25,57 +25,30 @@
  */
 
 /*
-*  Fan Zhang (2013)  TASSL Rutgers University
+*  Fan Zhang (2012)  TASSL Rutgers University
 *  zhangfan@cac.rutgers.edu
 */
-#include <stdio.h>
 
-#include "debug.h"
-#include "common.h"
+#ifndef __LUA_EXEC_ENGINE_H__
+#define __LUA_EXEC_ENGINE_H__
 
-#include "mpi.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-extern int test_get_run(int npapp, int npx, int npy, int npz,
-                int spx, int spy, int spz, int timestep, int dims, MPI_Comm);
-
-int main(int argc, char **argv)
-{
-	int err;
-	int nprocs, rank;
-
-	int npapp, npx, npy, npz;
-	int spx, spy, spz;
-	int dims, timestep;
-	MPI_Comm gcomm;
-
-	if (parse_args(argc, argv, &npapp, &npx, &npy, &npz,
-		&spx, &spy, &spz, &timestep) != 0) {
-		goto err_out;
-	}
-
-	// Using SPMD style programming
-	MPI_Init(&argc, &argv);
-	MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Barrier(MPI_COMM_WORLD);
-	gcomm = MPI_COMM_WORLD;
-
-	// Run as data reader
 #ifdef DS_HAVE_LUA_REXEC
-	dims = 2;
-	test_lua_rexec(npapp, npx, npy, npz,
-		spx, spy, spz, timestep, dims, gcomm);	
-#else
-	dims = 3;
-	test_get_run(npapp, npx, npy, npz,
-		spx, spy, spz, timestep, dims, gcomm);
-#endif	
+void lua_exec_set_input_data(void *data, size_t len);
+void lua_exec_unset_input_data();
+void lua_exec_set_output_data(void *data, size_t len);
+void lua_exec_unset_output_data();
 
-	MPI_Barrier(MPI_COMM_WORLD);
-	MPI_Finalize();
+int lua_exec(void *code_buff, size_t code_size);
+int lua_load_script_file(const char *fname,
+	void **code_buf, size_t *code_size);
+#endif
 
-	return 0;
-err_out:
-	uloga("error out!\n");
-	return -1;	
+#ifdef __cplusplus
 }
+#endif
+
+#endif

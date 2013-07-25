@@ -61,9 +61,15 @@ int main(int argc, char **argv)
 	gcomm = MPI_COMM_WORLD;
 
 	// Run as data writer
+#ifdef DS_HAVE_LUA_REXEC
+	dims = 2;
+	test_put_run(npapp, npx, npy, npz,
+		spx, spy, spz, timestep, dims, gcomm);
+#else
 	dims = 3;
 	test_put_run(npapp, npx, npy, npz,
 		spx, spy, spz, timestep, dims, gcomm);
+#endif
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	MPI_Finalize();

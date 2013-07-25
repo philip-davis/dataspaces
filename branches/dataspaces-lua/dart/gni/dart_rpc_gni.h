@@ -412,6 +412,10 @@ enum cmd_type {
 	dimes_obj_get_msg,
 	dimes_obj_get_ack_v3_msg,
 #endif
+#ifdef DS_HAVE_LUA_REXEC
+	ss_lua_rexec,
+	ss_lua_rexec_reply,
+#endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,
 	_CMD_COUNT
