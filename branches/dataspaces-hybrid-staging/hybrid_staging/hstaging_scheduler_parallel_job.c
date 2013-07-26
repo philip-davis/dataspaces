@@ -208,7 +208,7 @@ static struct job * jobq_create_job(struct job_id *jid)
 	j->id = *jid;
 	j->state = pending; 
 	j->num_finish = 0;
-	j->num_bk = 16;
+	j->num_bk = 8;
 	j->bk_tab = NULL;
 	list_add_tail(&j->job_entry, &jobq);	
 	

@@ -21,7 +21,8 @@ LIBS=${PMI_LIBS} ${UGNI_LIBS} \
 CFLAGS= -g ${UGNI_CFLAGS} ${PMI_CLFASG} -DDS_HAVE_HYBRID_STAGING
 
 SRC1 =  hybrid_staging_api.c \
-		hstaging_scheduler_serial_job.c 
+		hstaging_scheduler_serial_job.c \
+		hstaging_scheduler_parallel_job.c 
 
 OBJ1 = $(SRC1:.c=.o)
 
