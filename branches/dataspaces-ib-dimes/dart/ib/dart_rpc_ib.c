@@ -123,14 +123,12 @@ static int sys_bar_send(struct rpc_server *rpc_s, int peerid)	//Done
 */
 static int sys_send(struct rpc_server *rpc_s, struct node_id *peer, struct hdr_sys *hs)	//Done
 {
-        if(peer->sys_conn.f_connected != 1) {
-		sleep(10);
-	}
 
-	if(peer->sys_conn.f_connected != 1) {
-		printf("SYS channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
-	        sys_connect(rpc_s,peer);
+	while(peer->sys_conn.f_connected != 1) {
+	//	printf("SYS channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
+	  //      sys_connect(rpc_s,peer);
 //		goto err_out;
+//		sleep(1);
 	}
 
 
