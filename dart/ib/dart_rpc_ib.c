@@ -123,10 +123,16 @@ static int sys_bar_send(struct rpc_server *rpc_s, int peerid)	//Done
 */
 static int sys_send(struct rpc_server *rpc_s, struct node_id *peer, struct hdr_sys *hs)	//Done
 {
+        if(peer->sys_conn.f_connected != 1) {
+		sleep(10);
+	}
+
 	if(peer->sys_conn.f_connected != 1) {
 		printf("SYS channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
-		goto err_out;
+	        sys_connect(rpc_s,peer);
+//		goto err_out;
 	}
+
 
 	int err;
 
@@ -216,7 +222,7 @@ static int sys_process_event(struct rpc_server *rpc_s)
 	int num_ds = rpc_s->cur_num_peer - rpc_s->num_rpc_per_buff;
 
 	j = 0;
-	for(i = num_ds; i < rpc_s->cur_num_peer; i++) {
+	for(i =rpc_s->num_sp; i < rpc_s->num_sp +rpc_s->app_num_peers; i++) {
 		if(rpc_s->peer_tab[i].ptlmap.id == rpc_s->ptlmap.id) {
 			seq = i - num_ds;
 			continue;
@@ -360,13 +366,14 @@ static int sys_cleanup(struct rpc_server *rpc_s)
 // this function can only be used after rpc_server is fully initiated
 static struct node_id *rpc_get_peer(struct rpc_server *rpc_s, int peer_id)
 {
-	if(rpc_s->ptlmap.appid == 0)
+//	printf("I am %d ask for %d %d %d\n",rpc_s->ptlmap.id, peer_id, rpc_s->app_minid, rpc_s->app_num_peers);
+	if(rpc_s->ptlmap.appid == 0 || peer_id >= rpc_s->app_minid + rpc_s->app_num_peers)
 		return rpc_s->peer_tab + peer_id;
 	else {
 		if(peer_id < rpc_s->app_minid)
-			return rpc_s->peer_tab + peer_id;
+			return rpc_s->peer_tab + peer_id + rpc_s->app_num_peers + rpc_s->num_sp;
 		else
-			return (rpc_s->peer_tab + rpc_s->cur_num_peer - rpc_s->app_num_peers) + (peer_id - rpc_s->app_minid);
+			return (rpc_s->peer_tab + peer_id - rpc_s->app_minid + rpc_s->num_sp);
 	}
 }
 
@@ -1562,7 +1569,11 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 					rpc_s->app_minid = ((struct con_param *) event_copy.param.conn.private_data)->type;
 					rpc_s->ptlmap.id = ((struct con_param *) event_copy.param.conn.private_data)->pm_sp.id;
 					rpc_s->peer_tab = calloc(1, sizeof(struct node_id) * (rpc_s->num_rpc_per_buff + ((struct con_param *) event_copy.param.conn.private_data)->num_cp));
+
 					peer->ptlmap = ((struct con_param *) event_copy.param.conn.private_data)->pm_cp;
+
+//                                        printf("Client %d %d\n",rpc_s->ptlmap.id,((struct con_param *) event_copy.param.conn.private_data)->num_cp);
+
 //                                      rpc_s->app_minid = ((struct con_param *) event_copy.param.conn.private_data)->type;     //Here is a tricky design. Master Server puts app_minid into this 'type' field and return.
 //printf("id is %d, appminid is%d.\n", rpc_s->ptlmap.id, rpc_s->app_minid);
 				} else
