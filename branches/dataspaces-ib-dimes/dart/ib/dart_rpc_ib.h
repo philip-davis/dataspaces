@@ -290,7 +290,7 @@ struct rpc_server {
 	//Fields for barrier implementation.
 	int bar_num;
 	int *bar_tab;
-	int app_minid, app_num_peers;
+	int app_minid, app_num_peers, num_sp;
 
 	//Added in IB version. Just used at the beginning of registration.
 	int num_reg;
@@ -380,6 +380,7 @@ enum cmd_type {
 	sp_reg_reply,
 	peer_rdma_done,		/* Added in IB version 12 */
 	sp_announce_cp,
+	sp_announce_cp_all,
 	cn_timing,
 	/* Synchronization primitives. */
 	cp_barrier,
