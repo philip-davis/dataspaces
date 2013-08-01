@@ -38,6 +38,7 @@ static int dart_rdma_get(struct dart_rdma_read_tran *read_tran,
 	read_op->sge.length = read_op->bytes;
 	read_op->sge.lkey = read_tran->dst.mr.lkey;		
 
+	uloga("%s(): (3)\n", __func__);
 	err = ibv_post_send(read_tran->remote_peer->rpc_conn.qp, &read_op->wr,
 		&bad_wr);
 	if (err < 0) {
@@ -208,6 +209,14 @@ int dart_rdma_get_memregion_from_cmd(struct dart_rdma_mem_handle *mem_hndl,
 int dart_rdma_create_read_tran(struct node_id *remote_peer,
                 struct dart_rdma_read_tran **pp)
 {
+	if (!remote_peer->rpc_conn.f_connected) {
+#ifdef DEBUG
+		uloga("%s(): #%d to connect peer #%d\n", __func__,
+			drh->rpc_s->ptlmap.id, remote_peer->ptlmap.id);
+#endif
+		rpc_connect(drh->rpc_s, remote_peer);
+	}
+
 	// TODO: duplicate routine implementation acorss gni, ib, dcmf?
 	static int tran_id_ = 0;
 	struct dart_rdma_read_tran *read_tran = (struct dart_rdma_read_tran*)
@@ -286,7 +295,6 @@ int dart_rdma_schedule_read(int tran_id, size_t src_offset, size_t dst_offset,
 int dart_rdma_perform_reads(int tran_id)
 {
 	// Delayed reads in the check function.
-	//
 	return 0;
 
 	// TODO: duplicate routine implementation across gni, ib, dcmf?
@@ -356,7 +364,7 @@ int dart_rdma_check_reads(int tran_id)
 				goto err_out;
 			}
 		}
-		
+	
 		err = dart_rdma_get(read_tran, read_op);
 		if (err < 0) {
 			goto err_out;
