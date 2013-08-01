@@ -23,7 +23,7 @@ struct dart_client {
 
 	/* Registration flag; 0 - unregistred, 1 - registered. */
 	int f_reg:1;
-        int f_reg_all:1;
+	int f_reg_all:1;
 	int f_bar:1;
 
 	void *dart_ref;
