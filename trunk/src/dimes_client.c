@@ -43,7 +43,7 @@
 #define FC_FUNC(name,NAME) name ## _
 
 static struct dimes_client *dimes_c = NULL;
-static struct timer timer;
+static struct timer timer_;
 //static int sync_op_id;
 //static enum storage_type st = row_major;
 static enum storage_type st = column_major;
@@ -693,8 +693,10 @@ static int locate_data_completion_client(struct rpc_server *rpc_s,
                                 goto err_out_free;
 		}
 		else {
+#ifdef DEBUG
 			uloga("%s(): duplicate obj descriptor detected.\n",
 				__func__);
+#endif
 			qte->size_od--;
 		}
 	}
@@ -1715,9 +1717,6 @@ static int dimes_obj_get_v2(struct obj_data *od)
 	qt_add_d(&dimes_c->qt, qte);
 
 	double tm_st, tm_end;
-	struct timer timer_;
-	timer_init(&timer_, 1);
-	timer_start(&timer_);
 
 	tm_st = timer_read(&timer_);
 	err = dimes_get_dht_peers_v2(qte);
@@ -2622,6 +2621,8 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 
 	dart_rdma_init(dimes_c->dcg->dc->rpc_s);
 
+    timer_init(&timer_, 1);
+    timer_start(&timer_);
 #ifdef DEBUG
 	uloga("%s(): OK.\n", __func__);
 #endif

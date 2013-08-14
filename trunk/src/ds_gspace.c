@@ -757,8 +757,10 @@ static struct dsg_lock * dsg_lock_alloc(const char *lock_name,
                 dl->process_request = &lock_process_request;
                 dl->process_wait_list = &lock_process_wait_list;
                 dl->service = &lock_service;
+#ifdef DEBUG
 		uloga("'%s()': generic lock %s created.\n", 
 			__func__, lock_name);
+#endif
                 break;
 
         case lock_custom:
@@ -766,8 +768,10 @@ static struct dsg_lock * dsg_lock_alloc(const char *lock_name,
                 dl->process_request = &sem_process_request;
                 dl->process_wait_list = &sem_process_wait_list;
                 dl->service = &sem_service;
+#ifdef DEBUG
 		uloga("'%s()': custom lock %s created.\n", 
 			__func__, lock_name);
+#endif
                 break;
 
 	default:
@@ -1010,7 +1014,7 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_descriptor *odsc
 	/* Compute object distribution to nodes in the space. */
 	num_de = ssd_hash(dsg->ssd, &odsc->bb, dht_tab);
 	if (num_de == 0) {
-		uloga("'%s()': this shoult not happen, num_de == 0 ?!\n",
+		uloga("'%s()': this should not happen, num_de == 0 ?!\n",
 			__func__);
 	}
 
@@ -2037,7 +2041,7 @@ int dsghlp_obj_put(struct ds_gspace *dsg, struct obj_data *od)
 
         msg->private = od;
         err = obj_put_completion(dsg->ds->rpc_s, msg);
-        tm_end = timer_read(&timer);
+		tm_end = timer_read(&timer);
 #ifdef DEBUG
         printf("SRV %d %d %lf.\n", DSG_ID, -2, (tm_end-tm_start));
 #endif

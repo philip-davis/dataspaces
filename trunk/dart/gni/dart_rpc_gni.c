@@ -878,7 +878,7 @@ static int rpc_prepare_buffers(struct rpc_server *rpc_s, const struct node_id *p
 	status = GNI_MemRegister(rpc_s->nic_hndl, (uint64_t)rr->msg->msg_data, (uint64_t)(rr->msg->size), rpc_s->dst_cq_hndl, GNI_MEM_READWRITE, -1, &mdh);
 	if (status != GNI_RC_SUCCESS)
 	{
-		printf("Fail: GNI_MemRegister returned error.\n");
+		printf("Fail: GNI_MemRegister returned error. %d\n", status);
 		err = -1;
 		goto err_out;
 	}
