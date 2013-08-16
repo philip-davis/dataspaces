@@ -1,5 +1,7 @@
 #ifdef DS_HAVE_DIMES
 #include <stdint.h>
+#include <poll.h>
+
 #include "dart_rdma_ib.h"
 #include "debug.h"
 
@@ -38,7 +40,6 @@ static int dart_rdma_get(struct dart_rdma_read_tran *read_tran,
 	read_op->sge.length = read_op->bytes;
 	read_op->sge.lkey = read_tran->dst.mr.lkey;		
 
-	uloga("%s(): (3)\n", __func__);
 	err = ibv_post_send(read_tran->remote_peer->rpc_conn.qp, &read_op->wr,
 		&bad_wr);
 	if (err < 0) {
@@ -351,8 +352,8 @@ int dart_rdma_check_reads(int tran_id)
 	}
 
 	read_tran->avail_rdma_credit = drh->rpc_s->num_buf;
-	uloga("%s(): tran_id= %d, avail_rdma_credit= %d (1)\n",
-		__func__, tran_id, read_tran->avail_rdma_credit);
+	//uloga("%s(): tran_id= %d, avail_rdma_credit= %d (1)\n",
+	//	__func__, tran_id, read_tran->avail_rdma_credit);
 
 	int cnt = 0;
 	struct dart_rdma_read_op *read_op;
@@ -380,8 +381,8 @@ int dart_rdma_check_reads(int tran_id)
 		}
 	}
 
-	uloga("%s(): tran_id= %d, avail_rdma_credit= %d (2)\n",
-		__func__, tran_id, read_tran->avail_rdma_credit);
+	//uloga("%s(): tran_id= %d, avail_rdma_credit= %d (2)\n",
+	//	__func__, tran_id, read_tran->avail_rdma_credit);
 
 #ifdef DEBUG
 	uloga("%s(): tran_id=%d num_read_ops=%d\n", __func__, tran_id, cnt);
