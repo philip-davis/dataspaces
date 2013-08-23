@@ -399,11 +399,11 @@ enum cmd_type {
 	ss_code_reply,
 #ifdef DS_HAVE_DIMES
 	dimes_ss_info_msg,
+	dimes_locate_data_test_msg,
+	dimes_put_test_msg,
 	dimes_locate_data_msg,
-	dimes_locate_data_v3_msg,
 	dimes_put_msg,
-	dimes_put_v3_msg,
-	dimes_obj_get_ack_v3_msg,
+	dimes_obj_get_ack_v1_msg,
 #endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,

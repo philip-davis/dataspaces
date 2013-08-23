@@ -43,7 +43,6 @@
 #define FC_FUNC(name,NAME) name ## _
 
 static struct dimes_client *dimes_c = NULL;
-//static int sync_op_id;
 //static enum storage_type st = row_major;
 static enum storage_type st = column_major;
 static int num_dims = 2;
@@ -98,10 +97,9 @@ static int * syncop_ref_d(int opid)
 enum dimes_put_status {
 	DIMES_PUT_OK = 0,
 	DIMES_PUT_PENDING = 1,
-	DIMES_PUT_ERROR = -1
 };
 
-struct obj_sync_id {
+struct dimes_memory_obj {
 	struct list_head entry;
 	int sid;
 	size_t bytes_read;
@@ -109,16 +107,16 @@ struct obj_sync_id {
 	void *arg2;
 };
 
-// List of obj_sync_id  
-static struct list_head objs_sync_list;
-static inline int objs_sync_list_add(struct list_head *l, struct obj_sync_id *p) {
+// List of dimes_memory_obj  
+static struct list_head mem_obj_list;
+static inline int mem_obj_list_add(struct list_head *l, struct dimes_memory_obj *p) {
 	list_add(&p->entry, l);
 	return 0;
 }
 
-static inline int objs_sync_list_del(struct list_head *l, int sid) {
-	struct obj_sync_id *p, *tmp;
-	list_for_each_entry_safe(p, tmp, l, struct obj_sync_id, entry) {
+static inline int mem_obj_list_del(struct list_head *l, int sid) {
+	struct dimes_memory_obj *p, *tmp;
+	list_for_each_entry_safe(p, tmp, l, struct dimes_memory_obj, entry) {
 		if (p->sid == sid) {
 			list_del(&p->entry);
 			free(p);
@@ -129,9 +127,9 @@ static inline int objs_sync_list_del(struct list_head *l, int sid) {
 	return -1;
 }
 
-static inline struct obj_sync_id* objs_sync_list_find(struct list_head *l, int sid) {
-	struct obj_sync_id *p;
-	list_for_each_entry(p, l, struct obj_sync_id, entry) {
+static inline struct dimes_memory_obj* mem_obj_list_find(struct list_head *l, int sid) {
+	struct dimes_memory_obj *p;
+	list_for_each_entry(p, l, struct dimes_memory_obj, entry) {
 		if (p->sid == sid)
 			return p;
 	}
@@ -683,7 +681,7 @@ err_out:
 /*
   Free resources after object retrieved by remote peers
 */
-static int dimes_obj_put_completion(struct rpc_server *rpc_s,
+static int dimes_obj_put_test_completion(struct rpc_server *rpc_s,
 				    struct msg_buf *msg)
 {
 	struct obj_data *od = msg->private;
@@ -698,7 +696,7 @@ static int dimes_obj_put_completion(struct rpc_server *rpc_s,
 	return 0;
 }
 
-static int dimes_obj_put(struct obj_data *od)
+static int dimes_obj_put_test(struct obj_data *od)
 {
 	struct dht_entry *de_tab[dimes_c->dcg->ss_info.num_space_srv];
 	struct hdr_dimes_put *hdr;
@@ -724,7 +722,7 @@ static int dimes_obj_put(struct obj_data *od)
 		if (!msg)
 			goto err_out;
 
-		msg->msg_rpc->cmd = dimes_put_msg;
+		msg->msg_rpc->cmd = dimes_put_test_msg;
 		msg->msg_rpc->id = DIMES_CID;
 		hdr = (struct hdr_dimes_put *)msg->msg_rpc->pad;
 		memcpy(&hdr->odsc, &od->obj_desc, sizeof(struct obj_descriptor));
@@ -734,7 +732,7 @@ static int dimes_obj_put(struct obj_data *od)
 		if (i == 0) {
 			msg->msg_data = od->data;
 			msg->size = obj_data_size(&od->obj_desc);
-			msg->cb = dimes_obj_put_completion;
+			msg->cb = dimes_obj_put_test_completion;
 			msg->private = od;
 			msg->sync_op_id = syncop_ref_d(sid);
 			hdr->has_rdma_data = 1;
@@ -754,11 +752,11 @@ static int dimes_obj_put(struct obj_data *od)
 	// TODO(fan): We really need DART level APIs to explicitly
 	// allocate/deallocate RDMA send/recv buffers.
 
-	struct obj_sync_id *sync_id = (struct obj_sync_id*)malloc(sizeof(*sync_id));
-	sync_id->sid = sid;
-	sync_id->bytes_read = 0;
-	sync_id->arg1 = sync_id->arg2 = NULL;
-	objs_sync_list_add(&objs_sync_list, sync_id);
+	struct dimes_memory_obj *mem_obj = (struct dimes_memory_obj*)malloc(sizeof(*mem_obj));
+	mem_obj->sid = sid;
+	mem_obj->bytes_read = 0;
+	mem_obj->arg1 = mem_obj->arg2 = NULL;
+	mem_obj_list_add(&mem_obj_list, mem_obj);
 
 	return 0;
 err_out:
@@ -782,7 +780,7 @@ static int obj_data_get_direct_completion(struct rpc_server *rpc_s, struct msg_b
 	return 0;
 }
 
-static int dimes_obj_data_get(struct query_tran_entry_d *qte)
+static int dimes_obj_data_get_test(struct query_tran_entry_d *qte)
 {
 	struct msg_buf *msg;
 	struct node_id *peer;
@@ -838,7 +836,7 @@ err_out:
 	ERROR_TRACE();
 }
 
-static int dimes_locate_data(struct query_tran_entry_d *qte)
+static int dimes_locate_data_test(struct query_tran_entry_d *qte)
 {
 	struct hdr_dimes_obj_get *oh;
 	struct node_id *peer;
@@ -862,7 +860,7 @@ static int dimes_locate_data(struct query_tran_entry_d *qte)
 		if (!msg)
 			goto err_out;
 
-		msg->msg_rpc->cmd = dimes_locate_data_msg;
+		msg->msg_rpc->cmd = dimes_locate_data_test_msg;
 		msg->msg_rpc->id = DIMES_CID;
 
 		oh = (struct hdr_dimes_obj_get *) msg->msg_rpc->pad;
@@ -885,7 +883,7 @@ static int dimes_locate_data(struct query_tran_entry_d *qte)
 	ERROR_TRACE();
 }
 
-static int dimes_obj_get(struct obj_data *od)
+static int dimes_obj_get_test(struct obj_data *od)
 {
 	struct dht_entry *de_tab[dimes_c->dcg->ss_info.num_space_srv];
 	struct query_tran_entry_d *qte;
@@ -912,7 +910,7 @@ static int dimes_obj_get(struct obj_data *od)
 	qte->f_dht_peer_recv = 1;
 
 	// Locate the RDMA buffers
-	err = dimes_locate_data(qte);
+	err = dimes_locate_data_test(qte);
 	if ( err < 0 ) {
 		if (err == -EAGAIN)
 			goto out_no_data;
@@ -921,7 +919,7 @@ static int dimes_obj_get(struct obj_data *od)
 	DIMES_WAIT_COMPLETION(qte->f_locate_data_complete == 1);
 
 	// Fetch the data buffers
-	err = dimes_obj_data_get(qte);
+	err = dimes_obj_data_get_test(qte);
 	if ( err < 0 ) {
 		qt_free_obj_data_d(qte, 1);
 		goto err_data_free;
@@ -929,7 +927,6 @@ static int dimes_obj_get(struct obj_data *od)
 
 	while (!qte->f_complete) {
 		err = dc_process(dimes_c->dcg->dc);
-
 		if (err < 0) {
 			uloga("%s(): error.\n",__func__);
 			break;
@@ -956,17 +953,12 @@ err_out:
 	ERROR_TRACE();    	
 }
 
-static int dimes_obj_status(int sync_id)
+static int dimes_memory_obj_status(struct dimes_memory_obj *mem_obj)
 {
-	int *sync_op_ref = syncop_ref_d(sync_id);
+	int sid = mem_obj->sid;
+	int *sync_op_ref = syncop_ref_d(sid);
 	int err;
 	
-	err = dc_process(dimes_c->dcg->dc);
-	if (err < 0) {
-		err = DIMES_PUT_ERROR;
-		goto err_out;
-	}
-
 	if (sync_op_ref[0] == 1) {
 		err = DIMES_PUT_OK;
 	} else {
@@ -974,12 +966,9 @@ static int dimes_obj_status(int sync_id)
 	}
 
 	return err;
- err_out:
-	uloga("'%s()': failed with %d.\n", __func__, err);
-	return err;
 }
 
-static int dimes_obj_put_v3(struct obj_data *od)
+static int dimes_obj_put(struct obj_data *od)
 {
 	struct dht_entry *de_tab[dimes_c->dcg->ss_info.num_space_srv];
 	struct hdr_dimes_put *hdr;
@@ -992,16 +981,16 @@ static int dimes_obj_put_v3(struct obj_data *od)
 	// Register the RDMA memory buffer
 	void *data = od->data;
 	size_t bytes = obj_data_size(&od->obj_desc);
-	struct dart_rdma_mem_handle *mem_hndl =
-		(struct dart_rdma_mem_handle*)malloc(sizeof(*mem_hndl));
-	if (mem_hndl == NULL) {
+	struct dart_rdma_mem_handle *rdma_hndl =
+		(struct dart_rdma_mem_handle*)malloc(sizeof(*rdma_hndl));
+	if (rdma_hndl == NULL) {
 		uloga("%s(): malloc() failed\n", __func__);
 		goto err_out;
 	} 
 
-	err = dart_rdma_register_mem(mem_hndl, data, bytes);
+	err = dart_rdma_register_mem(rdma_hndl, data, bytes);
 	if (err < 0) {
-		free(mem_hndl);
+		free(rdma_hndl);
 		goto err_out;
 	}
 
@@ -1021,9 +1010,9 @@ static int dimes_obj_put_v3(struct obj_data *od)
 		if (!msg)
 			goto err_out;
 
-		msg->msg_rpc->cmd = dimes_put_v3_msg;
+		msg->msg_rpc->cmd = dimes_put_msg;
 		msg->msg_rpc->id = DIMES_CID;
-		dart_rdma_set_memregion_to_cmd(mem_hndl, msg->msg_rpc);	
+		dart_rdma_set_memregion_to_cmd(rdma_hndl, msg->msg_rpc);	
 
 		hdr = (struct hdr_dimes_put *)msg->msg_rpc->pad;
 		hdr->odsc = od->obj_desc;
@@ -1038,20 +1027,19 @@ static int dimes_obj_put_v3(struct obj_data *od)
 	}
 
 	inc_rdma_pending();
-	struct obj_sync_id *sync_id = (struct obj_sync_id*)
-	malloc(sizeof(*sync_id));
-	sync_id->sid = sid;
-	sync_id->bytes_read = 0;
-	sync_id->arg1 = mem_hndl;
-	sync_id->arg2 = od;
-	objs_sync_list_add(&objs_sync_list, sync_id);
+	struct dimes_memory_obj *mem_obj = (struct dimes_memory_obj*)malloc(sizeof(*mem_obj));
+	mem_obj->sid = sid;
+	mem_obj->bytes_read = 0;
+	mem_obj->arg1 = rdma_hndl;
+	mem_obj->arg2 = od;
+	mem_obj_list_add(&mem_obj_list, mem_obj);
 
 	return 0;
 err_out:
 	ERROR_TRACE();			
 }
 
-static int dimes_locate_data_v3(struct query_tran_entry_d *qte)
+static int dimes_locate_data(struct query_tran_entry_d *qte)
 {
 	struct hdr_dimes_obj_get *oh;
 	struct node_id *peer;
@@ -1075,7 +1063,7 @@ static int dimes_locate_data_v3(struct query_tran_entry_d *qte)
 		if (!msg)
 			goto err_out;
 
-		msg->msg_rpc->cmd = dimes_locate_data_v3_msg;
+		msg->msg_rpc->cmd = dimes_locate_data_msg;
 		msg->msg_rpc->id = DIMES_CID;
 
 		oh = (struct hdr_dimes_obj_get *) msg->msg_rpc->pad;
@@ -1254,9 +1242,44 @@ err_out:
 	ERROR_TRACE();
 } 
 
-static int dimes_obj_data_get_v3(struct query_tran_entry_d *qte)
+static int send_ack_v1(struct query_tran_entry_d *qte)
 {
+	int err;
 	struct msg_buf *msg;
+	struct node_id *peer;
+	struct obj_data_wrapper *od_w;
+	struct obj_data *od; 
+	struct hdr_dimes_obj_get *oh;
+	struct hdr_dimes_put *hdr;
+
+	list_for_each_entry(od_w, &qte->od_list,
+						struct obj_data_wrapper, obj_entry) {
+		od = od_w->od;
+		hdr = (struct hdr_dimes_put*)od_w->cmd.pad;
+		peer = dc_get_peer(dimes_c->dcg->dc, od->obj_desc.owner);
+		msg = msg_buf_alloc(dimes_c->dcg->dc->rpc_s, peer, 1);
+		msg->msg_rpc->cmd = dimes_obj_get_ack_v1_msg;
+		msg->msg_rpc->id = DIMES_CID;
+
+		oh = (struct hdr_dimes_obj_get*)msg->msg_rpc->pad;
+		oh->qid = qte->q_id;
+		oh->rank = DIMES_CID;
+		oh->rc = hdr->sync_id;
+		oh->u.o.odsc = od->obj_desc;
+		err = rpc_send(dimes_c->dcg->dc->rpc_s, peer, msg);
+		if (err < 0) {
+			free(msg);
+			goto err_out;
+		}
+	}
+
+	return 0;	
+ err_out:
+	ERROR_TRACE();
+}
+
+static int dimes_obj_data_get(struct query_tran_entry_d *qte)
+{
 	struct node_id *peer;
 	struct obj_data_wrapper *od_w;
 	struct obj_data *od;
@@ -1346,28 +1369,10 @@ static int dimes_obj_data_get_v3(struct query_tran_entry_d *qte)
 	}
 
 	// Send back ack messages to all dst. peers
-	struct hdr_dimes_obj_get *oh;
-	list_for_each_entry(od_w, &qte->od_list,
-						struct obj_data_wrapper, obj_entry) {
-		od = od_w->od;
-		hdr = (struct hdr_dimes_put*)od_w->cmd.pad;
-		peer = dc_get_peer(dimes_c->dcg->dc, od->obj_desc.owner);
-		msg = msg_buf_alloc(dimes_c->dcg->dc->rpc_s, peer, 1);
-		msg->msg_rpc->cmd = dimes_obj_get_ack_v3_msg;
-		msg->msg_rpc->id = DIMES_CID;
-
-		oh = (struct hdr_dimes_obj_get*)msg->msg_rpc->pad;
-		oh->qid = qte->q_id;
-		oh->rank = DIMES_CID;
-		oh->rc = hdr->sync_id;
-		oh->u.o.odsc = od->obj_desc;
-		oh->rank = DIMES_CID;
-		err = rpc_send(dimes_c->dcg->dc->rpc_s, peer, msg);
-		if (err < 0) {
-			free(msg);
-			goto err_out_free;
-		}
-	}	
+	err = send_ack_v1(qte);
+	if (err < 0) {
+		goto err_out_free;
+	}
 
 	qte->f_complete = 1;
 
@@ -1382,7 +1387,7 @@ err_out:
 	ERROR_TRACE();
 }
 
-static int dimes_obj_get_v3(struct obj_data *od)
+static int dimes_obj_get(struct obj_data *od)
 {
 	struct dht_entry *de_tab[dimes_c->dcg->ss_info.num_space_srv];
 	struct query_tran_entry_d *qte;
@@ -1412,7 +1417,7 @@ static int dimes_obj_get_v3(struct obj_data *od)
 #endif
 
 	// Locate the RDMA buffers
-	err = dimes_locate_data_v3(qte);
+	err = dimes_locate_data(qte);
 	if ( err < 0 ) {
 		if (err == -EAGAIN)
 			goto out_no_data;
@@ -1424,7 +1429,7 @@ static int dimes_obj_get_v3(struct obj_data *od)
 #endif
 
 	// Fetch the data
-	err = dimes_obj_data_get_v3(qte);
+	err = dimes_obj_data_get(qte);
 	if (err < 0) {
 		qt_free_obj_data_d(qte, 1);
 		goto err_data_free;
@@ -1453,27 +1458,27 @@ err_out:
 	ERROR_TRACE();
 }
 
-static int dcgrpc_dimes_obj_get_ack_v3(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int dcgrpc_dimes_obj_get_ack_v1(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	struct dart_rdma_mem_handle *mem_hndl = NULL;
+	struct dart_rdma_mem_handle *rdma_hndl = NULL;
 	struct obj_data *od = NULL;
 	struct hdr_dimes_obj_get *oh = (struct hdr_dimes_obj_get *)cmd->pad;
 	int sid = oh->rc;
 	int err = -ENOMEM;
 
-	struct obj_sync_id *sync_id = objs_sync_list_find(&objs_sync_list, sid);
-	if (sync_id == NULL) {
-		uloga("%s(): failed to find sync id %d\n", __func__, sid);
+	struct dimes_memory_obj *mem_obj = mem_obj_list_find(&mem_obj_list, sid);
+	if (mem_obj == NULL) {
+		uloga("%s(): failed to find dimes memory object sid=%d\n", __func__, sid);
 		err = -1;
 		goto err_out;
 	}	
 
-	mem_hndl = (struct dart_rdma_mem_handle *) sync_id->arg1;
-	od = (struct obj_data *) sync_id->arg2;
-	sync_id->bytes_read += obj_data_size(&oh->u.o.odsc);
-	if (sync_id->bytes_read == obj_data_size(&od->obj_desc)) {
+	rdma_hndl = (struct dart_rdma_mem_handle *) mem_obj->arg1;
+	od = (struct obj_data *) mem_obj->arg2;
+	mem_obj->bytes_read += obj_data_size(&oh->u.o.odsc);
+	if (mem_obj->bytes_read == obj_data_size(&od->obj_desc)) {
 		// Deregister RDMA memory region
-		err = dart_rdma_deregister_mem(mem_hndl);
+		err = dart_rdma_deregister_mem(rdma_hndl);
 		if (err < 0) {
 			uloga("%s(): failed with dart_rdma_deregister_mem\n", __func__);
 			goto err_out;
@@ -1483,7 +1488,7 @@ static int dcgrpc_dimes_obj_get_ack_v3(struct rpc_server *rpc_s, struct rpc_cmd 
 		obj_data_free(od);
 
 		// Set the flag
-		int *ref = syncop_ref_d(sync_id->sid);
+		int *ref = syncop_ref_d(mem_obj->sid);
 		*ref = 1;
 
 		dec_rdma_pending();
@@ -1491,12 +1496,78 @@ static int dcgrpc_dimes_obj_get_ack_v3(struct rpc_server *rpc_s, struct rpc_cmd 
 
 #ifdef DEBUG
 	uloga("%s(): #%d get ack from #%d for sync_id=%d\n",
-		__func__, DIMES_CID, cmd->id, sync_id->sid);
+		__func__, DIMES_CID, cmd->id, mem_obj->sid);
 #endif
 
 	return 0;
 err_out:
 	ERROR_TRACE();
+}
+
+static int dimes_put_sync_all_with_timeout(float timeout_sec)
+{
+	int err;
+	if (!dimes_c) {
+		uloga("'%s()': library was not properly initialized!\n",
+				 __func__);
+		return -EINVAL;
+	}
+
+	int stay_in_poll_loop = 1;
+	struct timer tm;
+	double t1, t2;
+	timer_init(&tm, 1);
+	timer_start(&tm);
+	t1 = timer_read(&tm);
+
+	while (stay_in_poll_loop) {	
+		// Check the size of mem_obj_list
+		if (list_empty(&mem_obj_list)) {
+			err = 0;
+			break;
+		}
+
+		struct dimes_memory_obj *p, *tmp;
+		list_for_each_entry_safe(p, tmp, &mem_obj_list,
+					 struct dimes_memory_obj, entry) {
+			// TODO: fix this part
+#ifdef HAVE_DCMF
+			err = rpc_process_event(dimes_c->dcg->dc->rpc_s);
+#else
+			err = rpc_process_event_with_timeout(dimes_c->dcg->dc->rpc_s, 1);
+#endif
+			if (err < 0) {
+				return -1;
+			}
+
+			switch (dimes_memory_obj_status(p)) {
+			case DIMES_PUT_OK:
+				list_del(&p->entry);
+				free(p);
+				break;
+			case DIMES_PUT_PENDING:
+				// Continue to block and check...
+				break;
+			default:
+				uloga("%s(): err= %d shouldn't happen!\n", __func__, err);
+				break;
+			}
+		}
+
+		if (timeout_sec < 0) {
+			stay_in_poll_loop = 1;
+		} else if (timeout_sec == 0) {
+			// TODO: or i should return immediately before the loop?
+			stay_in_poll_loop = 0;
+		} else if (timeout_sec > 0) {
+			t2 = timer_read(&tm);
+			if ((t2-t1) >= timeout_sec) {
+				stay_in_poll_loop = 0;
+			}
+		}
+	}
+
+	return 0;
 }
 
 /*
@@ -1528,9 +1599,9 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 
 	// Add rpc servie routines
 	rpc_add_service(dimes_ss_info_msg, dcgrpc_dimes_ss_info);
+	rpc_add_service(dimes_locate_data_test_msg, dcgrpc_dimes_locate_data);
 	rpc_add_service(dimes_locate_data_msg, dcgrpc_dimes_locate_data);
-	rpc_add_service(dimes_locate_data_v3_msg, dcgrpc_dimes_locate_data);
-	rpc_add_service(dimes_obj_get_ack_v3_msg, dcgrpc_dimes_obj_get_ack_v3); 
+	rpc_add_service(dimes_obj_get_ack_v1_msg, dcgrpc_dimes_obj_get_ack_v1); 
 
 	err = dimes_ss_info(&num_dims);
 	if (err < 0) {
@@ -1539,7 +1610,7 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 		return NULL;
 	}
 
-	INIT_LIST_HEAD(&objs_sync_list);
+	INIT_LIST_HEAD(&mem_obj_list);
 
 	dart_rdma_init(dimes_c->dcg->dc->rpc_s);
 
@@ -1604,8 +1675,8 @@ int common_dimes_get(const char *var_name,
 		goto err_out;
 	}
 	
-	err = dimes_obj_get_v3(od);
-	//err = dimes_obj_get(od);
+	err = dimes_obj_get(od);
+	//err = dimes_obj_get_test(od);
  
 	obj_data_free(od);
 	if (err < 0 && err != -EAGAIN)
@@ -1651,8 +1722,8 @@ int common_dimes_put(const char *var_name,
 		goto err_out;
 	}
 
-	err = dimes_obj_put_v3(od);
-	//err = dimes_obj_put(od);
+	err = dimes_obj_put(od);
+	//err = dimes_obj_put_test(od);
 	if (err < 0) {
 		obj_data_free(od);
 
@@ -1668,8 +1739,8 @@ err_out:
 
 int common_dimes_put_sync_all(void)
 {
+/*
 	int err;
-
 	if (!dimes_c) {
 		uloga("'%s()': library was not properly initialized!\n",
 				 __func__);
@@ -1677,27 +1748,32 @@ int common_dimes_put_sync_all(void)
 	}
 
 	do {
-		// Check the size of objs_sync_list
-		if (list_empty(&objs_sync_list)) {
+		// Check the size of mem_obj_list
+		if (list_empty(&mem_obj_list)) {
 			err = 0;
 			break;
 		}
 
-		struct obj_sync_id *p, *tmp;
-		list_for_each_entry_safe(p, tmp, &objs_sync_list,
-					 struct obj_sync_id, entry) {
-			err = dimes_obj_status(p->sid);
-			switch (err) {
+		struct dimes_memory_obj *p, *tmp;
+		list_for_each_entry_safe(p, tmp, &mem_obj_list,
+					 struct dimes_memory_obj, entry) {
+			// TODO: fix this part
+#ifdef HAVE_DCMF
+			err = rpc_process_event(dimes_c->dcg->dc->rpc_s);
+#else
+			err = rpc_process_event_with_timeout(dimes_c->dcg->dc->rpc_s, 1);
+#endif
+			if (err < 0) {
+				return -1;
+			}
+
+			switch (dimes_memory_obj_status(p)) {
 			case DIMES_PUT_OK:
 				list_del(&p->entry);
 				free(p);
 				break;
 			case DIMES_PUT_PENDING:
 				// Continue to block and check...
-				break;
-			case DIMES_PUT_ERROR:
-				uloga("%s(): failed with %d, can not complete.\n",
-					__func__, err);
 				break;
 			default:
 				uloga("%s(): err= %d shouldn't happen!\n", __func__, err);
@@ -1707,6 +1783,13 @@ int common_dimes_put_sync_all(void)
 	} while (1);
 
 	return err;
+*/
+	return dimes_put_sync_all_with_timeout(-1.0);
+}
+
+int common_dimes_put_sync_all_with_timeout(float timeout_sec)
+{
+	return dimes_put_sync_all_with_timeout(timeout_sec);
 }
 
 #endif // end of #ifdef DS_HAVE_DIMES
