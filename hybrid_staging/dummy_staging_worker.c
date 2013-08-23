@@ -239,15 +239,15 @@ int dummy_s3d_staging_parallel_job(MPI_Comm comm)
 			 (2) struct list_head is defined in list.h;
 			*/
 			perform_intransit_topology(mpi_rank, &data_list);
-			sleep(8); //TODO: why call sleep?
+			sleep(1);
 			break;
 		case VISUALIZATION:
 			perform_intransit_viz(mpi_rank, &data_list);
-			sleep(8);
+			sleep(1);
 			break;
 		case DESCRIPTIVE_STATS:
 			perform_intransit_stat(mpi_rank, &data_list);
-			sleep(6);
+			sleep(1);
 			break;
 		default:
 			uloga("error: unknown type...\n");

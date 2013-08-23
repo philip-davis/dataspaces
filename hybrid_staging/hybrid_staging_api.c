@@ -18,7 +18,7 @@ static enum storage_type st = row_major;
 // TODO: 'num_dims' is hardcoded to 2.
 static int num_dims = 2;
 
-const int NUM_TRYS = 20;
+const int NUM_TRYS = 50;
 const int RDMA_GET_CREDITS = 225;
 
 struct parallel_job {
@@ -39,6 +39,7 @@ static struct {
 	struct  list_head	desc_list;
 	int	num_get_credits;
 	size_t	bytes_recv;
+	int num_pending;
 	
 	/* track data get time */
 	double tm_st, tm_end;
@@ -46,8 +47,6 @@ static struct {
 	enum worker_type workertype;
 	int f_done; //flag indicates that all insitu work is done
 	
-	/* track the number of function calls to process forwarded data desc from one job */
-	int num_cb_call;
 	struct list_head parallel_job_list;
 } g_info;
 
@@ -55,7 +54,7 @@ static struct {
 static int process_event(struct dcg_space *dcg)
 {
 	int err;
-	err = rpc_process_event_with_timeout(dcg->dc->rpc_s, 2);
+	err = rpc_process_event_with_timeout(dcg->dc->rpc_s, 1);
 	if (err < 0)
 		goto err_out;
 
@@ -196,9 +195,6 @@ static int callback_rr_data_desc_msg(struct rpc_server *rpc_s, struct rpc_cmd *c
 	struct rdma_data_descriptor *rdma_desc =
 			(struct rdma_data_descriptor *)cmd->pad;
 
-	/* count the number of functin calls (for current job) */
-	g_info.num_cb_call++;
-
 	if ( 0 == g_info.has_job ) {
 		struct parallel_job *job;
 		list_for_each_entry(job, &g_info.parallel_job_list, struct parallel_job,
@@ -237,13 +233,6 @@ static int callback_rr_data_desc_msg(struct rpc_server *rpc_s, struct rpc_cmd *c
 				cmd->id);
 			return 0;
 		}
-
-		if ( g_info.num_cb_call > g_info.num_obj_to_receive) {
-			uloga("%s(): Bucket %d  g_info.num_cb_call= %d "
-				"rank= %d type= %d tstep= %d from %d\n",
-				__func__, dart_id, g_info.num_cb_call,
-				rdma_desc->desc.rank, g_info.type, g_info.tstep, cmd->id);
-		} 
 	}
 	
 	//RDMA get data
@@ -269,15 +258,14 @@ err_out:
 
 
 /*
-  RPC callback function to process insitu_unreg msg
+  RPC callback function to process msg
 */
-static int callback_insitu_unreg_msg(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_staging_exit_msg(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
 	uloga("%s(): rank= %d get msg from %d\n",
 		__func__, rpc_s->ptlmap.id, cmd->id);
 
 	g_info.f_done = 1;
-	
 	return 0;
 }
 
@@ -290,7 +278,6 @@ static int request_job() {
 	int err = -ENOMEM;
 
 	peer = dc_get_peer(dc, 0); //master srv has dart id as 0
-
 	msg = msg_buf_alloc(dc->rpc_s, peer, 1);
 	if (!msg)
 		goto err_out;
@@ -346,7 +333,7 @@ static int obj_put_direct_completion(struct rpc_server *rpc_s, struct msg_buf *m
 	obj_data_free(od);
 	free(msg);
 
-	dcg->num_pending--;
+	g_info.num_pending--;
 
 	return 0;
 }
@@ -396,7 +383,7 @@ static int obj_put_direct(struct obj_data *od, struct data_descriptor *desc)
 		goto err_out;
 	}
 
-	dcg->num_pending++;
+	g_info.num_pending++;
 
 	return 0;
  err_out:
@@ -418,6 +405,7 @@ int ds_init(int num_peers, enum worker_type type, int appid)
 	/* Init the g_info */
 	g_info.workertype = type;
 	g_info.f_done = 0;
+	g_info.num_pending = 0;
 	INIT_LIST_HEAD(&g_info.parallel_job_list);
 
 	if (dcg) {
@@ -425,7 +413,7 @@ int ds_init(int num_peers, enum worker_type type, int appid)
 	}
 
 	rpc_add_service(rr_data_desc, callback_rr_data_desc_msg);
-	rpc_add_service(insitu_unreg, callback_insitu_unreg_msg);
+	rpc_add_service(staging_exit, callback_staging_exit_msg);
 
 	dcg = dcg_alloc(num_peers, appid);	
 	if (!dcg) {
@@ -460,50 +448,51 @@ int ds_finalize()
 	int err;
 
 	if (!dcg) {
-		uloga("'%s()': library was not properly initialized!\n",
-			__func__);
+		uloga("'%s()': library was not properly initialized!\n", __func__);
 		return;
 	}
 
 	/* free the parallel_job_list */
 	struct parallel_job *job, *t;
-	list_for_each_entry_safe(job,t,&g_info.parallel_job_list, struct parallel_job, job_entry) {
+	list_for_each_entry_safe(job, t, &g_info.parallel_job_list, struct parallel_job, job_entry) {
 		list_del(&job->job_entry);
 		free(job);
 	}
 
 	if ( g_info.workertype == hs_simulation_worker ) {
 		// check if all pending RDMA operations completed
-		while ( dcg->num_pending != 0 ) {
+		while ( g_info.num_pending != 0 ) {
 			err = process_event(dcg);
 			if ( err < 0 ) {
-				uloga("%s(): error= %d of process_event()\n",__func__, err);
+				uloga("%s(): error= %d of process_event()\n", __func__, err);
 				goto err_out;
 			}
 		}
 
 		// TODO: make it more scalable...
-/*
-		struct msg_buf *msg;
-		struct node_id *peer;
-		peer = dc_get_peer(dc, min_dartid + myrank);
+		// err = dcg_barrier(dcg);
+		int dart_rank = dcg_get_rank(dcg);
+		if ( 0 == dart_rank ) {
+			struct msg_buf *msg;
+			struct node_id *peer;
+			peer = dc_get_peer(dc, 0); // Send unreg msg to master srv
 
-		msg = msg_buf_alloc(dc->rpc_s, peer, 1);
-		if (!msg)
-			goto err_out;
+			msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+			if (!msg)
+				goto err_out;
 
-		msg->msg_rpc->cmd = insitu_unreg;
-		msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
+			msg->msg_rpc->cmd = insitu_unreg;
+			msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
 
-		uloga("%s(): %d send unreg msg to %d\n",
-			__func__, dc->rpc_s->ptlmap.id, min_dartid + myrank);
+			uloga("%s(): %d send unreg msg\n",
+				__func__, dc->rpc_s->ptlmap.id);
 		
-		err = rpc_send(dc->rpc_s, peer, msg);
-		if (err < 0) {
-			free(msg);
-			goto err_out;
+			err = rpc_send(dc->rpc_s, peer, msg);
+			if (err < 0) {
+				free(msg);
+				goto err_out;
+			}
 		}			
-*/
 	}
 	
 	dcg_free(dcg);
@@ -580,7 +569,6 @@ int ds_request_job(enum op_type *type, struct list_head *head)
 	INIT_LIST_HEAD(&g_info.desc_list);
 	g_info.num_get_credits = RDMA_GET_CREDITS;
 	g_info.bytes_recv = 0;
-	g_info.num_cb_call = 0;
 	
 	/* send intran_req_job_msg to RR master server */
 	err = request_job();
@@ -595,6 +583,7 @@ int ds_request_job(enum op_type *type, struct list_head *head)
 		}		
 	}
 
+	// TODO: return -1 is good?
 	if (g_info.f_done)
 		return -1;
 
@@ -623,27 +612,3 @@ int ds_free_data_list(struct list_head *head)
 
 	return 0;
 }
-
-/*
-void ds_do_barrier()
-{
-	int err;
-
-	if (!dcg) {
-		uloga("'%s()': library was not properly initialized!\n",
-			__func__);
-		return;
-	}
-
-	err = dcg_barrier(dcg);
-
-	return;
-}
-
-int ds_rank()
-{
-	if (dcg)
-		return dcg_get_rank(dcg);
-	else return -1;
-}
-*/

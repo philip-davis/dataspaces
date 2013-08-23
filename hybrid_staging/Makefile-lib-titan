@@ -1,7 +1,7 @@
 SHELL   = /bin/sh
 CC = cc 
 FTN = ftn
-DSPACES_DIR = /ccs/home/zhangfan/DataSpaces/branches/dataspaces-hybrid-staging
+DSPACES_DIR = /ccs/home/zhangfan/dataspaces-hybrid-staging
 INCLUDES=-I. \
 		-I$(DSPACES_DIR) \
 		-I$(DSPACES_DIR)/include \
