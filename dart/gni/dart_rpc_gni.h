@@ -70,7 +70,9 @@ struct node_id;
 typedef unsigned char	__u8;
 typedef unsigned int	__u32;
 typedef int		__s32;
-typedef unsigned long	__u64;
+//typedef unsigned long	__u64;
+typedef unsigned long long	__u64;
+
 
 
 // Rpc prototype function, should be called in response to a remote rpc request. 
@@ -81,6 +83,10 @@ typedef int (*async_callback)(struct rpc_server *rpc_s, struct rpc_request *rr);
 
 // Asynchronous callback function to be used when a transfer completes.
 typedef int (*completion_callback)(struct rpc_server *rpc_s, struct msg_buf *msg);
+
+struct coord2{
+	int c[10];	//TODO-Q
+};
 
 typedef enum {
 	unset = 0,
@@ -168,7 +174,8 @@ struct lockhdr {
 // Header for space info.
 struct hdr_ss_info {
 	int		num_dims;
-	int		val_dims[3];
+	//int		val_dims[3];
+	struct coord2 	dims;
 	int		num_space_srv;
 };
 
@@ -197,17 +204,17 @@ struct hdr_sys {
 
 // Command values defined for the system commands, sys_count should be <= 16.
 enum sys_cmd_type {
-	sys_none = 0,
-	sys_msg_req,
-	sys_msg_ret,
-	sys_msg_ack,
+        sys_none = 0,
+        sys_msg_req,
+        sys_msg_ret,
+        sys_msg_ack,
 	sys_bar_enter,
 	//        sys_bar_cont,
-	sys_count
+        sys_count
 };
 
 enum io_dir {
-	io_none = 0,
+        io_none = 0,
 	io_send,
 	io_receive,
 	io_count
@@ -223,7 +230,7 @@ struct rpc_cmd {
 	struct mdh_addr_t	mdh_addr;
 	__u32			id;
 	// payload of the command
-	__u8			pad[218];
+	__u8			pad[280];
 };
 
 struct node_id {
@@ -246,8 +253,8 @@ struct node_id {
 	int			f_req_msg;
 	int			f_need_msg;
 
-	int                     f_unreg;
-	int                     f_reg;
+        int                     f_unreg;
+        int                     f_reg;
 
 	// Number of messages I can send to this peer without blocking.
 	int			num_msg_at_peer;
@@ -398,12 +405,19 @@ enum cmd_type {
 	ss_code_put,
 	ss_code_reply,
 #ifdef DS_HAVE_DIMES
-	dimes_ss_info_msg,
-	dimes_locate_data_test_msg,
-	dimes_put_test_msg,
-	dimes_locate_data_msg,
-	dimes_put_msg,
-	dimes_obj_get_ack_v1_msg,
+        dimes_ss_info_msg,
+        dimes_locate_data_msg,
+        dimes_locate_data_v2_msg,
+        dimes_locate_data_v3_msg,
+        dimes_put_msg,
+        dimes_put_v2_msg,
+        dimes_put_v2_1_msg,
+        dimes_put_v3_msg,
+        dimes_update_dht_msg,
+        dimes_get_dht_peers_msg,
+        dimes_get_location_peers_msg,
+        dimes_obj_get_msg,
+        dimes_obj_get_ack_v3_msg,
 #endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,
@@ -480,7 +494,7 @@ struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *pe
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 inline void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg,
                         struct rpc_cmd *cmd) {
-	return;
+        return;
 }
 
 #endif

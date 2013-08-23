@@ -44,7 +44,7 @@
 typedef unsigned char __u8;
 typedef unsigned int __u32;
 typedef int __s32;
-typedef unsigned long __u64;
+typedef unsigned long long __u64;
 
 struct msg_buf;
 struct rpc_server;
@@ -72,6 +72,11 @@ Structures
 
 
 /* Define a type for flags. */
+
+struct coord2{
+	int c[10];	//extend to 10d
+};
+
 typedef enum {
 	unset = 0,
 	set
@@ -129,7 +134,8 @@ struct lockhdr {
 /* Header for space info. */
 struct hdr_ss_info {
 	int num_dims;
-	int val_dims[3];
+	//int val_dims[3];
+	struct coord2 dims;
 	int num_space_srv;
 } __attribute__ ((__packed__));
 
@@ -149,7 +155,7 @@ struct rpc_cmd {
 	__u32 id;
 	struct ibv_mr mr;
 	int qp_num;
-	__u8 pad[218];		// payload of the command
+	__u8 pad[280];		// payload of the command
 	uint64_t wr_id;
 };
 

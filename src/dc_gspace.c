@@ -1959,44 +1959,35 @@ int dcg_time_log(double time_tab[], int n)
 int dcg_lock_on_read(const char *lock_name, void *comm)
 {
 	struct dcg_lock *lock;
-	int err = -ENOMEM;
-	int myid, app_minid;
+        int err = -ENOMEM;
 
 	lock = lock_get(lock_name, 1);
 	if (!lock) 
 		goto err_out;
 
-	if (comm == NULL) {
-		myid = DCG_ID;
-		app_minid = dcg->dc->cp_min_rank;
-	} else {
-		MPI_Comm_rank(*(MPI_Comm *)comm, &myid);
-		app_minid = 0;
-	}
+        if (DCG_ID == dcg->dc->cp_min_rank) {
+                /* I am the master peer for this app job. */
+                err = dcg_lock_request(lock, lk_read_get);
+                if (err < 0)
+                        goto err_out;
 
-	if (myid == app_minid) {
-		/* I am the master peer for this app job. */
-		err = dcg_lock_request(lock, lk_read_get);
-		if (err < 0)
-			goto err_out;
-
-		while (lock->ack == 0) {
-			err = dc_process(dcg->dc);
-			if (err < 0)
-				goto err_out;
-		}
-	}
+                while (lock->ack == 0) {
+                        err = dc_process(dcg->dc);
+                        if (err < 0)
+                                goto err_out;
+                }
+        }
 
 
 	if(comm == NULL){
-		err = dc_barrier(dcg->dc);
-		if (err == 0)
-			return 0;
+	  err = dc_barrier(dcg->dc);
+        if (err == 0)
+                return 0;
 	}
 	else{
-		err = MPI_Barrier(*(MPI_Comm *)comm);
-		if(err == MPI_SUCCESS)
-			return 0;
+	  err = MPI_Barrier(*(MPI_Comm *)comm);
+	  if(err == MPI_SUCCESS)
+	    return 0;
 	}
 
  err_out:
@@ -2005,84 +1996,68 @@ int dcg_lock_on_read(const char *lock_name, void *comm)
 
 int dcg_unlock_on_read(const char *lock_name, void *comm)
 {
-	struct dcg_lock *lock;
-	int err = -ENOMEM;
-	int myid, app_minid;
+        struct dcg_lock *lock;
+        int err = -ENOMEM;
 
 	lock = lock_get(lock_name, 1);
 	if (!lock)
 		goto err_out;
 
 	if(comm == NULL){
-		err = dc_barrier(dcg->dc);
-		if (err < 0)
-			goto err_out;
+	  err = dc_barrier(dcg->dc);
+	  if (err < 0)
+                goto err_out;
 	}
 	else{
-		err = MPI_Barrier(*(MPI_Comm *)comm);
-		if(err != MPI_SUCCESS)
-			goto err_out;
+	  err = MPI_Barrier(*(MPI_Comm *)comm);
+	  if(err != MPI_SUCCESS)
+	    goto err_out;
 	}
 
-	if (comm == NULL) {
-		myid = DCG_ID;
-		app_minid = dcg->dc->cp_min_rank;
-	} else {
-		MPI_Comm_rank(*(MPI_Comm *)comm, &myid);
-		app_minid = 0;
-	}
 
-	if (myid == app_minid) {
-		err = dcg_lock_request(lock, lk_read_release);
-		if (err < 0)
-			goto err_out;
-	}
+        if (DCG_ID == dcg->dc->cp_min_rank) {
+                err = dcg_lock_request(lock, lk_read_release);
+                if (err < 0)
+                        goto err_out;
+        }
 
-	return 0;
+        return 0;
  err_out:
 	ERROR_TRACE();
 }
 
 int dcg_lock_on_write(const char *lock_name, void *comm)
 {
-	struct dcg_lock *lock;
-	int err = -ENOMEM;
-	int myid, app_minid;
+        struct dcg_lock *lock;
+        int err = -ENOMEM;
 
 	lock = lock_get(lock_name, 1);
 	if (!lock)
 		goto err_out;
 
-	if (comm == NULL) {
-		myid = DCG_ID;
-		app_minid = dcg->dc->cp_min_rank;
-	} else {
-		MPI_Comm_rank(*(MPI_Comm *)comm, &myid);
-		app_minid = 0;
-	}
+        if (DCG_ID == dcg->dc->cp_min_rank) {
+                /* I am the master peer for this app job. */
 
-	if (myid == app_minid) {
-		/* I am the master peer for this app job. */
-		err = dcg_lock_request(lock, lk_write_get);
-		if (err < 0)
-			goto err_out;
+                err = dcg_lock_request(lock, lk_write_get);
+                if (err < 0)
+                        goto err_out;
 
-		while (lock->ack == 0) {
-			err = dc_process(dcg->dc);
-			if (err < 0)
-				goto err_out;
-		}
-	}
+                while (lock->ack == 0) {
+                        err = dc_process(dcg->dc);
+                        if (err < 0)
+                                goto err_out;
+                }
+        }
 
 	if(comm == NULL){
-		err = dc_barrier(dcg->dc);
-		if (err == 0)
-			return 0;
+	  err = dc_barrier(dcg->dc);
+        if (err == 0)
+                return 0;
 	}
 	else{
-		err = MPI_Barrier(*(MPI_Comm *)comm);
-		if(err == MPI_SUCCESS)
-			return 0;
+	  err = MPI_Barrier(*(MPI_Comm *)comm);
+	  if(err == MPI_SUCCESS)
+	    return 0;
 	}
 
  err_out:
@@ -2091,42 +2066,35 @@ int dcg_lock_on_write(const char *lock_name, void *comm)
 
 int dcg_unlock_on_write(const char *lock_name, void *comm)
 {
-	struct dcg_lock *lock;
-	int err = -ENOMEM;
-	int myid, app_minid;
+        struct dcg_lock *lock;
+        int err = -ENOMEM;
 
 	lock = lock_get(lock_name, 1);
 	if (!lock)
 		goto err_out;
 
 	if(comm == NULL){
-		err = dc_barrier(dcg->dc);
-		if (err < 0)
-			goto err_out;
+	  err = dc_barrier(dcg->dc);
+	  if (err < 0)
+                goto err_out;
 	}
 	else{
-		err = MPI_Barrier(*(MPI_Comm *)comm);
-		if(err != MPI_SUCCESS)
-			goto err_out;
+	  err = MPI_Barrier(*(MPI_Comm *)comm);
+	  if(err != MPI_SUCCESS)
+	    goto err_out;
 	}
 
-	if (comm == NULL) {
-		myid = DCG_ID;
-		app_minid = dcg->dc->cp_min_rank;
-	} else {
-		MPI_Comm_rank(*(MPI_Comm *)comm, &myid);
-		app_minid = 0;
-	}
 
-	if (myid == app_minid) {
-		err = dcg_lock_request(lock, lk_write_release);
-		if (err < 0)
-			goto err_out;
-	}
+
+        if (DCG_ID == dcg->dc->cp_min_rank) {
+                err = dcg_lock_request(lock, lk_write_release);
+                if (err < 0)
+                        goto err_out;
+        }
 
 	//debug
 	//printf("rank %d: barrier done.\n", dcg->dc->self->ptlmap.id);
-	return 0;
+        return 0;
  err_out:
 	ERROR_TRACE();
 }

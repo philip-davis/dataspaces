@@ -51,6 +51,13 @@ struct dimes_client {
 	struct sspace *ssd; //only used for hashing
 	struct bbox domain;
 	struct query_tran_d qt;
+	
+	// Local memory storage
+	struct ss_storage *storage;
+	// List of pending object data requests (from peers of 
+	// other coupled apps)
+	struct list_head req_list;
+
 	int    f_ss_info;
 };
 
