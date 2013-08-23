@@ -17,6 +17,7 @@
 
 
 const int BK_TAB_SIZE = 1024;
+const int BK_PER_JOB = 4;
 
 static int num_sp;
 static int num_cp;
@@ -68,13 +69,19 @@ struct job {
 
 struct bucket {
 	struct	list_head	bucket_entry;
-	int	dart_id; /*which peer*/
+	int	dart_id;
 	struct	job_id	current_jid;
+};
+
+struct workflow_state {
+	unsigned int f_done;
+	unsigned int f_send_exit_msg;
 };
 
 static struct list_head jobq;
 static struct list_head idle_bk_list;
 static struct list_head run_bk_list;
+static struct workflow_state state;
 
 static inline int is_master()
 {
@@ -208,7 +215,7 @@ static struct job * jobq_create_job(struct job_id *jid)
 	j->id = *jid;
 	j->state = pending; 
 	j->num_finish = 0;
-	j->num_bk = 8;
+	j->num_bk = BK_PER_JOB;
 	j->bk_tab = NULL;
 	list_add_tail(&j->job_entry, &jobq);	
 	
@@ -442,9 +449,9 @@ static int send_rdma_data_desc(struct job *j, struct rdma_data_descriptor *rdma_
 	peer = ds_get_peer(ds, dart_id);
 
 	// for debug
-	uloga("%s(): #%d send obj desc for job (%d,%d) to #%d\n",
-		__func__, ds->rpc_s->ptlmap.id, rdma_desc->desc.type,
-		rdma_desc->desc.tstep, dart_id);
+	//uloga("%s(): #%d send obj desc for job (%d,%d) to #%d\n",
+	//	__func__, ds->rpc_s->ptlmap.id, rdma_desc->desc.type,
+	//	rdma_desc->desc.tstep, dart_id);
 
 	msg = msg_buf_alloc(ds->rpc_s, peer, 1);
 	if (!msg)
@@ -462,6 +469,41 @@ static int send_rdma_data_desc(struct job *j, struct rdma_data_descriptor *rdma_
 
 	return 0;
 err_out:
+	ERROR_TRACE();
+}
+
+
+static int process_workflow_state()
+{
+	struct bucket *bk;
+	struct msg_buf *msg;
+	struct node_id *peer;
+	int err = -ENOMEM;
+
+	if (state.f_send_exit_msg) return 0;
+
+	if (state.f_done && 0 == run_bk_list_count()) {
+		list_for_each_entry(bk, &idle_bk_list, struct bucket, bucket_entry) {
+			peer = ds_get_peer(ds, bk->dart_id);
+			msg = msg_buf_alloc(ds->rpc_s, peer, 1);
+			if (!msg)
+				goto err_out;
+
+			msg->msg_rpc->cmd = staging_exit;
+			msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
+
+			err = rpc_send(ds->rpc_s, peer, msg);
+			if (err < 0) {
+				free(msg);
+				goto err_out;
+			}
+		}
+
+		state.f_send_exit_msg = 1;
+	}
+
+	return 0;
+ err_out:
 	ERROR_TRACE();
 }
 
@@ -738,8 +780,8 @@ static int callback_insitu_data_desc(struct rpc_server *rpc_s, struct rpc_cmd *c
 	rdma_desc.dart_id = cmd->id; //TODO: important!!
 
 	// for debug
-	uloga("%s(): #%d get obj desc for job (%d,%d) from #%d\n",
-		__func__, rpc_s->ptlmap.id, data_desc->type, data_desc->tstep, cmd->id);
+	// uloga("%s(): #%d get obj desc for job (%d,%d) from #%d\n",
+	// 	__func__, rpc_s->ptlmap.id, data_desc->type, data_desc->tstep, cmd->id);
 
 	if (is_master())
 		process_insitu_data_desc_master(rpc_s, &rdma_desc);
@@ -748,6 +790,11 @@ static int callback_insitu_data_desc(struct rpc_server *rpc_s, struct rpc_cmd *c
 	return 0;
 }
 
+static int callback_insitu_unreg(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+	state.f_done = 1;
+	return 0;
+}
 
 int hstaging_scheduler_parallel_init()
 {
@@ -763,11 +810,15 @@ int hstaging_scheduler_parallel_init()
 	rpc_add_service(rr_req_allocation, callback_rr_req_allocation);
 	rpc_add_service(rr_req_allocation_reply,
 				callback_rr_req_allocation_reply);
+	rpc_add_service(insitu_unreg, callback_insitu_unreg);
 
-	/*init the data structure */
+	// Init
 	jobq_init();
 	idle_bk_list_init();
 	run_bk_list_init();
+
+	state.f_done = 0;
+	state.f_send_exit_msg = 0;
 
 	return 0;
 }
@@ -793,7 +844,12 @@ int hstaging_scheduler_parallel_run()
 		}
 
 		process_jobq();
+		if (is_master()) {
+			process_workflow_state();
+		}
 	}
+
+	print_rr_count();
 
 	return 0;
 }
