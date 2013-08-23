@@ -75,7 +75,7 @@ err_out:
 	ERROR_TRACE();
 }
 
-static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int dsgrpc_dimes_put_test(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
 	int err;
 	struct hdr_dimes_put *hdr = (struct hdr_dimes_put *)cmd->pad;
@@ -183,22 +183,22 @@ err_out:
 	ERROR_TRACE();
 }
 
-static int dsgrpc_dimes_locate_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int dsgrpc_dimes_locate_data_test(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	return locate_data(rpc_s, cmd, dimes_locate_data_msg);
+	return locate_data(rpc_s, cmd, dimes_locate_data_test_msg);
 }
 
-static int dsgrpc_dimes_locate_data_v3(struct rpc_server *rpc_s,
+static int dsgrpc_dimes_locate_data(struct rpc_server *rpc_s,
 				       struct rpc_cmd *cmd)
 {
 #ifdef DEBUG
 	uloga("%s(): #%d get request from #%d\n", __func__,
 		DIMES_SID, cmd->id);
 #endif
-	return locate_data(rpc_s, cmd, dimes_locate_data_v3_msg);
+	return locate_data(rpc_s, cmd, dimes_locate_data_msg);
 }
 
-static int dsgrpc_dimes_put_v3(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
 	struct hdr_dimes_put *hdr = (struct hdr_dimes_put*)cmd->pad;
 	struct obj_descriptor *odsc = &hdr->odsc;
@@ -238,10 +238,10 @@ struct dimes_server *dimes_server_alloc(int num_sp, int num_cp, char *conf_name)
 	}
 
 	rpc_add_service(dimes_ss_info_msg, dsgrpc_dimes_ss_info);
+	rpc_add_service(dimes_put_test_msg, dsgrpc_dimes_put_test);
+	rpc_add_service(dimes_locate_data_test_msg, dsgrpc_dimes_locate_data_test);
 	rpc_add_service(dimes_put_msg, dsgrpc_dimes_put);
-	rpc_add_service(dimes_put_v3_msg, dsgrpc_dimes_put_v3);
 	rpc_add_service(dimes_locate_data_msg, dsgrpc_dimes_locate_data);
-	rpc_add_service(dimes_locate_data_v3_msg, dsgrpc_dimes_locate_data_v3);
 
 	dimes_s_l->cmd_store = cmd_s_alloc(dimes_s_l->dsg->ssd->storage->size_hash);
 	if (!dimes_s_l->cmd_store) {
