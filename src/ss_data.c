@@ -355,10 +355,24 @@ static void matrix_copy(struct matrix *a, struct matrix *b)
         __u64 b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
         __u64 bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
 
+
+	
+        for(a9 = a->mat_view.lb[9], b9 = b->mat_view.lb[9];	//TODO-Q
+            a9 <= a->mat_view.ub[9]; a9++, b9++){
+            aloc9 = a9 * a->dist[8];
+            bloc9 = a9 * b->dist[8];
+        for(a8 = a->mat_view.lb[8], b8 = b->mat_view.lb[8];	//TODO-Q
+            a8 <= a->mat_view.ub[8]; a8++, b8++){
+            aloc8 = (aloc9 + a8) * a->dist[7];
+            bloc8 = (bloc9 + b8) * b->dist[7];
+        for(a7 = a->mat_view.lb[7], b7 = b->mat_view.lb[7];	//TODO-Q
+            a7 <= a->mat_view.ub[7]; a7++, b7++){
+            aloc7 = (aloc8 + a7) * a->dist[6];
+            bloc7 = (bloc8 + b7) * b->dist[6];
         for(a6 = a->mat_view.lb[6], b6 = b->mat_view.lb[6];	//TODO-Q
             a6 <= a->mat_view.ub[6]; a6++, b6++){
-            aloc6 = a6 * a->dist[5];
-            bloc6 = b6 * b->dist[5];
+            aloc6 = (aloc7 + a6) * a->dist[5];
+            bloc6 = (bloc7 + b6) * b->dist[5];
         for(a5 = a->mat_view.lb[5], b5 = b->mat_view.lb[5];	//TODO-Q
             a5 <= a->mat_view.ub[5]; a5++, b5++){
             aloc5 = (aloc6 + a5) * a->dist[4];
@@ -388,7 +402,7 @@ static void matrix_copy(struct matrix *a, struct matrix *b)
                     }
                 }
             }
-        }}}}
+        }}}}}}}
 }
 
 
