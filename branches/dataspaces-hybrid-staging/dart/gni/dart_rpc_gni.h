@@ -421,6 +421,7 @@ enum cmd_type {
 	intran_req_job,
 	insitu_data_desc,
 	insitu_unreg,
+	staging_exit,
 #endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,
