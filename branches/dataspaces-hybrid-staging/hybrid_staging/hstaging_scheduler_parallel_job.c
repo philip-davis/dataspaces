@@ -145,6 +145,20 @@ static inline void idle_bk_list_add(struct bucket *bk)
 	list_add_tail(&bk->bucket_entry, &idle_bk_list);
 }
 
+static int idle_bk_list_free()
+{
+	uloga("%s(): idle_bk_list_count returns %d\n", __func__,
+			idle_bk_list_count());
+
+	struct bucket *bk, *t;
+	list_for_each_entry_safe(bk,t,&idle_bk_list,struct bucket,bucket_entry) {
+		list_del(&bk->bucket_entry);
+		free(bk);
+	}
+
+	return 0;
+}
+
 static int run_bk_list_count()
 {
 	int cnt = 0;
@@ -183,6 +197,20 @@ static void run_bk_list_remove(int dart_id)
 static inline void run_bk_list_add(struct bucket *bk)
 {
 	list_add_tail(&bk->bucket_entry, &run_bk_list);
+}
+
+static int run_bk_list_free()
+{
+	uloga("%s(): run_bk_list_count returns %d\n", __func__,
+			run_bk_list_count());
+
+	struct bucket *bk, *t;
+	list_for_each_entry_safe(bk,t,&run_bk_list,struct bucket,bucket_entry) {
+		list_del(&bk->bucket_entry);
+		free(bk);
+	}
+
+	return 0;
 }
 
 static int jobq_count()
@@ -234,6 +262,7 @@ static inline int job_is_finish(struct job *j) {
 	return j->state == finish;
 }
 
+// TODO: very tricky implementation
 static void job_update_state(struct job *j, int dart_id)
 {
 	if (j->state == pending) {
@@ -293,6 +322,17 @@ static void job_cache_data_desc(struct job *j, struct rdma_data_descriptor *rdma
 	list_add_tail(&d->desc_entry, &j->data_desc_list);
 }
 
+static void job_remove_cached_data_desc(struct job *j)
+{
+	struct data_desc *d, *t;
+	list_for_each_entry_safe(d,t,&j->data_desc_list,struct data_desc,
+		desc_entry)
+	{
+		list_del(&d->desc_entry);
+		free(d);
+	}
+}
+
 static void job_cache_allocation_req(struct job *j, int dart_id)
 {
 	struct allocation_request *req = malloc(sizeof(*req));
@@ -300,6 +340,18 @@ static void job_cache_allocation_req(struct job *j, int dart_id)
 	list_add_tail(&req->req_entry, &j->req_list);
 }
 
+static void job_remove_cached_allocation_req(struct job *j)
+{
+	struct allocation_request *req, *t;
+	list_for_each_entry_safe(req,t,&j->req_list,struct allocation_request,
+		req_entry)
+	{
+		list_del(&req->req_entry);
+		free(req);
+	}
+}
+
+/*
 static inline int jobq_empty()
 {
 	return list_empty(&jobq);
@@ -314,6 +366,22 @@ static struct job * jobq_remove_head()
 	}
 	
 	return NULL;
+}
+*/
+
+static int jobq_free()
+{
+	uloga("%s(): jobq_count returns %d\n", __func__, jobq_count());
+
+	struct job *j, *t;
+	list_for_each_entry_safe(j,t,&jobq,struct job,job_entry) {
+		list_del(&j->job_entry);
+		if (j->bk_tab)
+			free(j->bk_tab);
+		job_remove_cached_data_desc(j);
+		job_remove_cached_allocation_req(j);	
+		free(j);
+	}
 }
 
 /************/
@@ -332,7 +400,6 @@ static void print_rr_count()
 	fprintf(stderr, "EVAL: %d num_job_in_queue= %d num_idle_bucket= %d num_busy_bucket= %d\n",
 		timestamp_, num_job_in_queue, num_idle_bucket, num_busy_bucket);
 }
-
 
 
 /***********/
@@ -849,7 +916,9 @@ int hstaging_scheduler_parallel_run()
 		}
 	}
 
-	print_rr_count();
+	idle_bk_list_free();
+	run_bk_list_free();
+	jobq_free();
 
 	return 0;
 }

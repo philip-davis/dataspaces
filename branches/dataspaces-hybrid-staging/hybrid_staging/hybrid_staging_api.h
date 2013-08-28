@@ -8,7 +8,7 @@ extern "C" {
 #include "list.h"
 #include "hstaging_partition.h"
 
-// TODO: remov this
+// TODO: remove this
 //enum component_type {
 //	IN_SITU = 1,
 //	IN_TRANSIT
