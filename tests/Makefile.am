@@ -1,1 +1,1 @@
-SUBDIRS=C Fortran C-md
+SUBDIRS=C Fortran

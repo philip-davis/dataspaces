@@ -97,43 +97,43 @@ int parse_args(int argc, char **argv, int *npapp, int *npx, int *npy, int *npz,
 }
 
 int common_init(int num_peers, int appid) {
-        return dspaces_init(num_peers, appid);
+	return dspaces_init(num_peers, appid);
 }
 
 void common_set_storage_type(int fst) {
-        dspaces_set_storage_type(fst);
+	dspaces_set_storage_type(fst);
 }
 
 int common_rank() {
-        return dspaces_rank();
+	return dspaces_rank();
 }
 
 int common_peers() {
-        return dspaces_peers();
+	return dspaces_peers();
 }
 
 void common_barrier() {
-        dspaces_barrier();
+	dspaces_barrier();
 }
 
 void common_finalize() {
-        dspaces_finalize();
+	dspaces_finalize();
 }
 
 void common_lock_on_read(const char *lock_name, void *gcomm) {
-        dspaces_lock_on_read(lock_name, gcomm);
+	dspaces_lock_on_read(lock_name, gcomm);
 }
 
 void common_unlock_on_read(const char *lock_name, void *gcomm) {
-        dspaces_unlock_on_read(lock_name, gcomm);
+	dspaces_unlock_on_read(lock_name, gcomm);
 }
 
 void common_lock_on_write(const char *lock_name, void *gcomm) {
-        dspaces_lock_on_write(lock_name, gcomm);
+	dspaces_lock_on_write(lock_name, gcomm);
 }
 
 void common_unlock_on_write(const char *lock_name, void *gcomm) {
-        dspaces_unlock_on_write(lock_name, gcomm);
+	dspaces_unlock_on_write(lock_name, gcomm);
 }
 
 int common_put (const char *var_name,
@@ -141,26 +141,20 @@ int common_put (const char *var_name,
         int xl, int yl, int zl,
         int xu, int yu, int zu,
         void *data, enum transport_type type) {
-        if ( type == USE_DSPACES ) {
-               /* return dspaces_put(var_name, ver, size,
-                        xl, yl, zl, xu, yu, zu,
-                        data);
-		*/
-		int lb[3] = {xl, yl, zl};
-		int ub[3] = {xu, yu, zu};
+	if ( type == USE_DSPACES ) {
 		return dspaces_put(var_name, ver, size,
-			3, lb, ub,
-			data);
-        } else if (type == USE_DIMES) {
+				xl, yl, zl, xu, yu, zu,
+				data);
+	} else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
-                return dimes_put(var_name, ver, size,
-                        xl, yl, zl, xu, yu, zu,
-                        data);
+		return dimes_put(var_name, ver, size,
+				xl, yl, zl, xu, yu, zu,
+				data);
 #else
-                uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
-                return -1;
+		uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
+		return -1;
 #endif
-        }
+	}
 }
 
 int common_get (const char *var_name,
@@ -168,39 +162,33 @@ int common_get (const char *var_name,
         int xl, int yl, int zl,
         int xu, int yu, int zu,
         void *data, enum transport_type type) {
-        if ( type == USE_DSPACES ) {
-                /*return dspaces_get(var_name, ver, size,
-                        xl, yl, zl, xu, yu, zu,
-                        data);
-		*/
-                int lb[3] = {xl, yl, zl};
-                int ub[3] = {xu, yu, zu};
+	if ( type == USE_DSPACES ) {
 		return dspaces_get(var_name, ver, size,
-			3, lb, ub,
-			data);		
-        } else if (type == USE_DIMES) {
+				xl, yl, zl, xu, yu, zu,
+				data);
+	} else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
-                return dimes_get(var_name, ver, size,
-                        xl, yl, zl, xu, yu, zu,
-                        data);
+		return dimes_get(var_name, ver, size,
+				xl, yl, zl, xu, yu, zu,
+				data);
 #else
-                uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
-                return -1;
+		uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
+		return -1;
 #endif
-        }
+	}
 }
 
 int common_put_sync(enum transport_type type) {
-        if (type == USE_DSPACES) {
-                return dspaces_put_sync();
-        } else if (type == USE_DIMES) {
+	if (type == USE_DSPACES) {
+		return dspaces_put_sync();
+	} else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
-                return dimes_put_sync_all();
+		return dimes_put_sync_all();
 #else
-                uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
-                return -1;
+		uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
+		return -1;
 #endif
-        }
+	}
 }
 
 int common_run_server(int num_sp, int num_cp, enum transport_type type) {
@@ -220,8 +208,6 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type) {
 		dsg_barrier(dsg);
 		dsg_free(dsg); 
 
-		if (err == 0)
-			uloga("All ok.\n");
 		return 0;
 	} else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
@@ -239,8 +225,6 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type) {
 		dimes_server_barrier(dsg);
 		dimes_server_free(dsg); 
 
-		if (err == 0)
-			uloga("All ok.\n");
 		return 0;
 #else
 		uloga("%s(): Dataspaces DIMES is not enabled!\n", __func__);
@@ -251,36 +235,36 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type) {
 
 void check_data(const char *var_name, double *buf, int num_elem, int rank, int ts)
 {
-        double max, min, sum, avg;
-        int i;
+	double max, min, sum, avg;
+	int i;
 	int cnt = 0;
 
-        if (num_elem <= 0) {
-                return;
-        }
+	if (num_elem <= 0) {
+		return;
+	}
 
-        max = min = sum = buf[0];
-        for (i = 1; i < num_elem; i++) {
-                if (max < buf[i])
-                        max = buf[i];
-                if (min > buf [i])
-                        min = buf[i];
-                sum += buf[i];
+	max = min = sum = buf[0];
+	for (i = 1; i < num_elem; i++) {
+		if (max < buf[i])
+			max = buf[i];
+		if (min > buf [i])
+			min = buf[i];
+		sum += buf[i];
 		if (buf[i] != ts) {
 			cnt++;
 		}
-        }
-        avg = sum / num_elem;
+	}
+	avg = sum / num_elem;
 #ifdef DEBUG
-        uloga("%s(): var= %s, rank= %d, max= %f, min= %f, avg= %f\n",
-                __func__, var_name, rank, max, min, avg);
+	uloga("%s(): var= %s, rank= %d, max= %f, min= %f, avg= %f\n",
+			__func__, var_name, rank, max, min, avg);
 #endif
 
-        if (cnt > 0) {
-                uloga("%s(): var= %s, rank= %d, ts= %d, "
+	if (cnt > 0) {
+		uloga("%s(): var= %s, rank= %d, ts= %d, "
 			"error elem cnt= %d, total elem= %d\n",
-                        __func__, var_name, rank, ts, cnt, num_elem);
-        }
-	
-        return;
+			__func__, var_name, rank, ts, cnt, num_elem);
+	}
+
+	return;
 }

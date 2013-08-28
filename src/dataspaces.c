@@ -106,24 +106,20 @@ void dspaces_unlock_on_write(const char *lock_name, void *comm)
 
 int dspaces_get(const char *var_name,
 	unsigned int ver, int size,
-	int ndim,
-	int *lb, //int xl, int yl, int zl,
-	int *ub, //int xu, int yu, int zu,
+	int xl, int yl, int zl,
+	int xu, int yu, int zu,
 	void *data)
 {
-	//return common_dspaces_get(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
-	return common_dspaces_get(var_name, ver, size, ndim, lb, ub, data);
+	return common_dspaces_get(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
 }
 
 int dspaces_put(const char *var_name, 
         unsigned int ver, int size,
- 	int ndim,
-        int *lb, //int xl, int yl, int zl,
-        int *ub, //int xu, int yu, int zu, 
+        int xl, int yl, int zl,
+        int xu, int yu, int zu, 
         void *data)
 {
-	//return common_dspaces_put(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
-	return common_dspaces_put(var_name, ver, size, ndim, lb, ub, data);
+	return common_dspaces_put(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
 }
 
 int dspaces_put_sync(void)

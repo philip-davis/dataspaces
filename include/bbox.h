@@ -40,11 +40,6 @@
 #define max(a,b) (a) > (b) ? (a):(b)
 #define min(a,b) (a) < (b) ? (a):(b)
 
-typedef unsigned char 		__u8;
-typedef unsigned int 		__u32;
-typedef int			__s32;
-typedef unsigned long long	__u64; //TODO
-
 enum bb_dim {
         bb_x = 0,
         bb_y = 1,
@@ -52,7 +47,7 @@ enum bb_dim {
 };
 
 struct coord {
-        int c[10];
+        int c[3];
 };
 
 struct bbox {
@@ -62,41 +57,32 @@ struct bbox {
 
 struct intv {
         // unsigned int lb, ub;
-        //unsigned long lb, ub;
-	__u64 lb, ub;
+        unsigned long lb, ub;
 };
 
-//int bbox_dist(struct bbox *, int);
-__u64 bbox_dist(struct bbox *, int);
+int bbox_dist(struct bbox *, int);
 void bbox_divide(struct bbox *b0, struct bbox *b_tab);
 int bbox_include(const struct bbox *, const struct bbox *);
 int bbox_does_intersect(const struct bbox *, const struct bbox *);
 void bbox_intersect(struct bbox *, const struct bbox *, struct bbox *);
 int bbox_equals(const struct bbox *, const struct bbox *);
 
-//unsigned long bbox_volume(struct bbox *);
-__u64 bbox_volume(struct bbox *);
-//void bbox_to_intv(const struct bbox *, int, int, struct intv **, int *);
-void bbox_to_intv(const struct bbox *, __u64, int, struct intv **, int *);
-//void bbox_to_intv2(const struct bbox *, int, int, struct intv **, int *);
-void bbox_to_intv2(const struct bbox *, __u64, int, struct intv **, int *);
+unsigned long bbox_volume(struct bbox *);
+void bbox_to_intv(const struct bbox *, int, int, struct intv **, int *);
+void bbox_to_intv2(const struct bbox *, int, int, struct intv **, int *);
 void bbox_to_origin(struct bbox *, const struct bbox *);
 
 int intv_do_intersect(struct intv *, struct intv *);
-//unsigned long intv_size(struct intv *);
-__u64 intv_size(struct intv *);
+unsigned long intv_size(struct intv *);
 
-//static unsigned int next_pow_2(int n)
-static __u64 next_pow_2(__u64 n)
+static unsigned int next_pow_2(int n)
 {
-        //unsigned int i;
-        __u64 i;
+        unsigned int i;
 
         if (n < 0)
                 return 0;
 
-        //i = ~(~0U >> 1);
-        i = ~(~0ULL >> 1);
+        i = ~(~0U >> 1);
         while (i && !(i&n)) {
                 i = i >>1;
         }
@@ -127,21 +113,19 @@ static void coord_print(struct coord *c, int num_dims)
 /*
   Routine to return a string representation of the 'coord' object.
 */
-
 static char * coord_sprint(const struct coord *c, int num_dims)
 {
-        char *str;
-        int i;
-        asprintf(&str, "{%d", c->c[0]);
-        for(i = 1; i < num_dims; i++){
-                char *tmp;
-                asprintf(&tmp, ", %d", c->c[i]);
-                str = str_append(str, tmp);
-        }
-        str = str_append_const(str, "}");
-        return str;
-}
+	char *str;
 
+	if (num_dims == 3)
+		asprintf(&str, "{%d, %d, %d}", c->c[0], c->c[1], c->c[2]);
+	else if (num_dims == 2)
+		asprintf(&str, "{%d, %d}", c->c[0], c->c[1]);
+	else if (num_dims == 1)
+                asprintf(&str, "{%d}", c->c[0]);
+
+	return str;
+}
 
 static void bbox_print(struct bbox *bb)
 {
