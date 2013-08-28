@@ -93,7 +93,8 @@ static int dart_rdma_get(struct dart_rdma_read_tran *read_tran,
 	read_op->post_desc.src_cq_hndl = drh->post_cq_hndl;
 	ret = GNI_PostRdma(read_tran->remote_peer->ep_hndl,&read_op->post_desc);
 	if (ret != GNI_RC_SUCCESS) {
-		uloga("%s(): GNI_PostRdma() failed\n", __func__);
+		uloga("%s(): GNI_PostRdma() failed %d\n", __func__, ret);
+		err = -ret;
 		goto err_out;
 	}
 

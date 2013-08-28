@@ -404,6 +404,7 @@ enum cmd_type {
 	dimes_locate_data_msg,
 	dimes_put_msg,
 	dimes_obj_get_ack_v1_msg,
+	dimes_obj_get_ack_v2_msg,
 #endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,

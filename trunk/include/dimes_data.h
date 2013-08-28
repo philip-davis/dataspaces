@@ -54,29 +54,33 @@ struct obj_data_wrapper {
 
 /****************************************************************************/
 // Header structure for dimes_put request.
-struct hdr_dimes_put { // TODO(fan): more comments
+struct hdr_dimes_put { // TODO: more comments
 	__u8 has_rdma_data;
 	int sync_id;
 	struct obj_descriptor odsc;
 } __attribute__((__packed__));
 
-// Header structure for dimes_obj_get request.
-struct hdr_dimes_obj_get {
+// Header structure
+struct hdr_dimes_get {
 	int qid;
-	int rank;
+	int rank; //TODO: do we need this field?
 	int rc;
-	union {
-		struct {
-			/* Number of directory entries. */
-			int                     num_de;
-			struct obj_descriptor   odsc;
-		} o;
-		struct {
-			/* Number of versions available. */
-			int                     num_vers;
-			int                     versions[1];
-		} v;
-	} u;
+	/* Number of directory entries. */
+	int                     num_de;
+	struct obj_descriptor   odsc;
+} __attribute__((__packed__));
+
+struct hdr_dimes_get_ack_v1 {
+	int qid;
+	int sync_id;
+	struct obj_descriptor odsc;	
+} __attribute__((__packed__));
+
+struct hdr_dimes_get_ack_v2 {
+	int qid;
+	int sync_id;
+	struct obj_descriptor odsc;
+	size_t bytes_read;
 } __attribute__((__packed__));
 
 /****************************************************************************/
