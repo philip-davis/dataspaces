@@ -50,37 +50,37 @@ struct obj_data_wrapper {
 	struct obj_data *od;
 	struct rpc_cmd cmd;
 	int q_id;
-	size_t size_forwarded;
 };
 
 /****************************************************************************/
 // Header structure for dimes_put request.
-struct hdr_dimes_put { // TODO(fan): more comments
+struct hdr_dimes_put { // TODO: more comments
 	__u8 has_rdma_data;
-	__u8 has_new_owner;
-	int new_owner_id;
-	int location_peer_id;
 	int sync_id;
-        struct obj_descriptor odsc;
+	struct obj_descriptor odsc;
 } __attribute__((__packed__));
 
-// Header structure for dimes_obj_get request.
-struct hdr_dimes_obj_get {
+// Header structure
+struct hdr_dimes_get {
 	int qid;
-	int rank;
+	int rank; //TODO: do we need this field?
 	int rc;
-	union {
-		struct {
-			/* Number of directory entries. */
-			int                     num_de;
-			struct obj_descriptor   odsc;
-		} o;
-		struct {
-			/* Number of versions available. */
-			int                     num_vers;
-			int                     versions[1];
-		} v;
-	} u;
+	/* Number of directory entries. */
+	int                     num_de;
+	struct obj_descriptor   odsc;
+} __attribute__((__packed__));
+
+struct hdr_dimes_get_ack_v1 {
+	int qid;
+	int sync_id;
+	struct obj_descriptor odsc;	
+} __attribute__((__packed__));
+
+struct hdr_dimes_get_ack_v2 {
+	int qid;
+	int sync_id;
+	struct obj_descriptor odsc;
+	size_t bytes_read;
 } __attribute__((__packed__));
 
 /****************************************************************************/
@@ -101,9 +101,6 @@ struct cmd_storage *cmd_s_alloc(int max_versions);
 int cmd_s_free(struct cmd_storage *s);
 int cmd_s_find_all(struct cmd_storage *s, struct obj_descriptor *odsc,
                 struct list_head *out_list, int *out_num_cmd);
-int cmd_s_find_all_with_update(struct cmd_storage *s,
-			struct obj_descriptor *odsc, int peer_id,
-                	struct list_head *out_list, int *out_num_cmd);
 void cmd_s_add(struct cmd_storage *s, struct rpc_cmd *cmd);
 
 /****************************************************************************/

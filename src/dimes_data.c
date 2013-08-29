@@ -103,45 +103,6 @@ int cmd_s_free(struct cmd_storage *s)
 	return 0;
 }
 
-int cmd_s_find_all_with_update(struct cmd_storage *s,
-		struct obj_descriptor *odsc,
-		int peer_id,
-		struct list_head *out_list,
-		int *out_num_cmd) {
-	struct cmd_data *cmd;
-	struct list_head *list;
-	int index;
-
-	if (s->size_hash <= 0) {
-		uloga("%s(): cmd_storage not init.\n", __func__);
-		return -1;
-	}
-
-	index = odsc->version % s->size_hash;
-	list = &s->cmd_hash[index];
-
-	*out_num_cmd = 0;
-	list_for_each_entry(cmd, list, struct cmd_data, entry) {
-		struct hdr_dimes_put *hdr = (struct hdr_dimes_put *)
-														(cmd->cmd.pad);
-		if (obj_desc_equals_intersect(odsc, &hdr->odsc)) {
-			if (!hdr->has_new_owner) {
-				// Assign the new owner for the rdma buffer
-				hdr->has_new_owner = 1;
-				hdr->new_owner_id = peer_id;
-			}
-
-			struct cmd_data *tmp_cmd =
-					malloc(sizeof(struct cmd_data));
-			memcpy(tmp_cmd, cmd, sizeof(struct cmd_data));
-			list_add(&tmp_cmd->entry, out_list);
-			(*out_num_cmd)++;
-		}
-	}
-
-	return 0;
-}
-
 int cmd_s_find_all(struct cmd_storage *s, struct obj_descriptor *odsc,
 		struct list_head *out_list, int *out_num_cmd)
 {
