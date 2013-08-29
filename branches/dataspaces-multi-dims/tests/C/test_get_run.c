@@ -253,8 +253,10 @@ int test_get_run(int npapp, int npx, int npy, int npz,
 	int app_id = 2;
 	common_init(npapp_, app_id);
 	common_set_storage_type(row_major);
-	rank_ = common_rank();
-	nproc_ = common_peers();
+	//rank_ = common_rank();
+	//nproc_ = common_peers();
+	MPI_Comm_size(gcomm, &nproc_);
+	MPI_Comm_rank(gcomm, &rank_);
 
 	double *databuf = NULL;
 	if (dims == 2) {

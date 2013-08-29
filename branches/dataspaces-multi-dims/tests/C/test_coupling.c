@@ -101,9 +101,9 @@ int main(int argc, char **argv)
 		MPI_Comm_split(MPI_COMM_WORLD, 2, mpi_rank, &gcomm);
 
 		npapp = num_reader;
-		npx = writer_x;
-		npy = writer_y;
-		npz = writer_z;
+		npx = reader_x;
+		npy = reader_y;
+		npz = reader_z;
 		if (dims >= 2) {
 			spx = dim_x / npx;
 			spy = dim_y / npy;
