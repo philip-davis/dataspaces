@@ -350,8 +350,10 @@ void FC_FUNC(dimes_get, DIMES_GET) (const char *var_name,
                 *err = -ENOMEM;
         }
 
+	int ndim;
         *err = common_dimes_get(vname, *ver, *size,
-                                *xl, *yl, *zl, *xu, *yu, *zu, data);
+                                //*xl, *yl, *zl, *xu, *yu, *zu, data);
+                                ndim, xl, xu, data);
 }
 
 void FC_FUNC(dimes_put, DIMES_PUT) (const char *var_name,
@@ -368,8 +370,10 @@ void FC_FUNC(dimes_put, DIMES_PUT) (const char *var_name,
                 *err = -ENOMEM;
         }
 
+	int ndim;
         *err =  common_dimes_put(vname, *ver, *size,
-                                 *xl, *yl, *zl, *xu, *yu, *zu, data);
+                                 //*xl, *yl, *zl, *xu, *yu, *zu, data);
+                                 ndim, xl, xu, data);
 }
 
 void FC_FUNC(dimes_put_sync_all, DIMES_PUT_SYNC_ALL)(int *err)

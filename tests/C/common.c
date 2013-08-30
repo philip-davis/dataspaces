@@ -141,20 +141,21 @@ int common_put (const char *var_name,
         int xl, int yl, int zl,
         int xu, int yu, int zu,
         void *data, enum transport_type type) {
+
+	int lb[3] = {xl, yl, zl};
+	int ub[3] = {xu, yu, zu};
         if ( type == USE_DSPACES ) {
                /* return dspaces_put(var_name, ver, size,
                         xl, yl, zl, xu, yu, zu,
                         data);
 		*/
-		int lb[3] = {xl, yl, zl};
-		int ub[3] = {xu, yu, zu};
 		return dspaces_put(var_name, ver, size,
 			3, lb, ub,
 			data);
         } else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
                 return dimes_put(var_name, ver, size,
-                        xl, yl, zl, xu, yu, zu,
+                        3, lb, ub, //xl, yl, zl, xu, yu, zu,
                         data);
 #else
                 uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
@@ -168,20 +169,21 @@ int common_get (const char *var_name,
         int xl, int yl, int zl,
         int xu, int yu, int zu,
         void *data, enum transport_type type) {
+
+        int lb[3] = {xl, yl, zl};
+        int ub[3] = {xu, yu, zu};
         if ( type == USE_DSPACES ) {
                 /*return dspaces_get(var_name, ver, size,
                         xl, yl, zl, xu, yu, zu,
                         data);
 		*/
-                int lb[3] = {xl, yl, zl};
-                int ub[3] = {xu, yu, zu};
 		return dspaces_get(var_name, ver, size,
 			3, lb, ub,
 			data);		
         } else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
                 return dimes_get(var_name, ver, size,
-                        xl, yl, zl, xu, yu, zu,
+                        3, lb, ub, //xl, yl, zl, xu, yu, zu,
                         data);
 #else
                 uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);

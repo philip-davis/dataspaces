@@ -614,20 +614,26 @@ static int dcgrpc_dimes_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	dimes_c->dcg->ss_info.num_dims = hsi->num_dims;
 	dimes_c->dcg->ss_info.num_space_srv = hsi->num_space_srv;
 	dimes_c->domain.num_dims = hsi->num_dims;
-	dimes_c->domain.lb.c[0] = 0;
+/*	dimes_c->domain.lb.c[0] = 0;
 	dimes_c->domain.lb.c[1] = 0;
 	dimes_c->domain.lb.c[2] = 0;
 	dimes_c->domain.ub.c[0] = hsi->val_dims[0]-1;
 	dimes_c->domain.ub.c[1] = hsi->val_dims[1]-1;
 	dimes_c->domain.ub.c[2] = hsi->val_dims[2]-1;
-	dimes_c->f_ss_info = 1;
+*/	dimes_c->f_ss_info = 1;
+
+	int i;
+	for(i = 0; i < hsi->num_dims; i++){
+		dimes_c->domain.lb.c[i] = 0;
+		dimes_c->domain.ub.c[i] = hsi->dims.c[i] - 1;
+	}
 
 #ifdef DEBUG
 	uloga("%s(): num_dims=%d, num_space_srv=%d, "
 		"domain={(%d,%d,%d),(%d,%d,%d)}\n",
 		__func__, hsi->num_dims, hsi->num_space_srv,
-		0, 0, 0, hsi->val_dims[0]-1, hsi->val_dims[1]-1,
-		hsi->val_dims[2]-1);
+		0, 0, 0, hsi->dims.c[0]-1, hsi->dims.c[1]-1,
+		hsi->dims.c[2]-1);
 #endif
 	return 0;
 }
@@ -1078,12 +1084,14 @@ struct temp_read_tran {
 };
 
 struct matrix_view_d {
-	int lb[3];
-	int ub[3];
+	int lb[10]; //int lb[3];
+	int ub[10]; //int ub[3];
 };
 
 struct matrix_d {
-	int dimx, dimy, dimz;
+	//int dimx, dimy, dimz;
+	int 	dist[10];
+	int 	num_dims;
 	size_t size_elem;
 	enum storage_type mat_storage;
 	struct matrix_view_d mat_view;
@@ -1093,21 +1101,96 @@ static void matrix_init_d(struct matrix_d *mat, enum storage_type st,
                         struct bbox *bb_glb, struct bbox *bb_loc, size_t se)
 {
 	int i;
+	int ndims = bb_glb->num_dims;
 
-	mat->dimx = bbox_dist(bb_glb, bb_x);
-	mat->dimy = bbox_dist(bb_glb, bb_y);
-	mat->dimz = bbox_dist(bb_glb, bb_z);
+	memset(mat, 0, sizeof(struct matrix_d));
 
-	mat->mat_storage = st;
+    for(i = 0; i < ndims; i++){
+        mat->dist[i] = bbox_dist(bb_glb, i);
+        mat->mat_view.lb[i] = bb_loc->lb.c[i] - bb_glb->lb.c[i];
+        mat->mat_view.ub[i] = bb_loc->ub.c[i] - bb_glb->lb.c[i];
+    }
 
-	for (i = bb_x; i <= bb_z; i++) {
-		mat->mat_view.lb[i] = bb_loc->lb.c[i] - bb_glb->lb.c[i];
-		mat->mat_view.ub[i] = bb_loc->ub.c[i] - bb_glb->lb.c[i];
-	}
-
-	mat->size_elem = se;
+    	mat->num_dims = ndims;
+    	mat->mat_storage = st;
+    	mat->size_elem = se;
 }
 
+static int matrix_rdma_copy(struct matrix_d *a, struct matrix_d *b, int tran_id)
+{
+	__u64 src_offset = 0;
+	__u64 dst_offset = 0;
+	__u64 bytes = 0;
+	int err = -ENOMEM;
+
+	__u64 a0, a1, a2, a3, a4, a5, a6, a7, a8, a9;
+        __u64 aloc=0, aloc1=0, aloc2=0, aloc3=0, aloc4=0, aloc5=0, aloc6=0, aloc7=0, aloc8=0, aloc9=0;
+        __u64 b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
+        __u64 bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
+
+	__u64 n = 0;
+	n = a->mat_view.ub[0] - a->mat_view.lb[0] + 1;
+	a0 = a->mat_view.lb[0];
+        b0 = b->mat_view.lb[0];
+
+        for(a9 = a->mat_view.lb[9], b9 = b->mat_view.lb[9];     //TODO-Q
+            a9 <= a->mat_view.ub[9]; a9++, b9++){
+            aloc9 = a9 * a->dist[8];
+            bloc9 = a9 * b->dist[8];
+        for(a8 = a->mat_view.lb[8], b8 = b->mat_view.lb[8];     //TODO-Q
+            a8 <= a->mat_view.ub[8]; a8++, b8++){
+            aloc8 = (aloc9 + a8) * a->dist[7];
+            bloc8 = (bloc9 + b8) * b->dist[7];
+        for(a7 = a->mat_view.lb[7], b7 = b->mat_view.lb[7];     //TODO-Q
+            a7 <= a->mat_view.ub[7]; a7++, b7++){
+            aloc7 = (aloc8 + a7) * a->dist[6];
+            bloc7 = (bloc8 + b7) * b->dist[6];
+        for(a6 = a->mat_view.lb[6], b6 = b->mat_view.lb[6];     //TODO-Q
+            a6 <= a->mat_view.ub[6]; a6++, b6++){
+            aloc6 = (aloc7 + a6) * a->dist[5];
+            bloc6 = (bloc7 + b6) * b->dist[5];
+        for(a5 = a->mat_view.lb[5], b5 = b->mat_view.lb[5];     //TODO-Q
+            a5 <= a->mat_view.ub[5]; a5++, b5++){
+            aloc5 = (aloc6 + a5) * a->dist[4];
+            bloc5 = (bloc6 + b5) * b->dist[4];
+        for(a4 = a->mat_view.lb[4], b4 = b->mat_view.lb[4];
+            a4 <= a->mat_view.ub[4]; a4++, b4++){
+            aloc4 = (aloc5 + a4) * a->dist[3];
+            bloc4 = (bloc5 + b4) * b->dist[3];
+        for(a3 = a->mat_view.lb[3], b3 = b->mat_view.lb[3];
+            a3 <= a->mat_view.ub[3]; a3++, b3++){
+            aloc3 = (aloc4 + a3) * a->dist[2];
+            bloc3 = (bloc4 + b3) * b->dist[2];
+            for(a2 = a->mat_view.lb[2], b2 = b->mat_view.lb[2];
+                a2 <= a->mat_view.ub[2]; a2++, b2++){
+                aloc2 = (aloc3 + a2) * a->dist[1];
+                bloc2 = (bloc3 + b2) * b->dist[1];
+                for(a1 = a->mat_view.lb[1], b1 = b->mat_view.lb[1];
+                    a1 <= a->mat_view.ub[1]; a1++, b1++){
+                    aloc1 = (aloc2 + a1) * a->dist[0];
+                    bloc1 = (bloc2 + b1) * b->dist[0];
+                   /* for(a0 = a->mat_view.lb[0], b0 = b->mat_view.lb[0];
+                        a0 <= a->mat_view.ub[0]; a0++, b0++){
+                        aloc = aloc1 + a0;
+                        bloc = bloc1 + b0;
+		   */
+			aloc = aloc1 + a0;
+			bloc = bloc1 + b0;
+			src_offset = bloc * a->size_elem;
+			dst_offset = aloc * a->size_elem;
+			bytes = n * a->size_elem;
+			err = dart_rdma_schedule_read(tran_id, src_offset, dst_offset, bytes);
+                                if (err < 0)
+                                        goto err_out;
+
+	}}}}}}}}}
+        return 0;
+err_out:
+        ERROR_TRACE();
+
+}
+
+/*
 static int matrix_rdma_copy(struct matrix_d *a, struct matrix_d *b, int tran_id)
 {
 	int ai, aj, ak, bi, bj, bk;
@@ -1130,7 +1213,6 @@ static int matrix_rdma_copy(struct matrix_d *a, struct matrix_d *b, int tran_id)
 					(bk + b->dimx * (bj + b->dimy * bi));
 				dst_offset = a->size_elem *
 					(ak + a->dimx * (aj + a->dimy * ai));
-				/*
 				#ifdef DEBUG
 				uloga("%s(): tran_id=%d, bk=%d, bj=%d, bi=%d, "
 				  "src_offset=%u, ak=%d, aj=%d, ai=%d, "
@@ -1138,7 +1220,6 @@ static int matrix_rdma_copy(struct matrix_d *a, struct matrix_d *b, int tran_id)
 					__func__, tran_id, bk, bj, bi, src_offset,
 					ak, aj, ai, dst_offset, bytes);
 				#endif
-				*/
 
 				err = dart_rdma_schedule_read(tran_id, src_offset, dst_offset, bytes);
 				if (err < 0)
@@ -1171,6 +1252,7 @@ static int matrix_rdma_copy(struct matrix_d *a, struct matrix_d *b, int tran_id)
 err_out:
 	ERROR_TRACE();
 }
+*/
 
 static int schedule_rdma_reads(int tran_id,
         struct obj_descriptor *src_odsc, struct obj_descriptor *dst_odsc)
@@ -1711,8 +1793,9 @@ void common_dimes_set_storage_type(int fst)
 
 int common_dimes_get(const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+	int ndim,
+        int *lb, //int xl, int yl, int zl,
+        int *ub, //int xu, int yu, int zu,
         void *data)
 {
 	struct obj_descriptor odsc = {
@@ -1720,8 +1803,18 @@ int common_dimes_get(const char *var_name,
 			.st = st,
 			.size = size,
 			.bb = {.num_dims = num_dims,
-				   .lb.c = {xl, yl, zl},
-				   .ub.c = {xu, yu, zu}}};
+			//	   .lb.c = {xl, yl, zl},
+			//	   .ub.c = {xu, yu, zu}
+		}
+	};
+	memset(odsc.bb.lb.c, 0, sizeof(int)*num_dims);
+        memset(odsc.bb.ub.c, 0, sizeof(int)*num_dims);
+
+        //memcpy(odsc.bb.lb.c, lb, sizeof(int)*odsc.bb.num_dims);
+        //memcpy(odsc.bb.ub.c, ub, sizeof(int)*odsc.bb.num_dims);
+        memcpy(odsc.bb.lb.c, lb, sizeof(int)*ndim);
+        memcpy(odsc.bb.ub.c, ub, sizeof(int)*ndim);	
+
 	struct obj_data *od;
 	int err = -ENOMEM;
 
@@ -1758,8 +1851,9 @@ err_out:
 
 int common_dimes_put(const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+	int ndim,
+        int *lb, //int xl, int yl, int zl,
+        int *ub, //int xu, int yu, int zu,
         void *data)
 {
 	struct obj_descriptor odsc = {
@@ -1767,8 +1861,18 @@ int common_dimes_put(const char *var_name,
 			.st = st,
 			.size = size,
 			.bb = {.num_dims = num_dims,
-				   .lb.c = {xl, yl, zl},
-				   .ub.c = {xu, yu, zu}}};
+			//	   .lb.c = {xl, yl, zl},
+			//	   .ub.c = {xu, yu, zu}
+			}
+	};
+	memset(odsc.bb.lb.c, 0, sizeof(int)*num_dims);
+        memset(odsc.bb.ub.c, 0, sizeof(int)*num_dims);
+
+        //memcpy(odsc.bb.lb.c, lb, sizeof(int)*odsc.bb.num_dims);
+        //memcpy(odsc.bb.ub.c, ub, sizeof(int)*odsc.bb.num_dims);
+        memcpy(odsc.bb.lb.c, lb, sizeof(int)*ndim);
+        memcpy(odsc.bb.ub.c, ub, sizeof(int)*ndim);
+
 	struct obj_data *od;
 	int err = -ENOMEM;
 

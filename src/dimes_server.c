@@ -83,9 +83,16 @@ static int dsgrpc_dimes_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	
 	hsi = (struct hdr_ss_info*) msg->msg_rpc->pad;
 	hsi->num_dims = dimes_s->dsg->ssd->dht->bb_glb_domain.num_dims;
-	hsi->val_dims[bb_x] = dimes_s->dsg->ssd->dht->bb_glb_domain.ub.c[0] + 1;
+
+/*	hsi->val_dims[bb_x] = dimes_s->dsg->ssd->dht->bb_glb_domain.ub.c[0] + 1;
 	hsi->val_dims[bb_y] = dimes_s->dsg->ssd->dht->bb_glb_domain.ub.c[1] + 1;
 	hsi->val_dims[bb_z] = dimes_s->dsg->ssd->dht->bb_glb_domain.ub.c[2] + 1;
+*/
+	int i;
+	for(i = 0; i < hsi->num_dims; i++){
+		hsi->dims.c[i] = dimes_s->dsg->ssd->dht->bb_glb_domain.ub.c[i] + 1;
+	}
+
 	hsi->num_space_srv = dimes_s->dsg->ds->size_sp;
 
 	err = rpc_send(rpc_s, peer, msg);

@@ -159,19 +159,23 @@ int dimes_put_sync_all(void)
 
 int dimes_get (const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+	int ndim,
+        int *lb, //int xl, int yl, int zl,
+        int *ub, //int xu, int yu, int zu,
         void *data)
 {
-	return common_dimes_get(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
+	//return common_dimes_get(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
+	return common_dimes_get(var_name, ver, size, ndim, lb, ub, data);
 }
 
 int dimes_put (const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+        int ndim,
+	int *lb, //int xl, int yl, int zl,
+        int *ub, //int xu, int yu, int zu,
         void *data)
 {
-	return common_dimes_put(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
+	//return common_dimes_put(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
+	return common_dimes_put(var_name, ver, size, ndim, lb, ub, data);
 }
 #endif
