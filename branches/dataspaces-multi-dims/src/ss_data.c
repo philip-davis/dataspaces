@@ -246,8 +246,6 @@ static void matrix_init(struct matrix *mat, enum storage_type st,
         int i;
         int ndims = bb_glb->num_dims;
 	
-	printf("ndims = %d\n", ndims);
-
         memset(mat, 0, sizeof(struct matrix));
 
     for(i = 0; i < ndims; i++){

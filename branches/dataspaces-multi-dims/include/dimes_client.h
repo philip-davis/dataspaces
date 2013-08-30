@@ -61,13 +61,15 @@ void common_dimes_set_storage_type (int fst);
 int common_dimes_put_sync_all(void);
 int common_dimes_get (const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+	int ndim,
+	int *lb, //int xl, int yl, int zl,
+        int *ub, //int xu, int yu, int zu,
         void *data);
 int common_dimes_put (const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+	int ndim,
+        int *lb, //int xl, int yl, int zl,
+        int *ub, //int xu, int yu, int zu,
         void *data);
 
 #ifdef __cplusplus
