@@ -53,7 +53,9 @@ struct dart_rdma_read_op {
 struct dart_rdma_read_tran {
 	struct list_head entry;
 	struct list_head read_ops_list;
+	int num_read_ops;
 	int tran_id;
+	int f_rdma_read_posted;
 	struct node_id *remote_peer;
 	struct dart_rdma_mem_handle src;
 	struct dart_rdma_mem_handle dst;
@@ -63,6 +65,7 @@ struct dart_rdma_handle {
 	struct rpc_server *rpc_s;
 	gni_cq_handle_t post_cq_hndl;
 	struct list_head read_tran_list;
+	int num_rdma_read_posted;
 };
 
 int dart_rdma_init(struct rpc_server *rpc_s);
