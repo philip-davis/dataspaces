@@ -32,6 +32,8 @@
 #include <stdint.h>
 #include "dart_rdma_gni.h"
 
+#define MAX_NUM_RDMA_READ_POSTED 65536
+
 static struct dart_rdma_handle *drh = NULL;
 
 /*
@@ -98,6 +100,7 @@ static int dart_rdma_get(struct dart_rdma_read_tran *read_tran,
 		goto err_out;
 	}
 
+	drh->num_rdma_read_posted++;
 	return 0;
 err_out:
 	ERROR_TRACE();
@@ -129,10 +132,11 @@ static int dart_rdma_process_post_cq(uint64_t timeout)
 	struct dart_rdma_read_op *read_op = NULL;
 	// Get struct address from the field address
 	read_op = (struct dart_rdma_read_op *)
-							(((uintptr_t)pd)-offsetof(struct dart_rdma_read_op, post_desc));
+			(((uintptr_t)pd)-offsetof(struct dart_rdma_read_op, post_desc));
 	list_del(&read_op->entry);
 	free(read_op);
 
+	drh->num_rdma_read_posted--;
 	return 0;
 err_out:
 	ERROR_TRACE();
@@ -153,10 +157,11 @@ int dart_rdma_init(struct rpc_server *rpc_s)
 
 	drh->rpc_s = rpc_s;
 	INIT_LIST_HEAD(&drh->read_tran_list);
+	drh->num_rdma_read_posted = 0;
 
 	// Create completion queue for RDMA post operation
-	ret = GNI_CqCreate(drh->rpc_s->nic_hndl, 65535, 0, GNI_CQ_BLOCKING, NULL,
-					NULL, &drh->post_cq_hndl);
+	ret = GNI_CqCreate(drh->rpc_s->nic_hndl, MAX_NUM_RDMA_READ_POSTED,
+		0, GNI_CQ_BLOCKING, NULL, NULL, &drh->post_cq_hndl);
 	if (ret != GNI_RC_SUCCESS) {
 		uloga("%s(): GNI_CqCreate() failed with %d\n",
 						__func__, ret);
@@ -280,6 +285,7 @@ int dart_rdma_schedule_read(int tran_id, size_t src_offset, size_t dst_offset,
 	read_op->bytes = bytes;
 
 	list_add(&read_op->entry, &read_tran->read_ops_list);
+	read_tran->num_read_ops++;
 /*
 #ifdef DEBUG
 			uloga("%s(): read_op->src_offset= %u, read_op->dst_offset= %u,"
@@ -307,7 +313,17 @@ int dart_rdma_perform_reads(int tran_id)
 		return -1;
 	}
 
-	int cnt = 0;
+#ifdef DEBUG
+	uloga("%s(): tran_id=%d num_read_ops=%d\n", __func__, tran_id, read_tran->num_read_ops);
+#endif
+
+	int avail_rdma_post_queue_size = MAX_NUM_RDMA_READ_POSTED;
+	avail_rdma_post_queue_size -= drh->num_rdma_read_posted;
+	if (avail_rdma_post_queue_size < read_tran->num_read_ops) {
+		read_tran->f_rdma_read_posted = 0;
+		return 0;
+	}
+
 	struct dart_rdma_read_op *read_op;
 	list_for_each_entry(read_op, &read_tran->read_ops_list,
 		struct dart_rdma_read_op, entry) {
@@ -315,13 +331,9 @@ int dart_rdma_perform_reads(int tran_id)
 		if (err < 0) {
 			goto err_out;
 		}
-		cnt++;
 	}
 
-#ifdef DEBUG
-	uloga("%s(): tran_id=%d num_read_ops=%d\n", __func__, tran_id, cnt);
-#endif
-
+	read_tran->f_rdma_read_posted = 1;
 	return 0;
 err_out:
 	ERROR_TRACE();
@@ -329,7 +341,6 @@ err_out:
 
 int dart_rdma_check_reads(int tran_id)
 {
-	// Block till all RDMA reads complete
 	int err = -ENOMEM;
 	if (!drh) {
 		uloga("%s(): dart rdma not init!\n", __func__);
@@ -344,11 +355,32 @@ int dart_rdma_check_reads(int tran_id)
 		return -1;
 	}
 
+	if (!read_tran->f_rdma_read_posted) {
+		struct dart_rdma_read_op *read_op;
+		list_for_each_entry(read_op, &read_tran->read_ops_list,
+			struct dart_rdma_read_op, entry) {
+			while (!(drh->num_rdma_read_posted < MAX_NUM_RDMA_READ_POSTED))
+			{
+				err = dart_rdma_process_post_cq(1);
+				if (err < 0) {
+					return -1;
+				}
+			}
+
+			err = dart_rdma_get(read_tran, read_op);
+			if (err < 0) {
+				return -1;
+			}
+		}
+
+		read_tran->f_rdma_read_posted = 1;
+	}
+
+	// Block till all RDMA reads complete
 	while (!list_empty(&read_tran->read_ops_list))
 	{
 		err = dart_rdma_process_post_cq(1);
 		if (err < 0) {
-			uloga("%s(): process_rdma_post_cq() failed\n", __func__);
 			return -1;
 		}
 	}
@@ -378,6 +410,8 @@ int dart_rdma_create_read_tran(struct node_id *remote_peer,
 	}
 	read_tran->tran_id = tran_id_++;
 	read_tran->remote_peer = remote_peer;
+	read_tran->num_read_ops = 0;
+	read_tran->f_rdma_read_posted = 0;
 	INIT_LIST_HEAD(&read_tran->read_ops_list);
 	list_add(&read_tran->entry, &drh->read_tran_list);
 
