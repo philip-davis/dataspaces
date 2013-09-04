@@ -29,6 +29,8 @@
 *  tjin@cac.rutgers.edu
 */
 
+// Modified in August 2013 for scalability. Marked by #SCA.
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -222,7 +224,7 @@ static int dc_connect_init(struct sockaddr_in *dest)
 
 static int dc_master_init(struct dart_client *dc) //working
 {
-  int i, j, err;
+  int i, j, k, err;
 	struct ptlid_map *dcreg;
 	struct node_id *peer;
 
@@ -230,6 +232,7 @@ static int dc_master_init(struct dart_client *dc) //working
 	int info_size, tmp_size;
 
 	int check=0;
+	int sp=0;
 
         gni_return_t status;
 	struct sockaddr_in address;
@@ -390,6 +393,7 @@ static int dc_master_init(struct dart_client *dc) //working
 
 	}
 
+	/* 1.2.0 version before SCA
 		err = rpc_smsg_init(dc->rpc_s, dc->peer_size);
 		if (err != 0){
 			printf("Rank %d: failed for rpc_smsg_init %d. (%d)\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, err);
@@ -401,11 +405,34 @@ static int dc_master_init(struct dart_client *dc) //working
 		  printf("Rank %d: failed for sys_smsg_init. (%d)\n", dc->rpc_s->ptlmap.id, err);
 			goto err_out;
 		}
-
+	*/
 		//rpc_smsg_check(dc->rpc_s);
 		//sys_smsg_check(dc->rpc_s);
 
+	// #SCA start
 
+	k=0;
+	while(k < dc->peer_size)
+	{
+		peer = &dc->peer_tab[k];
+		if(peer->ptlmap.appid == 0)
+			sp++;
+		k++;
+	}
+
+		err = rpc_smsg_init(dc->rpc_s, sp);
+		if (err != 0){
+			printf("Rank %d: failed for rpc_smsg_init %d. (%d)\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, err);
+			goto err_out;
+		}
+
+		err = sys_smsg_init(dc->rpc_s, sp);
+		if (err != 0){
+		  printf("Rank %d: failed for sys_smsg_init. (%d)\n", dc->rpc_s->ptlmap.id, err);
+			goto err_out;
+		}
+
+	// #SCA end
 
 	// 4. allgather APP smsg_attr[rpc+sys]
         gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(dc->num_cp * sizeof(gni_smsg_attr_t));
@@ -528,6 +555,7 @@ static int dc_master_init(struct dart_client *dc) //working
 	free(recv_buffer);
 
 	// 7. smsg_config
+	/* version 1.2.0 before SCA
 	for(i=0;i<dc->peer_size;i++){
 		if(i == dc->rpc_s->ptlmap.id)
 			continue;
@@ -546,6 +574,30 @@ static int dc_master_init(struct dart_client *dc) //working
 			goto err_out;
 		}
 	}
+	*/
+
+	// #SCA start
+
+	for(i=0;i<sp;i++){
+		if(i == dc->rpc_s->ptlmap.id)
+			continue;
+
+		peer = &dc->peer_tab[i];
+
+		err = rpc_smsg_config(dc->rpc_s, peer);
+		if (err != 0){
+			printf("Rank %d: failed for config RPC SMSG for peer %d. (%d)\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, err);
+			goto err_out;
+		}
+
+		err = sys_smsg_config(dc->rpc_s, peer);
+		if (err != 0){
+			printf("Rank %d: failed for config SYS SMSG for peer %d. (%d)\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, err);
+			goto err_out;
+		}
+	}
+
+	// #SCA end
 
 	// 8. free connection, close socket
 	//close(connectfd);
@@ -624,7 +676,8 @@ err_out:
 
 static int dc_boot_slave(struct dart_client *dc, int appid)
 {
-        int i, err = -ENOMEM;
+  int i, k, err = -ENOMEM;
+  int sp = 0;
 	struct node_id *peer;
 	struct ptlid_map *dcreg;
 
@@ -708,6 +761,7 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 
 	}
 
+	/* version 1.2.0, before SCA
 		err = rpc_smsg_init(dc->rpc_s, dc->peer_size);
 		if (err != 0){
 			printf("Rank %d: failed for rpc_smsg_init %d. (%d)\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, err);
@@ -720,6 +774,34 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 			printf("Rank 0: failed for sys_smsg_init. (%d)\n", err);
 			goto err_out;
 		}
+	*/
+
+
+	// #SCA start
+
+	k=0;
+	while(k < dc->peer_size)
+	{
+		peer = &dc->peer_tab[k];
+		if(peer->ptlmap.appid == 0)
+			sp++;
+		k++;
+	}
+
+		err = rpc_smsg_init(dc->rpc_s, sp);
+		if (err != 0){
+			printf("Rank %d: failed for rpc_smsg_init %d. (%d)\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, err);
+			goto err_out;
+		}
+
+		err = sys_smsg_init(dc->rpc_s, sp);
+		if (err != 0){
+		  printf("Rank %d: failed for sys_smsg_init. (%d)\n", dc->rpc_s->ptlmap.id, err);
+			goto err_out;
+		}
+
+	// #SCA end
+
 
 	// allgather APP smsg_attr[rpc+sys]
         gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(dc->num_cp * sizeof(gni_smsg_attr_t));
@@ -766,6 +848,7 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 	
 
 	// smsg_config
+	/* version 1.2.0, before SCA
 	for(i=0;i<dc->peer_size;i++){
 		if(i == dc->rpc_s->ptlmap.id)
 			continue;
@@ -784,6 +867,31 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 			goto err_out;
 		}
 	}
+	*/
+
+
+	// #SCA start
+
+	for(i=0;i<sp;i++){
+		if(i == dc->rpc_s->ptlmap.id)
+			continue;
+
+		peer = &dc->peer_tab[i];
+
+		err = rpc_smsg_config(dc->rpc_s, peer);
+		if (err != 0){
+			printf("Rank %d: failed for config RPC SMSG for peer %d. (%d)\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, err);
+			goto err_out;
+		}
+
+		err = sys_smsg_config(dc->rpc_s, peer);
+		if (err != 0){
+			printf("Rank %d: failed for config SYS SMSG for peer %d. (%d)\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, err);
+			goto err_out;
+		}
+	}
+
+	// #SCA end
 
 	free(recv_buffer);
 
