@@ -63,7 +63,7 @@ int main(int argc, char **argv)
 	// Run as data writer
 #ifdef DS_HAVE_LUA_REXEC
 	dims = 2;
-	test_put_run(npapp, npx, npy, npz,
+	test_lua_put(npapp, npx, npy, npz,
 		spx, spy, spz, timestep, dims, gcomm);
 #else
 	dims = 3;

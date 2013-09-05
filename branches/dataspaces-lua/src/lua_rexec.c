@@ -243,13 +243,13 @@ int lua_exec(void *code_buff, size_t code_size)
         DSpaceObj_register(l);
 
         /* load the in-memory lua script */
-        int status = lua_load(l, lua_code_reader, &buf, "LUA_CODE", NULL);
-        if (status != LUA_OK) {
+        int status = lua_load(l, lua_code_reader, &buf, "LUA_CODE");
+        if (status != 0) {
                 fprintf(stderr, "lua_load() failed!\n");
         }
 
         status = lua_pcall(l, 0, 1, 0);
-        if (status != LUA_OK) {
+        if (status != 0) {
                 fprintf(stderr, "lua_pcall() failed!\n");
                 goto err_out;
         }
@@ -320,11 +320,11 @@ int lua_load_script_file(const char *fname, void **code_buf, size_t *code_size)
 
         struct load_block *blk, *tmp;
         size_t offset = 0;
-        list_for_each_entry_safe(blk, tmp, &blk_list, struct load_block, entry) {
+        list_for_each_entry_safe(blk, tmp, &blk_list, struct load_block, entry) 		{
                 memcpy(*code_buf+offset, blk->buff, blk->size);
                 offset += blk->size;
                 list_del(&blk->entry);
-                free(blk);
+				free(blk);
         }
 
         return 0;

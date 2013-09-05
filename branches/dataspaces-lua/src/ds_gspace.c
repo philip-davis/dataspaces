@@ -468,6 +468,7 @@ static int lua_script_put_completion(struct rpc_server *rpc_s,
         struct hdr_lua_result result;
         struct node_id *peer;
         int err;
+		double tm_st, tm_end;
 
         struct obj_data *from_obj;
         from_obj = ls_find(dsg->ssd->storage, &hc->odsc);
@@ -476,13 +477,18 @@ static int lua_script_put_completion(struct rpc_server *rpc_s,
         int num_input_elem =
                 obj_data_size(&from_obj->obj_desc) / sizeof(double);
         if (from_obj) {
+				tm_st = timer_read(&timer);
                 lua_exec_set_input_data(from_obj->data, num_input_elem);
                 lua_exec_set_output_data(result.pad,
                         LUA_BYTES_RESULT_PAD / sizeof(double));
                 // Execute the in-memory lua script.
                 result.num_elem = lua_exec(msg->msg_data, msg->size);
+				result.num_elem = 0;
                 lua_exec_unset_input_data();
                 lua_exec_unset_output_data();
+				tm_end = timer_read(&timer);
+				uloga("%s(): lua exec on %u bytes data, time= %lf\n",
+					__func__, obj_data_size(&from_obj->obj_desc), tm_end-tm_st);
 
                 result.rc = result.num_elem < 0 ? -1 : 0;
         } else {

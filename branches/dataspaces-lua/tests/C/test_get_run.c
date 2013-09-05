@@ -33,6 +33,7 @@
 #include "common.h"
 #include "debug.h"
 #include "ss_data.h"
+#include "lua_rexec.h"
 #include "mpi.h"
 
 //# of processors in x-y-z direction
@@ -313,15 +314,32 @@ int send_lua_script(const char *fname, const char *vname,
 	char* temp_res = (char*) malloc(size);
 	memset(temp_res, 0, size);
 
+	double tm_st, tm_end, tm_max, tm_diff;
+	int root = 0;
+
+	MPI_Barrier(gcomm_);
+
+	tm_st = timer_read(&timer_);
 	num_obj = dspaces_lua_rexec(fname, vname, version, size_elem,
 		xl, yl, zl, xu, yu, zu, temp_res);
+	tm_end = timer_read(&timer_);
+
+	MPI_Barrier(gcomm_);
+
+	tm_diff = tm_end-tm_st;
+	MPI_Reduce(&tm_diff, &tm_max, 1, MPI_DOUBLE, MPI_MAX, root, gcomm_);
+	
+	uloga("TS= %u RANK= %d lua_rexec time= %lf\n", version, rank_, tm_diff);
+	if (rank_ == root) {
+		uloga("TS= %u lua_rexec MAX time= %lf\n", version, tm_max);
+	}
 
 	if (num_obj >= 0) {
 		int i;
 		for (i = 0; i < num_obj; ++i) {
 			double *ptr = (double*)(temp_res + i*LUA_BYTES_RESULT_PAD);
-			uloga("%s(): ts= %u, rank= %d Min: %.4f, Max: %.4f, Avg: %.4f\n", 
-				__func__, version, rank_, ptr[0], ptr[1], ptr[2]);
+			uloga("%s(): ts= %u, rank= %d obj= %d Min: %.4f, Max: %.4f, Avg: %.4f\n", 
+				__func__, version, rank_, i, ptr[0], ptr[1], ptr[2]);
 		}
 		err = 0;
 	}
@@ -357,6 +375,63 @@ static int couple_lua_rexec_2d(unsigned int ts)
 	return 0;
 }
 
+static int couple_local_exec_2d(double *m2d, unsigned int ts, enum transport_type type)
+{
+	offx_ = (rank_ % npx_) * spx_;
+	offy_ = (rank_ / npx_) * spy_;
+
+	common_lock_on_read("m2d_lock", &gcomm_);
+
+	//send lua script to the space
+	int elem_size = sizeof(double);
+	int xl = offx_;
+	int yl = offy_;
+	int zl = 0;
+	int xu = offx_ + spx_ - 1;
+	int yu = offy_ + spy_ - 1;
+	int zu = 0;
+	double tm_st, tm_end, tm_diff, tm_max;
+	int root = 0;
+
+	uloga("Timestep=%u, %d local exec on m2d: {(%d,%d,%d),(%d,%d,%d)}\n",
+			ts, rank_, xl,yl,zl, xu,yu,zu);
+
+	MPI_Barrier(gcomm_);
+	tm_st = timer_read(&timer_);
+
+    common_get("m2d", ts, elem_size,
+        xl, yl, zl, xu, yu, zu,
+        m2d, type);
+	// check_data("m2d", m2d, spx_*spy_, rank_, ts);
+	// Read lua script file
+	void *code_buf = NULL;
+	size_t code_size;
+	int err = lua_load_script_file("simple_stat_nooutput.lua", &code_buf, &code_size);
+	if (err < 0) {
+		return err;
+	}
+	lua_exec_set_input_data(m2d, spx_*spy_);
+	lua_exec(code_buf, code_size);
+	lua_exec_unset_input_data();
+	free(code_buf);
+
+	tm_end = timer_read(&timer_);
+	
+	MPI_Barrier(gcomm_);
+
+	tm_diff = tm_end-tm_st;
+	MPI_Reduce(&tm_diff, &tm_max, 1, MPI_DOUBLE, MPI_MAX, root, gcomm_);
+
+	uloga("TS= %u RANK= %d local_exec time= %lf\n", ts, rank_, tm_diff);
+	if (rank_ == root) {
+		uloga("TS= %u local_exec MAX time= %lf\n", ts, tm_max);
+	}
+
+	common_unlock_on_read("m2d_lock", &gcomm_);
+
+	return 0;
+}
+
 int test_lua_rexec(int npapp, int npx, int npy, int npz,
 		int spx, int spy, int spz, int timestep, int dims, MPI_Comm gcomm)
 {
@@ -373,6 +448,9 @@ int test_lua_rexec(int npapp, int npx, int npy, int npz,
 	if (npz_)
 		spz_ = spz;
 
+	timer_init(&timer_, 1);
+	timer_start(&timer_);
+
 	int app_id = 2;
 	common_init(npapp_, app_id);
 	common_set_storage_type(row_major);
@@ -387,7 +465,10 @@ int test_lua_rexec(int npapp, int npx, int npy, int npz,
 			for (ts = 1; ts <= timestep_; ts++){
 				if (rank_ == 0)
 					uloga("%s: At timestep %u\n", __func__, ts);
-				couple_lua_rexec_2d(ts);
+				if (ts % 2 == 1)
+					couple_lua_rexec_2d(ts);
+				else
+					couple_local_exec_2d(databuf, ts, USE_DSPACES);
 			}
 		}
 	} else {
