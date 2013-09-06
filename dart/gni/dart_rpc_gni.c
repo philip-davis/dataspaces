@@ -555,7 +555,7 @@ static int sys_cleanup (struct rpc_server *rpc_s)
 	gni_return_t status;
 	int i, err;
 	void *tmp;
-
+	/*
 	status = GNI_MemDeregister(rpc_s->nic_hndl, &rpc_s->sys_local_smsg_attr.mem_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
@@ -564,6 +564,7 @@ static int sys_cleanup (struct rpc_server *rpc_s)
 	}
 
 	free(rpc_s->sys_mem);
+	*///SCA SYS
 
 	for(i=0; i < rpc_s->num_rpc_per_buff; i++)
 	{
@@ -589,7 +590,7 @@ static int sys_cleanup (struct rpc_server *rpc_s)
 	status = GNI_CqDestroy(rpc_s->sys_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
-		printf("Fail: GNI_MemDeregister returned error. %d.\n", status);
+		printf("Fail: GNI_CqDestroy returned error. %d.\n", status);
 		goto err_out;
 	}
 
