@@ -22,7 +22,7 @@ LIBS= -L./ -lhstaging \
 	${PMI_LIBS} ${UGNI_LIBS} \
 	-L/opt/cray/rca/default/lib64 -lrca
 
-CFLAGS= -g ${UGNI_CFLAGS} ${PMI_CLFASG} -DDEBUG -DDS_HAVE_HYBRID_STAGING
+CFLAGS= -g ${UGNI_CFLAGS} ${PMI_CLFASG} -DDEBUG -DDS_HAVE_DIMES -DDS_HAVE_HYBRID_STAGING
 
 SRC = common.c hstaging_partition.c dummy_simulation_worker.c dummy_staging_worker.c
 SRC1 = intransit_driver.c 
@@ -72,6 +72,6 @@ $(OUT6): $(OBJ6) $(OBJ)
 	$(CC) $(CFLAGS) $(INCLUDES) $(OBJ6) $(OBJ) -o $(OUT6) $(LIBS)
 
 clean:
-	rm -f *.o $(OUT1) $(OUT2) $(OUT3) $(OUT4) $(OUT5) $(OUT6)
+	rm -f $(OBJ) $(OBJ2) $(OBJ4) $(OBJ5) $(OBJ6) $(OUT2) $(OUT4) $(OUT5) $(OUT6)
 
 

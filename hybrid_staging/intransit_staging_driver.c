@@ -51,25 +51,20 @@ int main(int argc, char **argv)
 	int err;
 	int appid, nproc;
 
-    if (argc != 2) {
-        uloga("wrong number of args\n");
-        return -1;
-    }
-
-	appid = atoi(argv[1]);
+	appid = 3;
 	
 	MPI_Init(&argc, &argv);
 	MPI_Comm comm = MPI_COMM_WORLD;
 	MPI_Comm_size(comm, &nproc);
 
-	err = ds_init(nproc, workertype_, appid);	
+	err = hstaging_init(nproc, workertype_, appid);	
 
 	uloga("in-transit staging: num_worker= %d\n", nproc);
 	err = dummy_s3d_staging_parallel_job(comm);
 	if (err < 0)
 		goto err_out;
 
-	ds_finalize();
+	hstaging_finalize();
 
 	MPI_Barrier(comm);
 	MPI_Finalize();

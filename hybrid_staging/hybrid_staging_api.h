@@ -6,54 +6,32 @@ extern "C" {
 #endif
 
 #include "list.h"
+#include "ss_data.h"
 #include "hstaging_partition.h"
+#include "hstaging_def.h"
 
-// TODO: remove this
-//enum component_type {
-//	IN_SITU = 1,
-//	IN_TRANSIT
-//};
-
-enum op_type {	
-	TOPOLOGY = 1,
-	VISUALIZATION,
-	DESCRIPTIVE_STATS,
-	AUTOCORRELATION
-};
-
-struct data_descriptor {
-	size_t size; // size of the data to be transferred
-	int rank; // rank of the process
-	int tstep; // time step
-	int type; // type of application
-	int num_obj; // number of data objects 
-};
-
-struct data_item {
-	struct list_head item_entry;
-	struct data_descriptor desc;
-	void * buf; // pointer to retrieved data block
-}; 
+#include "mpi.h"
 
 /* Initialize the dataspaces library. */
-int ds_init(int num_peers, enum worker_type type, int appid);
+int hstaging_init(int num_peers, enum worker_type type, int appid);
 
 /* Finalize the dataspaces library. */
-int ds_finalize();
+int hstaging_finalize();
 
-/* Put/write memory block. */ 
-int ds_put_obj_data(void * in_ptr, struct data_descriptor * in_desc);
+int hstaging_put_var(const char *var_name, unsigned int ver, int size,
+	int xl, int yl, int zl,
+	int xu, int yu, int zu,
+	void *data, MPI_Comm *comm);
+int hstaging_put_sync_all();
 
-/*
- Request to get job from RR & get data blocks from insitu RDMA memory & chain retrieved blocks into a data item list. 
- Output: the application type and head pointer to the data item list.
-*/
-int ds_request_job(enum op_type *type, struct list_head *head);
+int hstaging_get_var(const char *var_name, unsigned int ver, int size,
+	int xl, int yl, int zl,
+	int xu, int yu, int zu,
+	void *data, MPI_Comm *comm);
 
-/*
-  Currently this function is only invoked by in-transit driver code NOT user's in-transit operation code.
-*/
-int ds_free_data_list(struct list_head *head);
+int hstaging_update_var(struct var_descriptor *var_desc, enum hstaging_update_var_op op);
+
+int hstaging_request_task(struct task_descriptor *t);
 
 #ifdef __cplusplus
 }

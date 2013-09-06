@@ -413,6 +413,7 @@ enum cmd_type {
 	dimes_obj_get_ack_v3_msg,
 #endif
 #ifdef DS_HAVE_HYBRID_STAGING
+	// TODO: rename msgs types for hybrid staging
 	rr_data_desc,
 	rr_req_bk,
 	rr_req_bk_reply,
@@ -422,6 +423,9 @@ enum cmd_type {
 	insitu_data_desc,
 	insitu_unreg,
 	staging_exit,
+	hs_update_var_msg,
+	hs_req_task_msg,
+	hs_exec_task_msg,
 #endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,

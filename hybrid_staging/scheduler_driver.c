@@ -33,7 +33,6 @@
 #include "unistd.h"
 #include "mpi.h"
 
-#include "hstaging_scheduler_serial_job.h"
 #include "hstaging_scheduler_parallel_job.h"
 
 #include "common.h"
@@ -68,36 +67,11 @@ int run_scheduler_parallel(int argc, char **argv) {
 	return 0;
 }
 
-// Run serial jobs scheduler
-int run_scheduler_serial(int argc, char **argv) {
-	if (hstaging_scheduler_serial_parse_args(argc, argv) < 0) {
-		hstaging_scheduler_serial_usage();
-		return -1;
-	}
-
-	if (hstaging_scheduler_serial_init() < 0) {
-		printf("DART server init failed!\n");
-		return -1;
-	}
-
-	if (hstaging_scheduler_serial_run() < 0) {
-		printf("DART server got an error at runtime!\n");
-		return -1;
-	}
-
-	hstaging_scheduler_serial_finish();
-
-	uloga("All ok.\n");	
-
-	return 0;
-}
-
 int main(int argc, char **argv)
 {
 	int err;
 	int color;
 
-	//err = run_scheduler_serial(argc, argv);
 	err = run_scheduler_parallel(argc, argv);
 
 	uloga("All ok.\n");	

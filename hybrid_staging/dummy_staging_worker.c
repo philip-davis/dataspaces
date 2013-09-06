@@ -6,25 +6,24 @@
 #include "hybrid_staging_api.h"
 #include "mpi.h"
 
-struct stats {
-	double mean;
-	double mom2;
-	double mom3;
-	double mom4;
-	double minF;
-	double maxF;
-};
+//# of processors in x-y-z direction
+static int npx_, npy_, npz_;
+//block size per processor per direction
+static int spx_, spy_, spz_;
+//# of iterations
+//static int timestep_;
+//# of processors in the application
+//static int nproc_;
+//# of dimensions
+static int dims_;
 
-struct variables {
-	int numSamples;
-	int numStats;
-	struct stats st[0];
-};
+static int rank_;
 
-static int validate_data(void *data, size_t size, int type, int rank, int tstep)
+static int offx_, offy_, offz_;
+
+static int validate_data(void *data, int num_double, int step)
 {
-	int num_double = size/sizeof(double);
-	double value = type*10000 + rank + 0.00001*tstep;
+	double value = step;
 	double *tmp = (double *)data;
 	int i, ret = 1;
 	for (i=0; i<num_double; i++) {
@@ -35,184 +34,123 @@ static int validate_data(void *data, size_t size, int type, int rank, int tstep)
 	return ret;
 }
 
-static int perform_intransit_topology(int rank, struct list_head *data_list)
+static double* allocate_2d()
 {
-	struct data_item *item;
-	int count=0, is_valid = 1;
-	int type, tstep;
+	double* tmp = NULL;
+	offx_ = (rank_ % npx_) * spx_;
+	offy_ = (rank_ / npx_) * spy_;
 
-	list_for_each_entry(item, data_list, struct data_item, item_entry) {
-		if ( count == 0 ) {
-			type = item->desc.type;
-			tstep = item->desc.tstep;
-		}
-
-		if ( !validate_data(item->buf, item->desc.size, item->desc.type,
-						item->desc.rank, item->desc.tstep) )
-			is_valid = 0;
-
-		if ( type != item->desc.type || tstep != item->desc.tstep )
-			is_valid = 0;
-
-		/*
-		printf("%s(): Bucket %d, get size=%u rank=%d tstep=%d num_obj=%d is_valid=%d\n",
-			__func__, rank, item->desc.size, item->desc.rank, item->desc.tstep, item->desc.num_obj, is_valid);
-		*/
-		count++;
-	}
-
-	uloga("%s(): Bucket %d tstep= %d is_valid= %d get %d data objs\n",
-			__func__, rank, tstep, is_valid, count);
-	return 0;
+	tmp = (double*)malloc(sizeof(double)*spx_*spy_);
+	return tmp;
 }
 
-static int perform_intransit_viz(int rank, struct list_head *data_list)
+static double* allocate_3d()
 {
-	struct data_item *item;
-	int count=0, is_valid = 1;
-	int type, tstep;
-	list_for_each_entry(item, data_list, struct data_item, item_entry) {
-		if ( count == 0 ) {
-			type = item->desc.type;
-			tstep = item->desc.tstep;
-		}
+	double *tmp = NULL;
+	offx_ = (rank_ % npx_) * spx_;
+	offy_ = (rank_ / npx_ % npy_) * spy_;
+	offz_ = (rank_ / npx_ / npy_) * spz_;
 
-		if ( !validate_data(item->buf, item->desc.size, item->desc.type,
-							item->desc.rank, item->desc.tstep) )
-			is_valid = 0;
-
-		if ( type != item->desc.type || tstep != item->desc.tstep )
-			is_valid = 0;
-		/*
-		printf("%s(): Bucket %d, get size=%u rank=%d tstep=%d num_obj=%d is_valid=%d\n",
-			__func__, rank, item->desc.size, item->desc.rank, item->desc.tstep, item->desc.num_obj, is_valid);
-		*/
-		count++;
-	}
-
-	uloga("%s(): Bucket %d tstep= %d is_valid= %d get %d data objs\n",
-			__func__, rank, tstep, is_valid, count);
-	return 0;
+	tmp = (double*)malloc(sizeof(double)*spx_*spy_*spz_);
+	return tmp;
 }
 
-static int perform_intransit_stat_v1(int rank, struct list_head *data_list)
+static int generate_bbox(int *xl, int *yl, int *zl, int *xu, int *yu, int *zu)
 {
-	struct data_item *item;
-	int count=0, is_valid = 1;
-	int type, tstep;
-	list_for_each_entry(item, data_list, struct data_item, item_entry) {
-		struct variables *var = (struct variables *)item->buf;
-		struct stats *st = (struct stats *)(var->st);
-		double val = item->desc.tstep + 0.00001*item->desc.rank;
-		int r;
-		if ( 0 == count) {
-			type = item->desc.type;
-			tstep = item->desc.tstep;
-		}
-
-		/*
-		printf("%s(): var->numSamples=%d, var->numStats= %d\n", 
-				__func__, var->numSamples, var->numStats);
-		*/
-		for (r=0; r < var->numStats; r++) {
-			if (st[r].mean != val)
-				is_valid = 0;
-			if (st[r].mom2 != val)
-				is_valid = 0;
-			if (st[r].mom3 != val)
-				is_valid = 0;
-			if (st[r].mom4 != val)
-				is_valid = 0;
-			if (st[r].minF != val)
-				is_valid = 0;
-			if (st[r].maxF != val)
-				is_valid = 0;
-		}
-
-		count++;
+	if (dims_ == 2) {
+		*xl = offx_;
+		*yl = offy_;
+		*zl = 0;
+		*xu = offx_ + spx_ - 1;
+		*yu = offy_ + spy_ - 1;
+		*zu = 0;
+	} else if (dims_ == 3) {
+		*xl = offx_;
+		*yl = offy_;
+		*zl = offz_;
+		*xu = offx_ + spx_ - 1;
+		*yu = offy_ + spy_ - 1;
+		*zu = offz_ + spz_ - 1;
 	}
-
-	uloga("%s(): Bucket %d tstep= %d is_valid= %d get %d data objs\n",
-			__func__, rank, tstep, is_valid, count);
 
 	return 0;
 }
 
-static int perform_intransit_stat(int rank, struct list_head *data_list)
+static void set_data_decomposition(struct task_descriptor *t, struct var_descriptor *var_desc)
 {
-	struct data_item *item;
-	int count=0, is_valid = 1;
-	int type, tstep;
-	list_for_each_entry(item, data_list, struct data_item, item_entry) {
-		if ( count == 0 ) {
-			type = item->desc.type;
-			tstep = item->desc.tstep;
-		}
+	rank_ = t->rank;
+	dims_ = var_desc->bb.num_dims;
 
-		if ( !validate_data(item->buf, item->desc.size, item->desc.type,
-										item->desc.rank, item->desc.tstep) )
-			is_valid = 0;
-
-		if ( type != item->desc.type || tstep != item->desc.tstep )
-			is_valid = 0;
-		/*
-		printf("%s(): Bucket %d, get size=%u rank=%d tstep=%d num_obj=%d is_valid=%d\n",
-		__func__, rank, item->desc.size, item->desc.rank, item->desc.tstep, item->desc.num_obj, is_valid);
-		*/
-		count++;
+	if (var_desc->bb.num_dims == 2) {
+		npx_ = t->nproc;
+		npy_ = 1;
+		npz_ = 0;
+		spx_ = (var_desc->bb.ub.c[0]+1)/npx_;
+		spy_ = (var_desc->bb.ub.c[1]+1)/npy_;
+		spz_ = 0;
+	} else if (var_desc->bb.num_dims == 3) {
+		npx_ = t->nproc;
+		npy_ = 1;
+		npz_ = 1;
+		spx_ = (var_desc->bb.ub.c[0]+1)/npx_;
+		spy_ = (var_desc->bb.ub.c[1]+1)/npy_;
+		spz_ = (var_desc->bb.ub.c[2]+1)/npz_;
 	}
 
-	uloga("%s(): Bucket %d tstep= %d is_valid= %d get %d data objs\n",
-			__func__, rank, tstep, is_valid, count);
-	return 0;
+	uloga("%s(): npx_= %d npy_= %d npz_= %d spx_= %d spy_= %d spz_= %d\n",
+		__func__,npx_,npy_,npz_,spx_,spy_,spz_);
 }
 
-int dummy_s3d_staging_serial_job(MPI_Comm comm) 
+static double* allocate_data(struct var_descriptor *var_desc)
+{	
+	if (var_desc->bb.num_dims == 2) {
+		return allocate_2d();					
+	} else if (var_desc->bb.num_dims == 3) {
+		return allocate_3d();
+	}		
+}
+
+int perform_processing_op(MPI_Comm comm, struct task_descriptor *t)
 {
-	int i, err;
-	int nprocs, mpi_rank;
+	double *databuf = NULL;
+	int xl, yl, zl, xu, yu, zu;
+	size_t elem_size;
+	int i;
+	int err;
+
+	for (i = 0; i < t->num_input_vars; i++) {
+		struct var_descriptor *var_desc = &(t->input_vars[i]);
+		set_data_decomposition(t, var_desc);
+		databuf = allocate_data(var_desc);
+		elem_size = sizeof(double);
+		generate_bbox(&xl, &yl, &zl, &xu, &yu, &zu);
+		err = hstaging_get_var(var_desc->var_name, t->step, elem_size,
+				xl, yl, zl, xu, yu, zu, databuf, NULL);	
+		if (err < 0) {
+			uloga("%s(): failed to get var\n", __func__);
+			return -1;
+		}
+
+		if (var_desc->bb.num_dims == 2) {
+			err = validate_data(databuf, spx_*spy_, t->step);
+		} else if (var_desc->bb.num_dims == 3) {
+			err = validate_data(databuf, spx_*spy_*spz_, t->step);
+		}
+
+		if (!err) {
+			uloga("%s(): tid= %d step= %d rank= %d nproc= %d "
+				"var '%s' validate_data() failed\n", __func__,
+				t->tid, t->step, t->rank, t->nproc, var_desc->var_name);
+		}
+
+		free(databuf);
+	}
+
+	uloga("%s(): execute task tid= %d step= %d rank= %d nproc= %d "
+		"num_input_vars= %d\n",
+		__func__, t->tid, t->step, t->rank, t->nproc, t->num_input_vars);
 	
-	MPI_Comm_size(comm, &nprocs);
-	MPI_Comm_rank(comm, &mpi_rank);
-	if (mpi_rank == 0) {
-		uloga("Dummy S3D staging: total %d workers\n", nprocs);
-	}
-
-	enum op_type type;
-	struct list_head data_list;
-	INIT_LIST_HEAD(&data_list);
-
-	while ( !ds_request_job(&type, &data_list)) {
-		switch (type) {
-		case TOPOLOGY:
-			/* 
-			 (1) User function should not attempt to free data blocks chained 
-				 by the list;
-			 (2) struct list_head is defined in list.h;
-			*/
-			perform_intransit_topology(mpi_rank, &data_list);
-			sleep(8); //TODO: why call sleep?
-			break;
-		case VISUALIZATION:
-			perform_intransit_viz(mpi_rank, &data_list);
-			sleep(8);
-			break;
-		case DESCRIPTIVE_STATS:
-			perform_intransit_stat(mpi_rank, &data_list);
-			sleep(6);
-			break;
-		default:
-			uloga("error: unknown type...\n");
-			break;
-		}
-
-		/*free the retrieved memroy blocks data*/
-		ds_free_data_list(&data_list);
-	}
-
 	return 0;
-err_out:
-	return -1;
 }
 
 int dummy_s3d_staging_parallel_job(MPI_Comm comm)
@@ -226,36 +164,15 @@ int dummy_s3d_staging_parallel_job(MPI_Comm comm)
 		uloga("Dummy S3D staging: total %d workers\n", nprocs);
 	}
 
-	enum op_type type;
-	struct list_head data_list;
-	INIT_LIST_HEAD(&data_list);
-
-	while ( !ds_request_job(&type, &data_list)) {
-		switch (type) {
-		case TOPOLOGY:
-			/* 
-			 (1) User function should not attempt to free data blocks chained 
-				 by the list;
-			 (2) struct list_head is defined in list.h;
-			*/
-			perform_intransit_topology(mpi_rank, &data_list);
-			sleep(1);
-			break;
-		case VISUALIZATION:
-			perform_intransit_viz(mpi_rank, &data_list);
-			sleep(1);
-			break;
-		case DESCRIPTIVE_STATS:
-			perform_intransit_stat(mpi_rank, &data_list);
-			sleep(1);
-			break;
-		default:
-			uloga("error: unknown type...\n");
-			break;
+	struct task_descriptor t;
+	while ( !hstaging_request_task(&t)) {
+		err = perform_processing_op(comm, &t);	
+		if (err < 0) {
+			if (t.num_input_vars > 0 && t.input_vars) {
+				free(t.input_vars);
+			}
+			return err;
 		}
-
-		/*free the retrieved memroy blocks data*/
-		ds_free_data_list(&data_list);
 	}
 
 	return 0;

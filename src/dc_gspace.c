@@ -2263,3 +2263,10 @@ int dcg_get_num_space_srv(struct dcg_space *dcg)
 	return dcg->ss_info.num_space_srv;
 }
 
+#ifdef DS_HAVE_HYBRID_STAGING
+struct dcg_space* dcg_get_ref()
+{
+	if (!dcg) return NULL;
+	else return dcg;
+}
+#endif
