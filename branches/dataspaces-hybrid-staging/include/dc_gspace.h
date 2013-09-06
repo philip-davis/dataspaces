@@ -103,4 +103,7 @@ int dcg_code_send(const void *, /* int, int,*/ struct obj_data *);
 int dcg_collect_timing(double, double *);
 int dcg_get_num_space_srv(struct dcg_space *);
 
+#ifdef DS_HAVE_HYBRID_STAGING
+struct dcg_space *dcg_get_ref();
+#endif
 #endif /* __DCG_SPACE_H_ */

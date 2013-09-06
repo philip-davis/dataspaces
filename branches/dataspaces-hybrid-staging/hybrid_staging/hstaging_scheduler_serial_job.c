@@ -12,7 +12,8 @@
 #include "dart.h"
 #include "ds_gspace.h"
 
-#include "hybrid_staging_internal_def.h"
+#include "hybrid_staging_api.h"
+#include "hstaging_def.h"
 #include "mpi.h"
 
 static int num_sp;

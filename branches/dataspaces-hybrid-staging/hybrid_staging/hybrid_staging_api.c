@@ -1,10 +1,11 @@
 #include "hybrid_staging_api.h"
-#include "hybrid_staging_internal_def.h"
+#include "hstaging_def.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include "debug.h"
 #include "dart.h"
+#include "dataspaces.h"
 #include "dc_gspace.h"
 #include "ss_data.h"
 #include "timer.h"
@@ -22,32 +23,24 @@ const int NUM_TRYS = 50;
 const int RDMA_GET_CREDITS = 225;
 
 struct parallel_job {
-	struct list_head job_entry;
+	struct list_head entry;
 	int type;
 	int tstep;
 };
 
 static struct {
-	struct list_head * data_list;
-	int	has_job;
-	int	num_obj_received;
+	int f_get_task;
+	/* keep basic info of current task */
+	struct task_descriptor *current_task;
 
-	/* keep basic info of current running job */
-	int type, tstep, num_obj_to_receive;
+	/* flags */
+	int f_done; //flag indicates that all insitu work is done
+	int f_init_dspaces;
 
-	/* info for performing adaptive RDMA get */
-	struct  list_head	desc_list;
-	int	num_get_credits;
-	size_t	bytes_recv;
-	int num_pending;
-	
 	/* track data get time */
 	double tm_st, tm_end;
 
 	enum worker_type workertype;
-	int f_done; //flag indicates that all insitu work is done
-	
-	struct list_head parallel_job_list;
 } g_info;
 
 #ifdef HAVE_UGNI
@@ -78,184 +71,63 @@ err_out:
 }
 #endif
 
-static int get_app_num_peers(int appid)
+static int fetch_input_vars_info_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-	int count = 0;
-	struct node_id *peer;
-	int i;
-	for (i=0; i < dc->peer_size; i++) {
-		peer = dc_get_peer(dc, i);
-		if ( peer->ptlmap.appid == appid )
-			count++;
-	}
-
-	return count;
-}
-
-/*
- Get the dart id of the master peer in the specified app
-*/
-static int get_app_min_dartid(int appid)
-{
-	struct node_id *peer;
-	int i, min_dartid;
-
-	for (i=0; i < dc->peer_size; i++) {
-		peer  = dc_get_peer(dc, i);
-		if ( peer->ptlmap.appid == appid ) {
-			return peer->ptlmap.id;
-		}
-	}
-
-	return -1;
-}
-
-
-/*
-  Completion callback function of RDMA get
-*/
-static int get_insitu_data_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
-{
-	struct data_item *item = msg->private;
-
-	//put data into data items list
-	list_add_tail(&item->item_entry, g_info.data_list);
-	
-	//count the number of received insitu data objects 
-	g_info.num_obj_received++;
-
-	/* */
-	g_info.num_get_credits++;
-	g_info.bytes_recv += item->desc.size;
-
+	g_info.f_get_task = 1;
 	free(msg);
 	return 0;
 }
 
-static int get_insitu_data(struct rdma_data_descriptor *rdma_desc)
+static int fetch_input_vars_info(struct rpc_cmd *cmd)
 {
-	int err = -ENOMEM;
+	struct node_id *peer = dc_get_peer(dc, cmd->id);
 	struct msg_buf *msg;
-	struct node_id *peer;
-	struct data_item *item;
+	int err = -ENOMEM;
 
-	item = malloc(sizeof(*item));
-	if (!item) {
-		uloga("%s(): failed to alloc memory.\n", __func__);
+	msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+	if (!msg)
 		goto err_out;
-	}
 
-	item->desc = rdma_desc->desc;
-	item->buf = malloc(rdma_desc->desc.size);
-	if (!item->buf) {
-		free(item);
-		goto err_out;
-	}
+	size_t size = g_info.current_task->num_input_vars * 
+					sizeof(struct var_descriptor);
+	g_info.current_task->input_vars = (struct var_descriptor *)malloc(size);
+	msg->msg_data = g_info.current_task->input_vars;
+	msg->size = size;
+	msg->cb = fetch_input_vars_info_completion;
 
-	peer = dc_get_peer(dc, rdma_desc->dart_id);
-	msg = msg_buf_alloc(dc->rpc_s, peer, 0);
-	if (!msg) {
-		free(item->buf);
-		free(item);
-		goto err_out;
-	}
-
-	msg->msg_data = item->buf;
-	msg->size = rdma_desc->desc.size;
-	msg->private = item;
-	msg->cb = get_insitu_data_completion;
-
-#ifdef HAVE_UGNI
-	peer->mdh_addr = rdma_desc->mdh_addr;
+	rpc_mem_info_cache(peer, msg, cmd);
 	err = rpc_receive_direct(dc->rpc_s, peer, msg);
-#endif
-#ifdef HAVE_DCMF
-	peer->cached_remote_memregion = &rdma_desc->mem_region;
-	err = rpc_receive_direct(dc->rpc_s, peer, msg);
-#endif
-	if (err < 0) {
-		free(item->buf);
-		free(item);
-		free(msg);
-		goto err_out;
-	}
-	
-	return 0;
+	rpc_mem_info_reset(peer, msg, cmd);
+	if (err == 0)
+		return 0;
+
+	free(msg);
 err_out:
 	ERROR_TRACE();
 }
 
-/*
-  RPC callback function to process rr_data_desc msg from servers.  
-*/
-static int callback_rr_data_desc_msg(struct rpc_server *rpc_s, struct rpc_cmd *cmd) 
+static int callback_hs_exec_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	int err = -ENOMEM;
-	int dart_id = dcghlp_get_id(dcg);
-	struct rdma_data_descriptor *rdma_desc =
-			(struct rdma_data_descriptor *)cmd->pad;
+	struct hdr_exec_task *hdr = (struct hdr_exec_task *)cmd->pad;
+	g_info.current_task->tid = hdr->tid;
+	g_info.current_task->step = hdr->step;
+	g_info.current_task->rank = hdr->rank;
+	g_info.current_task->nproc = hdr->nproc;
 
-	if ( 0 == g_info.has_job ) {
-		struct parallel_job *job;
-		list_for_each_entry(job, &g_info.parallel_job_list, struct parallel_job,
-				job_entry) {
-			if (job->type == rdma_desc->desc.type &&
-			    job->tstep == rdma_desc->desc.tstep ) {
-				uloga("%s(): get duplicate intran job (%d,%d)\n",
-					__func__, job->type, job->tstep);
-				return 0;
-			}
+	if (hdr->num_input_vars > 0) {
+		g_info.current_task->num_input_vars = hdr->num_input_vars;
+		if (fetch_input_vars_info(cmd) < 0) {
+			g_info.current_task = NULL;
+			return -1;
 		}
-
-		/* get a new job ... */
-		g_info.num_obj_to_receive = rdma_desc->num_obj_to_receive;
-		g_info.type = rdma_desc->desc.type;
-		g_info.tstep = rdma_desc->desc.tstep;
-		g_info.has_job = 1;
-
-		g_info.tm_st = timer_read(&timer);
-
-		job = (struct parallel_job*)malloc(sizeof(*job));
-		job->type = g_info.type;
-		job->tstep = g_info.tstep;
-		list_add_tail(&job->job_entry, &g_info.parallel_job_list);
-
-		uloga("%s(): Bucket %d get job (%d,%d) from %d\n",
-			__func__, dart_id, g_info.type, g_info.tstep, cmd->id);
 	} else {
-		/*check if i'm getting obj for the same job*/
-		if ( g_info.type != rdma_desc->desc.type ||
-			g_info.tstep != rdma_desc->desc.tstep ) {
-			uloga("%s(): error! Bucket %d should get obj desc for job (%d,%d), "
-				"but get for job (%d,%d) from %d\n", 
-				__func__, dart_id, g_info.type, g_info.tstep,
-				rdma_desc->desc.type, rdma_desc->desc.tstep,
-				cmd->id);
-			return 0;
-		}
-	}
-	
-	//RDMA get data
-	if ( g_info.num_get_credits > 0 ) {
-		err = get_insitu_data(rdma_desc);
-		if (err < 0)
-			goto err_out;
-		g_info.num_get_credits--;
-	}
-	else {
-		uloga("No sufficient rdma get credits for (%d,%d)!\n",
-			rdma_desc->desc.type, rdma_desc->desc.tstep);
-		//No sufficient rdma get credits ...
-		struct data_desc *desc = malloc(sizeof(*desc));
-		desc->desc = *rdma_desc;
-		list_add_tail(&desc->desc_entry, &g_info.desc_list);		
+		g_info.current_task->num_input_vars = 0;
+		g_info.current_task->input_vars = NULL;
+		g_info.f_get_task = 1;
 	}
 
-	return 0; 
-err_out:
-	ERROR_TRACE(); 
+	return 0;
 }
-
 
 /*
   RPC callback function to process msg
@@ -269,10 +141,8 @@ static int callback_staging_exit_msg(struct rpc_server *rpc_s, struct rpc_cmd *c
 	return 0;
 }
 
-/*
- Send intran_req_job msg to hashed server.
-*/
-static int request_job() {
+
+static int request_task() {
 	struct msg_buf *msg;
 	struct node_id *peer;
 	int err = -ENOMEM;
@@ -282,7 +152,7 @@ static int request_job() {
 	if (!msg)
 		goto err_out;
 
-	msg->msg_rpc->cmd = intran_req_job;
+	msg->msg_rpc->cmd = hs_req_task_msg;
 	msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
 
 	err = rpc_send(dc->rpc_s, peer, msg);
@@ -296,101 +166,6 @@ err_out:
 	ERROR_TRACE();
 }
 
-static int is_ready() 
-{
-	int err;
-
-	/* perform one RDMA get when get credits is > 0 */
-	if (g_info.num_get_credits > 0 ) {
-		struct data_desc *desc, *tmp;
-		list_for_each_entry_safe(desc, tmp, &g_info.desc_list, struct data_desc, desc_entry) {
-			err = get_insitu_data(&desc->desc);
-			if (0 == err) {
-				list_del(&desc->desc_entry);
-				free(desc);
-				g_info.num_get_credits--;
-			}
-
-			break;
-		}
-	}
-		
-	if (g_info.has_job && (g_info.num_obj_to_receive == g_info.num_obj_received)) {
-		g_info.tm_end = timer_read(&timer);
-		return 1;
-	}
-
-	return 0;
-}
-
-
-/*
-  Callback function after the completion of RDMA GET by remote bucket.
-*/
-static int obj_put_direct_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
-{
-	struct obj_data *od = (struct obj_data *)msg->private;
-	obj_data_free(od);
-	free(msg);
-
-	g_info.num_pending--;
-
-	return 0;
-}
-
-/*
-  Send data descriptor to hashed remote RR server. 
-*/
-static int obj_put_direct(struct obj_data *od, struct data_descriptor *desc)
-{
-	struct msg_buf *msg;
-	struct node_id *peer;
-	int peer_id, err = -ENOMEM;
-
-	peer_id =  (dc->self->ptlmap.id + desc->tstep) % dc->num_sp;
-	peer = dc_get_peer(dc, peer_id);
-
-	msg = msg_buf_alloc(dc->rpc_s, peer, 1);
-	if (!msg)
-		goto err_out;
-
-	msg->msg_data = od->data;
-	msg->size = obj_data_size(&od->obj_desc);
-	msg->cb = obj_put_direct_completion;
-	msg->private = od;
-
-	msg->msg_rpc->cmd = insitu_data_desc;
-	msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
-
-	memcpy(msg->msg_rpc->pad, desc, sizeof(struct data_descriptor));
-
-	/* try to regain credits to send msg */
-	while (peer->num_msg_at_peer <= 0) {
-		err = process_event(dcg);
-		if ( err < 0 )
-			uloga("%s(): process_event() err\n", __func__);
-	}
-
-	/*
-	uloga("%s(): Rank %d, msg->size=%u, job:type=%d tstep=%d num_obj=%d\n",
-		__func__, dc->self->ptlmap.id, msg->size, desc->type, desc->tstep, desc->num_obj);
-	*/
-
-	err = rpc_send(dc->rpc_s, peer, msg);
-	//err = rpc_send_v1(dc->rpc_s, peer, msg);
-	if (err < 0) {
-		free(msg);
-		goto err_out;
-	}
-
-	g_info.num_pending++;
-
-	return 0;
- err_out:
-	uloga("'%s()': failed with %d.\n", __func__, err);
-	return err;
-}
-
 /*
 *
   Public APIs
@@ -398,76 +173,61 @@ static int obj_put_direct(struct obj_data *od, struct data_descriptor *desc)
 */
 
 /* Initialize the dataspaces library. */
-int ds_init(int num_peers, enum worker_type type, int appid)
+int hstaging_init(int num_peers, enum worker_type type, int appid)
 {
 	int err = -ENOMEM;
 
 	/* Init the g_info */
 	g_info.workertype = type;
 	g_info.f_done = 0;
-	g_info.num_pending = 0;
-	INIT_LIST_HEAD(&g_info.parallel_job_list);
+	g_info.f_init_dspaces = 0;
 
 	if (dcg) {
 		return 0;
 	}
 
-	rpc_add_service(rr_data_desc, callback_rr_data_desc_msg);
+	// TODO: does it matter to place rpc_add_service after dspaces_init()?
 	rpc_add_service(staging_exit, callback_staging_exit_msg);
+	rpc_add_service(hs_exec_task_msg, callback_hs_exec_task);
 
-	dcg = dcg_alloc(num_peers, appid);	
-	if (!dcg) {
-		uloga("'%s()': failed to initialize.\n", __func__);
-		return err;
+	err = dspaces_init(num_peers, appid);
+	if (err < 0) {
+		uloga("%s(): failed to initialize.\n", __func__);
+		return err;	
 	}
 
-/* TODO: do we need to keep this? */
-/*
-        err = dcg_ss_info(dcg, &num_dims);
-        if (err < 0) {
-                uloga("'%s()': failed to obtain space info, err %d.\n",
-                        __func__, err);
-                return err;
-        }
-*/
+	dcg = dcg_get_ref();
+	if (!dcg) {
+		uloga("%s(): dcg == NULL should not happen.\n", __func__);
+		return -1;
+	}
+
 	dc = dcg->dc;
 	if (!dc) {
-		uloga("%s(): failed to obtain dart client...err\n", __func__);
+		uloga("%s(): dc == NULL should not happen\n", __func__);
 		return -1;
 	}
 
 	timer_init(&timer, 1);
 	timer_start(&timer);
-
+	
+	g_info.f_init_dspaces = 1;
 	return 0;
 }
 
 /* Finalize the dataspaces library. */
-int ds_finalize()
+int hstaging_finalize()
 {
 	int err;
 
-	if (!dcg) {
+	if (!g_info.f_init_dspaces) {
 		uloga("'%s()': library was not properly initialized!\n", __func__);
 		return;
 	}
 
-	/* free the parallel_job_list */
-	struct parallel_job *job, *t;
-	list_for_each_entry_safe(job, t, &g_info.parallel_job_list, struct parallel_job, job_entry) {
-		list_del(&job->job_entry);
-		free(job);
-	}
-
 	if ( g_info.workertype == hs_simulation_worker ) {
 		// check if all pending RDMA operations completed
-		while ( g_info.num_pending != 0 ) {
-			err = process_event(dcg);
-			if ( err < 0 ) {
-				uloga("%s(): error= %d of process_event()\n", __func__, err);
-				goto err_out;
-			}
-		}
+		dimes_put_sync_all();
 
 		// TODO: make it more scalable...
 		// err = dcg_barrier(dcg);
@@ -495,120 +255,125 @@ int ds_finalize()
 		}			
 	}
 	
-	dcg_free(dcg);
+	dspaces_finalize();
 	dcg = 0;
 	return 0;
 err_out:
-	dcg_free(dcg);
+	dspaces_finalize();
 	dcg = 0;
 	return -1;
 }
 
-
-/* Put/write memory block. */
-int ds_put_obj_data(void * data, struct data_descriptor * desc)
+int hstaging_put_var(const char *var_name, unsigned int ver, int size,
+    int xl, int yl, int zl,
+    int xu, int yu, int zu,
+    void *data, MPI_Comm *comm)
 {
-	struct obj_data *od;
-	int i, err, rank = desc->rank;
+	int err = -ENOMEM;
 
-	/* prepare dataspaces level object descriptor */
-	struct obj_descriptor odsc = {
-		.version = desc->tstep, .owner = dc->rpc_s->ptlmap.id,
-		.st = st,
-		.size = desc->size,
-		.bb = {.num_dims = num_dims,
-			.lb.c = {rank, 0, 0},
-			.ub.c = {rank, 0, 0}}};
-	sprintf(odsc.name, "block-%d-%d-%d", 
-			desc->type, desc->tstep, rank);
-
-	/* copy and create dataspaces obj data */
-	//od = obj_data_alloc_with_data(&odsc, data);
-	od = obj_data_alloc_no_data(&odsc, data);
-	if (!od) {
-		uloga("'%s()': failed, can not allocate data object.\n",
-				__func__);
-		return -ENOMEM;
+	if (!g_info.f_init_dspaces) {
+		uloga("%s(): library not init!\n", __func__);
+		goto err_out;
 	}
 
-	/* register RDMA mem buffer, send rpc msg to hashed server */
-	err = obj_put_direct(od, desc);
+	dspaces_lock_on_write(var_name, comm);
+	err = dimes_put(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
 	if (err < 0) {
-		obj_data_free(od);
-
-		uloga("'%s()': failed with %d, can not put data object.\n",
-				__func__, err);
-		return err;
+		goto err_out;
 	}
+	dspaces_unlock_on_write(var_name, comm);
 
-	/* try to release registered RDMA mem buffers */
-	i = 0;
-	while ( i++ < NUM_TRYS ) {
-		err  = process_event(dcg);
-		if (err < 0)
-			uloga("%s(): process_event() err\n",__func__);
-	}
-
-	return 0; 
+	return 0;
+err_out:
+	ERROR_TRACE();
 }
 
-/*
-Request to get job from RR & Get/read memory blocks & Aggregate data and store them into a data_list. Output: the application type and head pointer of data_list.
-*/
-int ds_request_job(enum op_type *type, struct list_head *head)
+int hstaging_put_sync_all()
+{
+	return dimes_put_sync_all();
+}
+
+int hstaging_get_var(const char *var_name, unsigned int ver, int size,
+    int xl, int yl, int zl,
+    int xu, int yu, int zu,
+    void *data, MPI_Comm *comm)
+{
+	int err = -ENOMEM;
+
+	if (!g_info.f_init_dspaces) {
+		uloga("%s(): library not init!\n", __func__);
+		goto err_out;
+	}
+
+	//dspaces_lock_on_read(var_name, comm);
+	err = dimes_get(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
+	if (err < 0) {
+		goto err_out;
+	}
+	//dspaces_unlock_on_read(var_name, comm);
+
+	return 0;
+err_out:
+	ERROR_TRACE();
+}
+
+int hstaging_update_var(struct var_descriptor *var_desc, enum hstaging_update_var_op op)
+{
+	struct msg_buf *msg;
+	struct node_id *peer;
+	struct hdr_update_var *hdr;
+	int peer_id, err = -ENOMEM;
+
+	peer_id = 0; // all update info is sent to master srv
+	peer = dc_get_peer(dc, peer_id);
+
+	msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+	if (!msg)
+		goto err_out;
+
+	msg->msg_rpc->cmd = hs_update_var_msg;
+	msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
+	hdr = (struct hdr_update_var*) msg->msg_rpc->pad;
+	strcpy(hdr->var_name, var_desc->var_name);
+	hdr->step = var_desc->step;
+	hdr->size = var_desc->size;
+	hdr->bb = var_desc->bb;
+	hdr->op = op;
+
+	err = rpc_send(dc->rpc_s, peer, msg);
+	if (err < 0) {
+		free(msg);
+		goto err_out;
+	}
+
+	return 0;
+ err_out:
+	ERROR_TRACE();
+}
+
+int hstaging_request_task(struct task_descriptor *t)
 {
 	int err;
 
-	/* init */
-	g_info.data_list = head;
-	g_info.num_obj_received = 0;
-	g_info.has_job = 0;
-	g_info.type = 0;
-	g_info.tstep = 0;
-	g_info.num_obj_to_receive = 0;	
-	INIT_LIST_HEAD(&g_info.desc_list);
-	g_info.num_get_credits = RDMA_GET_CREDITS;
-	g_info.bytes_recv = 0;
-	
-	/* send intran_req_job_msg to RR master server */
-	err = request_job();
-	if ( err < 0 )
+	g_info.f_get_task = 0;
+	g_info.current_task = t;
+
+	// Send hs_req_task_msg to master srv
+	err = request_task();
+	if (err < 0)
 		return -1;
 
-	while ( !g_info.f_done && !is_ready() ) {
+	while (!g_info.f_get_task && !g_info.f_done) {
 		err = process_event(dcg);
-		if ( err < 0 ) {
-			ds_free_data_list(head);
+		if (err < 0) {
 			return err;
-		}		
-	}
+		}
+	}	
 
-	// TODO: return -1 is good?
-	if (g_info.f_done)
+	if (g_info.f_done) {
 		return -1;
+	}	
 
-	fprintf(stderr, "EVAL: type= %d tstep= %d kB_recv=%u"
-		" get_data_time= %lf\n",
-		 g_info.type, g_info.tstep, g_info.bytes_recv/1024,
-		 g_info.tm_end-g_info.tm_st );
-
-	g_info.data_list = NULL;
-
-	//return operation type and data items list
-	*type = g_info.type;
-	return 0;	
-}
-
-int ds_free_data_list(struct list_head *head)
-{
-	//free data objs chained by this list
-	struct data_item *item, *tmp;
-	list_for_each_entry_safe(item,tmp,head,struct data_item,item_entry) {
-		list_del(&item->item_entry);
-		if (item->buf)
-			free(item->buf);
-		free(item);
-	}
-
+	g_info.current_task = NULL;
 	return 0;
 }

@@ -37,9 +37,7 @@
 
 #include "hybrid_staging_api.h"
 
-extern int dummy_s3d_simulation(MPI_Comm comm, int num_ts);
-extern int dummy_s3d_staging_serial_job(MPI_Comm comm);
-extern int dummy_s3d_staging_parallel_job(MPI_Comm comm);
+extern int dummy_s3d_simulation(MPI_Comm comm, int num_ts, int npx, int npy, int npz, int spx, int spy, int spz, int dims);
 
 static enum execution_mode exemode_ = hs_hybrid_staging_mode;
 static enum core_type coretype_ = hs_worker_core;
@@ -49,29 +47,31 @@ static enum worker_type workertype_ = hs_simulation_worker;
 int main(int argc, char **argv)
 {
 	int err;
-	int appid, nproc, num_ts;
-	int num_insitu_proc, num_intransit_proc;
+	int appid, nproc;
+	int npapp, npx, npy, npz;
+	int spx, spy, spz;
+	int dims, timestep;
 
-	if (argc != 3) {
-		uloga("wrong number of args\n");
-		return -1;
+	if (common_parse_args(argc, argv, &npapp, &npx, &npy, &npz,
+		&spx, &spy, &spz, &timestep) != 0) {
+		goto err_out;
 	}
-
-	appid = atoi(argv[1]);
-	num_ts = atoi(argv[2]);
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm comm = MPI_COMM_WORLD;
 	MPI_Comm_size(comm, &nproc);
 
-	err = ds_init(nproc, workertype_, appid); 
+	appid = 1;
+	err = hstaging_init(nproc, workertype_, appid); 
 
 	uloga("simulation: num_worker= %d\n", nproc);
-	err = dummy_s3d_simulation(comm, num_ts);
+	dims = 3;
+	err = dummy_s3d_simulation(comm, timestep, npx, npy, npz,
+			spx, spy, spz, dims);
 	if (err < 0)
 		goto err_out;
 
-	ds_finalize();
+	hstaging_finalize();
 
 	MPI_Barrier(comm);
 	MPI_Finalize();

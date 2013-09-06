@@ -69,5 +69,5 @@ int common_put_sync(enum transport_type type);
 int common_run_server(int num_sp, int num_cp, enum transport_type type);
 void check_data(const char *var_name, double *buf, int num_elem, int rank, int ts);
 void compute_stats(const char *var_name, double *buf, int num_elem, int rank, int ts);
-
+int common_parse_args(int argc, char **argv, int *npapp, int *npx, int *npy, int *npz, int *spx, int *spy, int *spz, int *timestep);
 #endif //end of __TEST_COMMON_H_
