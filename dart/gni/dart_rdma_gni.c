@@ -74,6 +74,22 @@ dart_rdma_find_read_tran(int tran_id, struct list_head *tran_list) {
 	return NULL;
 }
 
+static int dart_perform_local_reads(struct dart_rdma_read_tran *read_tran)
+{
+	struct dart_rdma_read_op *read_op, *t;
+	list_for_each_entry_safe(read_op, t, &read_tran->read_ops_list,
+				struct dart_rdma_read_op, entry) {
+		memcpy(read_tran->dst.base_addr + read_op->dst_offset,
+				read_tran->src.base_addr + read_op->src_offset,
+				read_op->bytes);
+		list_del(&read_op->entry);
+		free(read_op);
+	}
+
+	read_tran->f_rdma_read_posted = 1;
+	return 0;
+}
+
 static int dart_rdma_get(struct dart_rdma_read_tran *read_tran,
 											 struct dart_rdma_read_op *read_op)
 {
@@ -316,6 +332,10 @@ int dart_rdma_perform_reads(int tran_id)
 #ifdef DEBUG
 	uloga("%s(): tran_id=%d num_read_ops=%d\n", __func__, tran_id, read_tran->num_read_ops);
 #endif
+	if (drh->rpc_s->ptlmap.id == read_tran->remote_peer->ptlmap.id) {
+		dart_perform_local_reads(read_tran);
+		return 0;
+	}
 
 	int avail_rdma_post_queue_size = MAX_NUM_RDMA_READ_POSTED;
 	avail_rdma_post_queue_size -= drh->num_rdma_read_posted;
