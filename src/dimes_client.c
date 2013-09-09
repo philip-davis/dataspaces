@@ -1180,6 +1180,7 @@ static int schedule_rdma_reads(int tran_id,
 	size_t dst_offset = 0;
 	size_t bytes = 0;
 
+/*
 #ifdef DEBUG
 	char *str;
 	asprintf(&str, "#%d get obj %s ver %d from ",
@@ -1188,6 +1189,7 @@ static int schedule_rdma_reads(int tran_id,
 	uloga("%s(): tran_id=%d, %s\n", __func__, tran_id, str);
 	free(str);
 #endif
+*/
 
 	if (obj_desc_equals_no_owner(src_odsc, dst_odsc)) {
 #ifdef DEBUG
@@ -1331,17 +1333,34 @@ static int dimes_obj_data_get(struct query_tran_entry_d *qte)
 		peer = dc_get_peer(DC, od->obj_desc.owner);
 
 		err = dart_rdma_create_read_tran(peer, &trans_tab[i]);	
-		dart_rdma_get_memregion_from_cmd(&trans_tab[i]->src,
-						 &od_w->cmd);
 
-		// Register RDMA memregion
-		err = dart_rdma_register_mem(&trans_tab[i]->dst,
-					     od->data,
-					     obj_data_size(&od->obj_desc));
-		if (err < 0) {
-			uloga("%s(): failed with dart_rdma_register_mem\n",
-				__func__);
-			goto err_out_free;
+		if (trans_tab[i]->remote_peer->ptlmap.id == DIMES_CID) {
+			// Data on local peer
+			struct dimes_memory_obj *mem_obj = mem_obj_list_find(&mem_obj_list,
+					hdr->sync_id);
+			if (mem_obj == NULL) {
+				uloga("%s(): failed to find dimes memory object sid=%d\n",
+					__func__, hdr->sync_id);
+				goto err_out_free;
+			}
+			struct dart_rdma_mem_handle *rdma_hndl = 
+					(struct dart_rdma_mem_handle*) mem_obj->arg1; 			
+			trans_tab[i]->src.base_addr = rdma_hndl->base_addr;
+			trans_tab[i]->src.size = rdma_hndl->size;
+			trans_tab[i]->dst.base_addr = od->data; 
+			trans_tab[i]->dst.size = obj_data_size(&od->obj_desc);
+		} else {
+			// Data on remote peer
+			dart_rdma_get_memregion_from_cmd(&trans_tab[i]->src,
+							 &od_w->cmd);
+			err = dart_rdma_register_mem(&trans_tab[i]->dst,
+							 od->data,
+							 obj_data_size(&od->obj_desc));
+			if (err < 0) {
+				uloga("%s(): failed with dart_rdma_register_mem\n",
+					__func__);
+				goto err_out_free;
+			}
 		}
 
 		// Add read operations into the transaction
@@ -1362,31 +1381,30 @@ static int dimes_obj_data_get(struct query_tran_entry_d *qte)
 			goto err_out_free;
 		}
 
-		i++;
-	}
-
-	if (i != qte->size_od) {
-		uloga("%s(): ERROR i=%d qte->size_od=%d\n",
-			__func__, i, qte->size_od);
-	}
-
-	// Block till all previously scheduled RDMA read transactions complete       
-	for (i = 0; i < qte->size_od; i++) {
 		err = dart_rdma_check_reads(trans_tab[i]->tran_id);
 		if (err < 0) {
 			uloga("%s(): failed with dart_rdma_check_reads on tran %d\n",
 				__func__, trans_tab[i]->tran_id);
 			goto err_out_free;
 		}
-		
-		err = dart_rdma_deregister_mem(&trans_tab[i]->dst);
-		if (err < 0) {
-			uloga("%s(): failed with dart_rdma_deregister_mem on tran %d\n",
-				__func__, trans_tab[i]->tran_id);
-			goto err_out_free;
+	
+		if (trans_tab[i]->remote_peer->ptlmap.id != DIMES_CID) {	
+			err = dart_rdma_deregister_mem(&trans_tab[i]->dst);
+			if (err < 0) {
+				uloga("%s(): failed dart_rdma_deregister_mem on tran %d\n",
+					__func__, trans_tab[i]->tran_id);
+				goto err_out_free;
+			}
 		}
 
 		dart_rdma_delete_read_tran(trans_tab[i]->tran_id);
+
+		i++;
+	}
+
+	if (i != qte->size_od) {
+		uloga("%s(): ERROR i=%d qte->size_od=%d\n",
+			__func__, i, qte->size_od);
 	}
 
 	// Send back ack messages to all dst. peers
