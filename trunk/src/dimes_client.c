@@ -71,6 +71,11 @@ do {								\
 #define RPC_S dimes_c->dcg->dc->rpc_s 
 #define NUM_SP dimes_c->dcg->dc->num_sp
 
+static int is_peer_on_same_core(struct node_id *peer)
+{
+	return (peer->ptlmap.id == DIMES_CID);
+}
+
 static struct {
 	int next;
 	int opid[4095];
@@ -1334,7 +1339,7 @@ static int dimes_obj_data_get(struct query_tran_entry_d *qte)
 
 		err = dart_rdma_create_read_tran(peer, &trans_tab[i]);	
 
-		if (trans_tab[i]->remote_peer->ptlmap.id == DIMES_CID) {
+		if (is_peer_on_same_core(trans_tab[i]->remote_peer)) {
 			// Data on local peer
 			struct dimes_memory_obj *mem_obj = mem_obj_list_find(&mem_obj_list,
 					hdr->sync_id);
@@ -1387,8 +1392,9 @@ static int dimes_obj_data_get(struct query_tran_entry_d *qte)
 				__func__, trans_tab[i]->tran_id);
 			goto err_out_free;
 		}
-	
-		if (trans_tab[i]->remote_peer->ptlmap.id != DIMES_CID) {	
+
+		if (!is_peer_on_same_core(trans_tab[i]->remote_peer)) {	
+			// Only deregister when data resides on remote peer
 			err = dart_rdma_deregister_mem(&trans_tab[i]->dst);
 			if (err < 0) {
 				uloga("%s(): failed dart_rdma_deregister_mem on tran %d\n",
