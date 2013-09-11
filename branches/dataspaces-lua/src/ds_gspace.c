@@ -473,19 +473,23 @@ static int lua_script_put_completion(struct rpc_server *rpc_s,
         struct obj_data *from_obj;
         from_obj = ls_find(dsg->ssd->storage, &hc->odsc);
 
-        // set the input data.
-        int num_input_elem =
-                obj_data_size(&from_obj->obj_desc) / sizeof(double);
         if (from_obj) {
+				int num_input_elem, num_output_elem;
+				void *input_data, *output_data;
+        		num_input_elem =
+					obj_data_size(&from_obj->obj_desc) / sizeof(double);
+				num_output_elem =
+                        LUA_BYTES_RESULT_PAD / sizeof(double);
+				input_data = from_obj->data;
+				output_data = result.pad;
+
+				// uloga("%s(): num_input_elem= %d, num_output_elem=%d\n", __func__, num_input_elem, num_output_elem);
+
 				tm_st = timer_read(&timer);
-                lua_exec_set_input_data(from_obj->data, num_input_elem);
-                lua_exec_set_output_data(result.pad,
-                        LUA_BYTES_RESULT_PAD / sizeof(double));
                 // Execute the in-memory lua script.
-                result.num_elem = lua_exec(msg->msg_data, msg->size);
-				result.num_elem = 0;
-                lua_exec_unset_input_data();
-                lua_exec_unset_output_data();
+                result.num_elem = lua_exec(msg->msg_data, msg->size,
+							input_data, num_input_elem,
+							output_data, num_output_elem);
 				tm_end = timer_read(&timer);
 				uloga("%s(): lua exec on %u bytes data, time= %lf\n",
 					__func__, obj_data_size(&from_obj->obj_desc), tm_end-tm_st);

@@ -205,7 +205,7 @@ static const char *lua_code_reader(lua_State *L, void *ud, size_t *size)
         return ptr->data+offset;
 }
 
-static void copy_data(lua_State *l, double *data, int num_elem)
+static void copy_input_data(lua_State *l, double *data, int num_elem)
 {
         int i;
 
@@ -224,23 +224,26 @@ static void copy_data(lua_State *l, double *data, int num_elem)
 
 // Public APIs.
 
-int lua_exec(void *code_buff, size_t code_size)
+int lua_exec(void *code_buff, size_t code_size, void *input_data, int num_input_elem, void *output_data, int num_output_elem)
 {
+		lua_exec_set_input_data(input_data, num_input_elem);
+		lua_exec_set_output_data(output_data, num_output_elem);
+
         lua_State *l;
         // Create a new Lua state.
         l = luaL_newstate();
         // Opens all standard Lua libraries into the given state.
         luaL_openlibs(l);
 
-        int num_output_elem = -1;
+        int num_result = -1;
         struct code_buffer buf;
         buf.data = code_buff;
         buf.size_bytes = code_size;
         buf.read_bytes = 0;
 
         // printf("lua_script_size= %u\n", code_size);
-
         DSpaceObj_register(l);
+		copy_input_data(l, (double *)input_data, num_input_elem);
 
         /* load the in-memory lua script */
         int status = lua_load(l, lua_code_reader, &buf, "LUA_CODE");
@@ -255,13 +258,16 @@ int lua_exec(void *code_buff, size_t code_size)
         }
 
         /* Get the returned value at the top of the stack. */
-        num_output_elem = lua_tonumber(l, -1);
+        num_result = lua_tonumber(l, -1);
         lua_pop(l, 1);  // Take the returned value out of the stack.
 
         /* Remember to destroy the Lua State */
         lua_close(l);
 
-        return num_output_elem;
+		lua_exec_unset_input_data();
+		lua_exec_unset_output_data();
+
+        return num_result;
 err_out:
         lua_close(l);
         return -1;

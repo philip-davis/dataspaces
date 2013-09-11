@@ -406,17 +406,16 @@ static int couple_local_exec_2d(double *m2d, unsigned int ts, enum transport_typ
 	// Read lua script file
 	void *code_buf = NULL;
 	size_t code_size;
-	int err = lua_load_script_file("simple_stat_nooutput.lua", &code_buf, &code_size);
+	int err = lua_load_script_file("simple_stat.lua", &code_buf, &code_size);
 	if (err < 0) {
 		return err;
 	}
-	lua_exec_set_input_data(m2d, spx_*spy_);
-	lua_exec(code_buf, code_size);
-	lua_exec_unset_input_data();
+
+	double output_data[3];
+	lua_exec(code_buf, code_size, m2d, spx_*spy_, output_data, 3);
 	free(code_buf);
 
 	tm_end = timer_read(&timer_);
-	
 	MPI_Barrier(gcomm_);
 
 	tm_diff = tm_end-tm_st;

@@ -42,7 +42,7 @@ void lua_exec_unset_input_data();
 void lua_exec_set_output_data(void *data, size_t len);
 void lua_exec_unset_output_data();
 
-int lua_exec(void *code_buff, size_t code_size);
+int lua_exec(void *code_buff, size_t code_size, void *input_data, int num_input_elem, void *output_data, int num_output_elem);
 int lua_load_script_file(const char *fname,
 	void **code_buf, size_t *code_size);
 #endif
