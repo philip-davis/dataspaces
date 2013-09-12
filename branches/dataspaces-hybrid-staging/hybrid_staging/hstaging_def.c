@@ -184,12 +184,12 @@ int evaluate_dataflow_by_available_var(struct hstaging_workflow *wf, struct var_
 	return 0;
 }
 
-static struct hstaging_task* task_lookup_by_name(struct hstaging_workflow *wf, const char *name)
+static struct hstaging_task* task_lookup_by_id(struct hstaging_workflow *wf, int tid)
 {
 	struct hstaging_task *task = NULL;
 	int i;
 	for (i = 0; i < wf->num_tasks; i++) {
-		if (0 == strcmp(wf->tasks[i].name, name)) {
+		if (wf->tasks[i].tid == tid) {
 			task = &(wf->tasks[i]);
 			return task;
 		}
@@ -226,12 +226,12 @@ static int read_workflow_task(struct hstaging_workflow *wf, char *fields[], int 
 		return -1;
 	}
 
-	struct hstaging_task *task = task_lookup_by_name(wf, fields[1]);
+	int tid = atoi(fields[1]);
+	struct hstaging_task *task = task_lookup_by_id(wf, tid);
 	if (task == NULL) {
 		// New task
 		task = &(wf->tasks[wf->num_tasks]);
-		strcpy(task->name, fields[1]);
-		task->tid = wf->num_tasks + 1; //TODO: fix me
+		task->tid = tid;
 		INIT_LIST_HEAD(&task->instances_list);
 		wf->num_tasks++;
 	}
@@ -375,7 +375,6 @@ struct hstaging_workflow* read_workflow_conf_file(const char *fname)
 			free(fields[j]);
 			j++;
 		}	
-
 	}
 
 	fclose(file);
@@ -389,7 +388,7 @@ void print_workflow(struct hstaging_workflow *wf)
 	int i;
 	for (i = 0; i < wf->num_tasks; i++) {
 		struct hstaging_task *task = &(wf->tasks[i]);
-		printf("\ntask name: %s\n", task->name);
+		printf("\ntask tid: %d\n", task->tid);
 		int j;
 		for (j = 0; j < task->num_vars; j++) {
 			printf("var '%s' type '%s'\n", task->vars[j].name,

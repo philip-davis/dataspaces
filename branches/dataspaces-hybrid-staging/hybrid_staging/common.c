@@ -302,3 +302,91 @@ void compute_stats(const char *var_name, double *buf, int num_elem, int rank, in
 #endif
         return;
 }
+
+double* allocate_data(int num_elem)
+{
+	double* tmp = NULL;
+	tmp = (double*)malloc(sizeof(double)*num_elem);
+	return tmp;
+}
+
+int generate_data(double *buf, unsigned int ts, int num_elem)
+{
+	double value = ts;
+	int i;
+	for (i = 0; i < num_elem; i++) {
+		buf[i] = value;
+	}
+
+	return 0;
+}
+
+int validate_data(void *buf, unsigned int ts, int num_elem)
+{
+	double value = ts;
+	double *tmp = (double *)buf;
+	int i, ret = 1;
+	for (i=0; i<num_elem; i++) {
+		if (tmp[i] != value)
+			ret = 0;
+	}
+
+	return ret;
+}
+
+int read_task_info(const char *fname, int *num_peer, int *npx, int *npy, int *npz, int *dims, int *dim_x, int *dim_y, int *dim_z) {
+	// Read config file.
+	FILE *f = NULL;
+	f = fopen(fname,"rt");
+	if(!f){
+		goto err_out;
+	}
+
+	int num_items = fscanf(
+		f, "num_peer=%d;npx=%d;npy=%d;npz=%d\n",
+		num_peer, npx, npy, npz);
+	if(num_items != 4)
+		goto err_out;
+
+	num_items = fscanf(
+		f, "dims=%d;dimx=%d;dimy=%d;dimz=%d\n",
+		dims, dim_x, dim_y, dim_z);
+	if(num_items != 4)
+		goto err_out;
+
+	fclose(f);
+	return 0;
+err_out:
+	if (f) {
+		fclose(f);
+	}
+	return -1;
+}
+
+int generate_bbox(struct g_info *g, int *xl, int *yl, int *zl, int *xu, int *yu, int *zu)
+{
+	if (g->dims == 2) {
+		g->offx = (g->rank % g->npx) * g->spx;
+		g->offy = (g->rank / g->npx) * g->spy;
+
+		*xl = g->offx;
+		*yl = g->offy;
+		*zl = 0;
+		*xu = g->offx + g->spx - 1;
+		*yu = g->offy + g->spy - 1;
+		*zu = 0;
+	} else if (g->dims == 3) {
+		g->offx = (g->rank % g->npx) * g->spx;
+		g->offy = (g->rank / g->npx % g->npy) * g->spy;
+		g->offz = (g->rank / g->npx / g->npy) * g->spz;
+
+		*xl = g->offx;
+		*yl = g->offy;
+		*zl = g->offz;
+		*xu = g->offx + g->spx - 1;
+		*yu = g->offy + g->spy - 1;
+		*zu = g->offz + g->spz - 1;
+	}
+
+	return 0;
+}

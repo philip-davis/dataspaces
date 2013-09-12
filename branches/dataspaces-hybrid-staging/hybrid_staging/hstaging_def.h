@@ -120,7 +120,7 @@ struct hstaging_var {
 
 struct hstaging_task {
 	int tid;
-	char name[NAME_MAXLEN];
+	// char name[NAME_MAXLEN];
 	struct hstaging_var vars[MAX_NUM_VARS];	
 	int num_vars;
 	struct list_head instances_list;
