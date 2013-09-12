@@ -70,4 +70,28 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type);
 void check_data(const char *var_name, double *buf, int num_elem, int rank, int ts);
 void compute_stats(const char *var_name, double *buf, int num_elem, int rank, int ts);
 int common_parse_args(int argc, char **argv, int *npapp, int *npx, int *npy, int *npz, int *spx, int *spy, int *spz, int *timestep);
+
+struct g_info {
+	//# of processors in x-y-z direction
+	int npx, npy, npz;
+	//block size per processor per direction
+	int spx, spy, spz;
+	int offx, offy, offz;
+	//# of iterations
+	int timestep;
+	//# of processors in the application
+	int nproc;
+	//# of dimensions
+	int dims;
+	int rank;
+};
+
+double* allocate_data(int num_elem);
+int generate_data(double *buf, unsigned int ts, int num_elem);
+int generate_bbox(struct g_info *g, int *xl, int *yl, int *zl, int *xu, int *yu, int *zu);
+
+int validate_data(void *buf, unsigned int ts, int num_elem);
+
+int read_task_info(const char *fname, int *num_peer, int *npx, int *npy, int *npz, int *dims, int *dim_x, int *dim_y, int *dim_z);
+
 #endif //end of __TEST_COMMON_H_
