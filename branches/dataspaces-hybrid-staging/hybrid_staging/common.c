@@ -242,41 +242,42 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type) {
 
 void check_data(const char *var_name, double *buf, int num_elem, int rank, int ts)
 {
-        double max, min, sum, avg;
-        int i;
+	double max, min, sum, avg;
+	int i;
 	int cnt = 0;
 
-        if (num_elem <= 0) {
-                return;
-        }
+	if (num_elem <= 0) {
+		return;
+	}
 
-        max = min = sum = buf[0];
-        for (i = 1; i < num_elem; i++) {
-                if (max < buf[i])
-                        max = buf[i];
-                if (min > buf [i])
-                        min = buf[i];
-                sum += buf[i];
+	max = min = sum = buf[0];
+	for (i = 1; i < num_elem; i++) {
+		if (max < buf[i])
+			max = buf[i];
+		if (min > buf [i])
+			min = buf[i];
+		sum += buf[i];
 		if (buf[i] != ts) {
 			cnt++;
 		}
-        }
-        avg = sum / num_elem;
+	}
+
+	avg = sum / num_elem;
 #ifdef DEBUG
-        uloga("%s(): var= %s, rank= %d, max= %f, min= %f, avg= %f\n",
-                __func__, var_name, rank, max, min, avg);
+	uloga("%s(): var= %s, rank= %d, max= %f, min= %f, avg= %f\n",
+			__func__, var_name, rank, max, min, avg);
 #endif
 
-        if (cnt > 0) {
-                uloga("%s(): var= %s, rank= %d, ts= %d, "
+	if (cnt > 0) {
+		uloga("%s(): var= %s, rank= %d, ts= %d, "
 			"error elem cnt= %d, total elem= %d\n",
-                        __func__, var_name, rank, ts, cnt, num_elem);
-        }
+			__func__, var_name, rank, ts, cnt, num_elem);
+	}
 	
-        return;
+	return;
 }
 
-void compute_stats(const char *var_name, double *buf, int num_elem, int rank, int ts)
+void compute_stats(const char *var_name, double *buf, int num_elem, int rank)
 {
         double max, min, sum, avg;
         int i;

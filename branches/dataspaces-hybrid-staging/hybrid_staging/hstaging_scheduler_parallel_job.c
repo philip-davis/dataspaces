@@ -31,30 +31,6 @@ static struct ds_gspace *dsg = NULL;
 
 static struct hstaging_workflow *wf = NULL;
 
-/*
- TODO: this file will be merged into ds_gspace.c ??
-*/
-// Header for messages that request bucket allocation from master srv
-/*
-struct hdr_req_allocation {
-	struct job_id jid;
-} __attribute__((__packed__));
-*/
-
-// Header for messages that reply bucket allocation requests
-/*
-struct hdr_req_allocation_reply {
-	int flag;
-	struct job_id jid;
-	int num_bk;
-} __attribute__((__packed__));
-
-struct allocation_request {
-	struct list_head req_entry;
-	int	dart_id; 
-};
-*/
-
 struct job_id {
 	int tid;
 	int step;
@@ -73,6 +49,8 @@ struct job {
 struct bucket {
 	struct	list_head entry;
 	int	dart_id;
+	int mpi_rank;
+	enum hstaging_location_type location_type;
 	struct job_id current_jid;
 };
 
@@ -491,11 +469,11 @@ static int process_jobq()
 
 static int callback_hs_req_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
+	struct hdr_request_task *hdr = (struct hdr_request_task*)cmd->pad;
 	struct bucket *bk;
-	int dart_id;
+	int dart_id = cmd->id;
 	int err = -ENOMEM;
 
-	dart_id = cmd->id;
 	bk = run_bk_list_lookup(dart_id);
 	if (bk) {
 		struct job* j = jobq_lookup(&bk->current_jid);
@@ -503,6 +481,8 @@ static int callback_hs_req_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	} else {
 		bk = (struct bucket*) malloc(sizeof(*bk));
 		bk->dart_id = dart_id;
+		bk->mpi_rank = hdr->mpi_rank;
+		bk->location_type = hdr->location_type;
 		idle_bk_list_add(bk);
 		uloga("%s(): should call idle_bk_list_add for #%d once\n",
 			__func__, dart_id);

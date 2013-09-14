@@ -142,7 +142,7 @@ static int callback_staging_exit_msg(struct rpc_server *rpc_s, struct rpc_cmd *c
 }
 
 
-static int request_task() {
+static int request_task(enum hstaging_location_type loc_type, int mpi_rank) {
 	struct msg_buf *msg;
 	struct node_id *peer;
 	int err = -ENOMEM;
@@ -154,6 +154,9 @@ static int request_task() {
 
 	msg->msg_rpc->cmd = hs_req_task_msg;
 	msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
+	struct hdr_request_task *hdr = (struct hdr_request_task *)msg->msg_rpc->pad;
+	hdr->mpi_rank = mpi_rank;
+	hdr->location_type = loc_type; 
 
 	err = rpc_send(dc->rpc_s, peer, msg);
 	if (err < 0) {
@@ -351,7 +354,7 @@ int hstaging_update_var(struct var_descriptor *var_desc, enum hstaging_update_va
 	ERROR_TRACE();
 }
 
-int hstaging_request_task(struct task_descriptor *t)
+int hstaging_request_task(struct task_descriptor *t, enum hstaging_location_type loc_type, int mpi_rank)
 {
 	int err;
 
@@ -359,7 +362,7 @@ int hstaging_request_task(struct task_descriptor *t)
 	g_info.current_task = t;
 
 	// Send hs_req_task_msg to master srv
-	err = request_task();
+	err = request_task(loc_type, mpi_rank);
 	if (err < 0)
 		return -1;
 
