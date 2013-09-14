@@ -96,57 +96,12 @@ static unsigned int next_pow_2(int n)
 extern char *str_append_const(char *, const char *);
 extern char *str_append(char *, char *);
 
-static void coord_print(struct coord *c, int num_dims)
-{
-        switch (num_dims) {
-        case 3:
-                printf("{%d, %d, %d}", c->c[0], c->c[1], c->c[2]);
-                break;
-        case 2:
-                printf("{%d, %d}", c->c[0], c->c[1]);
-                break;
-        case 1:
-                printf("{%d}", c->c[0]);
-        }
-}
-
+void coord_print(struct coord *c, int num_dims);
 /*
   Routine to return a string representation of the 'coord' object.
 */
-static char * coord_sprint(const struct coord *c, int num_dims)
-{
-	char *str;
-
-	if (num_dims == 3)
-		asprintf(&str, "{%d, %d, %d}", c->c[0], c->c[1], c->c[2]);
-	else if (num_dims == 2)
-		asprintf(&str, "{%d, %d}", c->c[0], c->c[1]);
-	else if (num_dims == 1)
-                asprintf(&str, "{%d}", c->c[0]);
-
-	return str;
-}
-
-static void bbox_print(struct bbox *bb)
-{
-        printf("{lb = ");
-        coord_print(&bb->lb, bb->num_dims);
-        printf(", ub = ");
-        coord_print(&bb->ub, bb->num_dims);
-        printf("}");
-}
-
-static char * bbox_sprint(const struct bbox *bb)
-{
-	char *str;
-
-	asprintf(&str, "{lb = ");
-        str = str_append(str, coord_sprint(&bb->lb, bb->num_dims));
-        str = str_append_const(str, ", ub = ");
-        str = str_append(str, coord_sprint(&bb->ub, bb->num_dims));
-        str = str_append_const(str, "}\n");
-
-	return str;
-}
+char * coord_sprint(const struct coord *c, int num_dims);
+void bbox_print(struct bbox *bb);
+char * bbox_sprint(const struct bbox *bb);
 
 #endif /* __BBOX_H_ */

@@ -14,24 +14,45 @@ static void print_str_decimal(const char *str)
 	printf("\n");
 }
 
+// TODO: use more generic approach to convert strings to type id
 static int str_to_var_type(const char *str, enum hstaging_var_type *type)
 {
-	if (0 == strcmp(str, "DEPEND")) {
+	if (0 == strcmp(str, "depend")) {
 		*type = DEPEND;
 		return 0;
 	}
  
-	if (0 == strcmp(str, "PUT")) {
+	if (0 == strcmp(str, "put")) {
 		*type = PUT;
 		return 0;
 	}
 
-	if (0 == strcmp(str, "GET")) {
+	if (0 == strcmp(str, "get")) {
 		*type = GET;
 		return 0;
 	}
 
 	fprintf(stderr, "Unknown variable type string '%s'\n", str);	
+	return -1;
+}
+
+static int str_to_placement_hint(const char *str, enum hstaging_placement_hint *hint)
+{
+	if (0 == strcmp(str, "insitu")) {
+		*hint = hint_insitu;
+		return 0;
+	}
+
+	if (0 == strcmp(str, "intransit")) {
+		*hint = hint_intransit;
+		return 0;
+	}
+
+	if (0 == strcmp(str, "none")) {
+		*hint = hint_none;
+	}
+
+	fprintf(stderr, "Unknown placement hint string '%s'\n", str);
 	return -1;
 }
 
@@ -218,37 +239,71 @@ static void task_add_var(struct hstaging_task *task, const enum hstaging_var_typ
 	return;
 }
 
+static int read_task_var_info(struct hstaging_task *task, char *fields[], int num_fields)
+{
+	int index_to_var_type = 3;
+	// Get var type
+	enum hstaging_var_type type;
+	if (str_to_var_type(fields[index_to_var_type], &type) < 0) {
+		return -1;
+	}
+
+	// Get the variables
+	int vars_start_at = 4;
+	int i = vars_start_at, j = 0;
+	while (i < num_fields) {
+		task_add_var(task, type, fields[i]);
+		i++;
+	}
+
+	return 0;
+}
+
+static int read_task_placement_hint(struct hstaging_task *task, char *fields[], int num_fields)
+{
+	int index_to_hint = 3;
+	// Get placement hint
+	if (str_to_placement_hint(fields[index_to_hint], &task->placement_hint) < 0 ) {
+		return -1;
+	}
+
+	return 0;
+}
+
 static int read_workflow_task(struct hstaging_workflow *wf, char *fields[], int num_fields)
 {
-	// TODO: remove the magic number
-	if (num_fields < 4) {
+	int index_to_tid = 1;
+	int index_to_desc = 2;
+	int required_fields = 4;
+
+	if (num_fields < required_fields) {
 		fprintf(stderr, "Can NOT be valid task information\n");
 		return -1;
 	}
 
-	int tid = atoi(fields[1]);
+	int tid = atoi(fields[index_to_tid]);
 	struct hstaging_task *task = task_lookup_by_id(wf, tid);
 	if (task == NULL) {
 		// New task
 		task = &(wf->tasks[wf->num_tasks]);
 		task->tid = tid;
+		task->placement_hint = hint_none;
+		task->num_vars = 0;
 		INIT_LIST_HEAD(&task->instances_list);
 		wf->num_tasks++;
 	}
 
-	// Get var type
-	enum hstaging_var_type type;
-	if (str_to_var_type(fields[2], &type) < 0) {
-		wf->num_tasks--;
-		return -1;
-	}
-
-	// Get the variables
-	int var_field_start_at = 3;
-	int i = var_field_start_at, j = 0;
-	while (i < num_fields) {
-		task_add_var(task, type, fields[i]);
-		i++;
+	char *t_desc = fields[index_to_desc];
+	if (0 == strcmp(t_desc, "variable_info")) {
+		if(read_task_var_info(task, fields, num_fields) < 0) {
+			wf->num_tasks--;
+			return -1;
+		}
+	} else if (0 == strcmp(t_desc, "placement_hint")) {
+		if(read_task_placement_hint(task, fields, num_fields) < 0) {
+			wf->num_tasks--;
+			return -1;	
+		}
 	}
 
 	return 0;
@@ -314,7 +369,7 @@ struct hstaging_workflow* read_workflow_conf_file(const char *fname)
 {
 	int err = -1;
 	const size_t MAX_LINE = 4096;
-	const char *DELIM = " \t\n\r";
+	const char *DELIM = " \t\n\r"; //space, tab, line feed, carriage return
 	const int MAX_FIELDS = 50;
 
 	struct hstaging_workflow *wf = new_workflow(fname);
@@ -365,7 +420,7 @@ struct hstaging_workflow* read_workflow_conf_file(const char *fname)
 		}
 
 		// Read workflow task information
-		if (0 == strcmp("TASK", fields[0])) {
+		if (0 == strcmp("task", fields[0])) {
 			read_workflow_task(wf, fields, n);
 		}
 
@@ -388,7 +443,8 @@ void print_workflow(struct hstaging_workflow *wf)
 	int i;
 	for (i = 0; i < wf->num_tasks; i++) {
 		struct hstaging_task *task = &(wf->tasks[i]);
-		printf("\ntask tid: %d\n", task->tid);
+		printf("\ntask tid: %d placement_hint: %d ",
+			task->tid, task->placement_hint);
 		int j;
 		for (j = 0; j < task->num_vars; j++) {
 			printf("var '%s' type '%s'\n", task->vars[j].name,

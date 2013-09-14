@@ -5,8 +5,8 @@
 extern "C" {
 #endif
 
-#include "list.h"
-#include "ss_data.h"
+//#include "list.h"
+//#include "ss_data.h"
 #include "hstaging_partition.h"
 #include "hstaging_def.h"
 
@@ -31,7 +31,7 @@ int hstaging_get_var(const char *var_name, unsigned int ver, int size,
 
 int hstaging_update_var(struct var_descriptor *var_desc, enum hstaging_update_var_op op);
 
-int hstaging_request_task(struct task_descriptor *t);
+int hstaging_request_task(struct task_descriptor *t, enum hstaging_location_type loc_type, int mpi_rank);
 
 #ifdef __cplusplus
 }

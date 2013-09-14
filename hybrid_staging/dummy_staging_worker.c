@@ -11,24 +11,29 @@ typedef int (*task_function)(struct task_descriptor *t);
 static struct {
 	int tid;
 	task_function func_ptr;
-} parallel_tasks[64];
-static int num_tasks = 0;
+} parallel_tasks_[64];
+static int num_tasks_ = 0;
+
+static enum hstaging_location_type loctype_;
+static MPI_Comm comm_;
+static int mpi_nprocs_;
+static int mpi_rank_;
 
 static struct g_info g;
 
 static int add_task_function(int tid, task_function func_ptr)
 {
-	parallel_tasks[num_tasks].tid = tid;
-	parallel_tasks[num_tasks].func_ptr = func_ptr;
-	num_tasks++;
+	parallel_tasks_[num_tasks_].tid = tid;
+	parallel_tasks_[num_tasks_].func_ptr = func_ptr;
+	num_tasks_++;
 }
 
 static int exec_task_function(struct task_descriptor *t)
 {
 	int i;
-	for (i = 0; i < num_tasks; i++) {
-		if (t->tid == parallel_tasks[i].tid) {
-			return (parallel_tasks[i].func_ptr)(t);
+	for (i = 0; i < num_tasks_; i++) {
+		if (t->tid == parallel_tasks_[i].tid) {
+			return (parallel_tasks_[i].func_ptr)(t);
 		}
 	} 
 
@@ -111,15 +116,11 @@ static int read_input_data(struct task_descriptor *t)
 		}
 
 		if (var_desc->bb.num_dims == 2) {
-			err = validate_data(databuf, t->step, g.spx*g.spy);
+			//err = validate_data(databuf, t->step, g.spx*g.spy);
+			compute_stats(var_desc->var_name, databuf, g.spx*g.spy, t->rank);
 		} else if (var_desc->bb.num_dims == 3) {
-			err = validate_data(databuf, t->step, g.spx*g.spy*g.spz);
-		}
-
-		if (!err) {
-			uloga("%s(): tid= %d step= %d rank= %d nproc= %d "
-				"var '%s' validate_data() failed\n", __func__,
-				t->tid, t->step, t->rank, t->nproc, var_desc->var_name);
+			//err = validate_data(databuf, t->step, g.spx*g.spy*g.spz);
+			compute_stats(var_desc->var_name, databuf, g.spx*g.spy*g.spz,t->rank);
 		}
 
 		free(databuf);
@@ -186,7 +187,7 @@ int task1(struct task_descriptor *t)
 {
 	read_input_data(t);
 	// Do some computation
-	write_output_data(t, "topology_var2");
+	// write_output_data(t, "topology_var2");
 	return 0;
 }
 
@@ -194,7 +195,7 @@ int task2(struct task_descriptor *t)
 {
 	read_input_data(t);
 	// Do some computation
-	write_output_data(t, "stat_var2");
+	// write_output_data(t, "stat_var2");
 	return 0;
 } 
 
@@ -202,7 +203,7 @@ int task3(struct task_descriptor *t)
 {
 	read_input_data(t);
 	// Do some computation
-	write_output_data(t, "viz_var2");
+	// write_output_data(t, "viz_var2");
 	return 0;
 } 
 
@@ -227,15 +228,16 @@ int task6(struct task_descriptor *t)
 	return 0;
 } 
 
-int dummy_s3d_staging_parallel_job(MPI_Comm comm)
+int dummy_s3d_staging_parallel_job(MPI_Comm comm, enum hstaging_location_type loc_type)
 {
 	int i, err;
-	int nprocs, mpi_rank;
-	
-	MPI_Comm_size(comm, &nprocs);
-	MPI_Comm_rank(comm, &mpi_rank);
-	if (mpi_rank == 0) {
-		uloga("Dummy S3D staging: total %d workers\n", nprocs);
+
+	loctype_ = loc_type;	
+	comm_ = comm;
+	MPI_Comm_size(comm_, &mpi_nprocs_);
+	MPI_Comm_rank(comm_, &mpi_rank_);
+	if (mpi_rank_ == 0) {
+		uloga("Dummy S3D staging: total %d workers\n", mpi_nprocs_);
 	}
 
 	add_task_function(1, task1);
@@ -246,7 +248,7 @@ int dummy_s3d_staging_parallel_job(MPI_Comm comm)
 	add_task_function(6, task6);	
 
 	struct task_descriptor t;
-	while ( !hstaging_request_task(&t)) {
+	while ( !hstaging_request_task(&t, loctype_, mpi_rank_)) {
 		hstaging_put_sync_all();
 		err = exec_task_function(&t);	
 		if (t.num_input_vars > 0 && t.input_vars) {

@@ -41,7 +41,7 @@ extern int dummy_s3d_simulation(MPI_Comm comm, int num_ts, int npx, int npy, int
 
 static enum execution_mode exemode_ = hs_hybrid_staging_mode;
 static enum core_type coretype_ = hs_worker_core;
-static enum location_type loctype_ = hs_intransit;
+static enum hstaging_location_type loctype_ = loc_insitu;
 static enum worker_type workertype_ = hs_simulation_worker;
 
 int main(int argc, char **argv)

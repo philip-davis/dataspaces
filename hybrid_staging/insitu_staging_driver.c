@@ -37,12 +37,10 @@
 
 #include "hybrid_staging_api.h"
 
-extern int dummy_s3d_simulation(MPI_Comm comm, int num_ts);
-extern int dummy_s3d_staging_serial_job(MPI_Comm comm);
-extern int dummy_s3d_staging_parallel_job(MPI_Comm comm);
+extern int dummy_s3d_staging_parallel_job(MPI_Comm, enum hstaging_location_type);
 
 static enum execution_mode exemode_ = hs_hybrid_staging_mode;
-static enum location_type loctype_ = hs_insitu;
+static enum hstaging_location_type loctype_ = loc_insitu;
 static enum core_type coretype_ = hs_worker_core;
 static enum worker_type workertype_ = hs_staging_worker;
 
@@ -61,7 +59,7 @@ int main(int argc, char **argv)
 	err = hstaging_init(nproc, workertype_, appid);             
     
 	uloga("in-situ staging: num_worker= %d\n", nproc);
-	err = dummy_s3d_staging_parallel_job(comm);
+	err = dummy_s3d_staging_parallel_job(comm, loctype_);
 	if (err < 0)
 		goto err_out;
 
