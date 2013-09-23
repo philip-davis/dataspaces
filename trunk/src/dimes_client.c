@@ -78,7 +78,7 @@ static int is_peer_on_same_core(struct node_id *peer)
 
 static struct {
 	int next;
-	int opid[4095];
+	int opid[4096];
 } sync_op_d;
 
 static int syncop_next_d(void)
@@ -115,16 +115,26 @@ struct dimes_memory_obj {
 	void *arg2;
 };
 
-// List of dimes_memory_obj  
-static struct list_head mem_obj_list;
-static inline int mem_obj_list_add(struct list_head *l, struct dimes_memory_obj *p) {
+struct dimes_storage_group {
+	struct list_head entry;
+	char *name;
+	// List of dimes_memory_obj
+	struct list_head mem_obj_list;
+}
+
+//static struct list_head mem_obj_list;
+char *current_group_name = NULL;
+const char* default_group_name = "__default_storage_group__";
+static struct list_head storage;
+
+static int mem_obj_list_add(struct list_head *l, struct dimes_memory_obj *p) {
 	list_add(&p->entry, l);
 	return 0;
 }
 
-static inline int mem_obj_list_del(struct list_head *l, int sid) {
-	struct dimes_memory_obj *p, *tmp;
-	list_for_each_entry_safe(p, tmp, l, struct dimes_memory_obj, entry) {
+static int mem_obj_list_delete(struct list_head *l, int sid) {
+	struct dimes_memory_obj *p, *t;
+	list_for_each_entry_safe(p, t, l, struct dimes_memory_obj, entry) {
 		if (p->sid == sid) {
 			list_del(&p->entry);
 			free(p);
@@ -135,7 +145,7 @@ static inline int mem_obj_list_del(struct list_head *l, int sid) {
 	return -1;
 }
 
-static inline struct dimes_memory_obj* mem_obj_list_find(struct list_head *l, int sid) {
+static struct dimes_memory_obj* mem_obj_list_lookup(struct list_head *l, int sid) {
 	struct dimes_memory_obj *p;
 	list_for_each_entry(p, l, struct dimes_memory_obj, entry) {
 		if (p->sid == sid)
@@ -144,6 +154,92 @@ static inline struct dimes_memory_obj* mem_obj_list_find(struct list_head *l, in
 
 	return NULL;
 } 
+
+static struct dimes_storage_group* storage_add_group(const char *group_name)
+{
+	struct dimes_storage_group *p = malloc(sizeof(*p));
+	p->name = (char *)malloc(strlen(group_name)+1);
+	strcpy(p->name, group_name);
+	INIT_LIST_HEAD(&p->mem_obj_list);
+
+	list_add(&p->entry, &storage);	
+	return p;
+}
+
+static void storage_init()
+{
+	INIT_LIST_HEAD(&storage);
+
+    // Add the default storage group
+	struct dimes_storage_group *p =
+			storage_add_group(default_group_name);
+
+	// Set current group as default
+	current_group_name = p->name;	
+} 
+
+static void storage_free()
+{
+	struct dimes_storage_group *p, *t;
+	list_for_each_entry_safe(p, t, &storage, struct dimes_storage_group, entry) 
+	{
+		list_del(&p->entry);
+		if (p->name != NULL) free(p->name);
+		free(p);
+	}
+
+	current_group_name = NULL;
+}
+
+static struct dimes_storage_group* storage_lookup_group(const char *group_name)
+{
+	struct dimes_storage_group *p;
+	list_for_each_entry(p, &storage, struct dimes_storage_group, entry)
+	{
+		if (p->name == NULL) continue;
+		if (0 == strcmp(p->name, group_name)) {
+			return p;
+		} 
+	}
+
+	return NULL;
+} 
+
+static int storage_add_obj(struct dimes_memory_obj *mem_obj)
+{
+	struct dimes_storage_group *p = storage_lookup_group(current_group_name);
+	if (p == NULL) {
+		return -1;
+	}
+
+	return mem_obj_list_add(&p->mem_obj_list, mem_obj);
+}
+
+static int storage_delete_obj(int sid)
+{
+	struct dimes_storage_group *p;
+	list_for_each_entry(p, &storage, struct dimes_storage_group, entry)
+	{
+		if(0 == mem_obj_list_delete(&p->mem_obj_list, sid)) {
+			return 0;
+		}
+	}	
+
+	return -1;
+}
+
+static struct dimes_memory_obj* storage_lookup_obj(int sid)
+{
+	struct dimes_storage_group *p;
+	list_for_each_entry(p, &storage, struct dimes_storage_group, entry)
+	{
+		struct dimes_memory_obj *mem_obj;
+		mem_obj = mem_obj_list_lookup(&p->mem_obj_list, sid);
+		if (mem_obj != NULL) return mem_obj;
+	}	
+
+	return NULL;
+}
 
 static inline void inc_rdma_pending()
 {
@@ -755,7 +851,7 @@ static int dimes_obj_put_test(struct obj_data *od)
 	mem_obj->sid = sid;
 	mem_obj->bytes_read = 0;
 	mem_obj->arg1 = mem_obj->arg2 = NULL;
-	mem_obj_list_add(&mem_obj_list, mem_obj);
+	storage_add_obj(mem_obj);
 
 	return 0;
 err_out:
@@ -1026,7 +1122,7 @@ static int dimes_obj_put(struct obj_data *od)
 	mem_obj->bytes_read = 0;
 	mem_obj->arg1 = rdma_hndl;
 	mem_obj->arg2 = od;
-	mem_obj_list_add(&mem_obj_list, mem_obj);
+	storage_add_obj(mem_obj);
 
 	return 0;
 err_out:
@@ -1341,8 +1437,7 @@ static int dimes_obj_data_get(struct query_tran_entry_d *qte)
 
 		if (is_peer_on_same_core(trans_tab[i]->remote_peer)) {
 			// Data on local peer
-			struct dimes_memory_obj *mem_obj = mem_obj_list_find(&mem_obj_list,
-					hdr->sync_id);
+			struct dimes_memory_obj *mem_obj = storage_lookup_obj(hdr->sync_id);
 			if (mem_obj == NULL) {
 				uloga("%s(): failed to find dimes memory object sid=%d\n",
 					__func__, hdr->sync_id);
@@ -1512,7 +1607,7 @@ static int dcgrpc_dimes_obj_get_ack_v1(struct rpc_server *rpc_s, struct rpc_cmd 
 	int sid = oh->sync_id;
 	int err = -ENOMEM;
 
-	struct dimes_memory_obj *mem_obj = mem_obj_list_find(&mem_obj_list, sid);
+	struct dimes_memory_obj *mem_obj = storage_lookup_obj(sid);
 	if (mem_obj == NULL) {
 		uloga("%s(): failed to find dimes memory object sid=%d\n", __func__, sid);
 		err = -1;
@@ -1556,7 +1651,7 @@ static int dcgrpc_dimes_obj_get_ack_v2(struct rpc_server *rpc_s, struct rpc_cmd 
 	int sid = oh->sync_id;
 	int err = -ENOMEM;
 
-	struct dimes_memory_obj *mem_obj = mem_obj_list_find(&mem_obj_list, sid);
+	struct dimes_memory_obj *mem_obj = storage_lookup_obj(sid);
 	if (mem_obj == NULL) {
 		uloga("%s(): failed to find dimes memory object sid=%d\n", __func__, sid);
 		err = -1;
@@ -1595,7 +1690,7 @@ static int dcgrpc_dimes_obj_get_ack_v2(struct rpc_server *rpc_s, struct rpc_cmd 
 	ERROR_TRACE();	
 }
 
-static int dimes_put_sync_all_with_timeout(float timeout_sec)
+static int dimes_put_sync_with_timeout(float timeout_sec, struct dimes_storage_group *group)
 {
 	int err;
 	if (!dimes_c) {
@@ -1613,13 +1708,12 @@ static int dimes_put_sync_all_with_timeout(float timeout_sec)
 
 	while (stay_in_poll_loop) {	
 		// Check the size of mem_obj_list
-		if (list_empty(&mem_obj_list)) {
-			err = 0;
+		if (list_empty(&group->mem_obj_list)) {
 			break;
 		}
 
-		struct dimes_memory_obj *p, *tmp;
-		list_for_each_entry_safe(p, tmp, &mem_obj_list,
+		struct dimes_memory_obj *p, *t;
+		list_for_each_entry_safe(p, t, &group->mem_obj_list,
 					 struct dimes_memory_obj, entry) {
 			// TODO: fix this part
 #ifdef HAVE_DCMF
@@ -1702,8 +1796,7 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 		return NULL;
 	}
 
-	INIT_LIST_HEAD(&mem_obj_list);
-
+	storage_init();
 	dart_rdma_init(RPC_S);
 
 #ifdef DEBUG
@@ -1722,6 +1815,7 @@ void dimes_client_free(void) {
 	free(dimes_c);
 	dimes_c = NULL;
 
+	storage_free();
 	dart_rdma_finalize();
 }
 
@@ -1831,57 +1925,64 @@ err_out:
 
 int common_dimes_put_sync_all(void)
 {
-/*
 	int err;
-	if (!dimes_c) {
-		uloga("'%s()': library was not properly initialized!\n",
-				 __func__);
-		return -EINVAL;
+	struct dimes_storage_group *p;
+	list_for_each_entry(p, &storage, struct dimes_storage_group, entry)
+	{	
+		err = dimes_put_sync_with_timeout(-1.0, p);
+		if (err < 0) return err;
 	}
 
-	do {
-		// Check the size of mem_obj_list
-		if (list_empty(&mem_obj_list)) {
-			err = 0;
-			break;
-		}
-
-		struct dimes_memory_obj *p, *tmp;
-		list_for_each_entry_safe(p, tmp, &mem_obj_list,
-					 struct dimes_memory_obj, entry) {
-			// TODO: fix this part
-#ifdef HAVE_DCMF
-			err = rpc_process_event(RPC_S);
-#else
-			err = rpc_process_event_with_timeout(RPC_S, 1);
-#endif
-			if (err < 0) {
-				return -1;
-			}
-
-			switch (dimes_memory_obj_status(p)) {
-			case DIMES_PUT_OK:
-				list_del(&p->entry);
-				free(p);
-				break;
-			case DIMES_PUT_PENDING:
-				// Continue to block and check...
-				break;
-			default:
-				uloga("%s(): err= %d shouldn't happen!\n", __func__, err);
-				break;
-			}
-		}
-	} while (1);
-
-	return err;
-*/
-	return dimes_put_sync_all_with_timeout(-1.0);
+	return 0;
 }
 
+/*
 int common_dimes_put_sync_all_with_timeout(float timeout_sec)
 {
 	return dimes_put_sync_all_with_timeout(timeout_sec);
 }
+*/
+
+int common_dimes_put_group_start(const char *group_name)
+{
+    struct dimes_storage_group *p;
+    p = storage_lookup_group(group_name);
+    if (p == NULL) {
+        p = storage_add_group(group_name);
+    }
+
+    current_group_name = p->name;
+
+	return 0;
+}
+
+int common_dimes_put_group_end(const char *group_name)
+{
+    struct dimes_storage_group *p;
+    p = storage_lookup_group(default_group_name);
+    if (p == NULL) {
+        uloga("%s(): p == NULL should not happen!\n", __func__);
+        p = storage_add_group(default_group_name);
+    }
+
+    current_group_name = p->name;
+
+	return 0;
+}
+
+int common_dimes_put_sync_by_group(const char *group_name)
+{
+    int err;
+    struct dimes_storage_group *p;
+    p = storage_lookup_group(group_name);
+    if (p == NULL) return 0;
+
+    uloga("%s(): storage group name %s\n", __func__, p->name);
+    err = dimes_put_sync_with_timeout(-1, p);
+    if (err < 0) return err;
+
+    return 0;
+}
+
 
 #endif // end of #ifdef DS_HAVE_DIMES
