@@ -170,4 +170,19 @@ int dimes_put (const char *var_name,
 {
 	return common_dimes_put(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
 }
+
+int dimes_put_sync_group(const char* group_name)
+{
+    return common_dimes_put_sync_by_group(group_name);
+}
+
+int dimes_put_group_start(const char* group_name)
+{
+    return common_dimes_put_group_start(group_name);
+}
+
+int dimes_put_group_end(const char* group_name)
+{
+    return common_dimes_put_group_end(group_name);
+}
 #endif
