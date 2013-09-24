@@ -57,16 +57,16 @@ int main(int argc, char **argv)
     MPI_Comm_split(MPI_COMM_WORLD, appid, rank, &comm);
     MPI_Comm_size(comm, &nproc);
 
-	err = hstaging_init(nproc, workertype_, appid);             
-    
 	uloga("in-situ staging: num_worker= %d\n", nproc);
+	err = hstaging_init(nproc, appid, workertype_);             
+    
 	err = dummy_s3d_staging_parallel_job(comm, loctype_);
 	if (err < 0)
 		goto err_out;
 
 	hstaging_finalize();
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Barrier(comm);
 	MPI_Finalize();
 
 	return 0;

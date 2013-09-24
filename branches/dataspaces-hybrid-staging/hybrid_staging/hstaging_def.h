@@ -133,6 +133,7 @@ struct task_instance {
 	struct list_head input_vars_list;
 	enum hstaging_task_status status;
     enum hstaging_placement_hint placement_hint; 
+    int size_hint;
 };
 
 ////
@@ -145,7 +146,7 @@ struct hstaging_var {
 struct hstaging_task {
 	int tid;
 	enum hstaging_placement_hint placement_hint;
-	// char name[NAME_MAXLEN];
+    int size_hint; // number of processor cores
 	struct hstaging_var vars[MAX_NUM_VARS];	
 	int num_vars;
 	struct list_head instances_list;

@@ -62,7 +62,7 @@ int run_scheduler_parallel(int argc, char **argv) {
 
 	hstaging_scheduler_parallel_finish();
 
-	uloga("All ok.\n");	
+	uloga("%s(): all ok.\n", __func__);	
 
 	return 0;
 }
@@ -80,9 +80,7 @@ int main(int argc, char **argv)
 
 	err = run_scheduler_parallel(argc, argv);
 
-	uloga("All ok.\n");	
-
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(comm);
     MPI_Finalize();
 
 	return 0;
