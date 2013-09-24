@@ -85,6 +85,21 @@ static void dart_rdma_cb_get_completion(void *clientdata, DCMF_Error_t *err_dcmf
 	return;
 }
 
+static int dart_perform_local_reads(struct dart_rdma_read_tran *read_tran)
+{
+	struct dart_rdma_read_op *read_op, *t;
+	list_for_each_entry_safe(read_op, t, &read_tran->read_ops_list,
+				struct dart_rdma_read_op, entry) {
+		memcpy(read_tran->dst.base_addr + read_op->dst_offset,
+			read_tran->src.base_addr + read_op->src_offset,
+			read_op->bytes);
+		list_del(&read_op->entry);
+		free(read_op);
+	}
+
+	return 0;	
+}
+
 static int dart_rdma_get(struct dart_rdma_read_tran *read_tran,
                          struct dart_rdma_read_op *read_op)
 {
@@ -195,6 +210,8 @@ int dart_rdma_register_mem(struct dart_rdma_mem_handle *mem_hndl,
 				__func__, bytes_out, bytes);
 	}
 #endif
+	mem_hndl->size = bytes;
+	mem_hndl->base_addr = data;
 
 	return 0;
 err_out:
@@ -276,6 +293,11 @@ int dart_rdma_perform_reads(int tran_id)
 		uloga("%s(): read tran with id= %d not found!\n",
 				__func__, tran_id);
 		return -1;
+	}
+
+	if (drh->rpc_s->ptlmap.id == read_tran->remote_peer->ptlmap.id) {
+		dart_perform_local_reads(read_tran);
+		return 0;
 	}
 
 	int cnt = 0;
@@ -393,6 +415,7 @@ int dart_rdma_get_memregion_from_cmd(struct dart_rdma_mem_handle *mem_hndl,
 	memcpy(&mem_hndl->memregion, &cmd->mem_region,
 		   sizeof(DCMF_Memregion_t));
 	mem_hndl->size = cmd->mem_size;
+	mem_hndl->base_addr = NULL; 
 	return 0;
 }
 

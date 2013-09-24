@@ -12,7 +12,7 @@ extern "C" {
 #define MAX_NUM_TASKS 512 
 #define MAX_NUM_VARS 48 
 
-#define BK_GROUP_BASIC_SIZE 4
+#define BK_GROUP_BASIC_SIZE 16 
 #define MAX_NUM_SPLIT_LEVEL 30
 
 // TODO: change to lowercase, reasonable naming for the enum types below

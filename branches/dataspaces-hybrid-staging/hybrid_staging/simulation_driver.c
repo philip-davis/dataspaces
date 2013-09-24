@@ -47,21 +47,23 @@ static enum worker_type workertype_ = hs_simulation_worker;
 int main(int argc, char **argv)
 {
 	int err;
-	int appid, nproc;
+	int appid, rank, nproc;
 	int npapp, npx, npy, npz;
 	int spx, spy, spz;
 	int dims, timestep;
+    MPI_Comm comm;
 
 	if (common_parse_args(argc, argv, &npapp, &npx, &npy, &npz,
 		&spx, &spy, &spz, &timestep) != 0) {
 		goto err_out;
 	}
 
+	appid = 1;
 	MPI_Init(&argc, &argv);
-	MPI_Comm comm = MPI_COMM_WORLD;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_split(MPI_COMM_WORLD, appid, rank, &comm);
 	MPI_Comm_size(comm, &nproc);
 
-	appid = 1;
 	err = hstaging_init(nproc, workertype_, appid); 
 
 	uloga("simulation: num_worker= %d\n", nproc);
@@ -73,7 +75,7 @@ int main(int argc, char **argv)
 
 	hstaging_finalize();
 
-	MPI_Barrier(comm);
+	MPI_Barrier(MPI_COMM_WORLD);
 	MPI_Finalize();
 
 	return 0;	

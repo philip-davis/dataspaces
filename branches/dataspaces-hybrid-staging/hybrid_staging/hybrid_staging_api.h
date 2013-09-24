@@ -33,7 +33,7 @@ int hstaging_update_var(struct var_descriptor *var_desc, enum hstaging_update_va
 
 int hstaging_request_task(struct task_descriptor *t);
 int hstaging_set_task_done(struct task_descriptor *t);
-int hstaging_register_bucket_resource(enum hstaging_locaton_type loc_type, int num_bucket, int mpi_rank);
+int hstaging_register_bucket_resource(enum hstaging_location_type loc_type, int num_bucket, int mpi_rank);
 
 #ifdef __cplusplus
 }

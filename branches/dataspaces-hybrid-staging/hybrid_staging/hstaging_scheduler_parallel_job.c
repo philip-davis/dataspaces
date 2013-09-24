@@ -492,7 +492,7 @@ err_out:
 static int job_allocate_bk(struct job *j)
 {
 	if (j->ti->status != PENDING) {
-		return;
+		return 0;
 	}
 
     // Try to determine placement location
@@ -540,7 +540,7 @@ static int job_allocate_bk(struct job *j)
         int rank_hint = i - bk_group->rank_range.l;
         int nproc_hint = bk_group->size;
 		if (job_notify_bk(j, bk, rank_hint, nproc_hint) < 0) {
-			return;
+			return -1;
 		}
 	}
 
@@ -550,7 +550,7 @@ static int job_allocate_bk(struct job *j)
     uloga("%s(): assign job (%d,%d) to bk_group: size %d color %d\n",
         __func__, j->jid.tid, j->jid.step, bk_group->size, bk_group->color);
 
-	return;	
+	return 0;	
 }
 
 static int jobq_free()
