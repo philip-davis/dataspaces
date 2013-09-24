@@ -6,36 +6,122 @@
 #include "hybrid_staging_api.h"
 #include "mpi.h"
 
-typedef int (*task_function)(struct task_descriptor *t);
+struct parallel_communicator {
+    int level;
+    int color;
+    MPI_Comm comm;
+};
+static struct parallel_communicator comms[MAX_NUM_SPLIT_LEVEL];
 
-static struct {
+typedef int (*task_function)(struct task_descriptor *t);
+struct parallel_task {
 	int tid;
 	task_function func_ptr;
-} parallel_tasks_[64];
+};
+static struct parallel_task ptasks[64];
 static int num_tasks_ = 0;
 
 static enum hstaging_location_type loctype_;
-static MPI_Comm comm_;
-static int mpi_nprocs_;
-static int mpi_rank_;
-
 static struct g_info g;
+
+static struct parallel_communicator* parallel_comm_lookup(int color)
+{
+    int i;
+    for (i = 0; i < MAX_NUM_SPLIT_LEVEL; i++) {
+        if (comms[i].color == color) {
+            return &(comms[i]);
+        }
+    }
+
+    return NULL; 
+}
+
+static int parallel_comm_init()
+{
+    int i;
+    for (i = 0; i < MAX_NUM_SPLIT_LEVEL; i++) {
+        comms[i].level = -1;
+        comms[i].color = -1;
+    }
+
+    return 0;    
+}
+
+void recursive_split_mpi_comm(int current_level, int color)
+{
+    int rank, nproc;
+    int l = current_level;
+    MPI_Comm_rank(comms[l].comm, &rank);
+    MPI_Comm_size(comms[l].comm, &nproc);
+    if (rank == 0) {
+        uloga("%s(): loctype %d level %d color %d nproc %d\n",
+            __func__, loctype_, current_level, color, nproc);
+    } 
+
+    if (nproc <= BK_GROUP_BASIC_SIZE) return; // Done!
+    if (0 != (nproc % BK_GROUP_BASIC_SIZE)) {
+        uloga("%s(): nproc is not multiply of %d\n",
+            __func__, nproc, BK_GROUP_BASIC_SIZE);
+        return;
+    }
+    if (current_level+1 >= MAX_NUM_SPLIT_LEVEL) return;
+
+    int left_child_size, right_child_size;
+    int left_child_color = color * 2;
+    int right_child_color = color * 2 + 1;
+
+    left_child_size = nproc / 2;
+    if ((left_child_size % BK_GROUP_BASIC_SIZE) != 0) {
+        int t = left_child_size / BK_GROUP_BASIC_SIZE;
+        left_child_size = (t+1) * BK_GROUP_BASIC_SIZE;
+    }     
+    right_child_size = nproc - left_child_size;
+
+    if (rank < left_child_size) {
+        MPI_Comm_split(comms[l].comm, left_child_color, rank, &(comms[l+1].comm));
+        comms[l+1].level = l+1;
+        comms[l+1].color = left_child_color;
+        recursive_split_mpi_comm(l+1, left_child_color);
+    } else {
+        MPI_Comm_split(comms[l].comm, right_child_color, rank, &(comms[l+1].comm));
+        comms[l+1].level = l+1;
+        comms[l+1].color = right_child_color;
+        recursive_split_mpi_comm(l+1, right_child_color);
+    }
+}
+
+static void task_done(struct task_descriptor *t)
+{
+    struct parallel_communicator *comm;
+    comm = parallel_comm_lookup(t->color);
+    if (comm) {
+        MPI_Barrier(comm->comm);
+        if (t->rank == 0) { 
+            uloga("%s(): send task_done msg\n", __func__);
+            hstaging_set_task_done(t);
+        }
+    } else {
+        uloga("%s(): error comm == NULL\n", __func__);
+    }
+}
 
 static int add_task_function(int tid, task_function func_ptr)
 {
-	parallel_tasks_[num_tasks_].tid = tid;
-	parallel_tasks_[num_tasks_].func_ptr = func_ptr;
+	ptasks[num_tasks_].tid = tid;
+	ptasks[num_tasks_].func_ptr = func_ptr;
 	num_tasks_++;
 }
 
 static int exec_task_function(struct task_descriptor *t)
 {
-	int i;
+	int i, err;
 	for (i = 0; i < num_tasks_; i++) {
-		if (t->tid == parallel_tasks_[i].tid) {
-			return (parallel_tasks_[i].func_ptr)(t);
+		if (t->tid == ptasks[i].tid) {
+			err = (ptasks[i].func_ptr)(t);
+            task_done(t); 
+            return err;
 		}
-	} 
+	}
 
 	uloga("%s(): unknown tid= %d", __func__, t->tid);
 	return -1;
@@ -85,8 +171,10 @@ static void set_data_decomposition(struct task_descriptor *t, struct var_descrip
 		g.spz = (var_desc->bb.ub.c[2]+1)/g.npz;
 	}
 
+    /*
 	uloga("%s(): g.npx= %d g.npy= %d g.npz= %d g.spx= %d g.spy= %d g.spz= %d\n",
 		__func__,g.npx,g.npy,g.npz,g.spx,g.spy,g.spz);
+    */
 }
 
 static int read_input_data(struct task_descriptor *t)
@@ -126,9 +214,9 @@ static int read_input_data(struct task_descriptor *t)
 		free(databuf);
 	}
 
-	uloga("%s(): task tid= %d step= %d rank= %d nproc= %d "
-		"num_input_vars= %d\n",
-		__func__, t->tid, t->step, t->rank, t->nproc, t->num_input_vars);
+	uloga("%s(): task color= %d tid= %d step= %d rank= %d nproc= %d "
+		"num_input_vars= %d\n", __func__, t->color, t->tid, t->step, 
+        t->rank, t->nproc, t->num_input_vars);
 	
 	return 0;
 }
@@ -230,15 +318,25 @@ int task6(struct task_descriptor *t)
 
 int dummy_s3d_staging_parallel_job(MPI_Comm comm, enum hstaging_location_type loc_type)
 {
-	int i, err;
+    int err;
+    int level, color;
+    int mpi_rank, mpi_nproc;
+    MPI_Comm_size(comm, &mpi_nproc);
+    MPI_Comm_rank(comm, &mpi_rank);
+    if ((mpi_nproc % BK_GROUP_BASIC_SIZE) != 0) {
+        uloga("%s(): error size needs to be multiply of %d\n",
+            __func__, BK_GROUP_BASIC_SIZE);
+        return -1;
+    }
 
+    parallel_comm_init();
 	loctype_ = loc_type;	
-	comm_ = comm;
-	MPI_Comm_size(comm_, &mpi_nprocs_);
-	MPI_Comm_rank(comm_, &mpi_rank_);
-	if (mpi_rank_ == 0) {
-		uloga("Dummy S3D staging: total %d workers\n", mpi_nprocs_);
-	}
+    level = 0;
+    color = 1;
+    comms[level].level = level;
+    comms[level].color = color;
+    comms[level].comm = comm;
+    recursive_split_mpi_comm(level, color);
 
 	add_task_function(1, task1);
 	add_task_function(2, task2);
@@ -247,8 +345,11 @@ int dummy_s3d_staging_parallel_job(MPI_Comm comm, enum hstaging_location_type lo
 	add_task_function(5, task5);	
 	add_task_function(6, task6);	
 
+    hstaging_register_bucket_resource(loctype_, mpi_nproc, mpi_rank);
+    MPI_Barrier(comm);
+
 	struct task_descriptor t;
-	while ( !hstaging_request_task(&t, loctype_, mpi_rank_)) {
+	while (!hstaging_request_task(&t)) {
 		hstaging_put_sync_all();
 		err = exec_task_function(&t);	
 		if (t.num_input_vars > 0 && t.input_vars) {

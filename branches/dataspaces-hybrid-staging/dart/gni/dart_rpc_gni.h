@@ -417,9 +417,11 @@ enum cmd_type {
 	insitu_data_desc,
 	insitu_unreg,
 	staging_exit,
+    hs_reg_resource_msg,
 	hs_update_var_msg,
 	hs_req_task_msg,
 	hs_exec_task_msg,
+    hs_task_done_msg,
 #endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,
