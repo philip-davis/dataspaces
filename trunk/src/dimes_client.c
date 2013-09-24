@@ -120,10 +120,10 @@ struct dimes_storage_group {
 	char *name;
 	// List of dimes_memory_obj
 	struct list_head mem_obj_list;
-}
+};
 
 //static struct list_head mem_obj_list;
-char *current_group_name = NULL;
+static char *current_group_name = NULL;
 const char* default_group_name = "__default_storage_group__";
 static struct list_head storage;
 
