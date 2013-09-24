@@ -19,21 +19,18 @@ static enum storage_type st = row_major;
 // TODO: 'num_dims' is hardcoded to 2.
 static int num_dims = 2;
 
-const int NUM_TRYS = 50;
-const int RDMA_GET_CREDITS = 225;
-
 struct parallel_job {
 	struct list_head entry;
 	int type;
 	int tstep;
 };
 
-static struct {
-	int f_get_task;
+struct bucket_info {
 	/* keep basic info of current task */
 	struct task_descriptor *current_task;
 
 	/* flags */
+	int f_get_task;
 	int f_done; //flag indicates that all insitu work is done
 	int f_init_dspaces;
 
@@ -41,7 +38,10 @@ static struct {
 	double tm_st, tm_end;
 
 	enum worker_type workertype;
-} g_info;
+    enum hstaging_location_type location_type;
+    int mpi_rank, num_bucket;
+};
+static struct bucket_info bk_info;
 
 #ifdef HAVE_UGNI
 static int process_event(struct dcg_space *dcg)
@@ -73,7 +73,7 @@ err_out:
 
 static int fetch_input_vars_info_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-	g_info.f_get_task = 1;
+	bk_info.f_get_task = 1;
 	free(msg);
 	return 0;
 }
@@ -88,10 +88,10 @@ static int fetch_input_vars_info(struct rpc_cmd *cmd)
 	if (!msg)
 		goto err_out;
 
-	size_t size = g_info.current_task->num_input_vars * 
+	size_t size = bk_info.current_task->num_input_vars * 
 					sizeof(struct var_descriptor);
-	g_info.current_task->input_vars = (struct var_descriptor *)malloc(size);
-	msg->msg_data = g_info.current_task->input_vars;
+	bk_info.current_task->input_vars = (struct var_descriptor *)malloc(size);
+	msg->msg_data = bk_info.current_task->input_vars;
 	msg->size = size;
 	msg->cb = fetch_input_vars_info_completion;
 
@@ -109,21 +109,22 @@ err_out:
 static int callback_hs_exec_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
 	struct hdr_exec_task *hdr = (struct hdr_exec_task *)cmd->pad;
-	g_info.current_task->tid = hdr->tid;
-	g_info.current_task->step = hdr->step;
-	g_info.current_task->rank = hdr->rank;
-	g_info.current_task->nproc = hdr->nproc;
+	bk_info.current_task->tid = hdr->tid;
+	bk_info.current_task->step = hdr->step;
+    bk_info.current_task->color = hdr->color;
+	bk_info.current_task->rank = hdr->rank_hint;
+	bk_info.current_task->nproc = hdr->nproc_hint;
 
 	if (hdr->num_input_vars > 0) {
-		g_info.current_task->num_input_vars = hdr->num_input_vars;
+		bk_info.current_task->num_input_vars = hdr->num_input_vars;
 		if (fetch_input_vars_info(cmd) < 0) {
-			g_info.current_task = NULL;
+			bk_info.current_task = NULL;
 			return -1;
 		}
 	} else {
-		g_info.current_task->num_input_vars = 0;
-		g_info.current_task->input_vars = NULL;
-		g_info.f_get_task = 1;
+		bk_info.current_task->num_input_vars = 0;
+		bk_info.current_task->input_vars = NULL;
+		bk_info.f_get_task = 1;
 	}
 
 	return 0;
@@ -137,36 +138,8 @@ static int callback_staging_exit_msg(struct rpc_server *rpc_s, struct rpc_cmd *c
 	uloga("%s(): rank= %d get msg from %d\n",
 		__func__, rpc_s->ptlmap.id, cmd->id);
 
-	g_info.f_done = 1;
+	bk_info.f_done = 1;
 	return 0;
-}
-
-
-static int request_task(enum hstaging_location_type loc_type, int mpi_rank) {
-	struct msg_buf *msg;
-	struct node_id *peer;
-	int err = -ENOMEM;
-
-	peer = dc_get_peer(dc, 0); //master srv has dart id as 0
-	msg = msg_buf_alloc(dc->rpc_s, peer, 1);
-	if (!msg)
-		goto err_out;
-
-	msg->msg_rpc->cmd = hs_req_task_msg;
-	msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
-	struct hdr_request_task *hdr = (struct hdr_request_task *)msg->msg_rpc->pad;
-	hdr->mpi_rank = mpi_rank;
-	hdr->location_type = loc_type; 
-
-	err = rpc_send(dc->rpc_s, peer, msg);
-	if (err < 0) {
-		free(msg);
-		goto err_out;
-	}
-
-	return 0;	
-err_out:
-	ERROR_TRACE();
 }
 
 /*
@@ -176,14 +149,14 @@ err_out:
 */
 
 /* Initialize the dataspaces library. */
-int hstaging_init(int num_peers, enum worker_type type, int appid)
+int hstaging_init(int num_peers, int appid, enum worker_type workertype)
 {
 	int err = -ENOMEM;
 
-	/* Init the g_info */
-	g_info.workertype = type;
-	g_info.f_done = 0;
-	g_info.f_init_dspaces = 0;
+	/* Init the bk_info */
+	bk_info.workertype = workertype;
+	bk_info.f_done = 0;
+	bk_info.f_init_dspaces = 0;
 
 	if (dcg) {
 		return 0;
@@ -214,7 +187,7 @@ int hstaging_init(int num_peers, enum worker_type type, int appid)
 	timer_init(&timer, 1);
 	timer_start(&timer);
 	
-	g_info.f_init_dspaces = 1;
+	bk_info.f_init_dspaces = 1;
 	return 0;
 }
 
@@ -223,12 +196,12 @@ int hstaging_finalize()
 {
 	int err;
 
-	if (!g_info.f_init_dspaces) {
+	if (!bk_info.f_init_dspaces) {
 		uloga("'%s()': library was not properly initialized!\n", __func__);
 		return;
 	}
 
-	if ( g_info.workertype == hs_simulation_worker ) {
+	if ( bk_info.workertype == hs_simulation_worker ) {
 		// check if all pending RDMA operations completed
 		dimes_put_sync_all();
 
@@ -274,7 +247,7 @@ int hstaging_put_var(const char *var_name, unsigned int ver, int size,
 {
 	int err = -ENOMEM;
 
-	if (!g_info.f_init_dspaces) {
+	if (!bk_info.f_init_dspaces) {
 		uloga("%s(): library not init!\n", __func__);
 		goto err_out;
 	}
@@ -303,7 +276,7 @@ int hstaging_get_var(const char *var_name, unsigned int ver, int size,
 {
 	int err = -ENOMEM;
 
-	if (!g_info.f_init_dspaces) {
+	if (!bk_info.f_init_dspaces) {
 		uloga("%s(): library not init!\n", __func__);
 		goto err_out;
 	}
@@ -354,29 +327,88 @@ int hstaging_update_var(struct var_descriptor *var_desc, enum hstaging_update_va
 	ERROR_TRACE();
 }
 
-int hstaging_request_task(struct task_descriptor *t, enum hstaging_location_type loc_type, int mpi_rank)
+int hstaging_request_task(struct task_descriptor *t)
 {
 	int err;
 
-	g_info.f_get_task = 0;
-	g_info.current_task = t;
+	bk_info.f_get_task = 0;
+	bk_info.current_task = t;
 
-	// Send hs_req_task_msg to master srv
-	err = request_task(loc_type, mpi_rank);
-	if (err < 0)
-		return -1;
-
-	while (!g_info.f_get_task && !g_info.f_done) {
+	while (!bk_info.f_get_task && !bk_info.f_done) {
 		err = process_event(dcg);
 		if (err < 0) {
 			return err;
 		}
 	}	
 
-	if (g_info.f_done) {
+	if (bk_info.f_done) {
 		return -1;
 	}	
 
-	g_info.current_task = NULL;
+	bk_info.current_task = NULL;
 	return 0;
+}
+
+int hstaging_register_bucket_resource(enum hstaging_location_type loc_type, int num_bucket, int mpi_rank)
+{
+    struct msg_buf *msg;
+    struct node_id *peer;
+    int err = -ENOMEM;   
+
+    peer = dc_get_peer(dc, 0); //master srv has dart id as 0
+    msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+    if (!msg)
+        goto err_out;
+
+    msg->msg_rpc->cmd = hs_reg_resource_msg;
+    msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
+    struct hdr_register_resource *hdr = (struct hdr_register_resource *)
+            msg->msg_rpc->pad;
+    hdr->location_type = loc_type;
+    hdr->num_bucket = num_bucket;
+    hdr->mpi_rank = mpi_rank;
+
+    bk_info.location_type = loc_type;
+    bk_info.num_bucket = num_bucket;
+    bk_info.mpi_rank = mpi_rank;
+
+    err = rpc_send(dc->rpc_s, peer, msg);
+    if (err < 0) {
+        free(msg);
+        goto err_out;
+    }
+
+    return 0;
+err_out:
+    ERROR_TRACE();     
+}
+
+int hstaging_set_task_done(struct task_descriptor *t)
+{
+    struct msg_buf *msg;
+    struct node_id *peer;
+    int err = -ENOMEM;
+
+    peer = dc_get_peer(dc, 0); //master srv has dart id as 0
+    msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+    if (!msg)
+        goto err_out;
+
+    msg->msg_rpc->cmd = hs_task_done_msg;
+    msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
+    struct hdr_task_done *hdr= (struct hdr_task_done *)msg->msg_rpc->pad;
+    hdr->tid = t->tid;
+    hdr->step = t->step;
+    hdr->color = t->color;
+    hdr->location_type = bk_info.location_type;
+
+    err = rpc_send(dc->rpc_s, peer, msg);
+    if (err < 0) {
+        free(msg);
+        goto err_out;
+    }
+
+    return 0;
+err_out:
+    ERROR_TRACE();
 }

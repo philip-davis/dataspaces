@@ -5,7 +5,6 @@
 extern "C" {
 #endif
 
-//#include "dart.h"
 #include "list.h"
 #include "bbox.h"
 
@@ -13,11 +12,14 @@ extern "C" {
 #define MAX_NUM_TASKS 512 
 #define MAX_NUM_VARS 48 
 
+#define BK_GROUP_BASIC_SIZE 4
+#define MAX_NUM_SPLIT_LEVEL 30
+
 // TODO: change to lowercase, reasonable naming for the enum types below
 enum hstaging_var_type {
-	DEPEND = 0,
-	PUT,
-	GET,
+	var_type_depend = 0,
+	var_type_put,
+	var_type_get,
 };
 
 enum hstaging_var_status {
@@ -31,6 +33,11 @@ enum hstaging_task_status {
 	PENDING,
 	RUN,
 	FINISH,
+};
+
+enum hstaging_bucket_status {
+    bucket_idle = 0,
+    bucket_busy
 };
 
 enum hstaging_update_var_op {
@@ -49,6 +56,12 @@ enum hstaging_placement_hint {
 	hint_none
 };
 
+struct hdr_register_resource {
+    int location_type;
+    int num_bucket;
+    int mpi_rank;
+} __attribute__((__packed__));
+
 struct hdr_update_var {
 	int op;
 	char var_name[32];
@@ -57,17 +70,27 @@ struct hdr_update_var {
 	struct bbox bb;
 } __attribute__((__packed__));
 
+/*
 struct hdr_request_task {
 	int mpi_rank;
 	int location_type;
 } __attribute__((__packed__));
+*/
 
 struct hdr_exec_task {
 	int tid;
 	int step;
-	int rank;
-	int nproc;
+    int color;
+	int rank_hint;
+	int nproc_hint;
 	int num_input_vars;
+} __attribute__((__packed__));
+
+struct hdr_task_done {
+    int tid;
+    int step;
+    int color;
+    int location_type;
 } __attribute__((__packed__));
 
 static char* var_type_name[] =
@@ -86,6 +109,7 @@ struct var_descriptor {
 struct task_descriptor {
 	int tid;
 	int step;
+    int color;
 	int rank;
 	int nproc;
 	int num_input_vars;
@@ -108,6 +132,7 @@ struct task_instance {
 	int step;
 	struct list_head input_vars_list;
 	enum hstaging_task_status status;
+    enum hstaging_placement_hint placement_hint; 
 };
 
 ////
@@ -137,6 +162,7 @@ int free_workflow(struct hstaging_workflow *wf);
 
 int evaluate_dataflow_by_available_var(struct hstaging_workflow *wf, struct var_descriptor *var_desc);
 int get_ready_tasks(struct hstaging_workflow *wf, struct task_instance **tasks, int *n);
+int clear_finished_tasks(struct hstaging_workflow *wf);
 void update_task_instance_status(struct task_instance *ti, enum hstaging_task_status status);
 
 int read_emulated_vars_sequence(struct hstaging_workflow *wf, const char *fname);

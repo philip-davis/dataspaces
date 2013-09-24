@@ -18,17 +18,17 @@ static void print_str_decimal(const char *str)
 static int str_to_var_type(const char *str, enum hstaging_var_type *type)
 {
 	if (0 == strcmp(str, "depend")) {
-		*type = DEPEND;
+		*type = var_type_depend;
 		return 0;
 	}
  
 	if (0 == strcmp(str, "put")) {
-		*type = PUT;
+		*type = var_type_put;
 		return 0;
 	}
 
 	if (0 == strcmp(str, "get")) {
-		*type = GET;
+		*type = var_type_get;
 		return 0;
 	}
 
@@ -50,6 +50,7 @@ static int str_to_placement_hint(const char *str, enum hstaging_placement_hint *
 
 	if (0 == strcmp(str, "none")) {
 		*hint = hint_none;
+        return 0;
 	}
 
 	fprintf(stderr, "Unknown placement hint string '%s'\n", str);
@@ -59,6 +60,11 @@ static int str_to_placement_hint(const char *str, enum hstaging_placement_hint *
 void update_task_instance_status(struct task_instance *ti, enum hstaging_task_status status)
 {
 	ti->status = status;
+}
+
+static int is_task_instance_finish(struct task_instance *ti)
+{
+    return ti->status == FINISH;
 }
 
 static int is_task_instance_ready(struct task_instance *ti)
@@ -93,6 +99,26 @@ int get_ready_tasks(struct hstaging_workflow *wf,
 			if (is_task_instance_ready(ti)) {
 				tasks[*n] = ti;
 				*n = *n + 1;
+			}
+		}
+	}
+
+	return 0;
+}
+
+int clear_finished_tasks(struct hstaging_workflow *wf)
+{
+    struct hstaging_task *t = NULL;
+	int i;
+	for (i = 0; i < wf->num_tasks; i++) {
+		t = &(wf->tasks[i]);
+		struct task_instance *ti, *tmp;
+		list_for_each_entry_safe(ti, tmp, &t->instances_list,
+                struct task_instance, entry)
+		{
+			if (is_task_instance_finish(ti)) {
+                list_del(&ti->entry);
+                free(ti);
 			}
 		}
 	}
@@ -153,12 +179,13 @@ static struct task_instance *new_task_instance(struct hstaging_task *task, int s
 	ti->tid = task->tid;
 	ti->step = step; //TODO: this the unique id for instance?
 	ti->status = NOT_READY;
+    ti->placement_hint = task->placement_hint;
 
 	// Init the input_vars_list
 	INIT_LIST_HEAD(&ti->input_vars_list);
 	int i;
 	for (i = 0; i < task->num_vars; i++) {
-		if (task->vars[i].type == DEPEND) {
+		if (task->vars[i].type == var_type_depend) {
 			new_var_instance(ti, &task->vars[i]); 	
 		}
 	}
@@ -197,7 +224,7 @@ int evaluate_dataflow_by_available_var(struct hstaging_workflow *wf, struct var_
 	for (i = 0; i < wf->num_tasks; i++) {
 		task = &(wf->tasks[i]);
 		struct hstaging_var *var = lookup_var(task, var_desc->var_name);
-		if (var && var->type == DEPEND) { 
+		if (var && var->type == var_type_depend) { 
 			evaluate_task_by_available_var(task, var, var_desc);
 		}
 	}
