@@ -198,7 +198,7 @@ int hstaging_finalize()
 
 	if (!bk_info.f_init_dspaces) {
 		uloga("'%s()': library was not properly initialized!\n", __func__);
-		return;
+		return -1;
 	}
 
 	if ( bk_info.workertype == hs_simulation_worker ) {

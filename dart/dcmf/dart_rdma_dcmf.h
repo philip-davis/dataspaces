@@ -37,6 +37,7 @@
 
 struct dart_rdma_mem_handle {
 	DCMF_Memregion_t memregion;
+	void *base_addr; // Only used for local data copy
 	size_t size;
 };
 

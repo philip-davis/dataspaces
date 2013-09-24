@@ -19,7 +19,8 @@ LIBS= ${DCMF_LIBS}
 CFLAGS= -g ${DCMF_CFLAGS} -DDS_HAVE_HYBRID_STAGING
 
 SRC1 =  hybrid_staging_api.c \
-		hstaging_scheduler_serial_job.c \
+        hstaging_strutil.c \
+        hstaging_def.c \
 		hstaging_scheduler_parallel_job.c 
 
 OBJ1 = $(SRC1:.c=.o)

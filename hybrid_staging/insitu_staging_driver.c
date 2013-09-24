@@ -47,14 +47,15 @@ static enum worker_type workertype_ = hs_staging_worker;
 int main(int argc, char **argv)
 {
 	int err;
-	int appid, nproc;
+	int appid, rank, nproc;
 	int num_insitu_proc, num_intransit_proc;
+	MPI_Comm comm;
 
-	appid = 2;
-
-	MPI_Init(&argc, &argv);
-	MPI_Comm comm = MPI_COMM_WORLD;
-	MPI_Comm_size(comm, &nproc);
+    appid = 2;
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_split(MPI_COMM_WORLD, appid, rank, &comm);
+    MPI_Comm_size(comm, &nproc);
 
 	err = hstaging_init(nproc, workertype_, appid);             
     
@@ -65,7 +66,7 @@ int main(int argc, char **argv)
 
 	hstaging_finalize();
 
-	MPI_Barrier(comm);
+	MPI_Barrier(MPI_COMM_WORLD);
 	MPI_Finalize();
 
 	return 0;

@@ -70,11 +70,20 @@ int run_scheduler_parallel(int argc, char **argv) {
 int main(int argc, char **argv)
 {
 	int err;
-	int color;
+    int color, rank;
+    MPI_Comm comm;
+
+    color = 0;
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_split(MPI_COMM_WORLD, color, rank, &comm);
 
 	err = run_scheduler_parallel(argc, argv);
 
 	uloga("All ok.\n");	
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Finalize();
 
 	return 0;
 err_out:
