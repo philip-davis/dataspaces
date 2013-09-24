@@ -64,9 +64,9 @@ int main(int argc, char **argv)
     MPI_Comm_split(MPI_COMM_WORLD, appid, rank, &comm);
 	MPI_Comm_size(comm, &nproc);
 
-	err = hstaging_init(nproc, workertype_, appid); 
-
 	uloga("simulation: num_worker= %d\n", nproc);
+	err = hstaging_init(nproc, appid, workertype_); 
+
 	dims = 3;
 	err = dummy_s3d_simulation(comm, timestep, npx, npy, npz,
 			spx, spy, spz, dims);
@@ -75,7 +75,7 @@ int main(int argc, char **argv)
 
 	hstaging_finalize();
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Barrier(comm);
 	MPI_Finalize();
 
 	return 0;	

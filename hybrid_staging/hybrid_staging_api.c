@@ -281,13 +281,16 @@ int hstaging_get_var(const char *var_name, unsigned int ver, int size,
 		goto err_out;
 	}
 
-	//dspaces_lock_on_read(var_name, comm);
+    if (comm) {
+        dspaces_lock_on_read(var_name, comm);
+    }
 	err = dimes_get(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
 	if (err < 0) {
 		goto err_out;
 	}
-	//dspaces_unlock_on_read(var_name, comm);
-
+    if (comm) {
+        dspaces_unlock_on_read(var_name, comm);
+    }
 	return 0;
 err_out:
 	ERROR_TRACE();

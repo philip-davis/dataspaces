@@ -151,6 +151,11 @@ int dummy_s3d_simulation(MPI_Comm comm, int num_ts, int npx, int npy, int npz, i
 
 		hstaging_put_sync_all();
 
+		if (g.rank == 0) {
+			uloga("Dummy S3D rank= %d ts= %d start writing output data\n",
+				g.rank, i);
+		}
+
 		/* Do insitu analysis */
 		err = perform_topology(comm, g.nproc, g.rank, i);
 		if (err < 0) break;

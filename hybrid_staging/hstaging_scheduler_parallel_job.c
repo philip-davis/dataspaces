@@ -394,16 +394,17 @@ static struct job * jobq_create_job(struct task_instance *ti)
 	j->jid.tid = ti->tid;
 	j->jid.step = ti->step;
 	j->ti = ti;
-	j->num_required_bk = BK_GROUP_BASIC_SIZE; // TODO: get size from user specification file
-	list_add_tail(&j->entry, &jobq);	
-
-	int cnt = 0;
+    unsigned int num_basic_bk_group = j->ti->size_hint / BK_GROUP_BASIC_SIZE;
+    if (num_basic_bk_group == 0) num_basic_bk_group = 1;
+    j->num_required_bk = num_basic_bk_group * BK_GROUP_BASIC_SIZE; 
+    j->num_input_vars = 0;
 	struct var_instance *vi;
 	list_for_each_entry(vi, &ti->input_vars_list, struct var_instance, entry) {
-		cnt++;
+		j->num_input_vars++;
 	}
-	j->num_input_vars = cnt;
+
     update_task_instance_status(ti, PENDING);
+	list_add_tail(&j->entry, &jobq);	
 	
 	return j;
 }
@@ -804,8 +805,8 @@ int hstaging_scheduler_parallel_run()
 			return err;
 		}
 
-		process_jobq();
 		if (is_master()) {
+            process_jobq();
 			process_workflow_state();
 		}
 	}

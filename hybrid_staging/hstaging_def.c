@@ -177,9 +177,10 @@ static struct task_instance *new_task_instance(struct hstaging_task *task, int s
 {
 	struct task_instance *ti = (struct task_instance*)malloc(sizeof(*ti));
 	ti->tid = task->tid;
-	ti->step = step; //TODO: this the unique id for instance?
+	ti->step = step;
 	ti->status = NOT_READY;
     ti->placement_hint = task->placement_hint;
+    ti->size_hint = task->size_hint;
 
 	// Init the input_vars_list
 	INIT_LIST_HEAD(&ti->input_vars_list);
@@ -297,6 +298,18 @@ static int read_task_placement_hint(struct hstaging_task *task, char *fields[], 
 	return 0;
 }
 
+static int read_task_size_hint(struct hstaging_task *task, char *fields[], int num_fields)
+{
+    int index_to_hint = 3;
+    int size_hint = atoi(fields[index_to_hint]);
+    if (size_hint < 0) {
+        size_hint = 0;
+    }
+
+    task->size_hint = size_hint;
+    return 0;
+}
+
 static int read_workflow_task(struct hstaging_workflow *wf, char *fields[], int num_fields)
 {
 	int index_to_tid = 1;
@@ -311,27 +324,34 @@ static int read_workflow_task(struct hstaging_workflow *wf, char *fields[], int 
 	int tid = atoi(fields[index_to_tid]);
 	struct hstaging_task *task = task_lookup_by_id(wf, tid);
 	if (task == NULL) {
+        // TODO: add a function to create new task
 		// New task
 		task = &(wf->tasks[wf->num_tasks]);
 		task->tid = tid;
-		task->placement_hint = hint_none;
 		task->num_vars = 0;
+		task->placement_hint = hint_none;
+        task->size_hint = 0;
 		INIT_LIST_HEAD(&task->instances_list);
 		wf->num_tasks++;
 	}
 
 	char *t_desc = fields[index_to_desc];
 	if (0 == strcmp(t_desc, "variable_info")) {
-		if(read_task_var_info(task, fields, num_fields) < 0) {
+		if (read_task_var_info(task, fields, num_fields) < 0) {
 			wf->num_tasks--;
 			return -1;
 		}
 	} else if (0 == strcmp(t_desc, "placement_hint")) {
-		if(read_task_placement_hint(task, fields, num_fields) < 0) {
+		if (read_task_placement_hint(task, fields, num_fields) < 0) {
 			wf->num_tasks--;
 			return -1;	
 		}
-	}
+	} else if (0 == strcmp(t_desc, "size_hint")) {
+        if (read_task_size_hint(task, fields, num_fields) < 0 ) {
+            wf->num_tasks--;
+            return -1;
+        } 
+    }
 
 	return 0;
 }

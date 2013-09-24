@@ -181,6 +181,8 @@ static int read_input_data(struct task_descriptor *t)
 {
 	int i;
 	int err;
+    struct parallel_communicator *comm;
+    comm = parallel_comm_lookup(t->color);
 
 	for (i = 0; i < t->num_input_vars; i++) {
 		double *databuf = NULL;
@@ -196,8 +198,8 @@ static int read_input_data(struct task_descriptor *t)
 			databuf = allocate_data(g.spx*g.spy*g.spz);
 		}		
 		generate_bbox(&g, &xl, &yl, &zl, &xu, &yu, &zu);
-		err = hstaging_get_var(var_desc->var_name, t->step, elem_size,
-				xl, yl, zl, xu, yu, zu, databuf, NULL);	
+        err = hstaging_get_var(var_desc->var_name, t->step, elem_size,
+                xl, yl, zl, xu, yu, zu, databuf, NULL);	
 		if (err < 0) {
 			uloga("%s(): failed to get var\n", __func__);
 			return -1;
