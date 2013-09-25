@@ -13,7 +13,7 @@ struct parallel_communicator {
 };
 static struct parallel_communicator comms[MAX_NUM_SPLIT_LEVEL];
 
-typedef int (*task_function)(struct task_descriptor *t);
+typedef int (*task_function)(struct task_descriptor *t, struct parallel_communicator *comm);
 struct parallel_task {
 	int tid;
 	task_function func_ptr;
@@ -90,14 +90,11 @@ void recursive_split_mpi_comm(int current_level, int color)
     }
 }
 
-static void task_done(struct task_descriptor *t)
+static void task_done(struct task_descriptor *t, struct parallel_communicator *comm)
 {
-    struct parallel_communicator *comm;
-    comm = parallel_comm_lookup(t->color);
     if (comm) {
         MPI_Barrier(comm->comm);
         if (t->rank == 0) { 
-            uloga("%s(): send task_done msg\n", __func__);
             hstaging_set_task_done(t);
         }
     } else {
@@ -117,14 +114,15 @@ static int exec_task_function(struct task_descriptor *t)
 	int i, err;
 	for (i = 0; i < num_tasks_; i++) {
 		if (t->tid == ptasks[i].tid) {
-			err = (ptasks[i].func_ptr)(t);
-            task_done(t); 
+            struct parallel_communicator *comm;
+            comm = parallel_comm_lookup(t->color);	
+            err = (ptasks[i].func_ptr)(t, comm);
+            task_done(t, comm); 
             return err;
 		}
 	}
 
 	uloga("%s(): unknown tid= %d", __func__, t->tid);
-	return -1;
 }
 
 static int update_var(const char *var_name, int ts)
@@ -181,8 +179,6 @@ static int read_input_data(struct task_descriptor *t)
 {
 	int i;
 	int err;
-    struct parallel_communicator *comm;
-    comm = parallel_comm_lookup(t->color);
 
 	for (i = 0; i < t->num_input_vars; i++) {
 		double *databuf = NULL;
@@ -223,7 +219,7 @@ static int read_input_data(struct task_descriptor *t)
 	return 0;
 }
 
-static int write_output_data(struct task_descriptor *t, const char *var_name)
+static int write_output_data(struct task_descriptor *t, const char *var_name, struct parallel_communicator *comm)
 {
 	double *databuf = NULL;
 	int elem_size, num_elem, xl, yl, zl, xu, yu, zu;
@@ -259,7 +255,7 @@ static int write_output_data(struct task_descriptor *t, const char *var_name)
 	generate_bbox(&g, &xl, &yl, &zl, &xu, &yu, &zu);
 
 	err = hstaging_put_var(var_name, t->step, elem_size,
-			xl, yl, zl, xu, yu, zu, databuf, NULL);
+			xl, yl, zl, xu, yu, zu, databuf, &comm->comm);
 	if (err < 0) {
 		free(databuf);
 		return err;
@@ -273,45 +269,45 @@ static int write_output_data(struct task_descriptor *t, const char *var_name)
 	return err;
 } 
 
-int task1(struct task_descriptor *t)
+int task1(struct task_descriptor *t, struct parallel_communicator *comm)
 {
 	read_input_data(t);
 	// Do some computation
-	// write_output_data(t, "topology_var2");
+	write_output_data(t, "topology_var2", comm);
 	return 0;
 }
 
-int task2(struct task_descriptor *t)
+int task2(struct task_descriptor *t, struct parallel_communicator *comm)
 {
 	read_input_data(t);
 	// Do some computation
-	// write_output_data(t, "stat_var2");
+	write_output_data(t, "stat_var2", comm);
 	return 0;
 } 
 
-int task3(struct task_descriptor *t)
+int task3(struct task_descriptor *t, struct parallel_communicator *comm)
 {
 	read_input_data(t);
 	// Do some computation
-	// write_output_data(t, "viz_var2");
+	write_output_data(t, "viz_var2", comm);
 	return 0;
 } 
 
-int task4(struct task_descriptor *t)
-{
-	read_input_data(t);
-	// Do some computation
-	return 0;
-} 
-
-int task5(struct task_descriptor *t)
+int task4(struct task_descriptor *t, struct parallel_communicator *comm)
 {
 	read_input_data(t);
 	// Do some computation
 	return 0;
 } 
 
-int task6(struct task_descriptor *t)
+int task5(struct task_descriptor *t, struct parallel_communicator *comm)
+{
+	read_input_data(t);
+	// Do some computation
+	return 0;
+} 
+
+int task6(struct task_descriptor *t, struct parallel_communicator *comm)
 {
 	read_input_data(t);
 	// Do some computation
@@ -361,6 +357,8 @@ int dummy_s3d_staging_parallel_job(MPI_Comm comm, enum hstaging_location_type lo
 			return err;
 		}
 	}
+
+    hstaging_put_sync_all();
 
 	return 0;
  err_out:
