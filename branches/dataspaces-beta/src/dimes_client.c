@@ -38,7 +38,6 @@
 #include "dimes_interface.h"
 #include "dimes_client.h"
 #include "dimes_data.h"
-
 /* Name mangling for C functions to adapt Fortran compiler */
 #define FC_FUNC(name,NAME) name ## _
 
@@ -1058,6 +1057,7 @@ static int dimes_memory_obj_status(struct dimes_memory_obj *mem_obj)
 	return err;
 }
 
+//static struct timer tm_;
 static int dimes_obj_put(struct obj_data *od)
 {
 	struct dht_entry *de_tab[dimes_c->dcg->ss_info.num_space_srv];
@@ -1171,13 +1171,6 @@ static int dimes_locate_data(struct query_tran_entry_d *qte)
 	ERROR_TRACE();
 }
 
-// TODO(fan): to modify the structure of dart_rdma_read_tran
-struct temp_read_tran {
-	int tran_id;
-	struct dart_rdma_mem_handle src;
-	struct dart_rdma_mem_handle dst;
-};
-
 struct matrix_view_d {
 	int lb[3];
 	int ub[3];
@@ -1280,17 +1273,6 @@ static int schedule_rdma_reads(int tran_id,
 	size_t src_offset = 0;
 	size_t dst_offset = 0;
 	size_t bytes = 0;
-
-/*
-#ifdef DEBUG
-	char *str;
-	asprintf(&str, "#%d get obj %s ver %d from ",
-		DIMES_CID, dst_odsc->name, dst_odsc->version);
-	str = str_append(str, bbox_sprint(&dst_odsc->bb));
-	uloga("%s(): tran_id=%d, %s\n", __func__, tran_id, str);
-	free(str);
-#endif
-*/
 
 	if (obj_desc_equals_no_owner(src_odsc, dst_odsc)) {
 #ifdef DEBUG
@@ -1402,7 +1384,125 @@ static int send_ack_v2(struct query_tran_entry_d *qte)
 	ERROR_TRACE();
 }
 
-static int dimes_obj_data_get(struct query_tran_entry_d *qte)
+enum read_tran_status {
+    read_tran_ready = 0,
+    read_tran_posted,
+    read_tran_done
+};
+
+static size_t available_rdma_buffer_size = 100*1024*1024; // MB 
+static const size_t rdma_read_block_size = 1*1024*1024; // MB
+static int enable_customized_rdma_block_size = 0;
+
+static int all_read_tran_done(struct dart_rdma_read_tran **trans_tab, int *trans_status_tab, int trans_tab_size)
+{
+    int err, i;
+    int num_posted_tran = 0;
+    int complete_one_tran = 0;
+
+    // TODO: what if trans_tab_size is very large, is this efficient?
+    for (i = 0; i < trans_tab_size; i++) {
+        if (trans_status_tab[i] == read_tran_posted) {
+            num_posted_tran++;
+        }
+    }
+
+    while (!complete_one_tran && num_posted_tran > 0) {
+        dart_rdma_process_reads();
+        for (i = 0; i < trans_tab_size; i++) {
+            if (trans_status_tab[i] == read_tran_posted) {
+                if (dart_rdma_check_reads(trans_tab[i]->tran_id)) {
+                    err = dart_rdma_deregister_mem(&trans_tab[i]->dst);
+                    if (err < 0) {
+                        return 0;
+                    }
+                    available_rdma_buffer_size += trans_tab[i]->dst.size;
+                    trans_status_tab[i] = read_tran_done;
+                    complete_one_tran = 1; // reset flag
+                    break; // break inner loop
+                }
+            } 
+        }
+    }
+
+    for (i = 0; i < trans_tab_size; i++) {
+        if (trans_status_tab[i] != read_tran_done) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static int get_next_read_tran(struct dart_rdma_read_tran **trans_tab, int *trans_status_tab, int trans_tab_size)
+{
+    int err, i;
+    for (i = 0; i < trans_tab_size; i++) {
+        if (trans_status_tab[i] == read_tran_ready &&
+            (trans_tab[i]->dst.size < available_rdma_buffer_size)) {
+            err = dart_rdma_register_mem(&trans_tab[i]->dst,
+                                trans_tab[i]->dst.base_addr,
+                                trans_tab[i]->dst.size);
+            if (err < 0) {
+                uloga("%s(): dart_rdma_register_mem failed, adjust the "
+                    "size of available rdma memory buffer\n", __func__);
+                available_rdma_buffer_size = 0;
+                return -1; 
+            }
+            available_rdma_buffer_size -= trans_tab[i]->dst.size;
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+static int calculate_num_read_tran(size_t bytes)
+{
+    if (!enable_customized_rdma_block_size) {
+        return 1;
+    }
+
+    int num_read_tran = bytes / rdma_read_block_size;
+    if ((bytes % rdma_read_block_size) != 0) {
+        num_read_tran += 1;
+    }
+
+    return num_read_tran;
+}
+
+static int estimate_trans_tab_capacity(struct query_tran_entry_d *qte)
+{
+	struct node_id *peer;
+	struct obj_data_wrapper *od_w;
+	struct obj_data *od;
+	struct hdr_dimes_put *hdr;
+    int capacity = 0;
+
+    if (!enable_customized_rdma_block_size) {
+        return qte->size_od;
+    }
+
+    list_for_each_entry(od_w, &qte->od_list, struct obj_data_wrapper, obj_entry)
+    {
+        od = od_w->od;
+        hdr = (struct hdr_dimes_put*)od_w->cmd.pad;
+        peer = dc_get_peer(DC, od->obj_desc.owner);
+        if (!is_peer_on_same_core(peer)) {
+            // Data resides on remote core
+            size_t read_size = obj_data_size(&od->obj_desc);
+            capacity += calculate_num_read_tran(read_size);
+        }
+    }
+
+    if (capacity < qte->size_od) {
+        capacity = qte->size_od;
+    }
+
+    return capacity;
+}
+
+static int dimes_fetch_data(struct query_tran_entry_d *qte)
 {
 	struct node_id *peer;
 	struct obj_data_wrapper *od_w;
@@ -1418,112 +1518,151 @@ static int dimes_obj_data_get(struct query_tran_entry_d *qte)
 
 	// Allocate the array for read transactions
 	struct dart_rdma_read_tran **trans_tab = NULL;
+    int *trans_status_tab = NULL;
+    int trans_tab_capacity = estimate_trans_tab_capacity(qte);
+    int trans_tab_size = 0;
 	trans_tab = (struct dart_rdma_read_tran **)
-			malloc(sizeof(struct dart_rdma_read_tran *) * qte->size_od);
-	if (trans_tab == NULL) {
-		uloga("%s(): failed with malloc()\n", __func__);
-		err = -1;
-		goto err_out;
-	}
-	memset(trans_tab, 0, sizeof(struct dart_rdma_read_tran *)*qte->size_od);
+			malloc(sizeof(struct dart_rdma_read_tran *) * trans_tab_capacity);
+    trans_status_tab = (int *)malloc(sizeof(int) * trans_tab_capacity);
+    for (i = 0; i < trans_tab_capacity; i++) {
+        trans_tab[i] = NULL;
+        trans_status_tab[i] = read_tran_ready;
+    }
 
-	list_for_each_entry(od_w, &qte->od_list,
-			    struct obj_data_wrapper, obj_entry) {
-		od = od_w->od;
+    // Create read trans for data object (if any) that resides on remote cores
+    // and does NOT require sub-array reading 
+    i = 0;
+    list_for_each_entry(od_w, &qte->od_list, struct obj_data_wrapper, obj_entry)
+    {
+        od = od_w->od;
 		hdr = (struct hdr_dimes_put*)od_w->cmd.pad;
 		peer = dc_get_peer(DC, od->obj_desc.owner);
 
-		err = dart_rdma_create_read_tran(peer, &trans_tab[i]);	
+        if (!is_peer_on_same_core(peer) &&
+            obj_desc_equals_no_owner(&hdr->odsc, &od->obj_desc)) {
+            int num_read_tran;
+            size_t data_size, offset;
+            data_size = obj_data_size(&od->obj_desc);
+            num_read_tran = calculate_num_read_tran(data_size);
 
-		if (is_peer_on_same_core(trans_tab[i]->remote_peer)) {
-			// Data on local peer
-			struct dimes_memory_obj *mem_obj = storage_lookup_obj(hdr->sync_id);
-			if (mem_obj == NULL) {
-				uloga("%s(): failed to find dimes memory object sid=%d\n",
-					__func__, hdr->sync_id);
-				goto err_out_free;
-			}
-			struct dart_rdma_mem_handle *rdma_hndl = 
-					(struct dart_rdma_mem_handle*) mem_obj->arg1; 			
-			trans_tab[i]->src.base_addr = rdma_hndl->base_addr;
-			trans_tab[i]->src.size = rdma_hndl->size;
-			trans_tab[i]->dst.base_addr = od->data; 
-			trans_tab[i]->dst.size = obj_data_size(&od->obj_desc);
-		} else {
-			// Data on remote peer
-			dart_rdma_get_memregion_from_cmd(&trans_tab[i]->src,
-							 &od_w->cmd);
-			err = dart_rdma_register_mem(&trans_tab[i]->dst,
-							 od->data,
-							 obj_data_size(&od->obj_desc));
-			if (err < 0) {
-				uloga("%s(): failed with dart_rdma_register_mem\n",
-					__func__);
-				goto err_out_free;
-			}
-		}
+            for (offset = 0; num_read_tran > 0; num_read_tran--) {
+                dart_rdma_create_read_tran(peer, &trans_tab[i]);
+                dart_rdma_get_memregion_from_cmd(&trans_tab[i]->src,&od_w->cmd);
+                trans_tab[i]->dst.base_addr = od->data+offset;
+                if (num_read_tran == 1) {
+                    trans_tab[i]->dst.size = data_size - offset;
+                } else {
+                    trans_tab[i]->dst.size = rdma_read_block_size;
+                }
 
-		// Add read operations into the transaction
-		err = schedule_rdma_reads(trans_tab[i]->tran_id,
-					  &hdr->odsc,
-					  &od->obj_desc);
-		if (err < 0) {
-			uloga("%s(): failed with schedule_rdma_reads()\n",
-				__func__);
-			goto err_out_free;
-		}
+                err = dart_rdma_schedule_read(
+                            trans_tab[i]->tran_id,
+                            offset, // source offset
+                            0, // destination offset
+                            trans_tab[i]->dst.size);
+                offset += rdma_read_block_size;
+                i++; // Count number of read tran in the table
+            }
+        }        
+    }
+    trans_tab_size = i;
 
-		// Perform RDMA read transaction
-		err = dart_rdma_perform_reads(trans_tab[i]->tran_id);
-		if (err < 0) {
-			uloga("%s(): failed with dart_rdma_perform_reads\n",
-				__func__);
-			goto err_out_free;
-		}
+    int loop_done = 0;
+    // Perform RDMA read operations
+    do {
+        // Issue as much as RDMA read opertions as possible
+        do { 
+            i = get_next_read_tran(trans_tab, trans_status_tab, trans_tab_size);
+            if (i < 0 || i >= trans_tab_size) break; // break inner loop
+            err = dart_rdma_perform_reads(trans_tab[i]->tran_id);
+            if (err < 0) {
+                uloga("%s(): failed with dart_rdma_perform_reads\n", __func__);
+                goto err_out_free;
+            }
+            trans_status_tab[i] = read_tran_posted;
+        } while (1); // TODO: fix magic number
+        
+        loop_done = all_read_tran_done(trans_tab, trans_status_tab, trans_tab_size);
+    } while (!loop_done);
 
-		err = dart_rdma_check_reads(trans_tab[i]->tran_id);
-		if (err < 0) {
-			uloga("%s(): failed with dart_rdma_check_reads on tran %d\n",
-				__func__, trans_tab[i]->tran_id);
-			goto err_out_free;
-		}
-
-		if (!is_peer_on_same_core(trans_tab[i]->remote_peer)) {	
-			// Only deregister when data resides on remote peer
-			err = dart_rdma_deregister_mem(&trans_tab[i]->dst);
-			if (err < 0) {
-				uloga("%s(): failed dart_rdma_deregister_mem on tran %d\n",
-					__func__, trans_tab[i]->tran_id);
-				goto err_out_free;
-			}
-		}
-
+    for (i = 0; i < trans_tab_size; i++) {
 		dart_rdma_delete_read_tran(trans_tab[i]->tran_id);
+    }
 
-		i++;
+	if (trans_tab) {
+		free(trans_tab);
 	}
+    if (trans_status_tab) {
+        free(trans_status_tab);
+    }
 
-	if (i != qte->size_od) {
-		uloga("%s(): ERROR i=%d qte->size_od=%d\n",
-			__func__, i, qte->size_od);
-	}
+    // Read data object (if any) that (1) resides on remote cores BUT 
+    // require sub-array reading, OR (2) resides on local core
+    list_for_each_entry(od_w, &qte->od_list, struct obj_data_wrapper, obj_entry)
+    {
+        od = od_w->od;
+        hdr = (struct hdr_dimes_put*)od_w->cmd.pad;
+        peer = dc_get_peer(DC, od->obj_desc.owner);
+
+        if (is_peer_on_same_core(peer)) {
+            // Data on local peer, fetch directly
+            struct dimes_memory_obj *mem_obj = storage_lookup_obj(hdr->sync_id);
+            if (mem_obj == NULL) {
+                uloga("%s(): failed to find dimes memory object sid=%d\n",
+                    __func__, hdr->sync_id);
+                goto err_out;
+            }
+
+            struct dart_rdma_read_tran *local_tran;
+            dart_rdma_create_read_tran(peer, &local_tran);
+
+            struct dart_rdma_mem_handle *rdma_hndl =
+                    (struct dart_rdma_mem_handle*) mem_obj->arg1;
+            local_tran->src.base_addr = rdma_hndl->base_addr;
+            local_tran->src.size = rdma_hndl->size;
+            local_tran->dst.base_addr = od->data;
+            local_tran->dst.size = obj_data_size(&od->obj_desc);
+
+            schedule_rdma_reads(local_tran->tran_id, &hdr->odsc, &od->obj_desc);
+            dart_rdma_perform_reads(local_tran->tran_id);
+            dart_rdma_delete_read_tran(local_tran->tran_id);
+        } else if (!obj_desc_equals_no_owner(&hdr->odsc, &od->obj_desc)) {
+            // Data on remote peer
+            struct dart_rdma_read_tran *remote_tran;
+            dart_rdma_create_read_tran(peer, &remote_tran);
+            dart_rdma_get_memregion_from_cmd(&remote_tran->src, &od_w->cmd);
+            err = dart_rdma_register_mem(&remote_tran->dst,
+                                        od->data, obj_data_size(&od->obj_desc));
+            if (err < 0) {
+                uloga("%s(): dart_rdma_register_mem failed\n", __func__);
+                goto err_out;
+            }
+
+            schedule_rdma_reads(remote_tran->tran_id, &hdr->odsc,&od->obj_desc);
+            dart_rdma_perform_reads(remote_tran->tran_id);
+            while (!dart_rdma_check_reads(remote_tran->tran_id)) {
+                err = dart_rdma_process_reads();
+                if (err < 0) {
+                    uloga("%s(): dart_rdma_process_reads failed\n", __func__);
+                    goto err_out;
+                }
+            }
+            dart_rdma_deregister_mem(&remote_tran->dst);
+            dart_rdma_delete_read_tran(remote_tran->tran_id);
+        }
+    }
 
 	// Send back ack messages to all dst. peers
-	//err = send_ack_v1(qte);
 	err = send_ack_v2(qte);
 	if (err < 0) {
 		goto err_out_free;
 	}
 
 	qte->f_complete = 1;
-
-	if (trans_tab) {
-		free(trans_tab);
-	}
-
 	return 0;
 err_out_free:
 	free(trans_tab);
+    free(trans_status_tab);
 err_out:
 	ERROR_TRACE();
 }
@@ -1570,7 +1709,7 @@ static int dimes_obj_get(struct obj_data *od)
 #endif
 
 	// Fetch the data
-	err = dimes_obj_data_get(qte);
+	err = dimes_fetch_data(qte);
 	if (err < 0) {
 		qt_free_obj_data_d(qte, 1);
 		goto err_data_free;

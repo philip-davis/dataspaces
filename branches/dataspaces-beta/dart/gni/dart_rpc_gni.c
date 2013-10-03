@@ -49,6 +49,9 @@
 #define SENDCREDIT	rpc_s->num_buf/2-2
 #define SEC 0.1
 
+#define ENTRY_COUNT             65535
+#define INDEX_COUNT             65536
+
 #define SYS_WAIT_COMPLETION(x)					\
 	while (!(x)) {						\
 		err = sys_process_event(rpc_s);			\
@@ -61,6 +64,7 @@
 #define rank2id(rpc_s, rank)	((rank) + (rpc_s->app_minid))
 #define id2rank(rpc_s, id)	((id) - (rpc_s->app_minid))
 #define myrank(rpc_s)		id2rank(rpc_s, myid(rpc_s))
+
 
 static int first_spawned;
 static int rank_id_pmi; //this global rank_id is fetched by using pmi library.
@@ -153,7 +157,7 @@ static int rpc_index_init(struct rpc_server *rpc_s)
 	struct rr_index *ri;
 
 	INIT_LIST_HEAD(&index_list);
-	for(i=1; i<65536; i++)
+	for(i=1; i<INDEX_COUNT-1; i++)
 	{
 		ri = calloc(1, sizeof(struct rr_index));
 		if(ri==NULL)
@@ -180,6 +184,7 @@ static uint32_t rpc_get_index(void)
 		free(ri);
 		break;
 	}
+	//	printf("Rank %d: get index %d.\n", rpc_s_instance->ptlmap.id, current_index);
 	return current_index;
 }
 
@@ -195,6 +200,8 @@ static int rpc_free_index(int index)
 
 	ri->index = index;
 	list_add_tail(&ri->index_entry, &index_list);
+
+	//	printf("Rank %d: free index %d.\n", rpc_s_instance->ptlmap.id, index);
 	
 	return 0;
 }
@@ -375,7 +382,7 @@ static int sys_send(struct rpc_server *rpc_s, struct node_id *peer, struct hdr_s
 	int err;
 	uint32_t local, remote;
 
-	remote = rpc_s->ptlmap.id;
+	remote = rpc_s->ptlmap.id+INDEX_COUNT;
 	local = rpc_s->ptlmap.id;
  
         status = GNI_EpSetEventData(peer->sys_ep_hndl, local, remote);
@@ -912,7 +919,7 @@ static int rpc_post_request(struct rpc_server *rpc_s, const struct node_id *peer
 
 	if (rr->type == 0)
 	{
-		remote = rpc_s->ptlmap.id;
+		remote = rpc_s->ptlmap.id+INDEX_COUNT;
 
 	        status = GNI_EpSetEventData(peer->ep_hndl, local, remote);
 	        if(status != GNI_RC_SUCCESS)
@@ -934,7 +941,7 @@ static int rpc_post_request(struct rpc_server *rpc_s, const struct node_id *peer
 
 	if (rr->type == 1)
 	{
-	        remote = peer->mdh_addr.index+65536;
+	        remote = peer->mdh_addr.index;
 		status = GNI_EpSetEventData(peer->ep_hndl, local, (uint32_t)remote);
 		if(status != GNI_RC_SUCCESS)
 		{
@@ -988,7 +995,7 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
 	uint32_t local, remote;
 
 	local = rr->index;
-	remote = peer->mdh_addr.index+65536;
+	remote = peer->mdh_addr.index;
 
 	status = GNI_EpSetEventData(peer->ep_hndl, (uint32_t)local, (uint32_t)remote);
 	if(status != GNI_RC_SUCCESS)
@@ -1364,7 +1371,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 
   if(n == 1)
     {
-      if(event_id >= 0 && event_id < 65536)
+      if(event_id >= INDEX_COUNT)
 	{
 	  rr = rr_comm_alloc(0);
 	  if(rr == NULL)
@@ -1373,7 +1380,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	      goto err_out;
 	    }
 	  
-	  peer = rpc_get_peer(rpc_s, (int)event_id);
+	  peer = rpc_get_peer(rpc_s, (int)event_id-INDEX_COUNT);
 	  if(peer == NULL)
 	    {
 	      printf("(%s): rpc_get_peer err.\n", __func__);
@@ -1439,13 +1446,13 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	  free(rr);
 	  }
 
-	 if(event_id >= 65536 && event_id < 131072)
+	 if( event_id < INDEX_COUNT )
 	   {
 	     while(!GNI_CQ_STATUS_OK(event_data));
 		       
 	     list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry)
 	       {
-		 if( rr->index == event_id - 65536 )
+		 if( rr->index == event_id )
 		   {
 		     check = 1;
 		     break;
@@ -1454,6 +1461,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 		     
 	     if(check == 0)
 	       {
+		 printf("Rank %d: DST Indexing err with event_id (%d), rr_num (%d) in (%s).\n", rank_id_pmi, event_id, rpc_s->rr_num,  __func__);
 		 list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry)
 		   {
 		     printf("Rank(%d):Index(%d) with rr_num(%d).\n",rank_id_pmi, rr->index, rpc_s->rr_num);
@@ -1607,7 +1615,7 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 		goto err_free;
 
 
-        status = GNI_CqCreate(rpc_s->nic_hndl, 65535, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->sys_cq_hndl);
+        status = GNI_CqCreate(rpc_s->nic_hndl, ENTRY_COUNT, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->sys_cq_hndl);
         if (status != GNI_RC_SUCCESS)
         {
                 printf("Fail: GNI_CqCreate SYS returned error. %d.\n", status);
@@ -1615,14 +1623,14 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
         }
 
 
-	status = GNI_CqCreate(rpc_s->nic_hndl, 65535, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->src_cq_hndl);
+	status = GNI_CqCreate(rpc_s->nic_hndl,ENTRY_COUNT, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->src_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
 		printf("Fail: GNI_CqCreate SRC returned error. %d.\n", status);
 		goto err_out;
 	}
 
-	status = GNI_CqCreate(rpc_s->nic_hndl, 65535, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->dst_cq_hndl);
+	status = GNI_CqCreate(rpc_s->nic_hndl, ENTRY_COUNT, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->dst_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
 		printf("Fail: GNI_CqCreate DST returned error. %d.\n", status);
@@ -1646,6 +1654,9 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 	memset(rpc_s->bar_tab, 0, sizeof(*rpc_s->bar_tab) * num_rpc_per_buff);
 
 	rpc_add_service(cn_ack_credit, rpc_process_ack);
+
+
+	//	printf("rpc_cmd size is %d.\n", sizeof(struct rpc_cmd));
 
 	// Init succeeded, set the instance reference here.
 	rpc_s_instance = rpc_s;
@@ -1880,6 +1891,8 @@ void rpc_add_service(enum cmd_type rpc_cmd, rpc_service rpc_func)
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd)
 {
   peer->mdh_addr = cmd->mdh_addr;
+  //debug SCA
+  // printf("Rank %d: peer mdh_addr index is %d, cmd->mdh_addr->index is %d.\n", rpc_s_instance->ptlmap.id, peer->mdh_addr.index, cmd->mdh_addr.index);
 }
 
 struct msg_buf *msg_buf_alloc (struct rpc_server *rpc_s, const struct node_id *peer, int num_rpcs)
