@@ -101,10 +101,10 @@ static int dart_rdma_get(struct dart_rdma_read_tran *read_tran,
 	read_op->post_desc.cq_mode = GNI_CQMODE_GLOBAL_EVENT;
 	read_op->post_desc.dlvr_mode = GNI_DLVMODE_PERFORMANCE;
 	read_op->post_desc.local_addr = read_tran->dst.base_addr +
-																	read_op->dst_offset;
+                                    read_op->dst_offset;
 	read_op->post_desc.local_mem_hndl = read_tran->dst.mdh;
 	read_op->post_desc.remote_addr = read_tran->src.base_addr +
-																	 read_op->src_offset;
+                                     read_op->src_offset;
 	read_op->post_desc.remote_mem_hndl = read_tran->src.mdh;
 	read_op->post_desc.length = read_op->bytes;
 	read_op->post_desc.rdma_mode = 0;
@@ -136,8 +136,6 @@ static int dart_rdma_process_post_cq(uint64_t timeout)
 		uloga("%s(): GNI_CqWaitEvent() failed\n", __func__);
 		goto err_out;
 	}
-
-	while(!GNI_CQ_STATUS_OK(event_data)); // TODO(fan): Need this?
 
 	ret = GNI_GetCompleted(drh->post_cq_hndl, event_data, &pd);
 	if (ret != GNI_RC_SUCCESS) {
@@ -281,8 +279,7 @@ int dart_rdma_schedule_read(int tran_id, size_t src_offset, size_t dst_offset,
 	struct dart_rdma_read_tran *read_tran =
 					dart_rdma_find_read_tran(tran_id, &drh->read_tran_list);
 	if (read_tran == NULL) {
-		uloga("%s(): read tran with id= %d not found!\n",
-						__func__, tran_id);
+		uloga("%s(): read tran %d not found!\n", __func__, tran_id);
 		return -1;
 	}
 
@@ -324,8 +321,7 @@ int dart_rdma_perform_reads(int tran_id)
 	struct dart_rdma_read_tran *read_tran =
 					dart_rdma_find_read_tran(tran_id, &drh->read_tran_list);
 	if (read_tran == NULL) {
-		uloga("%s(): read tran with id= %d not found!\n",
-							__func__, tran_id);
+		uloga("%s(): read tran %d not found!\n", __func__, tran_id);
 		return -1;
 	}
 
@@ -337,16 +333,16 @@ int dart_rdma_perform_reads(int tran_id)
 		return 0;
 	}
 
-	int avail_rdma_post_queue_size = MAX_NUM_RDMA_READ_POSTED;
-	avail_rdma_post_queue_size -= drh->num_rdma_read_posted;
-	if (avail_rdma_post_queue_size < read_tran->num_read_ops) {
-		read_tran->f_rdma_read_posted = 0;
-		return 0;
-	}
-
 	struct dart_rdma_read_op *read_op;
 	list_for_each_entry(read_op, &read_tran->read_ops_list,
 		struct dart_rdma_read_op, entry) {
+        while (drh->num_rdma_read_posted >= MAX_NUM_RDMA_READ_POSTED) {
+            err = dart_rdma_process_post_cq(1);
+            if (err < 0) {
+                return -1;
+            }
+        }
+
 		err = dart_rdma_get(read_tran, read_op);
 		if (err < 0) {
 			goto err_out;
@@ -362,62 +358,34 @@ err_out:
 int dart_rdma_check_reads(int tran_id)
 {
 	int err = -ENOMEM;
+    int read_done = 0;
 	if (!drh) {
 		uloga("%s(): dart rdma not init!\n", __func__);
-		return -1;
+		return read_done;
 	}
 
 	struct dart_rdma_read_tran *read_tran =
 					dart_rdma_find_read_tran(tran_id, &drh->read_tran_list);
 	if (read_tran == NULL) {
-		uloga("%s(): read tran with id= %d not found!\n",
-						__func__, tran_id);
-		return -1;
+		uloga("%s(): read tran %d not found!\n", __func__, tran_id);
+		return read_done;
 	}
 
 	if (!read_tran->f_rdma_read_posted) {
-		struct dart_rdma_read_op *read_op;
-		list_for_each_entry(read_op, &read_tran->read_ops_list,
-			struct dart_rdma_read_op, entry) {
-			while (!(drh->num_rdma_read_posted < MAX_NUM_RDMA_READ_POSTED))
-			{
-				err = dart_rdma_process_post_cq(1);
-				if (err < 0) {
-					return -1;
-				}
-			}
-
-			err = dart_rdma_get(read_tran, read_op);
-			if (err < 0) {
-				return -1;
-			}
-		}
-
-		read_tran->f_rdma_read_posted = 1;
+		return read_done;
 	}
 
-	// Block till all RDMA reads complete
-	while (!list_empty(&read_tran->read_ops_list))
-	{
-		err = dart_rdma_process_post_cq(1);
-		if (err < 0) {
-			return -1;
-		}
-	}
+    if (list_empty(&read_tran->read_ops_list)) {
+        read_done = 1;
+    }
 
-#ifdef DEBUG
-	uloga("%s(): read transaction %d complete!\n", __func__, tran_id);
-#endif
-	return 0;
+    return read_done;    
 }
 
-/*
-int dart_rdma_gen_read_tran_id()
+int dart_rdma_process_reads()
 {
-	static int tran_id_ = 0;
-	return tran_id_++;
+    return dart_rdma_process_post_cq(50);
 }
-*/
 
 int dart_rdma_create_read_tran(struct node_id *remote_peer,
                                struct dart_rdma_read_tran **pp)
@@ -444,8 +412,7 @@ int dart_rdma_delete_read_tran(int tran_id)
 	struct dart_rdma_read_tran *read_tran =
 					dart_rdma_find_read_tran(tran_id, &drh->read_tran_list);
 	if (read_tran == NULL) {
-		uloga("%s(): read tran with id= %d not found!\n",
-						__func__, tran_id);
+		uloga("%s(): read tran %d not found!\n", __func__, tran_id);
 		return -1;
 	}
 

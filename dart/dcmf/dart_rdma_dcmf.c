@@ -204,12 +204,12 @@ int dart_rdma_register_mem(struct dart_rdma_mem_handle *mem_hndl,
 		goto err_out;
 	}
 
-#ifdef DEBUG
 	if (bytes_out != bytes) {
 		uloga("%s(): ERROR bytes_out=%u, bytes_in=%u\n",
 				__func__, bytes_out, bytes);
+        goto err_out;
 	}
-#endif
+
 	mem_hndl->size = bytes;
 	mem_hndl->base_addr = data;
 
@@ -322,44 +322,37 @@ err_out:
 
 int dart_rdma_check_reads(int tran_id)
 {
-	// Block till all RDMA reads complete
 	int err = -ENOMEM;
+    int read_done = 0;
 	if (!drh) {
 		uloga("%s(): dart rdma not init!\n", __func__);
-		return -1;
+		return read_done;
 	}
 
 	struct dart_rdma_read_tran *read_tran =
 			dart_rdma_find_read_tran(tran_id, &drh->read_tran_list);
 	if (read_tran == NULL) {
-		uloga("%s(): read tran with id= %d not found!\n",
-				__func__, tran_id);
-		return -1;
+		uloga("%s(): read tran %d not found!\n", __func__, tran_id);
+		return read_done;
 	}
 
-	while (!list_empty(&read_tran->read_ops_list))
-	{
-		err = rpc_process_event(drh->rpc_s);
-		if (err < 0) {
-			uloga("%s(): rpc_process_event failed\n", __func__);
-			return -1;
-		}
-	}
+    if (list_empty(&read_tran->read_ops_list)) {
+        read_done = 1;
+    }
 
-#ifdef DEBUG
-	uloga("%s(): read transaction %d complete!\n", __func__, tran_id);
-#endif
-
-	return 0;
+    return read_done;
 }
 
-/*
-int dart_rdma_gen_read_tran_id()
+int dart_rdma_process_reads()
 {
-        static int tran_id_ = 0;
-        return tran_id_++;
+    int err = rpc_process_event(drh->rpc_s);
+    if (err < 0) {
+        uloga("%s(): rpc_process_event failed\n", __func__);
+        return -1;
+    }
+
+    return 0;
 }
-*/
 
 int dart_rdma_create_read_tran(struct node_id *remote_peer,
                                struct dart_rdma_read_tran **pp)

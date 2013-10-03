@@ -170,7 +170,7 @@ static int locate_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd,
 		// TODO(fan): remove the double copy of the cmd_data
 		// use the linked list cmd_list only to store the pointer values
 		list_for_each_entry_safe(cmd_data,tmp,&cmd_list,
-														 struct cmd_data, entry) {
+								 struct cmd_data, entry) {
 			list_del(&cmd_data->entry);
 			tab[i++] = cmd_data->cmd;
 			free(cmd_data);
