@@ -34,13 +34,18 @@
 #ifdef DS_HAVE_DIMES
 #include "dart_rpc_gni.h"
 
+enum dart_rdma_tran_type {
+    dart_rdma_tran_type_read = 0,
+    dart_rdma_tran_type_write
+};
+
 struct dart_rdma_mem_handle {
 	gni_mem_handle_t mdh;
 	uint64_t base_addr;
 	size_t size;
 };
 
-struct dart_rdma_read_op {
+struct dart_rdma_op {
 	struct list_head entry;
 	int tran_id;
 	gni_post_descriptor_t post_desc;
@@ -50,12 +55,13 @@ struct dart_rdma_read_op {
 	int ret; // TODO(fan): Need this?
 };
 
-struct dart_rdma_read_tran {
+struct dart_rdma_tran {
 	struct list_head entry;
-	struct list_head read_ops_list;
-	int num_read_ops;
+	struct list_head rdma_op_list;
 	int tran_id;
-	int f_rdma_read_posted;
+	int num_rdma_op;
+	int f_all_rdma_op_posted;
+    enum dart_rdma_tran_type type;
 	struct node_id *remote_peer;
 	struct dart_rdma_mem_handle src;
 	struct dart_rdma_mem_handle dst;
@@ -65,7 +71,8 @@ struct dart_rdma_handle {
 	struct rpc_server *rpc_s;
 	gni_cq_handle_t post_cq_hndl;
 	struct list_head read_tran_list;
-	int num_rdma_read_posted;
+    struct list_head write_tran_list;
+	int num_rdma_op_posted;
 };
 
 int dart_rdma_init(struct rpc_server *rpc_s);
@@ -80,9 +87,8 @@ int dart_rdma_set_memregion_to_cmd(struct dart_rdma_mem_handle *mem_hndl,
 int dart_rdma_get_memregion_from_cmd(struct dart_rdma_mem_handle *mem_hndl,
                                    struct rpc_cmd *cmd);
 
-// int dart_rdma_gen_read_tran_id();
 int dart_rdma_create_read_tran(struct node_id *remote_peer,
-                struct dart_rdma_read_tran **pp);
+                struct dart_rdma_tran **pp);
 int dart_rdma_delete_read_tran(int tran_id);
 
 int dart_rdma_schedule_read(int tran_id, size_t src_offset, size_t dst_offset,
@@ -90,6 +96,18 @@ int dart_rdma_schedule_read(int tran_id, size_t src_offset, size_t dst_offset,
 int dart_rdma_perform_reads(int tran_id);
 int dart_rdma_process_reads();
 int dart_rdma_check_reads(int tran_id);
+
+/*
+int dart_rdma_create_write_tran(struct node_id *remote_peer,
+                struct dart_rdma_tran **pp);
+int dart_rdma_delete_write_tran(int tran_id);
+
+int dart_rdma_schedule_write(int tran_id, size_t src_offset, size_t dst_offset,
+                size_t bytes);
+int dart_rdma_perform_writes(int tran_id);
+int dart_rdma_process_writes();
+int dart_rdma_check_writes(int tran_id);
+*/
 #endif
 
 #endif

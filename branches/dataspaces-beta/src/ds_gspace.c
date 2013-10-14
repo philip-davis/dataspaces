@@ -87,7 +87,7 @@ enum lock_action {
 struct dsg_lock {
 	struct list_head	lk_entry;
 
-	char			lk_name[16];
+	char			lk_name[LOCK_NAME_SIZE];
 
         int                     rd_notify_cnt; 
         int                     wr_notify_cnt;

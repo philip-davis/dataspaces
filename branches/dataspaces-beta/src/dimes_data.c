@@ -34,12 +34,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <stdint.h>
 
 #include "dimes_data.h"
 #include "debug.h"
 #include "ss_data.h"
 
-////////////////////////////////////////////////////////////////////////
 static struct cmd_data *
 cmd_s_find_no_version(struct cmd_storage *s, struct obj_descriptor *odsc)
 {
@@ -315,4 +315,290 @@ int dimes_ls_count_obj_no_version(struct ss_storage *ls, int query_tran_id)
 
 	return cnt;
 }
+
+size_t dimes_buffer_size = 0;
+//Starting pointer to the memory buffer
+uint64_t dimes_buffer_ptr = 0;
+
+/*linked list for free dimes_buf_block. And the blocks in the list
+are sorted by block_size in ascending order.
+*/
+struct list_head free_blocks_list;
+
+/*linked list for in use dimes_buf_block. And the blocks in the list
+are sorted by block_size in ascending order.
+*/
+struct list_head used_blocks_list;
+
+enum mem_block_status {
+    free_block,
+    used_block
+};
+
+/*dynamic mem block data structure*/
+struct dimes_buf_block {
+    struct list_head mem_block_entry;
+    size_t block_size;
+    uint64_t block_ptr;
+    enum mem_block_status block_status;
+};
+
+#define SIZE_DART_MEM_BLOCK sizeof(struct dimes_buf_block)
+
+//
+// Cleanup a blocks list
+//
+static void dimes_buf_cleanup_list(struct list_head* blocks_list)
+{
+    struct dimes_buf_block * mb, *tmp;
+    list_for_each_entry_safe(mb, tmp, blocks_list, struct dimes_buf_block, mem_block_entry) {
+        list_del(&mb->mem_block_entry);
+        free(mb);//free the memory
+    }
+}
+
+//
+// Insert a memory block into the list that sorted by block_size.
+//
+static void dimes_buf_insert_block(
+    struct dimes_buf_block *block,
+    struct list_head* blocks_list)
+{
+    struct dimes_buf_block *mb, *tmp;
+    int inserted = 0;
+
+    list_for_each_entry_safe(mb, tmp, blocks_list, struct dimes_buf_block, mem_block_entry) {
+        if(block->block_size <= mb->block_size) {
+            //add the block befor the position of mb in the list.
+            list_add_before_pos(&block->mem_block_entry, &mb->mem_block_entry);
+            inserted = 1;
+            break;
+        }
+    }
+
+    //add the block to the tail
+    if (!inserted)
+        list_add_tail(&block->mem_block_entry, blocks_list);
+}
+
+/* 
+   Insert a memory  block into the  free blocks list,  and merge
+   contiguous free blocks into larger new one.
+*/
+static void dimes_buf_insert_block_to_freelist(
+    struct dimes_buf_block *block,
+    struct list_head *blocks_list)
+{
+    /*    low_memory_addresses ------->  high_memory_addresses
+    |             |    |                         |
+    | contiguous_block_before |  block |  contiguous_block_after | 
+    |                         |        |                 |
+    */
+    //the contiguous free block before 'block' in the buffer
+    struct dimes_buf_block *contiguous_block_before = NULL;
+    //the contiguous free block after 'block' in the buffer
+    struct dimes_buf_block *contiguous_block_after = NULL;
+
+    struct dimes_buf_block * mb, *tmp;
+    list_for_each_entry_safe(mb, tmp, blocks_list, struct dimes_buf_block, mem_block_entry) {
+        if(block->block_ptr == (mb->block_ptr + mb->block_size) )
+            contiguous_block_before = mb;
+        if(mb->block_ptr == (block->block_ptr + block->block_size) )
+            contiguous_block_after = mb;
+    }
+
+    if(contiguous_block_after) {
+        //update the size of the merged new free block
+        block->block_size = block->block_size + contiguous_block_after->block_size;
+        //the starting address of the merged new free block does NOT change
+
+        //remove from free blocks list
+        list_del(&contiguous_block_after->mem_block_entry);
+        free(contiguous_block_after);
+    }
+
+    if(contiguous_block_before) {
+        //update the size of the merged new free block
+        block->block_size = block->block_size + contiguous_block_before->block_size;
+        //update the starting address of the merged new free block  
+        block->block_ptr = contiguous_block_before->block_ptr;
+
+        //remove from free blocks list
+        list_del(&contiguous_block_before->mem_block_entry);
+        free(contiguous_block_before);
+    }
+
+    //add the new free block into list
+    block->block_status = free_block;
+    dimes_buf_insert_block(block, blocks_list);
+}
+
+//
+// Initialize DART Buffer
+//
+int dimes_buffer_init(uint64_t base_addr, size_t size)
+{
+    INIT_LIST_HEAD(&free_blocks_list);
+    INIT_LIST_HEAD(&used_blocks_list);
+
+    dimes_buffer_ptr = base_addr;
+    if (dimes_buffer_ptr != 0) {
+        dimes_buffer_size = size;
+
+        //create the first free block
+        struct dimes_buf_block *block;
+        block = (struct dimes_buf_block*)malloc(SIZE_DART_MEM_BLOCK);
+        block->block_size = size;
+        block->block_ptr = dimes_buffer_ptr;
+        block->block_status = free_block;
+
+        //add the block into free blocks list 
+        dimes_buf_insert_block(block, &free_blocks_list);
+
+        return 0;
+    }
+    else    return -1;
+}
+
+//
+// Finalize DART Buffer 
+//
+int dimes_buffer_finalize()
+{
+    //cleanup the free_blocks_list
+    dimes_buf_cleanup_list(&free_blocks_list);
+
+    //cleanup the used_blocks_list
+    dimes_buf_cleanup_list(&used_blocks_list);
+
+    return 0;
+}
+
+size_t dimes_buffer_total_size()
+{
+    return dimes_buffer_size;
+}
+
+void dimes_buffer_alloc(size_t size, uint64_t *ptr)
+{
+    //If requested buffer size exceeds the total available
+    if (size > dimes_buffer_size)
+        goto err_out;
+
+    //Search for usable free block with the smallest data size
+    struct dimes_buf_block * mb, *tmp;
+    int found = 0;
+    list_for_each_entry_safe(mb, tmp, &free_blocks_list, struct dimes_buf_block, 
+mem_block_entry){
+        if(mb->block_size >= size) {
+            //Usable free block found
+            found = 1;
+            break;
+        }
+    }
+
+    if (found) {
+        /*Usable free block 'mb' found*/
+
+        //new_free_mb is the new free memory block after allocating space from 'mb'
+        //new_used_mb is the new in_use memory block after allocating space from 'mb'
+        struct dimes_buf_block * new_free_mb, * new_used_mb;
+
+        //remove 'mb' from free blocks list
+        list_del(&mb->mem_block_entry);
+
+        if(mb->block_size == size){
+            new_free_mb = NULL;
+            new_used_mb = mb;
+            new_used_mb->block_status = used_block;
+        }
+
+        if(mb->block_size > size){
+            new_free_mb = (struct dimes_buf_block*)malloc(SIZE_DART_MEM_BLOCK);
+            new_free_mb->block_status = free_block;
+            new_free_mb->block_ptr = mb->block_ptr + size;
+            new_free_mb->block_size = mb->block_size - size;
+            new_used_mb = mb;
+            new_used_mb->block_status = used_block;
+            new_used_mb->block_size = size;
+        }
+
+        //add 'new_free_mb'  into free blocks list
+        if(new_free_mb != NULL)
+            dimes_buf_insert_block(new_free_mb, &free_blocks_list);
+        //add 'new_used_mb' into used blocks list 
+        if(new_used_mb != NULL)
+            dimes_buf_insert_block(new_used_mb, &used_blocks_list);
+
+        *ptr = (uint64_t)new_used_mb->block_ptr;
+        return;
+    }
+    else {
+        /*Could not find usable free block*/
+        fprintf(stderr, "%s: failed! no space\n", __func__);
+        goto err_out;
+    }
+
+ err_out:
+    *ptr = (uint64_t)0;
+    return;
+}
+
+void dimes_buffer_free(uint64_t ptr)
+{
+    /*test if the value of ptr is valid*/
+    if (ptr == 0 || dimes_buffer_ptr == 0)
+        return;
+
+    uint64_t start_ptr = dimes_buffer_ptr;
+    uint64_t end_ptr = dimes_buffer_ptr + dimes_buffer_size - 1;
+    if ( ptr < start_ptr || ptr > end_ptr) {
+        fprintf(stderr, "%s(): error invalid address! start_ptr %llx end_ptr %llx ptr %llx\n", __func__, start_ptr, end_ptr, ptr);
+        return;
+    }
+
+    /*search for the corresponding in_use memory block for ptr*/
+    struct dimes_buf_block * mb, *tmp;
+    unsigned int found = 0;//flag value init as 0!
+    list_for_each_entry_safe(mb, tmp, &used_blocks_list, struct dimes_buf_block, mem_block_entry){
+        if(mb->block_ptr == ptr) {
+            found = 1;
+            break;
+        }
+    }
+
+    if (found) {
+
+        //remove 'mb' from used blocks list
+        list_del(&mb->mem_block_entry);
+
+        //add back 'mb' into free blocks list
+        dimes_buf_insert_block_to_freelist(mb, &free_blocks_list);
+    }
+    else return;
+}
+
+//For testing
+void print_free_blocks_list()
+{
+    printf("#####Free Blocks List####\n");
+
+    struct dimes_buf_block * mb, *tmp;
+    list_for_each_entry_safe(mb, tmp, &free_blocks_list, struct dimes_buf_block, mem_block_entry){
+        printf("free block: ptr=%p, size=%zu, status=%u\n",
+            mb->block_ptr, mb->block_size, mb->block_status);
+    }
+}
+
+void print_used_blocks_list()
+{
+    printf("#####Used Blocks List####\n");
+
+    struct dimes_buf_block * mb, *tmp;
+    list_for_each_entry_safe(mb, tmp, &used_blocks_list, struct dimes_buf_block, mem_block_entry){
+        printf("used block: ptr=%p, size=%zu, status=%u\n",
+            mb->block_ptr, mb->block_size, mb->block_status);
+    }
+}
+
 #endif // end of #ifdef DS_HAVE_DIMES
