@@ -32,66 +32,154 @@
 #include <stdint.h>
 #include "dart_rdma_gni.h"
 
-#define MAX_NUM_RDMA_READ_POSTED 65536
+#define MAX_NUM_RDMA_OP_POSTED 65536
 
 static struct dart_rdma_handle *drh = NULL;
+static int tran_id_seed = 0;
 
-/*
-static int dart_rdma_insert_read_op(struct list_head *tran_list,
-                                struct dart_rdma_read_op *read_op)
+static struct dart_rdma_tran*
+common_dart_rdma_find_tran(int tran_id, enum dart_rdma_tran_type type)
 {
-	int find_tran = 0;
-	struct dart_rdma_read_tran *read_tran = NULL;
-	list_for_each_entry(read_tran, tran_list, entry) {
-					if (read_tran->tran_id == read_op->tran_id) {
-									find_tran = 1;
-									break;
-					}
-	}
+    struct list_head *tran_list = NULL;
+    if (type == dart_rdma_tran_type_read) {
+        tran_list = &drh->read_tran_list;
+    } else if (type == dart_rdma_tran_type_write) {
+        tran_list = &drh->write_tran_list;
+    }
 
-	if (!find_tran) {
-					uloga("%s(): Failed to find read tran with id=%d\n",
-									__func__, read_op->tran_id);
-					return -1;
-	}
-
-	list_add(&read_op->entry, &read_tran->read_ops_list);
-
-	return 0;
-}
-*/
-
-static struct dart_rdma_read_tran*
-dart_rdma_find_read_tran(int tran_id, struct list_head *tran_list) {
-	struct dart_rdma_read_tran *read_tran = NULL;
-	list_for_each_entry(read_tran, tran_list,
-		struct dart_rdma_read_tran, entry) {
-		if (read_tran->tran_id == tran_id) {
-			return read_tran;
+	struct dart_rdma_tran *tran = NULL;
+	list_for_each_entry(tran, tran_list,
+		struct dart_rdma_tran, entry) {
+		if (tran->tran_id == tran_id) {
+			return tran;
 		}
 	}
 
+    uloga("%s(): tran with id %d not found!\n", __func__, tran_id);
 	return NULL;
 }
 
-static int dart_perform_local_reads(struct dart_rdma_read_tran *read_tran)
+static int common_dart_rdma_create_tran(struct node_id *remote_peer,
+                                        struct dart_rdma_tran **pp,
+                                        enum dart_rdma_tran_type type)
 {
-	struct dart_rdma_read_op *read_op, *t;
-	list_for_each_entry_safe(read_op, t, &read_tran->read_ops_list,
-				struct dart_rdma_read_op, entry) {
-		memcpy(read_tran->dst.base_addr + read_op->dst_offset,
-				read_tran->src.base_addr + read_op->src_offset,
-				read_op->bytes);
-		list_del(&read_op->entry);
-		free(read_op);
+    struct dart_rdma_tran *tran = (struct dart_rdma_tran*)
+                                    malloc(sizeof(*tran));
+    if (tran == NULL) {
+        return -1;
+    }
+    tran->tran_id = tran_id_seed++;
+    tran->remote_peer = remote_peer;
+    tran->num_rdma_op = 0;
+    tran->f_all_rdma_op_posted = 0;
+    tran->type = type;
+    INIT_LIST_HEAD(&tran->rdma_op_list);
+    if (type == dart_rdma_tran_type_read) {
+        list_add(&tran->entry, &drh->read_tran_list);
+    } else if (type == dart_rdma_tran_type_write) {
+        list_add(&tran->entry, &drh->write_tran_list);
+    }
+
+    *pp = tran;
+    return 0;
+}
+
+static int common_dart_rdma_delete_tran(int tran_id, enum dart_rdma_tran_type type)
+{
+    struct dart_rdma_tran *tran = NULL;
+    tran = common_dart_rdma_find_tran(tran_id, type);
+    if (tran == NULL) {
+        return -1;
+    }
+
+    if (!list_empty(&tran->rdma_op_list)) {
+        uloga("%s(): dart tran with id= %d not complete!\n",
+            __func__, tran_id);
+        return -1;
+    }
+
+    list_del(&tran->entry);
+    free(tran);
+    return 0;
+}
+
+static int common_dart_rdma_schedule_op(int tran_id, enum dart_rdma_tran_type type, size_t src_offset, size_t dst_offset, size_t bytes)
+{
+    int err = -ENOMEM;
+    if (!drh) {
+        uloga("%s(): dart rdma not init!\n", __func__);
+        return -1;
+    }
+
+    struct dart_rdma_tran *tran = NULL;
+    tran = common_dart_rdma_find_tran(tran_id, type);
+    if (tran == NULL) {
+        return -1;
+    }
+
+    // Add the RDMA operation into the transaction list
+    struct dart_rdma_op *op = (struct dart_rdma_op*)malloc(sizeof(*op));
+    if (op == NULL) {
+        uloga("%s(): malloc() failed\n", __func__);
+        return -1;
+    }
+
+    memset(op, 0, sizeof(*op));
+    op->tran_id = tran_id;
+    op->src_offset = src_offset;
+    op->dst_offset = dst_offset;
+    op->bytes = bytes;
+
+    list_add(&op->entry, &tran->rdma_op_list);
+    tran->num_rdma_op++;
+
+    return 0;
+}
+
+static int common_dart_rdma_check_tran(int tran_id, enum dart_rdma_tran_type type) 
+{
+    int err = -ENOMEM;
+    int done = 0;
+    if (!drh) {
+        uloga("%s(): dart rdma not init!\n", __func__);
+        return done;
+    }
+
+    struct dart_rdma_tran *tran = NULL;
+    tran = common_dart_rdma_find_tran(tran_id, type);
+    if (tran == NULL) {
+        return done;
+    }
+
+    if (!tran->f_all_rdma_op_posted) {
+        return done;
+    }
+
+    if (list_empty(&tran->rdma_op_list)) {
+        done = 1;
+    }
+
+    return done;
+}
+
+static int dart_perform_local_copy(struct dart_rdma_tran *tran)
+{
+	struct dart_rdma_op *op, *t;
+	list_for_each_entry_safe(op, t, &tran->rdma_op_list,
+				struct dart_rdma_op, entry) {
+		memcpy(tran->dst.base_addr + op->dst_offset,
+			   tran->src.base_addr + op->src_offset,
+			   op->bytes);
+		list_del(&op->entry);
+		free(op);
 	}
 
-	read_tran->f_rdma_read_posted = 1;
+	tran->f_all_rdma_op_posted = 1;
 	return 0;
 }
 
-static int dart_rdma_get(struct dart_rdma_read_tran *read_tran,
-											 struct dart_rdma_read_op *read_op)
+static int dart_rdma_get(struct dart_rdma_tran *read_tran,
+                         struct dart_rdma_op *read_op)
 {
 	gni_return_t ret;
 	int err = -ENOMEM;
@@ -116,10 +204,42 @@ static int dart_rdma_get(struct dart_rdma_read_tran *read_tran,
 		goto err_out;
 	}
 
-	drh->num_rdma_read_posted++;
+	drh->num_rdma_op_posted++;
 	return 0;
 err_out:
 	ERROR_TRACE();
+}
+
+static int dart_rdma_put(struct dart_rdma_tran *write_tran,
+                         struct dart_rdma_op *write_op)
+{
+    gni_return_t ret;
+    int err = -ENOMEM;
+
+    // Configure rdma post descriptor
+    write_op->post_desc.type = GNI_POST_RDMA_PUT;
+    write_op->post_desc.cq_mode = GNI_CQMODE_GLOBAL_EVENT;
+    write_op->post_desc.dlvr_mode = GNI_DLVMODE_PERFORMANCE;
+    write_op->post_desc.local_addr = write_tran->src.base_addr +
+                                     write_op->src_offset;
+    write_op->post_desc.local_mem_hndl = write_tran->src.mdh;
+    write_op->post_desc.remote_addr = write_tran->dst.base_addr +
+                                      write_op->dst_offset;
+    write_op->post_desc.remote_mem_hndl = write_tran->dst.mdh;
+    write_op->post_desc.length = write_op->bytes;
+    write_op->post_desc.rdma_mode = 0;
+    write_op->post_desc.src_cq_hndl = drh->post_cq_hndl;
+    ret = GNI_PostRdma(write_tran->remote_peer->ep_hndl,&write_op->post_desc);
+    if (ret != GNI_RC_SUCCESS) {
+        uloga("%s(): GNI_PostRdma() failed %d\n", __func__, ret);
+        err = -ret;
+        goto err_out;
+    }
+
+    drh->num_rdma_op_posted++;
+    return 0;
+ err_out:
+    ERROR_TRACE();
 }
 
 static int dart_rdma_process_post_cq(uint64_t timeout)
@@ -137,20 +257,22 @@ static int dart_rdma_process_post_cq(uint64_t timeout)
 		goto err_out;
 	}
 
+	//while(!GNI_CQ_STATUS_OK(event_data)); // TODO(fan): Need this?
+
 	ret = GNI_GetCompleted(drh->post_cq_hndl, event_data, &pd);
 	if (ret != GNI_RC_SUCCESS) {
 		uloga("%s(): GNI_GetCompleted() failed\n", __func__);
 		goto err_out;
 	}
 
-	struct dart_rdma_read_op *read_op = NULL;
+	struct dart_rdma_op *op = NULL;
 	// Get struct address from the field address
-	read_op = (struct dart_rdma_read_op *)
-			(((uintptr_t)pd)-offsetof(struct dart_rdma_read_op, post_desc));
-	list_del(&read_op->entry);
-	free(read_op);
+    op = (struct dart_rdma_op *)
+			(((uintptr_t)pd)-offsetof(struct dart_rdma_op, post_desc));
+	list_del(&op->entry);
+	free(op);
 
-	drh->num_rdma_read_posted--;
+	drh->num_rdma_op_posted--;
 	return 0;
 err_out:
 	ERROR_TRACE();
@@ -171,10 +293,11 @@ int dart_rdma_init(struct rpc_server *rpc_s)
 
 	drh->rpc_s = rpc_s;
 	INIT_LIST_HEAD(&drh->read_tran_list);
-	drh->num_rdma_read_posted = 0;
+    INIT_LIST_HEAD(&drh->write_tran_list);
+	drh->num_rdma_op_posted = 0;
 
 	// Create completion queue for RDMA post operation
-	ret = GNI_CqCreate(drh->rpc_s->nic_hndl, MAX_NUM_RDMA_READ_POSTED,
+	ret = GNI_CqCreate(drh->rpc_s->nic_hndl, MAX_NUM_RDMA_OP_POSTED,
 		0, GNI_CQ_BLOCKING, NULL, NULL, &drh->post_cq_hndl);
 	if (ret != GNI_RC_SUCCESS) {
 		uloga("%s(): GNI_CqCreate() failed with %d\n",
@@ -210,9 +333,6 @@ err_out:
 	ERROR_TRACE();
 }
 
-/*
-[in/out] mem_hndl 
-*/
 int dart_rdma_register_mem(struct dart_rdma_mem_handle *mem_hndl,
 									 void *data, size_t bytes)
 {
@@ -241,9 +361,6 @@ err_out:
 	ERROR_TRACE();
 }
 
-/*
-[in/out] mem_hndl 
-*/
 int dart_rdma_deregister_mem(struct dart_rdma_mem_handle *mem_hndl)
 {
 	int err = -ENOMEM;
@@ -270,44 +387,8 @@ err_out:
 int dart_rdma_schedule_read(int tran_id, size_t src_offset, size_t dst_offset,
 							size_t bytes)
 {
-	int err = -ENOMEM;
-	if (!drh) {
-		uloga("%s(): dart rdma not init!\n", __func__);
-		return -1;
-	}
-
-	struct dart_rdma_read_tran *read_tran =
-					dart_rdma_find_read_tran(tran_id, &drh->read_tran_list);
-	if (read_tran == NULL) {
-		uloga("%s(): read tran %d not found!\n", __func__, tran_id);
-		return -1;
-	}
-
-	// Add the RDMA read operation into the transaction list
-	struct dart_rdma_read_op *read_op =
-					(struct dart_rdma_read_op*)malloc(sizeof(*read_op));
-	if (read_op == NULL) {
-		uloga("%s(): malloc() failed\n", __func__);
-		return -1;
-	}
-
-	memset(read_op, 0, sizeof(*read_op));
-	read_op->tran_id = tran_id;
-	read_op->src_offset = src_offset;
-	read_op->dst_offset = dst_offset;
-	read_op->bytes = bytes;
-
-	list_add(&read_op->entry, &read_tran->read_ops_list);
-	read_tran->num_read_ops++;
-/*
-#ifdef DEBUG
-			uloga("%s(): read_op->src_offset= %u, read_op->dst_offset= %u,"
-							" read_op->bytes= %u, src_addr= %u, dst_addr= %u\n", __func__,
-							read_op->src_offset, read_op->dst_offset, read_op->bytes,
-							read_tran->src.base_addr, read_tran->dst.base_addr); 
-#endif
-*/
-	return 0;
+    return common_dart_rdma_schedule_op(tran_id, dart_rdma_tran_type_read,
+                src_offset, dst_offset, bytes);
 }
 
 int dart_rdma_perform_reads(int tran_id)
@@ -318,38 +399,36 @@ int dart_rdma_perform_reads(int tran_id)
 		return -1;
 	}
 
-	struct dart_rdma_read_tran *read_tran =
-					dart_rdma_find_read_tran(tran_id, &drh->read_tran_list);
-	if (read_tran == NULL) {
-		uloga("%s(): read tran %d not found!\n", __func__, tran_id);
+	struct dart_rdma_tran *tran = NULL;
+    tran = common_dart_rdma_find_tran(tran_id, dart_rdma_tran_type_read);
+	if (tran == NULL) {
 		return -1;
 	}
 
 #ifdef DEBUG
-	uloga("%s(): tran_id=%d num_read_ops=%d\n", __func__, tran_id, read_tran->num_read_ops);
+	uloga("%s(): tran_id=%d num_rdma_op=%d\n", __func__, tran_id, tran->num_rdma_op);
 #endif
-	if (drh->rpc_s->ptlmap.id == read_tran->remote_peer->ptlmap.id) {
-		dart_perform_local_reads(read_tran);
+	if (drh->rpc_s->ptlmap.id == tran->remote_peer->ptlmap.id) {
+		dart_perform_local_copy(tran);
 		return 0;
 	}
 
-	struct dart_rdma_read_op *read_op;
-	list_for_each_entry(read_op, &read_tran->read_ops_list,
-		struct dart_rdma_read_op, entry) {
-        while (drh->num_rdma_read_posted >= MAX_NUM_RDMA_READ_POSTED) {
+	struct dart_rdma_op *op;
+	list_for_each_entry(op, &tran->rdma_op_list, struct dart_rdma_op, entry) {
+        while (drh->num_rdma_op_posted >= MAX_NUM_RDMA_OP_POSTED) {
             err = dart_rdma_process_post_cq(1);
             if (err < 0) {
                 return -1;
             }
         }
 
-		err = dart_rdma_get(read_tran, read_op);
+		err = dart_rdma_get(tran, op);
 		if (err < 0) {
 			goto err_out;
 		}
 	}
 
-	read_tran->f_rdma_read_posted = 1;
+	tran->f_all_rdma_op_posted = 1;
 	return 0;
 err_out:
 	ERROR_TRACE();
@@ -357,29 +436,7 @@ err_out:
 
 int dart_rdma_check_reads(int tran_id)
 {
-	int err = -ENOMEM;
-    int read_done = 0;
-	if (!drh) {
-		uloga("%s(): dart rdma not init!\n", __func__);
-		return read_done;
-	}
-
-	struct dart_rdma_read_tran *read_tran =
-					dart_rdma_find_read_tran(tran_id, &drh->read_tran_list);
-	if (read_tran == NULL) {
-		uloga("%s(): read tran %d not found!\n", __func__, tran_id);
-		return read_done;
-	}
-
-	if (!read_tran->f_rdma_read_posted) {
-		return read_done;
-	}
-
-    if (list_empty(&read_tran->read_ops_list)) {
-        read_done = 1;
-    }
-
-    return read_done;    
+    return common_dart_rdma_check_tran(tran_id, dart_rdma_tran_type_read);
 }
 
 int dart_rdma_process_reads()
@@ -388,43 +445,86 @@ int dart_rdma_process_reads()
 }
 
 int dart_rdma_create_read_tran(struct node_id *remote_peer,
-                               struct dart_rdma_read_tran **pp)
+                               struct dart_rdma_tran **pp)
 {
-	static int tran_id_ = 0;
-	struct dart_rdma_read_tran *read_tran = (struct dart_rdma_read_tran*)
-									malloc(sizeof(*read_tran));
-	if (read_tran == NULL) {
-		return -1;
-	}
-	read_tran->tran_id = tran_id_++;
-	read_tran->remote_peer = remote_peer;
-	read_tran->num_read_ops = 0;
-	read_tran->f_rdma_read_posted = 0;
-	INIT_LIST_HEAD(&read_tran->read_ops_list);
-	list_add(&read_tran->entry, &drh->read_tran_list);
-
-	*pp = read_tran;
-	return 0;
+    return common_dart_rdma_create_tran(remote_peer, pp,
+                                        dart_rdma_tran_type_read);
 }
 
 int dart_rdma_delete_read_tran(int tran_id)
 {
-	struct dart_rdma_read_tran *read_tran =
-					dart_rdma_find_read_tran(tran_id, &drh->read_tran_list);
-	if (read_tran == NULL) {
-		uloga("%s(): read tran %d not found!\n", __func__, tran_id);
-		return -1;
-	}
+    return common_dart_rdma_delete_tran(tran_id, dart_rdma_tran_type_read);
+}
 
-	if (!list_empty(&read_tran->read_ops_list)) {
-		uloga("%s(): read tran with id= %d not complete!\n",
-						__func__, tran_id);
-		return -1;
-	}
+int dart_rdma_create_write_tran(struct node_id *remote_peer,
+                                struct dart_rdma_tran **pp)
+{
+    return common_dart_rdma_create_tran(remote_peer, pp, dart_rdma_tran_type_write);
+}
 
-	list_del(&read_tran->entry);
-	free(read_tran);
-	return 0;
+int dart_rdma_delete_write_tran(int tran_id)
+{
+    return common_dart_rdma_delete_tran(tran_id, dart_rdma_tran_type_write);
+}
+
+int dart_rdma_schedule_write(int tran_id, size_t src_offset, size_t dst_offset, size_t bytes)
+{
+   return common_dart_rdma_schedule_op(tran_id, dart_rdma_tran_type_write,
+            src_offset, dst_offset, bytes);
+}
+
+int dart_rdma_perform_writes(int tran_id)
+{
+    int err = -ENOMEM;
+    if (!drh) {
+        uloga("%s(): dart rdma not init!\n", __func__);
+        return -1;
+    }
+
+    struct dart_rdma_tran *tran = NULL;
+    tran = common_dart_rdma_find_tran(tran_id, dart_rdma_tran_type_write);
+    if (tran == NULL) {
+        return -1;
+    }
+
+#ifdef DEBUG
+    uloga("%s(): tran_id=%d num_rdma_op=%d\n", __func__, tran_id, tran->num_rdma_op);
+#endif
+    if (drh->rpc_s->ptlmap.id == tran->remote_peer->ptlmap.id) {
+        dart_perform_local_copy(tran);
+        return 0;
+    }
+
+    struct dart_rdma_op *op;
+    list_for_each_entry(op, &tran->rdma_op_list,
+        struct dart_rdma_op, entry) {
+        while (drh->num_rdma_op_posted >= MAX_NUM_RDMA_OP_POSTED) {
+            err = dart_rdma_process_post_cq(1);
+            if (err < 0) {
+                return -1;
+            }
+        }
+
+        err = dart_rdma_put(tran, op);
+        if (err < 0) {
+            goto err_out;
+        }
+    }
+
+    tran->f_all_rdma_op_posted = 1;
+    return 0;
+err_out:
+    ERROR_TRACE();
+}
+
+int dart_rdma_check_writes(int tran_id)
+{
+    return common_dart_rdma_check_tran(tran_id, dart_rdma_tran_type_write);
+}
+
+int dart_rdma_process_writes()
+{
+    return dart_rdma_process_post_cq(50);
 }
 
 int dart_rdma_set_memregion_to_cmd(struct dart_rdma_mem_handle *mem_hndl,

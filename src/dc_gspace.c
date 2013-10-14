@@ -112,7 +112,7 @@ struct dcg_lock {
         int                     req;
         int                     ack;
         int                     lock_num;
-	char			name[16];
+	char			name[LOCK_NAME_SIZE];
 };
 
 /* 
@@ -1439,6 +1439,13 @@ static int dcgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 	dcg->ss_info.num_dims = hsi->num_dims;
 	dcg->ss_info.num_space_srv = hsi->num_space_srv;
+    dcg->ss_domain.num_dims = hsi->num_dims;
+    dcg->ss_domain.lb.c[0] = 0;
+    dcg->ss_domain.lb.c[1] = 0;
+    dcg->ss_domain.lb.c[2] = 0;
+    dcg->ss_domain.ub.c[0] = hsi->val_dims[0]-1;
+    dcg->ss_domain.ub.c[1] = hsi->val_dims[1]-1;
+    dcg->ss_domain.ub.c[2] = hsi->val_dims[2]-1;
 	dcg->f_ss_info = 1;
 
 	// TODO: read  in the  rest of the  variables from  the header

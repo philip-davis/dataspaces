@@ -118,12 +118,13 @@ struct rfshdr {
 } __attribute__ ((__packed__));
 
 /* Header for the locking service. */
+#define LOCK_NAME_SIZE 64
 struct lockhdr {
 	int type;
 	int rc;
 	int id;
 	int lock_num;
-	char name[16];		/* lock name */
+	char name[LOCK_NAME_SIZE];		/* lock name */
 } __attribute__ ((__packed__));
 
 /* Header for space info. */

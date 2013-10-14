@@ -35,6 +35,8 @@
 extern "C" {
 #endif
 
+#include <stdint.h>
+
 #include "dart.h"
 #include "ss_data.h"
 
@@ -52,7 +54,6 @@ struct obj_data_wrapper {
 	int q_id;
 };
 
-/****************************************************************************/
 // Header structure for dimes_put request.
 struct hdr_dimes_put { // TODO: more comments
 	__u8 has_rdma_data;
@@ -63,27 +64,17 @@ struct hdr_dimes_put { // TODO: more comments
 // Header structure
 struct hdr_dimes_get {
 	int qid;
-	int rank; //TODO: do we need this field?
 	int rc;
-	/* Number of directory entries. */
-	int                     num_de;
+	int                     num_cmd;
 	struct obj_descriptor   odsc;
 } __attribute__((__packed__));
 
-struct hdr_dimes_get_ack_v1 {
-	int qid;
-	int sync_id;
-	struct obj_descriptor odsc;	
-} __attribute__((__packed__));
-
-struct hdr_dimes_get_ack_v2 {
+struct hdr_dimes_get_ack {
 	int qid;
 	int sync_id;
 	struct obj_descriptor odsc;
 	size_t bytes_read;
 } __attribute__((__packed__));
-
-/****************************************************************************/
 
 struct cmd_data {
 	struct  list_head       entry;
@@ -103,7 +94,6 @@ int cmd_s_find_all(struct cmd_storage *s, struct obj_descriptor *odsc,
                 struct list_head *out_list, int *out_num_cmd);
 void cmd_s_add(struct cmd_storage *s, struct rpc_cmd *cmd);
 
-/****************************************************************************/
 
 struct ss_storage * dimes_ls_alloc(int);
 int dimes_ls_free(struct ss_storage *);
@@ -112,6 +102,18 @@ struct obj_data_wrapper* dimes_ls_find_no_version(struct ss_storage *,struct obj
 void dimes_ls_add_obj(struct ss_storage *ls, struct obj_data_wrapper *od_w);
 void dimes_ls_remove_obj(struct ss_storage *ls, struct obj_data_wrapper *od_w);
 int dimes_ls_count_obj(struct ss_storage *ls, int query_tran_id);
+
+
+// Init DIMES Buffer
+int dimes_buffer_init(uint64_t base_addr, size_t size);
+// Finalize DIMES Buffer
+int dimes_buffer_finalize(void);
+size_t dimes_buffer_total_size(void);
+// Allocates a block of memory from DIMES Buffer, returning a pointer to
+// the beginning of the block.
+void dimes_buffer_alloc(size_t , uint64_t *);
+// Free a memory block previously allocated from DIMES Buffer 
+void dimes_buffer_free(uint64_t addr);
 
 #ifdef __cplusplus
 }
