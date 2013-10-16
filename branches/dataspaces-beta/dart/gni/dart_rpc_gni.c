@@ -212,31 +212,31 @@ static int rpc_free_index(int index)
 
 static int init_gni (struct rpc_server *rpc_s)
 {
-        int err;
-	int modes = 0;
-	int device_id = DEVICE_ID;
-	gni_return_t status;
+    int err;
+    int modes = 0;
+    int device_id = DEVICE_ID;
+    gni_return_t status;
 
+    /* Try from environment first DSPACES_GNI_PTAG (decimal) and DSPACES_GNI_COOKIE (hexa)*/
+    ptag = get_ptag_env("DSPACES_GNI_PTAG");
+    if (ptag != 0)
+        cookie = get_cookie_env("DSPACES_GNI_COOKIE");
+    //uloga(" ****** (%s) from env: ptag=%d  cookie=%x.\n", __func__, ptag, cookie);
+
+    if (ptag == 0 || cookie == 0) {
 #ifdef GNI_PTAG
         ptag = GNI_PTAG;
         cookie = GNI_COOKIE;
         //uloga(" ****** (%s) from configure: ptag=%d  cookie=%x.\n", __func__, ptag, cookie);
 #else
-	/* Try from environment first DSPACES_GNI_PTAG (decimal) and DSPACES_GNI_COOKIE (hexa)*/
-	ptag = get_ptag_env("DSPACES_GNI_PTAG");
-	if (ptag != 0)
-		cookie = get_cookie_env("DSPACES_GNI_COOKIE");
-        //uloga(" ****** (%s) from env: ptag=%d  cookie=%x.\n", __func__, ptag, cookie);
-
-	if (ptag == 0 || cookie == 0) {
-		err = get_named_dom("ADIOS", &ptag, &cookie);
-		if(err != 0){
-			printf("Fail: ptag and cookie returned error. %d.\n", err);
-			goto err_out;
-		}
-            //uloga(" ****** (%s) from apstat: ptag=%d  cookie=%x.\n", __func__, ptag, cookie);
+        err = get_named_dom("ADIOS", &ptag, &cookie);
+        if(err != 0){
+            printf("Fail: ptag and cookie returned error. %d.\n", err);
+            goto err_out;
         }
+    //uloga(" ****** (%s) from apstat: ptag=%d  cookie=%x.\n", __func__, ptag, cookie);
 #endif
+    }
 
 	status = GNI_CdmCreate(rank_id_pmi, ptag, cookie, modes, &rpc_s->cdm_handle);
 	if (status != GNI_RC_SUCCESS) 
