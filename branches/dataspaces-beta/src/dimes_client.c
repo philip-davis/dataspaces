@@ -918,7 +918,7 @@ static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
 	// Update the DHT nodes
 	num_dht_nodes = ssd_hash(dimes_c->ssd, &mem_obj->obj_desc.bb, dht_nodes);
 	if (num_dht_nodes <= 0) {
-		uloga("%s(): NOT Good!! ssd_hash return num_dht_nodes=%d\n",
+		uloga("%s(): error! ssd_hash() return %d\n",
 				__func__, num_dht_nodes);
 		goto err_out;
 	}
@@ -1145,17 +1145,20 @@ static int get_num_posted_fetch(struct fetch_entry **fetch_tab, int *fetch_statu
     return num_posted_fetch;
 }
 
-static int all_fetch_done(struct query_tran_entry_d *qte, struct fetch_entry **fetch_tab, int *fetch_status_tab, int fetch_tab_size)
+static int all_fetch_done(struct query_tran_entry_d *qte, struct fetch_entry **fetch_tab, int *fetch_status_tab, int fetch_tab_size, int *all_done)
 {
+    *all_done = 0;
     int err, i;
-    int num_posted_fetch = 0;
     int complete_one_fetch = 0;
-
-    num_posted_fetch = get_num_posted_fetch(fetch_tab, fetch_status_tab,
+    int num_posted_fetch = get_num_posted_fetch(fetch_tab, fetch_status_tab,
                                             fetch_tab_size);
 
     while (!complete_one_fetch && num_posted_fetch > 0) {
-        dart_rdma_process_reads();
+        err = dart_rdma_process_reads();
+        if (err < 0) {
+            goto err_out;
+        }
+
         for (i = 0; i < fetch_tab_size; i++) {
             if (fetch_status_tab[i] == fetch_posted) {
                 if (dart_rdma_check_reads(fetch_tab[i]->read_tran->tran_id)) {
@@ -1165,7 +1168,7 @@ static int all_fetch_done(struct query_tran_entry_d *qte, struct fetch_entry **f
                     err = dimes_memory_free(&fetch_tab[i]->read_tran->dst,
                                             dimes_memory_rdma); 
                     if (err < 0) {
-                        return 0;
+                        goto err_out;
                     }
                     options.available_rdma_buffer_size +=
                         obj_data_size(&fetch_tab[i]->dst_odsc);
@@ -1183,17 +1186,20 @@ static int all_fetch_done(struct query_tran_entry_d *qte, struct fetch_entry **f
         }
     }
 
-    return 1;
+    *all_done = 1;
+    return 0;
+ err_out:
+    ERROR_TRACE();
 }
 
-static int get_next_fetch(struct fetch_entry **fetch_tab, int *fetch_status_tab, int fetch_tab_size)
+static int get_next_fetch(struct fetch_entry **fetch_tab, int *fetch_status_tab, int fetch_tab_size, int *index)
 {
+    *index = -1;
     int err, i;
-    int num_posted_fetch = 0;
-    num_posted_fetch = get_num_posted_fetch(fetch_tab, fetch_status_tab,
-                                            fetch_tab_size);
+    int num_posted_fetch = get_num_posted_fetch(fetch_tab, fetch_status_tab,
+                                                fetch_tab_size);
     if (num_posted_fetch >= options.max_num_concurrent_rdma_read_op) {
-        return -1;
+        return 0;
     }
 
     for (i = 0; i < fetch_tab_size; i++) {
@@ -1203,14 +1209,18 @@ static int get_next_fetch(struct fetch_entry **fetch_tab, int *fetch_status_tab,
             err = dimes_memory_alloc(&fetch_tab[i]->read_tran->dst,
                                      read_size, dimes_memory_rdma);
             if (err < 0) {
-                return -1; 
+                uloga("%s(): dimes_memory_alloc() failed\n", __func__);
+                goto err_out;
             }
             options.available_rdma_buffer_size -= read_size;
-            return i;
+            *index = i;
+            return 0;
         }
     }
 
-    return -1;
+    return 0;
+ err_out:
+    ERROR_TRACE();
 }
 
 /*
@@ -1382,25 +1392,30 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
     }
     fetch_tab_size = i;
 
-    int cnt_loop = 0;
     int loop_done = 0;
     // Perform RDMA read operations
     do {
-        cnt_loop++;
         // Issue as much as RDMA read opertions as possible
         do { 
-            i = get_next_fetch(fetch_tab, fetch_status_tab, fetch_tab_size);
+            err = get_next_fetch(fetch_tab, fetch_status_tab,
+                                 fetch_tab_size, &i);
+            if (err < 0) {
+                goto err_out_free;
+            }
             if (i < 0 || i >= fetch_tab_size) break; // break inner loop
 
             err = dart_rdma_perform_reads(fetch_tab[i]->read_tran->tran_id);
+            fetch_status_tab[i] = fetch_posted;
             if (err < 0) {
-                uloga("%s(): failed with dart_rdma_perform_reads\n", __func__);
                 goto err_out_free;
             }
-            fetch_status_tab[i] = fetch_posted;
         } while (1); // TODO: fix magic number
 
-        loop_done = all_fetch_done(qte, fetch_tab, fetch_status_tab, fetch_tab_size);
+        err = all_fetch_done(qte, fetch_tab, fetch_status_tab,
+                             fetch_tab_size, &loop_done);
+        if (err < 0) {
+            goto err_out_free;
+        }
     } while (!loop_done);
 
 	if (fetch_tab) {
@@ -1443,22 +1458,35 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
         {
             // Data on remote peer
             // Alloc receive buffer, schedle reads, perform reads
-            dimes_memory_alloc(&fetch->read_tran->dst,
+            err = dimes_memory_alloc(&fetch->read_tran->dst,
                                obj_data_size(&fetch->dst_odsc),
                                dimes_memory_rdma);
+            if (err < 0) {
+                goto err_out;
+            }
+
             schedule_rdma_reads(fetch->read_tran->tran_id,
                                 &fetch->src_odsc, &fetch->dst_odsc);
-            dart_rdma_perform_reads(fetch->read_tran->tran_id);
+
+            err = dart_rdma_perform_reads(fetch->read_tran->tran_id);
+            if (err < 0) {
+                goto err_out;
+            }
+
             while (!dart_rdma_check_reads(fetch->read_tran->tran_id)) {
                 err = dart_rdma_process_reads();
                 if (err < 0) {
-                    uloga("%s(): dart_rdma_process_reads failed\n", __func__);
                     goto err_out;
                 }
             }
+
             // Copy fetched data
             obj_assemble(fetch, qte->data_ref);
-            dimes_memory_free(&fetch->read_tran->dst, dimes_memory_rdma);
+
+            err = dimes_memory_free(&fetch->read_tran->dst, dimes_memory_rdma);
+            if (err < 0) {
+                goto err_out;
+            }
         }
     }
 
@@ -1466,14 +1494,19 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
         // Send back ack messages to all dst. peers
         err = dimes_get_ack_by_msg(qte);
         if (err < 0) {
-            goto err_out_free;
+            goto err_out;
         }
     }
 
 	qte->f_complete = 1;
 	return 0;
 err_out_free:
-	free(fetch_tab);
+    for (i = 0; i < fetch_tab_size; i++) {
+        if (fetch_status_tab[i] == fetch_posted) {
+            dimes_memory_free(&fetch_tab[i]->read_tran->dst, dimes_memory_rdma);
+        }
+    } 
+    free(fetch_tab);
     free(fetch_status_tab);
 err_out:
 	ERROR_TRACE();
@@ -1494,7 +1527,7 @@ static int dimes_obj_get(struct obj_data *od)
 	/* get dht nodes */
 	num_dht_nodes = ssd_hash(dimes_c->ssd, &od->obj_desc.bb, dht_nodes);
 	if (num_dht_nodes <= 0) {
-		uloga("%s(): ssd_hash return %d\n",__func__, num_dht_nodes);
+		uloga("%s(): error! ssd_hash() return %d\n", __func__, num_dht_nodes);
 		goto err_qt_free;
 	}
 
@@ -1523,7 +1556,6 @@ static int dimes_obj_get(struct obj_data *od)
 	// Fetch the data
 	err = dimes_fetch_data(qte);
 	if (err < 0) {
-		qt_free_obj_data_d(qte);
 		goto err_data_free;
 	}
 
@@ -1689,7 +1721,7 @@ struct dimes_client* dimes_client_alloc(void * ptr)
     options.enable_pre_allocated_rdma_buffer = 0;
     options.pre_allocated_rdma_buffer_size = 64*1024*1024; // MB
     options.available_rdma_buffer_size = 64*1024*1024; // MB
-    options.max_num_concurrent_rdma_read_op = 8;
+    options.max_num_concurrent_rdma_read_op = 3;
 #ifdef DS_HAVE_DIMES_ACK
     options.enable_dimes_ack = 1;
 #else
@@ -1771,8 +1803,7 @@ int common_dimes_get(const char *var_name,
 	int err = -ENOMEM;
 
 	if (!dimes_c->dcg) {
-		uloga("'%s()': library was not properly initialized!\n",
-				 __func__);
+		uloga("%s(): library was not properly initialized!\n", __func__);
 		err =  -EINVAL;
 		goto err_out;
 	}
@@ -1782,8 +1813,7 @@ int common_dimes_get(const char *var_name,
 
 	od = obj_data_alloc_no_data(&odsc, data);
 	if (!od) {
-		uloga("'%s()': failed, can not allocate data object.\n",
-				__func__);
+		uloga("%s(): obj_data_alloc_no_data failed.\n", __func__);
 		err = -ENOMEM;
 		goto err_out;
 	}
@@ -1791,9 +1821,10 @@ int common_dimes_get(const char *var_name,
 	err = dimes_obj_get(od);
  
 	obj_data_free(od);
-	if (err < 0 && err != -EAGAIN)
-		uloga("'%s()': failed with %d, can not get data object.\n",
-				__func__, err);
+	if (err < 0 && err != -EAGAIN) {
+        uloga("%s(): failed with %d, can not get data object.\n",
+                __func__, err);
+    }
 
 	return err;
 err_out:
@@ -1816,8 +1847,7 @@ int common_dimes_put(const char *var_name,
 	int err = -ENOMEM;
 
 	if (!dimes_c->dcg) {
-		uloga("'%s()': library was not properly initialized!\n",
-				 __func__);
+		uloga("%s(): library was not properly initialized!\n", __func__);
 		err = -EINVAL;
 		goto err_out;
 	}
@@ -1917,7 +1947,6 @@ int common_dimes_put_sync_by_group(const char *group_name)
     p = storage_lookup_group(group_name);
     if (p == NULL) return 0;
 
-    uloga("%s(): storage group name %s\n", __func__, p->name);
     err = dimes_put_sync_with_timeout(-1, p);
     if (err < 0) return err;
 

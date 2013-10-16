@@ -253,7 +253,8 @@ static int dart_rdma_process_post_cq(uint64_t timeout)
 	if (ret == GNI_RC_TIMEOUT)
 		return 0;
 	else if (ret != GNI_RC_SUCCESS) {
-		uloga("%s(): GNI_CqWaitEvent() failed\n", __func__);
+		uloga("%s(): GNI_CqWaitEvent() failed %d\n", __func__, ret);
+        err = -ret;
 		goto err_out;
 	}
 
@@ -261,7 +262,8 @@ static int dart_rdma_process_post_cq(uint64_t timeout)
 
 	ret = GNI_GetCompleted(drh->post_cq_hndl, event_data, &pd);
 	if (ret != GNI_RC_SUCCESS) {
-		uloga("%s(): GNI_GetCompleted() failed\n", __func__);
+		uloga("%s(): GNI_GetCompleted() failed %d\n", __func__, ret);
+        err = -ret;
 		goto err_out;
 	}
 
