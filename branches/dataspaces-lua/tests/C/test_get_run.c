@@ -53,6 +53,8 @@ static struct timer timer_;
 
 static MPI_Comm gcomm_;
 
+size_t elem_size_ = sizeof(double);
+
 /*
 Matrix representation
 +-----> (x)
@@ -66,7 +68,7 @@ static double* allocate_2d()
 	offx_ = (rank_ % npx_) * spx_;
 	offy_ = (rank_ / npx_) * spy_;
 
-	tmp = (double*)malloc(sizeof(double)*spx_*spy_);
+	tmp = (double*)malloc(elem_size_*spx_*spy_);
 	return tmp;
 }
 
@@ -303,7 +305,7 @@ int test_get_run(int npapp, int npx, int npy, int npz,
 
 #ifdef DS_HAVE_LUA_REXEC
 int send_lua_script(const char *fname, const char *vname,
-                unsigned int version, int size_elem,
+                unsigned int version, int elem_size,
                 int xl, int yl, int zl,
                 int xu, int yu, int zu)
 {
@@ -320,7 +322,7 @@ int send_lua_script(const char *fname, const char *vname,
 	MPI_Barrier(gcomm_);
 
 	tm_st = timer_read(&timer_);
-	num_obj = dspaces_lua_rexec(fname, vname, version, size_elem,
+	num_obj = dspaces_lua_rexec(fname, vname, version, elem_size,
 		xl, yl, zl, xu, yu, zu, temp_res);
 	tm_end = timer_read(&timer_);
 
@@ -356,7 +358,6 @@ static int couple_lua_rexec_2d(unsigned int ts)
 	common_lock_on_read("m2d_lock", &gcomm_);
 
 	//send lua script to the space
-	int elem_size = sizeof(double);
 	int xl = offx_;
 	int yl = offy_;
 	int zl = 0;
@@ -367,7 +368,7 @@ static int couple_lua_rexec_2d(unsigned int ts)
 	uloga("Timestep=%u, %d lua rexec on m2d: {(%d,%d,%d),(%d,%d,%d)}\n",
 			ts, rank_, xl,yl,zl, xu,yu,zu);
 
-	send_lua_script("simple_stat.lua", "m2d", ts, elem_size,
+	send_lua_script("simple_stat.lua", "m2d", ts, elem_size_,
 		xl, yl, zl, xu, yu, zu);
 
 	common_unlock_on_read("m2d_lock", &gcomm_);
@@ -383,7 +384,6 @@ static int couple_local_exec_2d(double *m2d, unsigned int ts, enum transport_typ
 	common_lock_on_read("m2d_lock", &gcomm_);
 
 	//send lua script to the space
-	int elem_size = sizeof(double);
 	int xl = offx_;
 	int yl = offy_;
 	int zl = 0;
@@ -399,7 +399,7 @@ static int couple_local_exec_2d(double *m2d, unsigned int ts, enum transport_typ
 	MPI_Barrier(gcomm_);
 	tm_st = timer_read(&timer_);
 
-    common_get("m2d", ts, elem_size,
+    common_get("m2d", ts, elem_size_,
         xl, yl, zl, xu, yu, zu,
         m2d, type);
 	// check_data("m2d", m2d, spx_*spy_, rank_, ts);
@@ -412,7 +412,8 @@ static int couple_local_exec_2d(double *m2d, unsigned int ts, enum transport_typ
 	}
 
 	double output_data[3];
-	lua_exec(code_buf, code_size, m2d, spx_*spy_, output_data, 3);
+    int num_double = (spx_*spy_*elem_size_) / sizeof(double);
+	lua_exec(code_buf, code_size, m2d, num_double, output_data, 3);
 	free(code_buf);
 
 	tm_end = timer_read(&timer_);
@@ -458,18 +459,15 @@ int test_lua_rexec(int npapp, int npx, int npy, int npz,
 
 	double *databuf = NULL;
 	if (dims == 2) {
-		databuf = allocate_2d();
-		if (databuf) {
-			unsigned int ts;
-			for (ts = 1; ts <= timestep_; ts++){
-				if (rank_ == 0)
-					uloga("%s: At timestep %u\n", __func__, ts);
-				if (ts % 2 == 1)
-					couple_lua_rexec_2d(ts);
-				else
-					couple_local_exec_2d(databuf, ts, USE_DSPACES);
-			}
-		}
+        unsigned int ts;
+        for (ts = 1; ts <= timestep_; ts++){
+            elem_size_ = sizeof(double);
+            databuf = allocate_2d();
+            if (ts % 2 == 1)
+                couple_lua_rexec_2d(ts);
+            else
+                couple_local_exec_2d(databuf, ts, USE_DSPACES);
+        }
 	} else {
 		uloga("%s(): error dims= %d\n", __func__, dims);
 		return -1;
@@ -477,8 +475,6 @@ int test_lua_rexec(int npapp, int npx, int npy, int npz,
 
 	common_barrier();
 	common_finalize();
-	if (databuf)
-		free(databuf);
 
 	return 0;
 }

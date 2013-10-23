@@ -51,6 +51,7 @@ static struct timer timer_;
 
 static MPI_Comm gcomm_;
 
+size_t elem_size_ = sizeof(double);
 /*
 Matrix representation
 +-----> (x)
@@ -65,7 +66,7 @@ static double* allocate_2d()
 	offx_ = (rank_ % npx_) * spx_;
 	offy_ = (rank_ / npx_) * spy_;
 
-	tmp = (double*)malloc(sizeof(double)*spx_*spy_);
+	tmp = (double*)malloc(elem_size_*spx_*spy_);
 	return tmp;
 }
 
@@ -73,7 +74,7 @@ static int generate_2d(double *m2d, unsigned int ts)
 {
 	// double value = 1.0*(rank_) + 0.0001*ts;
 	double value = ts;
-	int m2d_size = spx_ * spy_;
+	int m2d_size = (spx_ * spy_ * elem_size_) / sizeof(double);
 	int i;
 	for (i = 0; i < m2d_size; i++) {
 		m2d[i] = value;
@@ -369,6 +370,49 @@ int test_put_run(int npapp, int npx, int npy, int npz,
 }
 
 #ifdef DS_HAVE_LUA_REXEC
+static int couple_write_2d_lua(double *m2d, unsigned int ts, size_t elem_size, enum transport_type type)
+{
+    common_lock_on_write("m2d_lock", &gcomm_);
+
+    //put the m2d into the space
+    /*set the two coordinates for the box*/
+    int xl = offx_;
+    int yl = offy_;
+    int zl = 0;
+    int xu = offx_ + spx_ - 1;
+    int yu = offy_ + spy_ - 1;
+    int zu = 0;
+    double tm_st, tm_end, tm_max, tm_diff;
+    int root = 0;
+
+    uloga("Timestep=%u, %d write m2d:{(%d,%d,%d),(%d,%d,%d)} into space\n",
+        ts, rank_, xl,yl,zl,xu,yu,zu);
+
+    MPI_Barrier(gcomm_);
+
+    tm_st = timer_read(&timer_);
+    common_put("m2d", ts, elem_size,
+        xl, yl, zl, xu, yu, zu,
+        m2d, type);
+    common_put_sync(type);
+    tm_end = timer_read(&timer_);
+
+    common_unlock_on_write("m2d_lock", &gcomm_);
+    MPI_Barrier(gcomm_);
+
+    tm_diff = tm_end-tm_st;
+    MPI_Reduce(&tm_diff, &tm_max, 1, MPI_DOUBLE, MPI_MAX, root, gcomm_);
+
+    uloga("TS= %u TRANSPORT_TYPE= %d RANK= %d write time= %lf\n",
+        ts, type, rank_, tm_diff);
+    if (rank_ == root) {
+        uloga("TS= %u TRANSPORT_TYPE= %d write MAX time= %lf\n",
+            ts, type, tm_max);
+    }
+
+    return 0;
+}
+
 int test_lua_put(int npapp, int npx, int npy, int npz,
     int spx, int spy, int spz, int timestep, int dims, MPI_Comm gcomm)
 {
@@ -396,31 +440,22 @@ int test_lua_put(int npapp, int npx, int npy, int npz,
 
 	double *databuf = NULL;
 	if (dims == 2) {
-		databuf = allocate_2d();
-		if (databuf) {
-			unsigned int ts;
-			for (ts = 1; ts <= timestep_; ts++){
-				generate_2d(databuf, ts);
-				couple_write_2d(databuf, ts, USE_DSPACES);
-			}
-		}
-	} else if (dims == 3) {
-		databuf = allocate_3d();
-		if (databuf) {
-			unsigned int ts;
-			for (ts = 1; ts <= timestep_; ts++) {
-				generate_3d(databuf, ts);
-				couple_write_3d(databuf, ts, USE_DSPACES);
-			}
-		}
-	}
-
+        unsigned int ts;
+        for (ts = 1; ts <= timestep_; ts++){
+            elem_size_ = sizeof(double);
+            databuf = allocate_2d();
+            generate_2d(databuf, ts);
+            couple_write_2d_lua(databuf, ts, elem_size_, USE_DSPACES);
+            if (databuf)
+                free(databuf);
+        }
+	} else {
+        uloga("%s(): only 2D\n", __func__);
+    }
+    
 	common_barrier();
 	common_finalize();
 
-	if (databuf)
-		free(databuf);
-	
 	return 0;	
 }
 #endif

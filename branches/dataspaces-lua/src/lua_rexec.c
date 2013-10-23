@@ -42,6 +42,7 @@
 
 #include "lua_rexec.h"
 #include "list.h"
+#include "timer.h"
 
 struct load_block {
 	struct list_head entry;
@@ -243,7 +244,16 @@ int lua_exec(void *code_buff, size_t code_size, void *input_data, int num_input_
 
         // printf("lua_script_size= %u\n", code_size);
         DSpaceObj_register(l);
+
+        struct timer tm;
+        timer_init(&tm, 1);
+        timer_start(&tm);
+        double tm_st, tm_end;
+        tm_st = timer_read(&tm);
 		copy_input_data(l, (double *)input_data, num_input_elem);
+        tm_end = timer_read(&tm);
+        fprintf(stderr, "%s(): lua exec copy input data time= %lf\n",
+            __func__, tm_end-tm_st);
 
         /* load the in-memory lua script */
         int status = lua_load(l, lua_code_reader, &buf, "LUA_CODE");
