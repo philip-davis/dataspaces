@@ -262,6 +262,24 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 static int file_lock(int fd, int op)
 {
+	int result;
+	errno = 0;
+
+        if(op)  
+                result =  lockf(fd, F_TLOCK, (off_t)1);
+        else
+                result =  lockf(fd, F_ULOCK, (off_t)1);
+
+	if(result!=0)
+	        ulog_err("'%s()' failed: %s", __func__, strerror (errno));
+
+	return result;
+}
+
+
+/*
+static int file_lock(int fd, int op)
+{
 	int err;
 	struct flock fl = {.l_type = (op != 0) ? F_WRLCK : F_UNLCK,.l_whence = SEEK_SET,.l_start = 0,.l_len = 0,.l_pid = getpid()
 	};
@@ -271,7 +289,7 @@ static int file_lock(int fd, int op)
 	printf("'%s()' failed\n", __func__);
 	return err;
 }
-
+*/
 
 //-----------------------------------------------------------------------------------------------------
 //TODO:  After getting rpc reg msg, check the qp num, change corresponding peer->conn->f_connected to 1 after get this
