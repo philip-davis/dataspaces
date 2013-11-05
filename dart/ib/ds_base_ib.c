@@ -260,23 +260,16 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	return err;
 }
 
+
 static int file_lock(int fd, int op)
 {
-	int result;
-	errno = 0;
-
-        if(op)  
-                result =  lockf(fd, F_TLOCK, (off_t)1);
+        if(op){
+                        while(lockf(fd, F_TLOCK, (off_t)1)!=0){}
+                        return 0;
+                }
         else
-                result =  lockf(fd, F_ULOCK, (off_t)1);
-
-	if(result!=0)
-	        ulog_err("'%s()' failed: %s", __func__, strerror (errno));
-
-	return result;
+                return lockf(fd, F_ULOCK, (off_t)1);
 }
-
-
 /*
 static int file_lock(int fd, int op)
 {
