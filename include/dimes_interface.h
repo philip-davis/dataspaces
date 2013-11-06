@@ -143,6 +143,11 @@ int dimes_get (const char *var_name,
  */
 int dimes_put_sync_all(void);
 
+// TODO: add comments, add fortran interface
+int dimes_put_set_group(const char *group_name, int step);
+int dimes_put_unset_group();
+int dimes_put_sync_group(const char *group_name, int step);
+
 #ifdef __cplusplus
 }
 #endif

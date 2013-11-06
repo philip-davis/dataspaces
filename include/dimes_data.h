@@ -65,8 +65,8 @@ struct hdr_dimes_put { // TODO: more comments
 struct hdr_dimes_get {
 	int qid;
 	int rc;
-	int                     num_cmd;
-	struct obj_descriptor   odsc;
+    int num_obj;
+	struct obj_descriptor odsc;
 } __attribute__((__packed__));
 
 struct hdr_dimes_get_ack {
@@ -76,23 +76,34 @@ struct hdr_dimes_get_ack {
 	size_t bytes_read;
 } __attribute__((__packed__));
 
-struct cmd_data {
-	struct  list_head       entry;
-	struct  rpc_cmd         cmd;
+struct obj_location_wrapper {
+    struct list_head entry;
+    struct rpc_cmd *data_ref;
 };
 
-struct cmd_storage {
-	int     num_cmd;
-	int     size_hash;
-	/* List of rpc_cmd objects */
-	struct list_head        cmd_hash[1];
+struct obj_location_list_node {
+    struct list_head entry;
+    struct rpc_cmd cmd; 
 };
 
-struct cmd_storage *cmd_s_alloc(int max_versions);
-int cmd_s_free(struct cmd_storage *s);
-int cmd_s_find_all(struct cmd_storage *s, struct obj_descriptor *odsc,
-                struct list_head *out_list, int *out_num_cmd);
-void cmd_s_add(struct cmd_storage *s, struct rpc_cmd *cmd);
+struct var_list_node {
+    struct list_head entry;
+    char name[256];
+    struct list_head obj_location_list;    
+};
+
+struct metadata_storage {
+    int max_versions;
+    struct list_head version_tab[1];
+};
+
+struct metadata_storage *metadata_s_alloc(int max_versions);
+int metadata_s_free(struct metadata_storage *s);
+int metadata_s_add_obj_location(struct metadata_storage *s,
+                                struct rpc_cmd *cmd);
+int metadata_s_find_obj_location(struct metadata_storage *s,
+                                struct obj_descriptor *odsc,
+                                struct list_head *out_list, int *out_num_items);
 
 
 struct ss_storage * dimes_ls_alloc(int);

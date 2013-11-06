@@ -41,27 +41,15 @@ extern "C" {
 
 struct dimes_server {
 	struct ds_gspace *dsg;
-	/* local storage for rpc_cmd */
-	struct cmd_storage *cmd_store;
+	struct metadata_storage *meta_store;
 };
 
 struct dimes_server * dimes_server_alloc(int num_sp, int num_cp, char *);
 void dimes_server_free(struct dimes_server *dimes_s_l);
 
-inline int dimes_server_process(struct dimes_server *dimes_s_l)
-{
-	return dsg_process(dimes_s_l->dsg);
-}
-
-inline int dimes_server_complete(struct dimes_server *dimes_s_l)
-{
-	return dsg_complete(dimes_s_l->dsg);	
-}
-
-inline int dimes_server_barrier(struct dimes_server *dimes_s_l)
-{
-	return dsg_barrier(dimes_s_l->dsg);
-}
+int dimes_server_process(struct dimes_server *dimes_s_l);
+int dimes_server_complete(struct dimes_server *dimes_s_l);
+int dimes_server_barrier(struct dimes_server *dimes_s_l);
 
 #ifdef __cplusplus
 }

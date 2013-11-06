@@ -102,6 +102,8 @@ static int locate_data_completion_server(struct rpc_server *rpc_s, struct msg_bu
 	return 0;
 }
 
+static struct timer tm;
+double t1, t2;
 static int locate_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd,
 		enum cmd_type reply_msg_type)
 {
@@ -109,10 +111,11 @@ static int locate_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd,
 	struct node_id *peer = ds_get_peer(dimes_s->dsg->ds, cmd->id);
 	struct msg_buf *msg;
 	int err = -ENOMEM;
-	int num_cmd = 0, qid;
+	int qid;
+    int num_obj = 0;
 	struct rpc_cmd *tab;
-	struct list_head cmd_list;
-	INIT_LIST_HEAD(&cmd_list);
+	struct list_head obj_loc_wrapper_list;
+	INIT_LIST_HEAD(&obj_loc_wrapper_list);
 
 #ifdef DEBUG
 	uloga("%s(): get cmd from peer #%d, "
@@ -121,10 +124,14 @@ static int locate_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd,
 		hdr->odsc.version, obj_data_size(&hdr->odsc));
 #endif
 
-	// Search in the rpc_cmd storage
-	err = cmd_s_find_all(dimes_s->cmd_store, &hdr->odsc,
-				 &cmd_list, &num_cmd);
+    struct hdr_dimes_get *hdr2 = hdr;
+    t1 = timer_read(&tm);
 
+	// Search in the metadata storage
+    err = metadata_s_find_obj_location(dimes_s->meta_store,
+                                       &hdr->odsc,
+                                       &obj_loc_wrapper_list,
+                                       &num_obj);
 	if (err < 0)
 		goto err_out;
 
@@ -135,26 +142,24 @@ static int locate_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd,
 	}
 	qid = hdr->qid;
 	hdr = (struct hdr_dimes_get *) msg->msg_rpc->pad;
-	hdr->num_cmd = num_cmd;
+	hdr->num_obj = num_obj;
 	hdr->qid = qid;
 
-	if (num_cmd > 0) {
-		tab = malloc(sizeof(struct rpc_cmd) * num_cmd);
+	if (num_obj > 0) {
+		tab = malloc(sizeof(struct rpc_cmd) * num_obj);
 		if (!tab)
 			goto err_out;
 
 		int i = 0;
-		struct cmd_data *cmd_data, *tmp;
-		// TODO(fan): remove the double copy of the cmd_data
-		// use the linked list cmd_list only to store the pointer values
-		list_for_each_entry_safe(cmd_data,tmp,&cmd_list,
-								 struct cmd_data, entry) {
-			list_del(&cmd_data->entry);
-			tab[i++] = cmd_data->cmd;
-			free(cmd_data);
+        struct obj_location_wrapper *obj_loc_w, *tmp;
+		list_for_each_entry_safe(obj_loc_w, tmp, &obj_loc_wrapper_list,
+								 struct obj_location_wrapper, entry) {
+            list_del(&obj_loc_w->entry);
+			tab[i++] = *(obj_loc_w->data_ref);
+			free(obj_loc_w);
 		}
 
-		msg->size = sizeof(struct rpc_cmd) * num_cmd;
+		msg->size = sizeof(struct rpc_cmd) * num_obj;
 		msg->msg_data = tab;
 		msg->cb = locate_data_completion_server;
 
@@ -167,11 +172,16 @@ static int locate_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd,
 	msg->msg_rpc->id = DIMES_SID;
 
 #ifdef DEBUG
-	uloga("%s(): #%d num_cmd= %d for request from #%d\n",
-		__func__, DIMES_SID, num_cmd, cmd->id);
+	uloga("%s(): #%d num_obj= %d for request from #%d\n",
+		__func__, DIMES_SID, num_obj, cmd->id);
 #endif
 
 	err = rpc_send(rpc_s, peer, msg);
+    t2 = timer_read(&tm);
+    //uloga("%s(): %lf name=%s version=%d num_obj=%d process_time %lf\n",
+    //    __func__, t1, hdr2->odsc.name, hdr2->odsc.version, num_obj,
+    //    t2-t1);
+
 	if (err == 0)
 		return 0;
 
@@ -193,12 +203,13 @@ static int dsgrpc_dimes_locate_data(struct rpc_server *rpc_s,
 
 static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
+    t1 = timer_read(&tm);
 	struct hdr_dimes_put *hdr = (struct hdr_dimes_put*)cmd->pad;
 	struct obj_descriptor *odsc = &hdr->odsc;
-	odsc->owner = cmd->id;
+	// odsc->owner = cmd->id;
 	
 	if (hdr->has_rdma_data) {
-		cmd_s_add(dimes_s->cmd_store, cmd);
+        metadata_s_add_obj_location(dimes_s->meta_store, cmd);
 	}
 
 #ifdef DEBUG    
@@ -208,7 +219,10 @@ static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 					__func__, cmd->id, hdr->has_rdma_data,
 					odsc->name, odsc->owner, odsc->version, obj_data_size(odsc));
 #endif
-
+    
+    t2 = timer_read(&tm);
+    //uloga("%s(): %lf name=%s version=%d process_time %lf from peer %d\n", __func__,
+    //        t1, odsc->name, odsc->version, t2-t1, cmd->id);
 	return 0;
 }
 
@@ -298,8 +312,9 @@ struct dimes_server *dimes_server_alloc(int num_sp, int num_cp, char *conf_name)
 	rpc_add_service(dimes_locate_data_msg, dsgrpc_dimes_locate_data);
 	rpc_add_service(dimes_get_ack_msg, dsgrpc_dimes_get_ack);
 
-	dimes_s_l->cmd_store = cmd_s_alloc(dimes_s_l->dsg->ssd->storage->size_hash);
-	if (!dimes_s_l->cmd_store) {
+	dimes_s_l->meta_store =
+        metadata_s_alloc(dimes_s_l->dsg->ssd->storage->size_hash);
+	if (!dimes_s_l->meta_store) {
 		free(dimes_s_l->dsg);
 		free(dimes_s_l);
 		goto err_out;
@@ -308,6 +323,9 @@ struct dimes_server *dimes_server_alloc(int num_sp, int num_cp, char *conf_name)
 	INIT_LIST_HEAD(&sync_info_list);
 
 	dimes_s = dimes_s_l;
+
+    timer_init(&tm, 1);
+    timer_start(&tm);
 
 #ifdef DEBUG
 	uloga("%s(): #%d complete!\n", __func__, DIMES_SID);
@@ -322,8 +340,23 @@ err_out:
 void dimes_server_free(struct dimes_server *dimes_s_l)
 {
 	dsg_free(dimes_s_l->dsg);
-	cmd_s_free(dimes_s_l->cmd_store);
+	metadata_s_free(dimes_s_l->meta_store);
 	free(dimes_s_l);
+}
+
+int dimes_server_process(struct dimes_server *dimes_s_l)
+{
+    return dsg_process(dimes_s_l->dsg);
+}
+
+int dimes_server_complete(struct dimes_server *dimes_s_l)
+{
+    return dsg_complete(dimes_s_l->dsg);
+}
+
+int dimes_server_barrier(struct dimes_server *dimes_s_l)
+{
+    return dsg_barrier(dimes_s_l->dsg);
 }
 
 #endif // end of #ifdef DS_HAVE_DIMES
