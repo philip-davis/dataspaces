@@ -46,10 +46,6 @@
 #include "common_dataspaces.h"
 #include "dc_gspace.h"
 
-#ifdef DS_HAVE_DIMES
-#include "dimes_client.h"
-#endif
-
 /* Name mangling for C functions to adapt Fortran compiler */
 #ifdef HAVE_DCMF
 #define FC_FUNC(name,NAME) name  

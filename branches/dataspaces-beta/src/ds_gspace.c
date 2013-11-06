@@ -555,7 +555,7 @@ static int lock_process_wait_list(struct dsg_lock *dl)
                 switch (lock_process_request(dl, lh, 1)) {
                 case la_none:
                         /* Nothing to do. Yeah ... this should not happen! */
-		case la_wait:
+                case la_wait:
                         return 0;
 
                 case la_grant:
@@ -682,7 +682,7 @@ lock_service(struct dsg_lock *dl, struct rpc_server *rpc, struct rpc_cmd *cmd)
 
         switch (lock_process_request(dl, lh, list_empty(&dl->wait_list))) {
 
-	case la_none:
+        case la_none:
 		break;
 
         case la_wait:
