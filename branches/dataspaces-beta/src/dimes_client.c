@@ -1346,6 +1346,7 @@ static int dimes_get_ack_by_rdma(struct query_tran_entry_d *qte)
     ERROR_TRACE();
 }
 */
+
 static int dimes_fetch_data(struct query_tran_entry_d *qte)
 {
     struct fetch_entry *fetch;

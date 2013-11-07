@@ -32,15 +32,19 @@ AM_CONDITIONAL([DIMES], [test "x$enable_dimes" == "xyes"])
 
 if test "x$enable_dimes" == "xyes"; then
         if test -z "${HAVE_UGNI_TRUE}"; then
-                DSPACESLIB_CFLAGS+=" -DDS_HAVE_DIMES"
-		DSPACESLIB_CPPFLAGS+=" -DDS_HAVE_DIMES"
-		echo "DIMES enabled!"
+            DSPACESLIB_CFLAGS+=" -DDS_HAVE_DIMES"
+            DSPACESLIB_CPPFLAGS+=" -DDS_HAVE_DIMES"
+            echo "DIMES enabled!"
         elif test -z "${HAVE_DCMF_TRUE}"; then
-                DSPACESLIB_CFLAGS+=" -DDS_HAVE_DIMES"
-		DSPACESLIB_CPPFLAGS+=" -DDS_HAVE_DIMES"
-		echo "DIMES enabled!"
+            DSPACESLIB_CFLAGS+=" -DDS_HAVE_DIMES"
+            DSPACESLIB_CPPFLAGS+=" -DDS_HAVE_DIMES"
+            echo "DIMES enabled!"
+        elif test -z "${HAVE_INFINIBAND_TRUE}"; then
+            DSPACESLIB_CFLAGS+="-DDS_HAVE_DIMES"
+            DSPACESLIB_CPPFLAGS+="-DDS_HAVE_DIMES"
+            echo "DIMES enabled!"
         else
-                echo "DIMES only supported on Cray UGNI, IBM DCMF"
+            echo "DIMES only supported on Cray UGNI, Infiniband, IBM DCMF"
         fi
 fi
 

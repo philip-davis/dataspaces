@@ -21,6 +21,7 @@
 #include "ib/dart_rpc_ib.h"
 #include "ib/dc_base_ib.h"
 #include "ib/ds_base_ib.h"
+#include "ib/dart_rdma_ib.h"
 
 #elif HAVE_DCMF
 
