@@ -41,7 +41,7 @@ struct dart_rdma_mem_handle {
 	size_t size;
 };
 
-struct dart_rdma_read_op {
+struct dart_rdma_op {
 	struct list_head entry;
 	int tran_id;
 	size_t src_offset;
@@ -50,7 +50,7 @@ struct dart_rdma_read_op {
 	int ret;
 };
 
-struct dart_rdma_read_tran {
+struct dart_rdma_tran {
 	struct list_head entry;
 	struct list_head read_ops_list;
 	int tran_id;
@@ -77,9 +77,8 @@ int dart_rdma_set_memregion_to_cmd(struct dart_rdma_mem_handle *mem_hndl,
 int dart_rdma_get_memregion_from_cmd(struct dart_rdma_mem_handle *mem_hndl,
                                    struct rpc_cmd *cmd);
 
-// int dart_rdma_gen_read_tran_id();
 int dart_rdma_create_read_tran(struct node_id *remote_peer,
-                struct dart_rdma_read_tran **pp);
+                struct dart_rdma_tran **pp);
 int dart_rdma_delete_read_tran(int tran_id);
 
 int dart_rdma_schedule_read(int tran_id, size_t src_offset, size_t dst_offset,
