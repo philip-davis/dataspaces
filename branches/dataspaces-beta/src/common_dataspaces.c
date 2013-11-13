@@ -216,6 +216,19 @@ void common_dspaces_unlock_on_write(const char *lock_name, void *comm)
 		ERROR_TRACE_AND_EXIT();
 }
 
+int check_bb(int xl, int yl, int zl,
+        int xu, int yu, int zu)
+{
+	if(xl < dcg->ss_domain.lb.c[0]||yl < dcg->ss_domain.lb.c[1]||
+		zl < dcg->ss_domain.lb.c[2] || xu > dcg->ss_domain.ub.c[0]||
+		yu > dcg->ss_domain.ub.c[1] || zu > dcg->ss_domain.ub.c[2])
+		return 0;
+	else
+		return 1;
+}
+
+
+
 int common_dspaces_get(const char *var_name,
 	unsigned int ver, int size,
 	int xl, int yl, int zl,
@@ -237,6 +250,13 @@ int common_dspaces_get(const char *var_name,
 			 __func__);
 		return -EINVAL;
 	}
+
+	if (!check_bb(xl, yl, zl, xu, yu, zu)){
+		uloga("'%s()': bounding box is out of range!\n",
+                         __func__);
+                return -ENOMEM;
+	}
+
 
 	strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
 	odsc.name[sizeof(odsc.name)-1] = '\0';
@@ -283,6 +303,14 @@ int common_dspaces_put(const char *var_name,
 			 __func__);
 		return -EINVAL;
 	}
+
+
+        if (!check_bb(xl, yl, zl, xu, yu, zu)){
+                uloga("'%s()': bounding box is out of range!\n",
+                         __func__);
+                return -ENOMEM;
+        }
+
 
 	strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
 	odsc.name[sizeof(odsc.name)-1] = '\0';
