@@ -261,6 +261,19 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 }
 
 
+
+static int file_lock(int fd, int op)
+{
+        if(op){
+                        while(lockf(fd, F_TLOCK, (off_t)1)!=0){}
+                        return 0;
+                }
+        else
+                return lockf(fd, F_ULOCK, (off_t)1);
+}
+
+/*
+
 static int file_lock(int fd, int op)
 {
     int result;
@@ -278,7 +291,7 @@ static int file_lock(int fd, int op)
 }
 
 
-/*
+
 static int file_lock(int fd, int op)
 {
 	int err;
