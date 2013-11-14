@@ -222,7 +222,14 @@ int check_bb(int xl, int yl, int zl,
 	if(xl < dcg->ss_domain.lb.c[0]||yl < dcg->ss_domain.lb.c[1]||
 		zl < dcg->ss_domain.lb.c[2] || xu > dcg->ss_domain.ub.c[0]||
 		yu > dcg->ss_domain.ub.c[1] || zu > dcg->ss_domain.ub.c[2])
+    {
+        uloga("bb:{(%d,%d,%d), (%d,%d,%d)} domain:{(%d,%d,%d), (%d,%d,%d)}\n",
+            xl, yl, zl, xu, yu, zu, dcg->ss_domain.lb.c[0],
+            dcg->ss_domain.lb.c[1], dcg->ss_domain.lb.c[2],
+            dcg->ss_domain.ub.c[0], dcg->ss_domain.ub.c[1],
+            dcg->ss_domain.ub.c[2]);
 		return 0;
+    }
 	else
 		return 1;
 }
@@ -253,9 +260,9 @@ int common_dspaces_get(const char *var_name,
 
 	if (!check_bb(xl, yl, zl, xu, yu, zu)){
 		uloga("'%s()': bounding box is out of range!\n",
-                         __func__);
-                return -ENOMEM;
-	}
+                 __func__);
+        return -ENOMEM;
+    }
 
 
 	strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
@@ -305,11 +312,11 @@ int common_dspaces_put(const char *var_name,
 	}
 
 
-        if (!check_bb(xl, yl, zl, xu, yu, zu)){
-                uloga("'%s()': bounding box is out of range!\n",
-                         __func__);
-                return -ENOMEM;
-        }
+    if (!check_bb(xl, yl, zl, xu, yu, zu)){
+        uloga("'%s()': bounding box is out of range!\n",
+                 __func__);
+        return -ENOMEM;
+    }
 
 
 	strncpy(odsc.name, var_name, sizeof(odsc.name)-1);

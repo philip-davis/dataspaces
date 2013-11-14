@@ -35,21 +35,29 @@
 
 #include "mpi.h"
 
-extern int test_get_run(int npapp, int npx, int npy, int npz,
-                int spx, int spy, int spz, int timestep, int dims, MPI_Comm);
+extern int test_get_run(enum transport_type, int npapp, int npx,int npy,int npz,
+        int spx, int spy, int spz, int timestep, int dims, size_t elem_size,
+        int num_vars, MPI_Comm gcomm);
 
 int main(int argc, char **argv)
 {
 	int err;
 	int nprocs, rank;
-
-	int npapp, npx, npy, npz;
-	int spx, spy, spz;
-	int dims, timestep;
 	MPI_Comm gcomm;
 
-	if (parse_args(argc, argv, &npapp, &npx, &npy, &npz,
-		&spx, &spy, &spz, &timestep) != 0) {
+    // Usage: ./test_reader type npapp npx npy npz spx spy spz timestep dims elem_size num_vars
+    // Command line arguments
+    enum transport_type type; // DATASPACES or DIMES
+	int npapp; // number of application processes
+    int npx, npy, npz; // number of processes in x,y,z direction
+	int spx, spy, spz; // block size per process in x,y,z direction
+    int timestep; // number of iterations
+	int dims; // Optional: 2 or 3. Default value is 3.
+    size_t elem_size; // Optional: size of one element in the global array. Default value is 8 (bytes).
+    int num_vars; // Optional: number of variables to be shared in the testing. Default value is 1.
+
+	if (parse_args(argc, argv, &type, &npapp, &npx, &npy, &npz,
+		&spx, &spy, &spz, &timestep, &dims, &elem_size, &num_vars) != 0) {
 		goto err_out;
 	}
 
@@ -60,12 +68,14 @@ int main(int argc, char **argv)
 	MPI_Barrier(MPI_COMM_WORLD);
 	gcomm = MPI_COMM_WORLD;
 
+	int color = 2;
+	MPI_Comm_split(MPI_COMM_WORLD, color, rank, &gcomm);
+
 	// Run as data reader
-	dims = 3;
-	test_get_run(npapp, npx, npy, npz,
-		spx, spy, spz, timestep, dims, gcomm);
+	test_get_run(type, npapp, npx, npy, npz,
+		spx, spy, spz, timestep, dims, elem_size, num_vars, gcomm);
 	
-	MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Barrier(gcomm);
 	MPI_Finalize();
 
 	return 0;
