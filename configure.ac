@@ -1,4 +1,4 @@
-AC_INIT([dataspaces],[1.2.1-beta1])
+AC_INIT([dataspaces],[1.3.0-rc1])
 AC_CONFIG_AUX_DIR(config)
 
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])

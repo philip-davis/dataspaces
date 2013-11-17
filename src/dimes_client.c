@@ -49,10 +49,12 @@ static int num_dims = 2;
 struct dimes_client_option {
     int enable_dimes_ack;
     int enable_pre_allocated_rdma_buffer;
-    size_t pre_allocated_rdma_buffer_size; // MB 
-    size_t available_rdma_buffer_size; // MB 
-    int max_num_concurrent_rdma_read_op;
+    size_t pre_allocated_rdma_buffer_size;
     struct dart_rdma_mem_handle pre_allocated_rdma_handle;
+    size_t rdma_buffer_size;
+    size_t rdma_buffer_write_usage;
+    size_t rdma_buffer_read_usage;
+    int max_num_concurrent_rdma_read_op;
 };
 static struct dimes_client_option options;
 
@@ -85,7 +87,17 @@ static int is_peer_on_same_core(struct node_id *peer)
 	return (peer->ptlmap.id == DIMES_CID);
 }
 
-// TODO: add APIs/types to avoid magic number =1, =0 etc.
+static size_t get_available_rdma_buffer_size()
+{
+    size_t total_usage = options.rdma_buffer_write_usage +
+                         options.rdma_buffer_read_usage;
+    if (total_usage > options.rdma_buffer_size) {
+        return 0;
+    } else {
+        return options.rdma_buffer_size-total_usage;
+    }
+}
+
 #define NUM_SYNC_ID 4096
 static struct {
 	int next;
@@ -308,9 +320,8 @@ static int dimes_memory_init()
         }
 
         dimes_buffer_init(options.pre_allocated_rdma_handle.base_addr,
-                      options.pre_allocated_rdma_buffer_size);
-        // Reset available_rdma_buffer_size
-        options.available_rdma_buffer_size = options.pre_allocated_rdma_buffer_size;
+                          options.pre_allocated_rdma_buffer_size);
+        options.rdma_buffer_size = options.pre_allocated_rdma_buffer_size;
     }
 
     return 0;
@@ -1169,8 +1180,9 @@ static int all_fetch_done(struct query_tran_entry_d *qte, struct fetch_entry **f
                 if (err < 0) {
                     goto err_out;
                 }
-                options.available_rdma_buffer_size +=
-                    obj_data_size(&fetch_tab[i]->dst_odsc);
+
+                options.rdma_buffer_read_usage -= 
+                                obj_data_size(&fetch_tab[i]->dst_odsc);
                 fetch_status_tab[i] = fetch_done;
                 complete_one_fetch = 1;
             } 
@@ -1202,14 +1214,14 @@ static int get_next_fetch(struct fetch_entry **fetch_tab, int *fetch_status_tab,
     for (i = 0; i < fetch_tab_size; i++) {
         size_t read_size = obj_data_size(&fetch_tab[i]->dst_odsc);
         if (fetch_status_tab[i] == fetch_ready &&
-            (read_size <= options.available_rdma_buffer_size)) {
+            read_size <= get_available_rdma_buffer_size()) {
             err = dimes_memory_alloc(&fetch_tab[i]->read_tran->dst,
                                      read_size, dimes_memory_rdma);
             if (err < 0) {
                 uloga("%s(): dimes_memory_alloc() failed\n", __func__);
                 goto err_out;
             }
-            options.available_rdma_buffer_size -= read_size;
+            options.rdma_buffer_read_usage += read_size;
             *index = i;
             return 0;
         }
@@ -1516,6 +1528,7 @@ static int dimes_obj_get(struct obj_data *od)
 	struct query_tran_entry_d *qte;
 	int err = -ENOMEM;
 	int num_dht_nodes, i;
+    double tm_st, tm_end;
 
 	qte = qte_alloc_d(od);
 	if (!qte)
@@ -1719,7 +1732,9 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 
     options.enable_pre_allocated_rdma_buffer = 0;
     options.pre_allocated_rdma_buffer_size = 64*1024*1024; // MB
-    options.available_rdma_buffer_size = 64*1024*1024; // MB
+    options.rdma_buffer_size = 64*1024*1024; // MB
+    options.rdma_buffer_write_usage = 0;
+    options.rdma_buffer_read_usage = 0;
     options.max_num_concurrent_rdma_read_op = 3;
 #ifdef DS_HAVE_DIMES_ACK
     options.enable_dimes_ack = 1;

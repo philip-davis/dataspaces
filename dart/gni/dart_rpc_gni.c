@@ -45,7 +45,7 @@
 #define RECVHEADER	0
 #define SYSPAD          24   //24 default for 10 credit
 #define SYSNUM		rpc_s->num_buf
-#define RECVCREDIT     	rpc_s->num_buf/2-4
+#define RECVCREDIT	rpc_s->num_buf/2-4
 #define SENDCREDIT	rpc_s->num_buf/2-2
 #define SEC 0.1
 
@@ -917,6 +917,8 @@ static int rpc_post_request(struct rpc_server *rpc_s, const struct node_id *peer
 
 	uint32_t hdr_size = hs ? (uint32_t)(sizeof(struct hdr_sys)) : 0;
 
+RESEND:
+
 	if (rr->type == 0)
 	{
 		remote = rpc_s->ptlmap.id+INDEX_COUNT;
@@ -937,6 +939,28 @@ static int rpc_post_request(struct rpc_server *rpc_s, const struct node_id *peer
 			err = -1;
 			goto err_out;
 		}
+
+        if (status == GNI_RC_NOT_DONE) {
+            // printf("%s(): GNI_SmsgSend returns GNI_RC_NOT_DONE but peer->num_msg_at_peer is %d\n", __func__, peer->num_msg_at_peer);
+            peer->num_msg_at_peer = 0;
+            while (peer->num_msg_at_peer <= 0) {
+                if (rpc_s->cmp_type == DART_SERVER) {
+                    printf("%s(): should not happen on server\n", __func__);
+                    break;
+                }
+
+                err = rpc_process_event_with_timeout(rpc_s, 1);
+                if (err < 0 && err != GNI_RC_TIMEOUT) {
+                    printf("%s(): rpc_process_event_with_timeout err %d\n",
+                            __func__, err);
+                    break;
+                }
+            }
+
+            if (peer->num_msg_at_peer > 0) {
+                goto RESEND;
+            }
+        }
 	}
 
 	if (rr->type == 1)
@@ -1058,12 +1082,14 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 	{
 	    if(peer->num_msg_at_peer == 0)
 	    {
-	      if (rpc_s->cmp_type == DART_SERVER)                 
-	           break;                                                	      
+	      if (rpc_s->cmp_type == DART_SERVER) {
+               printf("%s(): peer->num_msg_at_peer == 0 should not happen on server\n", __func__);                 
+	           break;                         
+          }                       	      
 
 	      err = rpc_process_event_with_timeout(rpc_s, 1);
 	      if (err < 0 && err != GNI_RC_TIMEOUT)
-		goto err_out;
+            goto err_out;
 	    
 
 	      continue;
@@ -1116,6 +1142,7 @@ static int rpc_credit_return(struct rpc_server *rpc_s, struct node_id *peer)
    msg->msg_rpc->cmd = cn_ack_credit;
    msg->msg_rpc->id = rpc_s->ptlmap.id;
 
+   peer->num_msg_at_peer++; // cn_ack_credit msg NOT consume send credit
    err = rpc_send(rpc_s, peer, msg);
    if (err < 0) {
      free(msg);
@@ -1138,7 +1165,15 @@ static int rpc_process_ack(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
       printf("(%s): rpc_get_peer err.\n", __func__);
       return -ENOMEM;
     }
-  peer->num_msg_at_peer = SENDCREDIT;
+
+  if (rpc_s->cmp_type == DART_SERVER) {
+    peer->num_msg_at_peer = SENDCREDIT;
+  }
+  if (rpc_s->cmp_type == DART_CLIENT) {
+    peer->num_msg_at_peer += RECVCREDIT;
+    if (peer->num_msg_at_peer > SENDCREDIT)
+       peer->num_msg_at_peer = SENDCREDIT;
+  }
 
   return 0;
 }
@@ -1417,7 +1452,9 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 
 	  memcpy(rr->msg->msg_rpc, tmpcmd, sizeof(struct rpc_cmd));
 
-	  peer->num_msg_at_peer = SENDCREDIT;
+      if (rpc_s->cmp_type == DART_SERVER) {
+	    peer->num_msg_at_peer = SENDCREDIT;
+      }
 
 	  do
 	    {
@@ -1429,14 +1466,18 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 		}
 	    }while(status == GNI_RC_NOT_DONE);
 
-	  peer->num_msg_recv++;
-	  if(peer->num_msg_recv == RECVCREDIT)
-	    {
-	      err = rpc_credit_return(rpc_s, peer);
-	      if(err!=0)
-		goto err_out;
-	      peer->num_msg_recv = 0;
-	    }
+      if (rpc_s->cmp_type == DART_SERVER) {
+        peer->num_msg_recv++;
+      } else if (rr->msg->msg_rpc->cmd != cn_ack_credit) {
+        peer->num_msg_recv++;
+      }
+      if(peer->num_msg_recv == RECVCREDIT)
+        {
+          err = rpc_credit_return(rpc_s, peer);
+          if(err!=0)
+            goto err_out;
+          peer->num_msg_recv = 0;
+        }
 
 	  err = rpc_cb_decode(rpc_s, rr);
 	  if(err!=0)
@@ -1933,7 +1974,7 @@ int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg
 	if(!rr)
 		goto err_out;
 
-        rr->type = 0;//0 represents cmd ; 1 for data
+    rr->type = 0;//0 represents cmd ; 1 for data
 	rr->msg = msg;
 	rr->iodir = io_send;
 	rr->cb = (async_callback)rpc_cb_req_completion;
