@@ -5,6 +5,8 @@
 #include "hstaging_def.h"
 #include "hstaging_strutil.h"
 
+void free_task_instance(struct task_instance *ti);
+
 static void print_str_decimal(const char *str)
 {
 	int j = 0;
@@ -106,26 +108,6 @@ int get_ready_tasks(struct hstaging_workflow *wf,
 	return 0;
 }
 
-int clear_finished_tasks(struct hstaging_workflow *wf)
-{
-    struct hstaging_task *t = NULL;
-	int i;
-	for (i = 0; i < wf->num_tasks; i++) {
-		t = &(wf->tasks[i]);
-		struct task_instance *ti, *tmp;
-		list_for_each_entry_safe(ti, tmp, &t->instances_list,
-                struct task_instance, entry)
-		{
-			if (is_task_instance_finish(ti)) {
-                list_del(&ti->entry);
-                free(ti);
-			}
-		}
-	}
-
-	return 0;
-}
-
 static struct hstaging_var *lookup_var(struct hstaging_task *task, const char *var_name)
 {
 	int i;
@@ -153,7 +135,9 @@ static struct var_instance *lookup_var_instance(struct task_instance *ti, struct
 
 static struct var_instance *new_var_instance(struct task_instance *ti, struct hstaging_var *var)
 {
-	struct var_instance *vi = (struct var_instance*)malloc(sizeof(*vi));
+    size_t size = sizeof(struct var_instance);
+	struct var_instance *vi = (struct var_instance*)malloc(size);
+    memset(vi, 0, size);
 	vi->var = var;
 	vi->status = NOT_AVAILABLE;
 	
@@ -175,7 +159,9 @@ static struct task_instance *lookup_task_instance(struct hstaging_task *task, in
 
 static struct task_instance *new_task_instance(struct hstaging_task *task, int step)
 {
-	struct task_instance *ti = (struct task_instance*)malloc(sizeof(*ti));
+    size_t size = sizeof(struct task_instance);
+	struct task_instance *ti = (struct task_instance*)malloc(size);
+    memset(ti, 0, size);
 	ti->tid = task->tid;
 	ti->step = step;
 	ti->status = NOT_READY;
@@ -359,7 +345,7 @@ static int read_workflow_task(struct hstaging_workflow *wf, char *fields[], int 
 static struct hstaging_workflow* new_workflow(const char *fname)
 {
 	struct hstaging_workflow *wf = (struct hstaging_workflow*)
-			malloc(sizeof(*wf));
+			malloc(sizeof(struct hstaging_workflow));
 	if (wf == NULL) {
 		fprintf(stderr, "%s(): malloc failed\n", __func__);
 		return NULL;
@@ -375,29 +361,36 @@ static struct hstaging_workflow* new_workflow(const char *fname)
 	return wf;
 }
 
-static int free_var_instance(struct task_instance *ti)
+static void free_task_instance(struct task_instance *ti)
 {
-	struct var_instance *vi, *temp;
-	list_for_each_entry_safe(vi, temp, &ti->input_vars_list, struct var_instance, entry)
-	{
-		list_del(&vi->entry);
-		free(vi);
-	}
-	
-	return 0;
+    struct var_instance *vi, *tmp;
+    list_for_each_entry_safe(vi, tmp, &ti->input_vars_list, struct var_instance, entry)
+    {
+        list_del(&vi->entry);
+        free(vi);
+    }
+
+    free(ti);
 }
 
-static int free_task_instance(const struct hstaging_task *t)
+int clear_finished_tasks(struct hstaging_workflow *wf)
 {
-	struct task_instance *ti, *temp;
-	list_for_each_entry_safe(ti, temp, &t->instances_list, struct task_instance, entry)
-	{
-		list_del(&ti->entry);
-		free_var_instance(ti);
-		free(ti);
-	}
+    struct hstaging_task *t = NULL;
+    int i;
+    for (i = 0; i < wf->num_tasks; i++) {
+        t = &(wf->tasks[i]);
+        struct task_instance *ti, *tmp;
+        list_for_each_entry_safe(ti, tmp, &t->instances_list,
+                struct task_instance, entry)
+        {
+            if (is_task_instance_finish(ti)) {
+                list_del(&ti->entry);
+                free_task_instance(ti);
+            }
+        }
+    }
 
-	return 0;
+    return 0;
 }
 
 int free_workflow(struct hstaging_workflow *wf)
@@ -405,7 +398,12 @@ int free_workflow(struct hstaging_workflow *wf)
 	int i;
 	for (i = 0; i < wf->num_tasks; i++) {
 		struct hstaging_task *t = &(wf->tasks[i]);
-		free_task_instance(t);
+        struct task_instance *ti, *tmp;
+        list_for_each_entry_safe(ti, tmp, &t->instances_list, struct task_instance, entry)
+        {
+            list_del(&ti->entry);
+            free_task_instance(ti);
+        }
 	}
 
 	free(wf);

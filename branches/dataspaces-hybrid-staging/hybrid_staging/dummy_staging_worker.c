@@ -5,11 +5,20 @@
 #include "common.h"
 #include "hybrid_staging_api.h"
 #include "mpi.h"
+#include "hpgv.h"
+
+struct viz_task_info {
+    int is_viz_init;
+    double *viz_data;
+    // int num_viz_step;
+};
 
 struct parallel_communicator {
     int level;
     int color;
     MPI_Comm comm;
+    // Information kept for rendering task
+    struct viz_task_info viz_info;
 };
 static struct parallel_communicator comms[MAX_NUM_SPLIT_LEVEL];
 
@@ -36,12 +45,36 @@ static struct parallel_communicator* parallel_comm_lookup(int color)
     return NULL; 
 }
 
+static void viz_task_info_init(struct viz_task_info *p)
+{
+    p->is_viz_init = 0;
+    p->viz_data = NULL;
+}
+
+static void viz_task_info_free(struct viz_task_info *p)
+{
+    if (p->is_viz_init && p->viz_data) {
+        free(p->viz_data);
+    }
+}
+
 static int parallel_comm_init()
 {
     int i;
     for (i = 0; i < MAX_NUM_SPLIT_LEVEL; i++) {
         comms[i].level = -1;
         comms[i].color = -1;
+        viz_task_info_init(&comms[i].viz_info);
+    }
+
+    return 0;    
+}
+
+static int parallel_comm_free()
+{
+    int i;
+    for (i = 0; i < MAX_NUM_SPLIT_LEVEL; i++) {
+        viz_task_info_free(&comms[i].viz_info);
     }
 
     return 0;    
@@ -122,7 +155,7 @@ static int exec_task_function(struct task_descriptor *t)
 		}
 	}
 
-	uloga("%s(): unknown tid= %d", __func__, t->tid);
+	uloga("%s(): unknown tid= %d\n", __func__, t->tid);
 }
 
 static int update_var(const char *var_name, int ts)
@@ -153,17 +186,21 @@ static void set_data_decomposition(struct task_descriptor *t, struct var_descrip
 	g.rank = t->rank;
 	g.dims = var_desc->bb.num_dims;
 
-	if (var_desc->bb.num_dims == 2) {
-		g.npx = t->nproc;
-		g.npy = 1;
-		g.npz = 0;
+    int num_peer, dims, dimx, dimy, dimz;
+    char fname[128];
+    sprintf(fname, "task%d.conf", t->tid);
+    int err = read_task_info(fname, &num_peer, &g.npx, &g.npy, &g.npz,
+                        &dims, &dimx, &dimy, &dimz);
+    if (err < 0 ) {
+        uloga("Failed to read %s\n", fname);
+        return err;
+    }
+
+	if (g.dims == 2) {
 		g.spx = (var_desc->bb.ub.c[0]+1)/g.npx;
 		g.spy = (var_desc->bb.ub.c[1]+1)/g.npy;
 		g.spz = 0;
-	} else if (var_desc->bb.num_dims == 3) {
-		g.npx = t->nproc;
-		g.npy = 1;
-		g.npz = 1;
+	} else if (g.dims == 3) {
 		g.spx = (var_desc->bb.ub.c[0]+1)/g.npx;
 		g.spy = (var_desc->bb.ub.c[1]+1)/g.npy;
 		g.spz = (var_desc->bb.ub.c[2]+1)/g.npz;
@@ -312,7 +349,122 @@ int task6(struct task_descriptor *t, struct parallel_communicator *comm)
 	read_input_data(t);
 	// Do some computation
 	return 0;
-} 
+}
+
+#define RENDER_VAR 3
+float my_data_quantize(float value, int varname)
+{
+    float min, max;
+
+    if (3 == RENDER_VAR) {
+        //min = 2.5;
+        //max = 15;
+        min = 1.22;
+        max = 7.2;
+    }
+
+    if (4 == RENDER_VAR) {
+        min = 1.22;
+        max = 7.2;
+    }
+
+    //min = -5.5e-04;
+    //max = 5.5e-04;
+
+    if( max == min) {
+        return value;
+    }
+
+    float v = (value - min) / (max - min);
+
+    if (v < 0) {
+        v = 0;
+    }
+    if (v > 1) {
+        v = 1;
+    }
+    return v;
+}
+
+int task_viz_render(struct task_descriptor *t, struct parallel_communicator *comm)
+{
+    int err;
+    int npx, npy, npz, mypx, mypy, mypz;
+    int domain_grid_size[3];
+    int render_root = 0;
+    struct viz_task_info *viz_info = &comm->viz_info;
+
+    double tm_st, tm_end;
+
+    MPI_Comm_rank(comm->comm, &t->rank);
+    MPI_Barrier(comm->comm);
+    tm_st = MPI_Wtime();
+
+    // read input data
+    double *data = NULL;
+    int xl, yl, zl, xu, yu, zu;
+    size_t elem_size = sizeof(double);
+    struct var_descriptor *var_desc;
+
+    var_desc = &(t->input_vars[0]);
+    set_data_decomposition(t, var_desc);
+    if (!viz_info->is_viz_init) {
+        data = allocate_data(g.spx*g.spy*g.spz);
+        viz_info->viz_data = data;
+    } else {
+        data = viz_info->viz_data;
+    }
+    generate_bbox(&g, &xl, &yl, &zl, &xu, &yu, &zu);
+    err = hstaging_get_var(var_desc->var_name, t->step, elem_size,
+            xl, yl, zl, xu, yu, zu, data, NULL);
+    if (err < 0) {
+        uloga("%s(): failed to get var\n", __func__);
+        return -1;
+    }
+
+    MPI_Barrier(comm->comm);
+    tm_end = MPI_Wtime();
+    if (t->rank == 0) {
+        uloga("%s(): fetch data time %lf\n", __func__, tm_end-tm_st);
+    }
+
+    tm_st = tm_end;
+    // perform viz. render
+    npx = g.npx;
+    npy = g.npy;
+    npz = g.npz;
+    domain_grid_size[0] = g.npx * g.spx;
+    domain_grid_size[1] = g.npy * g.spy;
+    domain_grid_size[2] = g.npz * g.spz;
+    mypx = g.rank % g.npx;
+    mypy = g.rank / g.npx % g.npy;
+    mypz = g.rank / g.npx / g.npy;
+
+    //uloga("%s(): step %d rank %d npx %d npy %d npz %d "
+    //    "domain_grid_size[] = {%d, %d, %d} "
+    //    "mypx %d mypy %d mypz %d\n", __func__,
+    //    t->step, g.rank, npx, npy, npz, 
+    //    domain_grid_size[0], domain_grid_size[1], domain_grid_size[2],
+    //    mypx, mypy, mypz);
+
+    // compute_stats(var_desc->var_name, data, g.spx*g.spy*g.spz, t->rank);
+    if (!viz_info->is_viz_init) {
+        hpgv_insituvis_init_(g.rank, comm->comm, render_root,
+                    npx, npy, npz, mypx, mypy, mypz,
+                    domain_grid_size, data);
+        viz_info->is_viz_init = 1;
+    }
+
+    hpgv_insitu_render_tstep_(g.rank, comm->comm, t->step, my_data_quantize);
+
+    MPI_Barrier(comm->comm);
+    tm_end = MPI_Wtime();
+    if (t->rank == 0) {
+        uloga("%s(): render data time %lf\n", __func__, tm_end-tm_st);
+    }
+
+    return 0; 
+}
 
 int dummy_s3d_staging_parallel_job(MPI_Comm comm, enum hstaging_location_type loc_type)
 {
@@ -342,6 +494,7 @@ int dummy_s3d_staging_parallel_job(MPI_Comm comm, enum hstaging_location_type lo
 	add_task_function(4, task4);	
 	add_task_function(5, task5);	
 	add_task_function(6, task6);	
+    add_task_function(7, task_viz_render);
 
     hstaging_register_bucket_resource(loctype_, mpi_nproc, mpi_rank);
     MPI_Barrier(comm);
@@ -359,6 +512,7 @@ int dummy_s3d_staging_parallel_job(MPI_Comm comm, enum hstaging_location_type lo
 	}
 
     hstaging_put_sync_all();
+    parallel_comm_free();
 
 	return 0;
  err_out:
