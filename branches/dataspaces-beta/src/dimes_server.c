@@ -41,7 +41,6 @@
 #include "dart.h"
 #include "ds_gspace.h"
 #include "ss_data.h"
-#include "timer.h"
 
 static struct dimes_server *dimes_s = NULL;
 
@@ -102,8 +101,6 @@ static int locate_data_completion_server(struct rpc_server *rpc_s, struct msg_bu
 	return 0;
 }
 
-static struct timer tm;
-double t1, t2;
 static int locate_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd,
 		enum cmd_type reply_msg_type)
 {
@@ -125,7 +122,6 @@ static int locate_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd,
 #endif
 
     struct hdr_dimes_get *hdr2 = hdr;
-    t1 = timer_read(&tm);
 
 	// Search in the metadata storage
     err = metadata_s_find_obj_location(dimes_s->meta_store,
@@ -177,7 +173,6 @@ static int locate_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd,
 #endif
 
 	err = rpc_send(rpc_s, peer, msg);
-    t2 = timer_read(&tm);
     //uloga("%s(): %lf name=%s version=%d num_obj=%d process_time %lf\n",
     //    __func__, t1, hdr2->odsc.name, hdr2->odsc.version, num_obj,
     //    t2-t1);
@@ -203,7 +198,6 @@ static int dsgrpc_dimes_locate_data(struct rpc_server *rpc_s,
 
 static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-    t1 = timer_read(&tm);
 	struct hdr_dimes_put *hdr = (struct hdr_dimes_put*)cmd->pad;
 	struct obj_descriptor *odsc = &hdr->odsc;
 	// odsc->owner = cmd->id;
@@ -220,7 +214,6 @@ static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 					odsc->name, odsc->owner, odsc->version, obj_data_size(odsc));
 #endif
     
-    t2 = timer_read(&tm);
     //uloga("%s(): %lf name=%s version=%d process_time %lf from peer %d\n", __func__,
     //        t1, odsc->name, odsc->version, t2-t1, cmd->id);
 	return 0;
@@ -323,9 +316,6 @@ struct dimes_server *dimes_server_alloc(int num_sp, int num_cp, char *conf_name)
 	INIT_LIST_HEAD(&sync_info_list);
 
 	dimes_s = dimes_s_l;
-
-    timer_init(&tm, 1);
-    timer_start(&tm);
 
 #ifdef DEBUG
 	uloga("%s(): #%d complete!\n", __func__, DIMES_SID);
