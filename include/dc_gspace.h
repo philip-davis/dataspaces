@@ -63,6 +63,7 @@ struct dcg_space {
 
         int                     f_ss_info;
         struct ss_info          ss_info;
+        struct bbox             ss_domain;
 
         /* List of 'struct dcg_lock' */
         struct list_head        locks_list;

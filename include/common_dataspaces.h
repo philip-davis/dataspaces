@@ -76,4 +76,22 @@ void common_dspaces_finalize (void);
 int common_dspaces_collect_timing(double, double *);
 int common_dspaces_num_space_srv(void);
 
+#ifdef DS_HAVE_DIMES
+void common_dimes_set_storage_type(int fst);
+int common_dimes_get(const char *var_name,
+        unsigned int ver, int size,
+        int xl, int yl, int zl,
+        int xu, int yu, int zu,
+        void *data);
+int common_dimes_put(const char *var_name,
+        unsigned int ver, int size,
+        int xl, int yl, int zl,
+        int xu, int yu, int zu,
+        void *data);
+int common_dimes_put_sync_all(void);
+int common_dimes_put_set_group(const char *group_name, int step);
+int common_dimes_put_unset_group();
+int common_dimes_put_sync_group(const char *group_name, int step);
+#endif
+
 #endif

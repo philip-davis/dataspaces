@@ -34,133 +34,169 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <stdint.h>
 
 #include "dimes_data.h"
 #include "debug.h"
 #include "ss_data.h"
+#include "timer.h"
 
-////////////////////////////////////////////////////////////////////////
-static struct cmd_data *
-cmd_s_find_no_version(struct cmd_storage *s, struct obj_descriptor *odsc)
+static struct var_list_node* var_node_lookup(struct list_head *var_list,
+                                    const char* var_name)
 {
-	struct cmd_data *cmd;
-	struct list_head *list;
-	int index;
+    struct var_list_node *n;
+    list_for_each_entry(n, var_list, struct var_list_node, entry)
+    {
+        if (0 == strcmp(n->name, var_name)) {
+            return n;
+        }
+    }
 
-	if (s->size_hash <= 0 ) {
-		uloga("%s(): cmd_storage not init.\n", __func__);
-		return NULL;
-	}
-
-	index = odsc->version % s->size_hash;
-	list = &s->cmd_hash[index];
-
-	list_for_each_entry(cmd, list, struct cmd_data, entry) {
-		struct hdr_dimes_put *hdr = (struct hdr_dimes_put *)
-														(cmd->cmd.pad);
-		if (obj_desc_by_name_intersect(odsc, &hdr->odsc))
-			return cmd;
-	}
-
-	return NULL;
+    // not found, add new list node
+    n = calloc(1, sizeof(struct var_list_node));
+    strcpy(n->name, var_name); // TODO: here assume destination has large enough buffer size   
+    INIT_LIST_HEAD(&n->obj_location_list);
+    list_add(&n->entry, var_list); 
+    return n;
 }
 
-
-struct cmd_storage *cmd_s_alloc(int max_versions)
+static struct list_head* obj_location_list_lookup(struct metadata_storage *s,
+                                    int version, const char* var_name)
 {
-	struct cmd_storage *cmd_s = 0;
-	int i;
-	
-	cmd_s = malloc(sizeof(*cmd_s) + sizeof(struct list_head)*max_versions);
-	if (!cmd_s) {
-		errno = ENOMEM;
-		return cmd_s;
-	}
+    int index;
+    struct var_list *l;
+    index = version % s->max_versions;
+    l = &s->version_tab[index];
 
-	memset(cmd_s, 0, sizeof(*cmd_s));
-	for (i=0; i<max_versions; i++)
-		INIT_LIST_HEAD(&cmd_s->cmd_hash[i]);
-	cmd_s->size_hash = max_versions;
-
-	return cmd_s;
+    struct var_list_node *var_node;
+    var_node = var_node_lookup(l, var_name);
+    if (var_node == NULL) {
+        return NULL;
+    }
+    
+    return &(var_node->obj_location_list);
 }
 
-
-int cmd_s_free(struct cmd_storage *s)
+static int var_node_free(struct var_list_node *var_node)
 {
-	int max_versions = s->size_hash;
-	int i;
-	
-	for(i=0; i<max_versions; i++){
-		struct cmd_data *cmd, *tmp;
-		list_for_each_entry_safe(cmd,tmp,&s->cmd_hash[i],
-					 struct cmd_data, entry){
-			list_del(&cmd->entry);			
-			free(cmd);
-		}
-	}	
+    struct obj_location_list_node *n, *tmp;
+    list_for_each_entry_safe(n, tmp, &var_node->obj_location_list,
+                        struct obj_location_list_node, entry)
+    {
+        list_del(&n->entry);
+        free(n);
+    }
 
-	return 0;
+    return 0;
 }
 
-int cmd_s_find_all(struct cmd_storage *s, struct obj_descriptor *odsc,
-		struct list_head *out_list, int *out_num_cmd)
+struct metadata_storage *metadata_s_alloc(int max_versions)
 {
-	struct cmd_data *cmd;
-	struct list_head *list;
-	int index;
+    struct metadata_storage *s = malloc(sizeof(*s) + 
+                                sizeof(struct list_head)*max_versions);
+    if (!s) {
+        errno = ENOMEM;
+        return s;
+    }
 
-	if (s->size_hash <= 0) {
-		uloga("%s(): cmd_storage not init.\n", __func__);
-		return -1;
-	}
+    memset(s, 0, sizeof(*s));
+    int i;
+    for (i = 0; i < max_versions; i++) {
+        INIT_LIST_HEAD(&s->version_tab[i]);
+    }
+    s->max_versions = max_versions;
 
-	index = odsc->version % s->size_hash;
-	list = &s->cmd_hash[index];
-		
-	*out_num_cmd = 0;
-	list_for_each_entry(cmd, list, struct cmd_data, entry) {
-		struct hdr_dimes_put *hdr = (struct hdr_dimes_put *)
-					(cmd->cmd.pad);
-		if (obj_desc_equals_intersect(odsc, &hdr->odsc)) {
-			struct cmd_data *tmp_cmd =
-					malloc(sizeof(struct cmd_data));
-			memcpy(tmp_cmd, cmd, sizeof(struct cmd_data));
-			list_add(&tmp_cmd->entry, out_list);
-			(*out_num_cmd)++;
-		}
-	}
-
-	return 0;
+    return s;
 }
 
-void cmd_s_add(struct cmd_storage *s, struct rpc_cmd *cmd)
+int metadata_s_free(struct metadata_storage *s)
 {
-	int index;
-	struct list_head *bin;
-	struct cmd_data *existing;
-	struct hdr_dimes_put *hdr = (struct hdr_dimes_put *)cmd->pad;
-	struct obj_descriptor *odsc = &hdr->odsc;
-	
-	if (s->size_hash <= 0) {
-		uloga("%s(): cmd_storage not initialized.\n",__func__);
-		return;
-	}
+    int i;
+    for (i = 0; i < s->max_versions; i++) {
+        struct var_list_node *n, *tmp;
+        list_for_each_entry_safe(n, tmp, &s->version_tab[i],
+                            struct var_list_node, entry)
+        {
+            var_node_free(n);
+            list_del(&n->entry);
+            free(n);
+        }
+    }
 
-	existing = cmd_s_find_no_version(s, odsc);
-	if (existing) {
-		// Remove the duplicate item (if any).
-		list_del(&existing->entry);
-		s->num_cmd--;
-	}
+    free(s);
+    s = NULL;
 
-	index = odsc->version % s->size_hash;
-	bin = &s->cmd_hash[index];
+    return 0;
+}
 
-	struct cmd_data *new = calloc(1, sizeof(struct cmd_data));
-	new->cmd = *cmd; //copy the rpc_cmd!!
-	list_add(&new->entry, bin);
-	s->num_cmd++;
+int metadata_s_add_obj_location(struct metadata_storage *s,
+                                struct rpc_cmd *cmd)
+{
+    int err;
+    struct list_head *l = NULL;
+    struct hdr_dimes_put *hdr = (struct hdr_dimes_put *)cmd->pad;
+    struct obj_descriptor *odsc = &hdr->odsc;
+
+    // Lookup  
+    l = obj_location_list_lookup(s, odsc->version, odsc->name);
+    if (l == NULL) {
+        err = -1;
+        goto err_out;
+    }
+
+    // First remove any existing obj location info whose bbox intersects with 
+    // the newly inserted obj location info
+    struct obj_location_list_node *n, *tmp;
+    list_for_each_entry_safe(n, tmp, l, struct obj_location_list_node, entry)
+    {
+        hdr = (struct hdr_dimes_put*)(n->cmd.pad);
+        if (obj_desc_by_name_intersect(odsc, &hdr->odsc))
+        {
+            list_del(&n->entry);
+            free(n);
+        }
+    }
+
+    n = calloc(1, sizeof(struct obj_location_list_node));
+    n->cmd = *cmd;
+    list_add(&n->entry, l);
+
+    return 0;
+ err_out:
+    ERROR_TRACE();
+}
+
+int metadata_s_find_obj_location(struct metadata_storage *s,
+                                 struct obj_descriptor *odsc,
+                                 struct list_head *out_list, int *out_num_items)
+{
+    int err;
+    struct list_head *l = NULL;
+    
+    // lookup
+    l = obj_location_list_lookup(s, odsc->version, odsc->name);
+    if (l == NULL) {
+        err = -1;
+        goto err_out;
+    }
+
+    *out_num_items = 0;
+    struct obj_location_list_node *n;
+    list_for_each_entry(n, l, struct obj_location_list_node, entry)
+    {
+        struct hdr_dimes_put *hdr = (struct hdr_dimes_put *)(n->cmd.pad);
+        if (obj_desc_equals_intersect(odsc, &hdr->odsc)) {
+            struct obj_location_wrapper *p;
+            p = malloc(sizeof(struct obj_location_wrapper));
+            p->data_ref = &(n->cmd);
+            list_add(&p->entry, out_list);
+            (*out_num_items)++;
+        }
+    }
+    
+    return 0;
+ err_out:
+    ERROR_TRACE();
 }
 
 /*
@@ -315,4 +351,290 @@ int dimes_ls_count_obj_no_version(struct ss_storage *ls, int query_tran_id)
 
 	return cnt;
 }
+
+size_t dimes_buffer_size = 0;
+//Starting pointer to the memory buffer
+uint64_t dimes_buffer_ptr = 0;
+
+/*linked list for free dimes_buf_block. And the blocks in the list
+are sorted by block_size in ascending order.
+*/
+struct list_head free_blocks_list;
+
+/*linked list for in use dimes_buf_block. And the blocks in the list
+are sorted by block_size in ascending order.
+*/
+struct list_head used_blocks_list;
+
+enum mem_block_status {
+    free_block,
+    used_block
+};
+
+/*dynamic mem block data structure*/
+struct dimes_buf_block {
+    struct list_head mem_block_entry;
+    size_t block_size;
+    uint64_t block_ptr;
+    enum mem_block_status block_status;
+};
+
+#define SIZE_DART_MEM_BLOCK sizeof(struct dimes_buf_block)
+
+//
+// Cleanup a blocks list
+//
+static void dimes_buf_cleanup_list(struct list_head* blocks_list)
+{
+    struct dimes_buf_block * mb, *tmp;
+    list_for_each_entry_safe(mb, tmp, blocks_list, struct dimes_buf_block, mem_block_entry) {
+        list_del(&mb->mem_block_entry);
+        free(mb);//free the memory
+    }
+}
+
+//
+// Insert a memory block into the list that sorted by block_size.
+//
+static void dimes_buf_insert_block(
+    struct dimes_buf_block *block,
+    struct list_head* blocks_list)
+{
+    struct dimes_buf_block *mb, *tmp;
+    int inserted = 0;
+
+    list_for_each_entry_safe(mb, tmp, blocks_list, struct dimes_buf_block, mem_block_entry) {
+        if(block->block_size <= mb->block_size) {
+            //add the block befor the position of mb in the list.
+            list_add_before_pos(&block->mem_block_entry, &mb->mem_block_entry);
+            inserted = 1;
+            break;
+        }
+    }
+
+    //add the block to the tail
+    if (!inserted)
+        list_add_tail(&block->mem_block_entry, blocks_list);
+}
+
+/* 
+   Insert a memory  block into the  free blocks list,  and merge
+   contiguous free blocks into larger new one.
+*/
+static void dimes_buf_insert_block_to_freelist(
+    struct dimes_buf_block *block,
+    struct list_head *blocks_list)
+{
+    /*    low_memory_addresses ------->  high_memory_addresses
+    |             |    |                         |
+    | contiguous_block_before |  block |  contiguous_block_after | 
+    |                         |        |                 |
+    */
+    //the contiguous free block before 'block' in the buffer
+    struct dimes_buf_block *contiguous_block_before = NULL;
+    //the contiguous free block after 'block' in the buffer
+    struct dimes_buf_block *contiguous_block_after = NULL;
+
+    struct dimes_buf_block * mb, *tmp;
+    list_for_each_entry_safe(mb, tmp, blocks_list, struct dimes_buf_block, mem_block_entry) {
+        if(block->block_ptr == (mb->block_ptr + mb->block_size) )
+            contiguous_block_before = mb;
+        if(mb->block_ptr == (block->block_ptr + block->block_size) )
+            contiguous_block_after = mb;
+    }
+
+    if(contiguous_block_after) {
+        //update the size of the merged new free block
+        block->block_size = block->block_size + contiguous_block_after->block_size;
+        //the starting address of the merged new free block does NOT change
+
+        //remove from free blocks list
+        list_del(&contiguous_block_after->mem_block_entry);
+        free(contiguous_block_after);
+    }
+
+    if(contiguous_block_before) {
+        //update the size of the merged new free block
+        block->block_size = block->block_size + contiguous_block_before->block_size;
+        //update the starting address of the merged new free block  
+        block->block_ptr = contiguous_block_before->block_ptr;
+
+        //remove from free blocks list
+        list_del(&contiguous_block_before->mem_block_entry);
+        free(contiguous_block_before);
+    }
+
+    //add the new free block into list
+    block->block_status = free_block;
+    dimes_buf_insert_block(block, blocks_list);
+}
+
+//
+// Initialize DART Buffer
+//
+int dimes_buffer_init(uint64_t base_addr, size_t size)
+{
+    INIT_LIST_HEAD(&free_blocks_list);
+    INIT_LIST_HEAD(&used_blocks_list);
+
+    dimes_buffer_ptr = base_addr;
+    if (dimes_buffer_ptr != 0) {
+        dimes_buffer_size = size;
+
+        //create the first free block
+        struct dimes_buf_block *block;
+        block = (struct dimes_buf_block*)malloc(SIZE_DART_MEM_BLOCK);
+        block->block_size = size;
+        block->block_ptr = dimes_buffer_ptr;
+        block->block_status = free_block;
+
+        //add the block into free blocks list 
+        dimes_buf_insert_block(block, &free_blocks_list);
+
+        return 0;
+    }
+    else    return -1;
+}
+
+//
+// Finalize DART Buffer 
+//
+int dimes_buffer_finalize()
+{
+    //cleanup the free_blocks_list
+    dimes_buf_cleanup_list(&free_blocks_list);
+
+    //cleanup the used_blocks_list
+    dimes_buf_cleanup_list(&used_blocks_list);
+
+    return 0;
+}
+
+size_t dimes_buffer_total_size()
+{
+    return dimes_buffer_size;
+}
+
+void dimes_buffer_alloc(size_t size, uint64_t *ptr)
+{
+    //If requested buffer size exceeds the total available
+    if (size > dimes_buffer_size)
+        goto err_out;
+
+    //Search for usable free block with the smallest data size
+    struct dimes_buf_block * mb, *tmp;
+    int found = 0;
+    list_for_each_entry_safe(mb, tmp, &free_blocks_list, struct dimes_buf_block, 
+mem_block_entry){
+        if(mb->block_size >= size) {
+            //Usable free block found
+            found = 1;
+            break;
+        }
+    }
+
+    if (found) {
+        /*Usable free block 'mb' found*/
+
+        //new_free_mb is the new free memory block after allocating space from 'mb'
+        //new_used_mb is the new in_use memory block after allocating space from 'mb'
+        struct dimes_buf_block * new_free_mb, * new_used_mb;
+
+        //remove 'mb' from free blocks list
+        list_del(&mb->mem_block_entry);
+
+        if(mb->block_size == size){
+            new_free_mb = NULL;
+            new_used_mb = mb;
+            new_used_mb->block_status = used_block;
+        }
+
+        if(mb->block_size > size){
+            new_free_mb = (struct dimes_buf_block*)malloc(SIZE_DART_MEM_BLOCK);
+            new_free_mb->block_status = free_block;
+            new_free_mb->block_ptr = mb->block_ptr + size;
+            new_free_mb->block_size = mb->block_size - size;
+            new_used_mb = mb;
+            new_used_mb->block_status = used_block;
+            new_used_mb->block_size = size;
+        }
+
+        //add 'new_free_mb'  into free blocks list
+        if(new_free_mb != NULL)
+            dimes_buf_insert_block(new_free_mb, &free_blocks_list);
+        //add 'new_used_mb' into used blocks list 
+        if(new_used_mb != NULL)
+            dimes_buf_insert_block(new_used_mb, &used_blocks_list);
+
+        *ptr = (uint64_t)new_used_mb->block_ptr;
+        return;
+    }
+    else {
+        /*Could not find usable free block*/
+        fprintf(stderr, "%s: failed! no space\n", __func__);
+        goto err_out;
+    }
+
+ err_out:
+    *ptr = (uint64_t)0;
+    return;
+}
+
+void dimes_buffer_free(uint64_t ptr)
+{
+    /*test if the value of ptr is valid*/
+    if (ptr == 0 || dimes_buffer_ptr == 0)
+        return;
+
+    uint64_t start_ptr = dimes_buffer_ptr;
+    uint64_t end_ptr = dimes_buffer_ptr + dimes_buffer_size - 1;
+    if ( ptr < start_ptr || ptr > end_ptr) {
+        fprintf(stderr, "%s(): error invalid address! start_ptr %llx end_ptr %llx ptr %llx\n", __func__, start_ptr, end_ptr, ptr);
+        return;
+    }
+
+    /*search for the corresponding in_use memory block for ptr*/
+    struct dimes_buf_block * mb, *tmp;
+    unsigned int found = 0;//flag value init as 0!
+    list_for_each_entry_safe(mb, tmp, &used_blocks_list, struct dimes_buf_block, mem_block_entry){
+        if(mb->block_ptr == ptr) {
+            found = 1;
+            break;
+        }
+    }
+
+    if (found) {
+
+        //remove 'mb' from used blocks list
+        list_del(&mb->mem_block_entry);
+
+        //add back 'mb' into free blocks list
+        dimes_buf_insert_block_to_freelist(mb, &free_blocks_list);
+    }
+    else return;
+}
+
+//For testing
+void print_free_blocks_list()
+{
+    printf("#####Free Blocks List####\n");
+
+    struct dimes_buf_block * mb, *tmp;
+    list_for_each_entry_safe(mb, tmp, &free_blocks_list, struct dimes_buf_block, mem_block_entry){
+        printf("free block: ptr=%p, size=%zu, status=%u\n",
+            mb->block_ptr, mb->block_size, mb->block_status);
+    }
+}
+
+void print_used_blocks_list()
+{
+    printf("#####Used Blocks List####\n");
+
+    struct dimes_buf_block * mb, *tmp;
+    list_for_each_entry_safe(mb, tmp, &used_blocks_list, struct dimes_buf_block, mem_block_entry){
+        printf("used block: ptr=%p, size=%zu, status=%u\n",
+            mb->block_ptr, mb->block_size, mb->block_status);
+    }
+}
+
 #endif // end of #ifdef DS_HAVE_DIMES
