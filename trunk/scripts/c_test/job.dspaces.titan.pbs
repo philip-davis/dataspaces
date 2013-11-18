@@ -13,8 +13,8 @@ rm -f conf
 aprun -n 4 ./dataspaces_server -s  -c 48  &
 sleep 10
  
-aprun -n 16 ./test_writer 16 4 4 1 32 32 128 10 &
+aprun -n 16 ./test_writer DATASPACES 16 4 4 1 32 32 128 10 &
 
-aprun -n 32 ./test_reader 32 4 4 2 32 32 64 10 &
+aprun -n 32 ./test_reader DATASPACES 32 4 4 2 32 32 64 10 &
 
 wait

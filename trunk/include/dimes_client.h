@@ -56,19 +56,21 @@ struct dimes_client {
 
 struct dimes_client* dimes_client_alloc(void *);
 void dimes_client_free(void);
-
-void common_dimes_set_storage_type (int fst);
-int common_dimes_put_sync_all(void);
-int common_dimes_get (const char *var_name,
+void dimes_client_set_storage_type (int fst);
+int dimes_client_get (const char *var_name,
         unsigned int ver, int size,
         int xl, int yl, int zl,
         int xu, int yu, int zu,
         void *data);
-int common_dimes_put (const char *var_name,
+int dimes_client_put (const char *var_name,
         unsigned int ver, int size,
         int xl, int yl, int zl,
         int xu, int yu, int zu,
         void *data);
+int dimes_client_put_sync_all(void);
+int dimes_client_put_set_group(const char *group_name, int step);
+int dimes_client_put_unset_group();
+int dimes_client_put_sync_group(const char *group_name, int step);
 
 #ifdef __cplusplus
 }

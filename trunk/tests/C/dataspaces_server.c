@@ -91,6 +91,7 @@ int main(int argc, char **argv)
 	int err;
 	int nprocs, rank;
 	MPI_Comm gcomm;
+	int color;
 
 	if (parse_args(argc, argv) < 0) {
 		usage();
@@ -106,13 +107,16 @@ int main(int argc, char **argv)
 	uloga("dataspaces server starts...\n");
 #endif
 
+	color = 0;
+	MPI_Comm_split(MPI_COMM_WORLD, 0, rank, &gcomm);
+
 #ifdef DS_HAVE_DIMES
 	common_run_server(num_sp, num_cp, USE_DIMES);
 #else
 	common_run_server(num_sp, num_cp, USE_DSPACES);
 #endif
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Barrier(gcomm);
 	MPI_Finalize();
 
 	return 0;

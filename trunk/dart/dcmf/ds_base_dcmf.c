@@ -777,7 +777,7 @@ static int ds_boot(struct dart_server *ds)
 
 	close(fd);
 	remove(lck_file);
-
+    
 	return 0;
 err_flock:
 	uloga("%s(): failed with err_flock.\n");

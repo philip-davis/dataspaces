@@ -1,4 +1,4 @@
-AC_INIT([dataspaces],[1.2.0])
+AC_INIT([dataspaces],[1.3.0-rc1])
 AC_CONFIG_AUX_DIR(config)
 
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
@@ -32,15 +32,35 @@ AM_CONDITIONAL([DIMES], [test "x$enable_dimes" == "xyes"])
 
 if test "x$enable_dimes" == "xyes"; then
         if test -z "${HAVE_UGNI_TRUE}"; then
-                DSPACESLIB_CFLAGS+="-DDS_HAVE_DIMES"
-		DSPACESLIB_CPPFLAGS+="-DDS_HAVE_DIMES"
-		echo "DIMES enabled!"
+            DSPACESLIB_CFLAGS+=" -DDS_HAVE_DIMES"
+            DSPACESLIB_CPPFLAGS+=" -DDS_HAVE_DIMES"
+            echo "DIMES enabled!"
         elif test -z "${HAVE_DCMF_TRUE}"; then
-                DSPACESLIB_CFLAGS+="-DDS_HAVE_DIMES"
-		DSPACESLIB_CPPFLAGS+="-DDS_HAVE_DIMES"
-		echo "DIMES enabled!"
+            DSPACESLIB_CFLAGS+=" -DDS_HAVE_DIMES"
+            DSPACESLIB_CPPFLAGS+=" -DDS_HAVE_DIMES"
+            echo "DIMES enabled!"
+        elif test -z "${HAVE_INFINIBAND_TRUE}"; then
+            DSPACESLIB_CFLAGS+="-DDS_HAVE_DIMES"
+            DSPACESLIB_CPPFLAGS+="-DDS_HAVE_DIMES"
+            echo "DIMES enabled!"
         else
-                echo "DIMES only supported on Cray UGNI, IBM DCMF"
+            echo "DIMES only supported on Cray UGNI, Infiniband, IBM DCMF"
+        fi
+fi
+
+dnl Check if DIMES ack. is enabled
+AC_ARG_ENABLE(dimes_ack,
+    [AS_HELP_STRING([--enable-dimes-ack],
+        [Include the dimes ack. mechanism. By default this is not enabled])])
+AM_CONDITIONAL([DIMES_ACK], [test "x$enable_dimes_ack" == "xyes"])
+
+if test "x$enable_dimes_ack" == "xyes"; then
+        if test -z "${HAVE_UGNI_TRUE}"; then
+                DSPACESLIB_CFLAGS+=" -DDS_HAVE_DIMES_ACK"
+		DSPACESLIB_CPPFLAGS+=" -DDS_HAVE_DIMES_ACK"
+        elif test -z "${HAVE_DCMF_TRUE}"; then
+                DSPACESLIB_CFLAGS+=" -DDS_HAVE_DIMES_ACK"
+		DSPACESLIB_CPPFLAGS+=" -DDS_HAVE_DIMES_ACK"
         fi
 fi
 
