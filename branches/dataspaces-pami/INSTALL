@@ -1,0 +1,36 @@
+Requirements
+============
+1. DataSpaces requires MPI. 
+
+
+Quick Installation Instructions
+===============================
+The following steps are needed to configure, bulid and install DataSpaces.
+
+1. Configure
+# Examples for the configure command on supported architectures and networks. Please customize it according to your specific system configurations and environments.
+# Gemini for Cray XE and XK series
+$ ./configure CC=cc FC=ftn
+
+# Infiniband cluster
+$ ./configure CC=mpicc FC=mpif90
+
+# DCMF for IBM BlueGene/P
+$ ./configure CC=mpixlc FC=mpixlf90 CFLAGS="-g -O0 -qarch=450 -qtune=450" --with-dcmf="/bgsys/drivers/ppcfloor"
+
+# Portals for Cray XT series
+$ ./configure CC=cc FC=ftn
+
+2. Some of the useful configure options
+ --preifx=/install/path - Set the directory where DataSpaces will be installed.
+
+ --enable-dimes - Build DataSpaces with DIstributed MEmory Space (DIMES) support.
+   DIMES feature uses local RDMA memory buffers across application processes to build
+   a virtual shared data space in-situ, which can be queried and directly accessed by 
+   other applications in a data coupling workflow. Currently this feature is only 
+   supported on Cray Gemini and IBM DCMF networks. 
+
+3. Build & Install 
+# Under project top dir
+$ make
+$ make install
