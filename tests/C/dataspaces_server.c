@@ -113,7 +113,7 @@ int main(int argc, char **argv)
 #ifdef DS_HAVE_DIMES
 	common_run_server(num_sp, num_cp, USE_DIMES);
 #else
-	common_run_server(num_sp, num_cp, USE_DSPACES);
+	common_run_server(num_sp, num_cp, USE_DSPACES, &gcomm);
 #endif
 
 	MPI_Barrier(gcomm);

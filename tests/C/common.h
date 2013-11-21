@@ -35,6 +35,7 @@
 #include "timer.h"
 #include "dataspaces.h"
 #include "ds_gspace.h"
+#include "mpi.h"
 #ifdef DS_HAVE_DIMES
 #include "dimes_interface.h"
 #include "dimes_server.h"
@@ -50,7 +51,7 @@ int common_init(int num_peers, int appid);
 void common_set_storage_type(int fst, enum transport_type type); 
 int common_rank(); 
 int common_peers();
-void common_barrier();
+//void common_barrier();
 void common_finalize(); 
 void common_lock_on_read(const char *lock_name, void *gcomm);
 void common_unlock_on_read(const char *lock_name, void *gcomm);
@@ -67,7 +68,7 @@ int common_get (const char *var_name,
         int xu, int yu, int zu,
         void *data, enum transport_type type); 
 int common_put_sync(enum transport_type type); 
-int common_run_server(int num_sp, int num_cp, enum transport_type type);
+int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gcomm);
 
 void check_data(const char *var_name, double *buf, int num_elem, int rank, int ts);
 
