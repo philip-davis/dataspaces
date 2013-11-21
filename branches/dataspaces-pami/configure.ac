@@ -17,6 +17,7 @@ AC_INFINIBAND
 AC_DCMF
 AC_UGNI
 AC_GNI_PTAG
+AC_PAMI
 
 dnl Generate flags for dataspaces lib creation which depends on the particular network transport layer. DSPACESLIB_* is used for compiling the lib, and linking testing codes.
 DSPACESLIB_CFLAGS=
@@ -36,6 +37,10 @@ if test "x$enable_dimes" == "xyes"; then
             DSPACESLIB_CPPFLAGS+=" -DDS_HAVE_DIMES"
             echo "DIMES enabled!"
         elif test -z "${HAVE_DCMF_TRUE}"; then
+            DSPACESLIB_CFLAGS+=" -DDS_HAVE_DIMES"
+            DSPACESLIB_CPPFLAGS+=" -DDS_HAVE_DIMES"
+            echo "DIMES enabled!"
+        elif test -z "${HAVE_PAMI_TRUE}"; then
             DSPACESLIB_CFLAGS+=" -DDS_HAVE_DIMES"
             DSPACESLIB_CPPFLAGS+=" -DDS_HAVE_DIMES"
             echo "DIMES enabled!"
@@ -109,6 +114,13 @@ if test -z "${HAVE_DCMF_TRUE}"; then
   DSPACESLIB_LDADD+=" ${DCMF_LIBS}"
 fi
 
+if test -z "${HAVE_PAMI_TRUE}"; then
+  DSPACESLIB_CPPFLAGS+=" ${PAMI_CPPFLAGS} -DHAVE_PAMI"
+  DSPACESLIB_CFLAGS+=" ${PAMI_CFLAGS} -DHAVE_PAMI"
+  DSPACESLIB_LDFLAGS+=" ${PAMI_LDFLAGS}"
+  DSPACESLIB_LDADD+=" ${PAMI_LIBS}"
+fi
+
 AC_SUBST(DSPACESLIB_CFLAGS)
 AC_SUBST(DSPACESLIB_CPPFLAGS)
 AC_SUBST(DSPACESLIB_LDFLAGS)
@@ -176,4 +188,14 @@ if test -z "${HAVE_DCMF_TRUE}"; then
   echo "	- DCMF_LIBS = $DCMF_LIBS";
 else
   echo "No IBM DCMF."
+fi
+
+if test -z "${HAVE_PAMI_TRUE}"; then
+  echo "IBM PAMI enabled.";
+  echo "	- PAMI_CFLAGS = $PAMI_CFLAGS";
+  echo "	- PAMI_CPPFLAGS = $PAMI_CPPFLAGS";
+  echo "	- PAMI_LDFLAGS = $PAMI_LDFLAGS";
+  echo "	- PAMI_LIBS = $PAMI_LIBS";
+else
+  echo "No IBM PAMI."
 fi

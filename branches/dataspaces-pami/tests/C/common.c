@@ -158,9 +158,10 @@ int common_peers() {
         return dspaces_peers();
 }
 
+/*
 void common_barrier() {
         dspaces_barrier();
-}
+}*/
 
 void common_finalize() {
         dspaces_finalize();
@@ -237,7 +238,7 @@ int common_put_sync(enum transport_type type) {
         }
 }
 
-int common_run_server(int num_sp, int num_cp, enum transport_type type) {
+int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gcomm) {
 	int err;
 	if (type == USE_DSPACES) {
 		struct ds_gspace *dsg;
@@ -251,7 +252,8 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type) {
 				break;
 		}
 
-		dsg_barrier(dsg);
+		//dsg_barrier(dsg);
+		MPI_Barrier(*(MPI_Comm*)gcomm);
 		dsg_free(dsg); 
 
 		if (err == 0)
@@ -270,7 +272,7 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type) {
 				break;
 		}
 
-		dimes_server_barrier(dsg);
+		//dimes_server_barrier(dsg);
 		dimes_server_free(dsg); 
 
 		if (err == 0)
