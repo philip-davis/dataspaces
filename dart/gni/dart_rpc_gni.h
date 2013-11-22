@@ -157,12 +157,13 @@ struct rfshdr {
 };
 
 // Header for the locking service.
+#define LOCK_NAME_SIZE 64
 struct lockhdr {
 	int		type;
 	int		rc;
 	int		id;
 	int		lock_num;
-	char		name[16];	// lock name
+    char	name[LOCK_NAME_SIZE];	// lock name
 };
 
 // Header for space info.
@@ -399,28 +400,25 @@ enum cmd_type {
 	ss_code_reply,
 #ifdef DS_HAVE_DIMES
 	dimes_ss_info_msg,
-	dimes_locate_data_test_msg,
-	dimes_put_test_msg,
 	dimes_locate_data_msg,
 	dimes_put_msg,
-	dimes_obj_get_ack_v1_msg,
-	dimes_obj_get_ack_v2_msg,
+	dimes_get_ack_msg,
 #endif
 #ifdef DS_HAVE_HYBRID_STAGING
-	// TODO: rename msgs types for hybrid staging
-	rr_data_desc,
-	rr_req_bk,
-	rr_req_bk_reply,
-	rr_req_allocation,
-	rr_req_allocation_reply,
-	intran_req_job,
-	insitu_data_desc,
-	insitu_unreg,
-	staging_exit,
+    // TODO: rename msgs types for hybrid staging
+    rr_data_desc,
+    rr_req_bk,
+    rr_req_bk_reply,
+    rr_req_allocation,
+    rr_req_allocation_reply,
+    intran_req_job,
+    insitu_data_desc,
+    insitu_unreg,
+    staging_exit,
     hs_reg_resource_msg,
-	hs_update_var_msg,
-	hs_req_task_msg,
-	hs_exec_task_msg,
+    hs_update_var_msg,
+    hs_req_task_msg,
+    hs_exec_task_msg,
     hs_task_done_msg,
 #endif
 	//Added for CCGrid Demo

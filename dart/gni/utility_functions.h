@@ -96,7 +96,7 @@ allgather(void *in, void *out, int len)
     rc = PMI_Allgather(in, tmp_buf, len);
     assert(rc == PMI_SUCCESS);
 
-    out_ptr = out;
+    out_ptr = (char*)out;
 
     for (i = 0; i < job_size; i++) {
         memcpy(&out_ptr[len * ivec_ptr[i]], &tmp_buf[i * len], len);

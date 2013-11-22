@@ -50,6 +50,12 @@ static inline void list_add_tail(struct list_head *np, struct list_head *head)
 	__list_add(np, head->prev, head);
 }
 
+/* Add element 'new' before element 'next'. */
+static inline void list_add_before_pos(struct list_head *np, struct list_head *next)
+{
+    __list_add(np, next->prev, next);
+}
+
 /* Unlink element 'old' from the list it belongs. */
 static inline void list_del(struct list_head *old)
 {
