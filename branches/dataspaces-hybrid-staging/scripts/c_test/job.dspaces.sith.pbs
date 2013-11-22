@@ -12,8 +12,8 @@ rm -f conf srv.lck
 mpirun -n 4 ./dataspaces_server -s 4 -c 48 &
 sleep 6
 
-mpirun -n 16 ./test_writer 16 4 4 1 32 32 128 10 &
+mpirun -n 16 ./test_writer DATASPACES 16 4 4 1 32 32 128 10 &
 
-mpirun -n 32 ./test_reader 32 4 4 2 32 32 64 10 &
+mpirun -n 32 ./test_reader DATASPACES 32 4 4 2 32 32 64 10 &
 
 wait

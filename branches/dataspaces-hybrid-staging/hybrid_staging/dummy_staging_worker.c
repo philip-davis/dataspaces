@@ -5,7 +5,9 @@
 #include "common.h"
 #include "hybrid_staging_api.h"
 #include "mpi.h"
+
 #include "hpgv.h"
+#include "carraysearch.h"
 
 struct viz_task_info {
     int is_viz_init;
@@ -386,6 +388,7 @@ float my_data_quantize(float value, int varname)
     return v;
 }
 
+// TODO: this task routine is highly hard-coded...
 int task_viz_render(struct task_descriptor *t, struct parallel_communicator *comm)
 {
     int err;
@@ -466,6 +469,60 @@ int task_viz_render(struct task_descriptor *t, struct parallel_communicator *com
     return 0; 
 }
 
+// TODO: use read_input_data() to fetch input data buffers
+int task_fb_indexing(struct task_descriptor *t, struct parallel_communicator *comm)
+{
+    int err;
+    int npx, npy, npz;
+    double tm_st, tm_end;
+
+    MPI_Comm_rank(comm->comm, &t->rank);
+
+    // read input data
+    MPI_Barrier(comm->comm);
+    tm_st = MPI_Wtime();
+
+    double *data = NULL;
+    int xl, yl, zl, xu, yu, zu;
+    size_t elem_size = sizeof(double);
+    struct var_descriptor *var_desc;
+
+    var_desc = &(t->input_vars[0]);
+    set_data_decomposition(t, var_desc);
+    data = allocate_data(g.spx*g.spy*g.spz);
+    generate_bbox(&g, &xl, &yl, &zl, &xu, &yu, &zu);
+    err = hstaging_get_var(var_desc->var_name, t->step, elem_size,
+            xl, yl, zl, xu, yu, zu, data, NULL);
+    if (err < 0) {
+        uloga("%s(): failed to get var\n", __func__);
+        return -1;
+    }
+
+    MPI_Barrier(comm->comm);
+    tm_end = MPI_Wtime();
+    if (t->rank == 0) {
+        uloga("%s(): fetch data time %lf\n", __func__, tm_end-tm_st);
+    }
+
+    void* cas;
+    size_t num_elem = g.spx*g.spy*g.spz;
+    const char *indopt = "<binning start=0 end=1000 nbins=100 scale=simple/>";
+    char *colname = "var";
+    int size_index = 0;
+    tm_st = MPI_Wtime();
+    cas = fb_build_index_double(data, num_elem, indopt, (void*)colname, &size_index); 
+    tm_end = MPI_Wtime();
+    if (cas == 0) {
+        uloga("%s(): fb_build_index_double failed\n", __func__);
+    }
+   
+    uloga("%s(): ts %d rank %d size_index %d build_index_time %lf\n", __func__,
+        t->step, t->rank, size_index, tm_end-tm_st);
+
+    free(data);
+    return 0;
+}
+
 int dummy_s3d_staging_parallel_job(MPI_Comm comm, enum hstaging_location_type loc_type)
 {
     int err;
@@ -495,6 +552,7 @@ int dummy_s3d_staging_parallel_job(MPI_Comm comm, enum hstaging_location_type lo
 	add_task_function(5, task5);	
 	add_task_function(6, task6);	
     add_task_function(7, task_viz_render);
+    add_task_function(8, task_fb_indexing);
 
     hstaging_register_bucket_resource(loctype_, mpi_nproc, mpi_rank);
     MPI_Barrier(comm);

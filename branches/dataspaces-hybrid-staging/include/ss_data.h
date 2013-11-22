@@ -68,7 +68,7 @@ struct obj_data {
 
         struct obj_descriptor   obj_desc;
 
-	void			*_data;		/* Unaligned pointer */
+        void			*_data;		/* Unaligned pointer */
         void                    *data;		/* Aligned pointer */
 
         /* Reference to the parent object; used only for sub-objects. */
