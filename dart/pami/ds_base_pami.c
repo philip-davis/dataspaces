@@ -348,7 +348,7 @@ err_out:
 */
 static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-        //printf("get into dsrpc_cn_unregister\n");
+        uloga("get into dsrpc_cn_unregister\n");
         struct dart_server *ds = ds_ref_from_rpc(rpc_s);
         struct hdr_register *hreg = (struct hdr_register *) cmd->pad;
         struct msg_buf *msg;
@@ -360,7 +360,7 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 	if(ds->f_stop != 1){
 		num_unreg += hreg->num_cp;
-		//printf("rank%d num_unreg=%d\n", ds->rpc_s->ptlmap.id, num_unreg);
+		uloga("rank%d num_unreg=%d\n", ds->rpc_s->ptlmap.id, num_unreg);
 		if(num_unreg == ds->num_cp){
 			ds->f_stop = 1;
 		}
@@ -388,7 +388,7 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 			ds->num_charge--;
 		}
-		//printf("rank%d, num_charge=%d\n", ds->self->ptlmap.id, ds->num_charge);
+		uloga("rank%d, num_charge=%d\n", ds->self->ptlmap.id, ds->num_charge);
 		//only send to other server at the time received last msg from client
 		if(ds->num_charge == 0 && cmd->id >= ds->num_sp){
 			
