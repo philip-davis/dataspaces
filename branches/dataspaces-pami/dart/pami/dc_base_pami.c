@@ -336,7 +336,10 @@ static int dc_unregister(struct dart_client *dc)
 
 void dc_free(struct dart_client *dc)
 {
-	//printf("get into dc_free\n");
+#ifdef DEBUG
+        uloga("'%s()': #%u num_posted = %d.\n", __func__,dc->self->ptlmap.rank_pami, dc->num_posted);
+#endif
+
 	while(dc->num_posted)
 		rpc_process_event(dc->rpc_s);
 	dc_unregister(dc);
