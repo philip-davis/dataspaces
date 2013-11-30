@@ -20,11 +20,17 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 	printf("all the data has been acquited by the server\n");
 }
 
-static int cn_read_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+static int cn_read_transfer_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-	rpc_s->flag--;
-	printf("flag = %d\n", rpc_s->flag);
+        struct dart_server *ds = ds_ref_from_rpc(rpc_s);
+
+        if(msg && msg->msg_data){
+                free(msg->msg_data);
+                free(msg);
+        }
+
 	printf("all the data has been send to the remote node\n");
+        return 0;
 }
 
 static struct app_info *app_alloc()
@@ -822,6 +828,9 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref)
 	rpc_add_service(sp_reg_reply, dsrpc_sp_ack_register);
 	rpc_add_service(sp_announce_cp, dsrpc_announce_cp);
 
+	//for test
+	rpc_add_service(cn_read, dsrpc_cn_read);
+
 	err = ds_boot(ds);
 	if(err < 0)
 		goto err_free_dsrv;
@@ -878,30 +887,35 @@ int dsrpc_cn_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 int dsrpc_cn_read(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	//printf("get into dsrpc_cn_read\n");
+	uloga("get into dsrpc_cn_read\n");
+        struct dart_server *ds = ds_ref_from_rpc(rpc_s);
         struct node_id *peer;
-	peer = calloc(1, sizeof(struct node_id));
-        //memset(&peer, 0, sizeof(struct node_id));
-        peer->ptlmap.rank_pami = cmd->id;	
-	INIT_LIST_HEAD(&peer->req_list);
+        struct msg_buf *msg;
+        int err;
 
-	struct msg_buf *msg;
-	msg = msg_buf_alloc(rpc_s, peer, 0);
-	msg->size = cmd->mem_size;
-	msg->msg_data = calloc(1, msg->size);
-	
-	msg->cb = cn_read_completion;
+        peer = ds_get_peer(ds, cmd->id);
 
-	size_t i;
-	//int len = 'Z' - 'A' + 1;
-	//for(i = 0; i < msg->size/sizeof(char); i++){
-	//	*((char*)msg->msg_data + i) = 'A' + (i % len);
-	//}
-	size_t num_elem = msg->size/sizeof(double);
-	for(i = 0; i < num_elem; i++){
-		*((double*)msg->msg_data + i) = 1 + peer->ptlmap.rank_pami/10;
-	}	
-	//printf("send num_elem = %llu\n", num_elem);
+        msg = msg_buf_alloc(rpc_s, peer, 0);
+        //if(!msg)
+        //        goto err_out;
+        msg->size = cmd->mem_size;
+        msg->msg_data = calloc(1, msg->size);
+        /*if(!msg->msg_data){
+                goto err_out_free;
+        }*/
+        msg->cb = cn_read_transfer_completion;
+
+	int i;
+        int len = 'Z' - 'A' + 1;
+        for(i=0; i < msg->size; i++){
+                *((char*)msg->msg_data + i) = 'A' + (i%len);
+        }
+
+#ifdef DEBUG
+        uloga("%s(): #%u(dart_id=%d), get cn_read(msg->size=%d) from compute node #%u(dart_id=%d)\n",
+                __func__,rpc_s->ptlmap.rank_pami,msg->size,rpc_s->ptlmap.id,peer->ptlmap.rank_pami,peer->ptlmap.id);
+#endif
+
 	//rpc_mem_info_cache(peer, msg, cmd);	
 	//rpc_send_direct(rpc_s, &peer, msg);
 	peer->cached_remote_memregion = &cmd->mem_region;
