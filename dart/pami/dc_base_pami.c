@@ -28,11 +28,64 @@ static int check_data(struct rpc_server *rpc_s, struct msg_buf *msg)
 static int data_read_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
 	printf("get into data_read_completion\n");
+        struct dart_client *dc = dc_ref_from_rpc(rpc_s);
+        dc->num_posted--;
+        //dc->read_complete = 1;
+
+        if(msg && msg->msg_data){
+                int offset = msg->size - 1;
+                *((char*)(msg->msg_data)+offset ) = 0;
+                uloga("%s(): #%u, read data '%s'\n", __func__, rpc_s->ptlmap.rank_pami, msg->msg_data);
+
+                free(msg->msg_data);
+                free(msg);
+        }
+
 	check_data(rpc_s, msg);
-	rpc_s->flag--;
+        return 0;
 }
 
-int dc_read_test(struct rpc_server *rpc_s, size_t size, int rank)
+int dc_read_test(struct dart_client *dc, size_t size)
+{
+	uloga("get into dc_read_test\n");
+        struct node_id *peer = dc_get_peer(dc, 0);
+        struct msg_buf  *msg;
+        int err;
+
+	printf("send msg to rank%d\n", peer->ptlmap.rank_pami);
+        msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+        if(!msg)
+                goto err_out;
+
+        msg->msg_rpc->cmd = cn_read;
+        msg->msg_rpc->id = dc->self->ptlmap.id;
+        msg->size = size;
+        msg->msg_data = calloc(1, msg->size);
+        if(!msg->msg_data)
+                goto err_out_free;
+
+        msg->cb = data_read_completion;
+
+        err = rpc_receive(dc->rpc_s, peer, msg);
+        if(err < 0){
+                if(msg->msg_data)
+                        free(msg->msg_data);
+                goto err_out_free;
+        }
+        dc->num_posted++;
+//        dc->read_complete = 0;
+
+        return 0;
+err_out_free:
+        if(msg)
+                free(msg);
+err_out:
+        uloga("%s(): #%u, failed\n", __func__, dc->self->ptlmap.rank_pami);
+        return -1;
+
+}
+
+int dc_read_test_old(struct rpc_server *rpc_s, size_t size, int rank)
 {
 	//printf("size=%llu\n", size);
 	//size = size * 1024 * 1024;
@@ -58,6 +111,7 @@ int dc_read_test(struct rpc_server *rpc_s, size_t size, int rank)
 	msg->cb = data_read_completion;
 
 	err = rpc_receive(rpc_s, &peer, msg);
+	//dc->num_posted++;
 
 	return 0;
 }
