@@ -675,10 +675,10 @@ static int locate_data_completion_client(struct rpc_server *rpc_s,
             if (err < 0)
                 goto err_out_free;
 		} else {
-#ifdef DEBUG
-			uloga("%s(): duplicate obj descriptor detected.\n",
-				__func__);
-#endif
+//#ifdef DEBUG
+//			uloga("%s(): duplicate obj descriptor detected.\n",
+//				__func__);
+//#endif
 			qte->num_fetch--;
 		}
 	}
