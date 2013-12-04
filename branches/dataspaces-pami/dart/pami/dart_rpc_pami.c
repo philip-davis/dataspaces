@@ -145,7 +145,6 @@ static int rpc_service_put_finish(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	struct rpc_request *rr = NULL;
 	int flag = 0;
 	
-	uloga("--------5-----------\n");
 	list_for_each_entry(rr, &rpc_s->out_rpc_list, struct rpc_request, req_entry){
 		struct rpc_cmd *msg_rpc = rr->msg->msg_rpc;
 		if(msg_rpc && test_equal_memregion(&msg_rpc->mem_region, &cmd->mem_region)){
@@ -154,7 +153,6 @@ static int rpc_service_put_finish(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		}
 	}
 
-	uloga("--------6-----------\n");
 	if(flag && rr){
 		list_del(&rr->req_entry);
 
@@ -215,7 +213,7 @@ static void rpc_cb_put_completion(void *ctxt, void *clientdata, pami_result_t er
 	struct node_id *peer = ptr->peer;
 	pami_memregion_t *remote_memregion = ptr->remote_memregion;
 	pami_memregion_t *local_memregion = ptr->local_memregion;
-	
+
 	struct msg_buf *msg = msg_buf_alloc(rpc_s, peer, 1);
 	if(msg){
 		msg->msg_rpc->cmd = rpc_put_finish;
@@ -314,6 +312,8 @@ static void rpc_cb_recv_done(pami_context_t context, void *cookie, pami_result_t
 
 	//list
 	list_add_tail(&rr->req_entry, &rpc_s->rpc_list);
+	if(ptr)
+		free(ptr);
 }
 
 
@@ -472,11 +472,13 @@ static int rpc_prepare_buffers(struct rpc_server *rpc_s, const struct node_id *p
 {
 	struct msg_buf *msg = rr->msg;
 	size_t bytes_out;
-	int err;
+	pami_result_t err;
 
 	err = PAMI_Memregion_create(rpc_s->contexts[0], msg->msg_data, msg->size, &bytes_out, &(msg->msg_rpc->mem_region));
 	msg->msg_rpc->mem_size = msg->size;
 
+	if (err != PAMI_SUCCESS)
+		uloga("%s(): PAMI_Memregion_create failed\n", __func__);
 	//printf("registered mem size = %zu\n", msg->size);
 	
 	return 0;	
@@ -498,6 +500,7 @@ static void rpc_decode(struct rpc_server* rpc_s, struct rpc_request *rr)
 			return;
 		}
 	}
+        uloga("%s(): Network command unknown %d.\n", __func__,cmd->cmd);
 }
 
 struct msg_buf* msg_buf_alloc(struct rpc_server *rpc_s, 
@@ -614,6 +617,7 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 			err = rpc_prepare_buffers(rpc_s, peer, rr, rr->iodir);
 		}
 
+		rr->msg->msg_rpc->id = rpc_s->ptlmap.id;
 		list_del(&rr->req_entry);	
 
 		err = rpc_post_request(rpc_s, peer, rr, has_data);
@@ -865,6 +869,10 @@ int rpc_process_event(struct rpc_server *rpc_s)
 		rr = list_entry(rpc_s->rpc_list.next, struct rpc_request, req_entry);
 		list_del(&rr->req_entry);
 		rpc_decode(rpc_s, rr);
+		if(rr){
+			(*rr->msg->cb)(rpc_s, rr->msg);
+			free(rr);
+		}
 	}
 	return 0;
 }
@@ -877,6 +885,18 @@ void rpc_server_free(struct rpc_server *rpc_s)
 		rpc_process_event(rpc_s);
 	//MPI_Barrier(MPI_COMM_WORLD);
 
+	struct rpc_request *rr = NULL, *t;
+	list_for_each_entry_safe(rr, t, &rpc_s->out_rpc_list, struct rpc_request, req_entry){
+		if(rr){
+			list_del(&rr->req_entry);
+			PAMI_Memregion_destroy(rpc_s->contexts[0], &(rr->msg->msg_rpc->mem_region));
+                        (*rr->msg->cb)(rpc_s,rr->msg);
+                        if(rr)
+                                free(rr);
+                        rpc_server_dec_reply(rpc_s);
+		}
+	}
+
 	pami_result_t result = PAMI_ERROR;
 
 	result = PAMI_Context_destroyv(rpc_s->contexts, rpc_s->num_contexts);
@@ -888,6 +908,8 @@ void rpc_server_free(struct rpc_server *rpc_s)
 
 	PAMI_Client_destroy(&rpc_s->client);
 	
+	if(rpc_s)
+		free(rpc_s);
 	//printf("rank%d finished test. \n", rpc_s->ptlmap.rank_pami);
 }
 
