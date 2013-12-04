@@ -29,7 +29,7 @@ static int cn_read_transfer_completion(struct rpc_server *rpc_s, struct msg_buf 
                 free(msg);
         }
 
-	printf("all the data has been send to the remote node\n");
+	uloga("all the data has been send to the remote node\n");
         return 0;
 }
 
@@ -203,7 +203,7 @@ err_out:
 
 static int ds_register_cp(struct dart_server *ds, struct app_info *app)
 {
-	//printf("get into ds_register_cp\n");
+	uloga("get into ds_register_cp\n");
         struct hdr_register *hreg;
         struct msg_buf *msg;
         struct node_id *peer;
@@ -282,7 +282,7 @@ err_out:
  */
 static int dsrpc_cn_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	//printf("get into dsrpc_cn_register\n");
+	uloga("get into dsrpc_cn_register\n");
         struct dart_server *ds = ds_ref_from_rpc(rpc_s);
         struct node_id *cn_peer;
         struct hdr_register *hreg = (struct hdr_register *) cmd->pad;
@@ -906,28 +906,35 @@ int dsrpc_cn_read(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         msg->cb = cn_read_transfer_completion;
 
 	int i;
-        int len = 'Z' - 'A' + 1;
-        for(i=0; i < msg->size; i++){
-                *((char*)msg->msg_data + i) = 'A' + (i%len);
+        //int len = 'Z' - 'A' + 1;
+        int num_elem = msg->size/sizeof(double);
+        for(i=0; i < num_elem; i++){
+                //*((char*)msg->msg_data + i) = 'A' + (i%len);
+                *((double*)msg->msg_data + i) = 1;
+		uloga("%f\n", *((double*)msg->msg_data+i));
         }
 
 #ifdef DEBUG
         uloga("%s(): #%u(dart_id=%d), get cn_read(msg->size=%d) from compute node #%u(dart_id=%d)\n",
-                __func__,rpc_s->ptlmap.rank_pami,msg->size,rpc_s->ptlmap.id,peer->ptlmap.rank_pami,peer->ptlmap.id);
+                __func__,rpc_s->ptlmap.rank_pami,rpc_s->ptlmap.id,msg->size,peer->ptlmap.rank_pami,peer->ptlmap.id);
 #endif
 
-	//rpc_mem_info_cache(peer, msg, cmd);	
+	uloga("-------0----------\n");	
+	rpc_mem_info_cache(peer, msg, cmd);
+
+	uloga("-------1----------\n");	
 	//rpc_send_direct(rpc_s, &peer, msg);
-	peer->cached_remote_memregion = &cmd->mem_region;
+	//peer->cached_remote_memregion = &cmd->mem_region;
 	//rpc_send_direct(rpc_s, peer, msg, &cmd->mem_region);
 	rpc_send_direct(rpc_s, peer, msg);
+	uloga("-------2----------\n");	
 
 	return 0;
 }
 
 void ds_free(struct dart_server *ds)
 {
-	//printf("get into ds_free\n");
+	uloga("get into ds_free\n");
 	struct app_info *app, *t;
 	rpc_server_free(ds->rpc_s);
 

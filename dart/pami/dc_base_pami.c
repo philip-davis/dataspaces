@@ -16,10 +16,12 @@ static int check_data(struct rpc_server *rpc_s, struct msg_buf *msg)
 	//size_t num_elem = msg->size/sizeof(char);
 	size_t num_elem = msg->size/sizeof(double);
 	printf("num_elem = %llu\n", num_elem);
+
 	for(i = 0; i < num_elem; i++){
-		//printf("%c\n", *((char*)msg->msg_data + i));
+		printf("---3---------\n");
+		printf("%f\n", *((double*)msg->msg_data + i));
 		//if(*((char*)msg->msg_data + i) != 'A' + (i % len))
-		if(*((double*)msg->msg_data + i) != 1 + rpc_s->ptlmap.rank_pami/10)
+		if(*((double*)msg->msg_data + i) != 1)//rpc_s->ptlmap.rank_pami/10)
 			count++;
 	}
 	printf("error=%d\n", count);
@@ -33,15 +35,15 @@ static int data_read_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
         //dc->read_complete = 1;
 
         if(msg && msg->msg_data){
-                int offset = msg->size - 1;
-                *((char*)(msg->msg_data)+offset ) = 0;
+                //int offset = msg->size - 1;
+                //*((char*)(msg->msg_data)+offset ) = 0;
                 uloga("%s(): #%u, read data '%s'\n", __func__, rpc_s->ptlmap.rank_pami, msg->msg_data);
 
+		check_data(rpc_s, msg);
                 free(msg->msg_data);
                 free(msg);
         }
 
-	check_data(rpc_s, msg);
         return 0;
 }
 
@@ -52,7 +54,7 @@ int dc_read_test(struct dart_client *dc, size_t size)
         struct msg_buf  *msg;
         int err;
 
-	printf("send msg to rank%d\n", peer->ptlmap.rank_pami);
+	printf("send msg to rank%d, msg->size=%d\n", peer->ptlmap.rank_pami, size);
         msg = msg_buf_alloc(dc->rpc_s, peer, 1);
         if(!msg)
                 goto err_out;

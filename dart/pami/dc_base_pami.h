@@ -53,7 +53,9 @@ void dc_free(struct dart_client*);
 int dc_process(struct dart_client*);
 
 
-int dc_read_test(struct rpc_server *rpc_s, size_t size, int target);
+//int dc_read_test(struct rpc_server *rpc_s, size_t size, int target);
+int dc_read_test(struct dart_client *dc, size_t size);
+
 
 #ifdef __cplusplus
 }
