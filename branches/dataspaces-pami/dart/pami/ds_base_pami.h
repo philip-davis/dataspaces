@@ -81,4 +81,4 @@ static inline int ds_stop(struct dart_server *ds)
 
 //int dsrpc_sp_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd);
 //int dsrpc_cn_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd);
-//int dsrpc_cn_read(struct rpc_server *rpc_s, struct rpc_cmd *cmd);
+int dsrpc_cn_read(struct rpc_server *rpc_s, struct rpc_cmd *cmd);

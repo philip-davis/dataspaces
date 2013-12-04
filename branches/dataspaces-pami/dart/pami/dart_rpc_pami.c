@@ -82,13 +82,13 @@ static void cb_done (void *ctxt, void * clientdata, pami_result_t err)
 
 static void rpc_cb_req_completion(void *ctxt, void *clientdata, pami_result_t err)
 {
-//	printf("get into rpc_cb_req_completion");
+	uloga("get into rpc_cb_req_completion\n");
 	struct client_data_rpc_send *ptr = (struct client_data_rpc_send *)clientdata;
 	if(!ptr)
 		return;
 
 	struct rpc_server *rpc_s = ptr->rpc_s;
-/*	struct rpc_request *rr = ptr->rr;
+	struct rpc_request *rr = ptr->rr;
 	struct node_id *peer = ptr->peer;
 
 	if(!rpc_s || !rr || !peer)
@@ -105,20 +105,26 @@ static void rpc_cb_req_completion(void *ctxt, void *clientdata, pami_result_t er
 	//TODO free memory resource? ptr->pami_req
 	if(ptr)
 		free(ptr);
-*/		
-	rpc_server_dec_reply(rpc_s);
+		
+	//rpc_server_dec_reply(rpc_s);
 }
 
 static void rpc_cb_req_hasdata_completion(void *ctxt, void *clientdata, pami_result_t err)
 {
-	printf("get into rpc_cb_req_hasdata_completion\n");
+	uloga("get into rpc_cb_req_hasdata_completion\n");
 	struct client_data_rpc_send *ptr = (struct client_data_rpc_send *)clientdata;
 
 	struct rpc_server *rpc_s = ptr->rpc_s;
 	struct rpc_request *rr = ptr->rr;
 	struct node_id *peer = ptr->peer;
 
+	if(!rpc_s ||!rr ||!peer)
+		return;
+
 	list_add_tail(&rr->req_entry, &rpc_s->out_rpc_list);
+
+	if(ptr)
+		free(ptr);
 }
 
 static int test_equal_memregion(pami_memregion_t *left, pami_memregion_t *right)
@@ -135,10 +141,11 @@ static int test_equal_memregion(pami_memregion_t *left, pami_memregion_t *right)
  */
 static int rpc_service_put_finish(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-//	printf("get into rpc_service_put_finish\n");
+	uloga("get into rpc_service_put_finish\n");
 	struct rpc_request *rr = NULL;
 	int flag = 0;
 	
+	uloga("--------5-----------\n");
 	list_for_each_entry(rr, &rpc_s->out_rpc_list, struct rpc_request, req_entry){
 		struct rpc_cmd *msg_rpc = rr->msg->msg_rpc;
 		if(msg_rpc && test_equal_memregion(&msg_rpc->mem_region, &cmd->mem_region)){
@@ -146,17 +153,23 @@ static int rpc_service_put_finish(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 			break;
 		}
 	}
+
+	uloga("--------6-----------\n");
 	if(flag && rr){
 		list_del(&rr->req_entry);
 
+		pami_result_t err;
+		err = PAMI_Memregion_destroy(rpc_s->contexts[0], &(rr->msg->msg_rpc->mem_region));
+		if(err != PAMI_SUCCESS)
+			uloga("%s(): PAMI_Memregion_destroy failed\n", __func__);
 		(*rr->msg->cb)(rpc_s, rr->msg);
 		if(rr)
 			free(rr);
 
-		//rpc_server_dec_reply(rpc_s);
-	}
 		rpc_server_dec_reply(rpc_s);
-	
+	}
+		//rpc_server_dec_reply(rpc_s);
+	uloga("%s() is done\n", __func__);
 	return 0;
 }
 	
@@ -180,6 +193,7 @@ static int rpc_service_get_finish(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	if(flag && rr){
 		list_del(&rr->req_entry);
 
+		PAMI_Memregion_destroy(rpc_s->contexts[0], &(rr->msg->msg_rpc->mem_region));
 		(*rr->msg->cb)(rpc_s, rr->msg);
 		if(rr)
 			free(rr);
@@ -193,7 +207,7 @@ static int rpc_service_get_finish(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 static void rpc_cb_put_completion(void *ctxt, void *clientdata, pami_result_t err)
 {
-	//printf("get into rpc_cb_put_completion\n");
+	uloga("get into rpc_cb_put_completion\n");
 	struct client_data_rpc_put *ptr = (struct client_data_rpc_put *)clientdata;
 
 	struct rpc_server *rpc_s = ptr->rpc_s;
@@ -207,16 +221,32 @@ static void rpc_cb_put_completion(void *ctxt, void *clientdata, pami_result_t er
 		msg->msg_rpc->cmd = rpc_put_finish;
 		memcpy(&msg->msg_rpc->mem_region, remote_memregion, sizeof(pami_memregion_t));
 		err = rpc_send(rpc_s, peer, msg);
+		if(err < 0){
+			free(msg);
+			uloga("%s(): #%u, rpc_send() of RPC msg "
+			"rpc_get_finish finish failed\n", __func__, rpc_s->ptlmap.rank_pami);
+		}
 	}
 
-	//TODO: destroy PAMI_Memregion_destroy
+	//destroy PAMI_Memregion_destroy
+	err = PAMI_Memregion_destroy(rpc_s->contexts[0], local_memregion);
+	if(err != PAMI_SUCCESS){
+		uloga("PAMI_Memregion_destroy failed\n");
+	}
 	(*rr->msg->cb)(rpc_s, rr->msg);
 	if(rr)
 		free(rr);
 	
 	rpc_server_dec_reply(rpc_s);
 
-	//TODO: free memory resource
+	//free memory resource
+	if(remote_memregion)
+		free(remote_memregion);
+	if(local_memregion)
+		free(local_memregion);
+	if(ptr)
+		free(ptr);
+	uloga("%s() is done\n", __func__);
 }
 
 static void rpc_cb_get_completion(void *ctxt, void *clientdata, pami_result_t err)
@@ -232,26 +262,34 @@ static void rpc_cb_get_completion(void *ctxt, void *clientdata, pami_result_t er
 
 	//=========send notification about data receive complete============
 	struct msg_buf *msg = msg_buf_alloc(rpc_s, peer, 1);
-	msg->msg_rpc->cmd = rpc_get_finish;
-	memcpy(&msg->msg_rpc->mem_region, remote_memregion, sizeof(pami_memregion_t));
-	err = rpc_send(rpc_s, peer, msg);
-	
+	if(msg){
+		msg->msg_rpc->cmd = rpc_get_finish;
+		memcpy(&msg->msg_rpc->mem_region, remote_memregion, sizeof(pami_memregion_t));
+		err = rpc_send(rpc_s, peer, msg);
+	}
+
+        PAMI_Memregion_destroy(rpc_s->contexts[0], local_memregion);	
 	(*rr->msg->cb)(rpc_s, rr->msg);
 	if(rr)
 		free(rr);
 	
 	rpc_server_dec_reply(rpc_s);
 
-	//TODO: free memory resource
+        if(remote_memregion)
+               free(remote_memregion);
+        if(local_memregion)
+               free(local_memregion);
+        if(ptr)
+               free(ptr);
 
 	//check received data
-	int i, count = 0;
+	/*int i, count = 0;
 	int size = rr->size/sizeof(int);
-//	printf("data_size = %d\n", size);
+	printf("data_size = %d\n", size);
 	for(i = 0; i < size; i++){
 		if(*((int*)rr->data + i) != i)
 			count++;
-	}	
+	}*/	
 }
 
 /*for test
@@ -471,7 +509,8 @@ struct msg_buf* msg_buf_alloc(struct rpc_server *rpc_s,
 	size = sizeof(struct msg_buf) + sizeof(struct rpc_cmd)*num_rpcs + 7;
 	msg = calloc(1, size);
 	msg->peer = peer;
-
+	msg->cb = default_completion_callback;
+	
 	if(num_rpcs > 0){
 		msg->msg_rpc = (struct rpc_cmd*)(msg + 1);
 		ALIGN_ADDR_QUAD_BYTES(msg->msg_rpc);
@@ -641,7 +680,7 @@ int rpc_receive(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *
 int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)
 //int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg, pami_memregion_t *remote_memregion)
 {
-	//printf("get into rpc_send_direct\n");
+	uloga("get into rpc_send_direct\n");
 	struct rpc_request *rr;
 	int err;
 
