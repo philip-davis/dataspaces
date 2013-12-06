@@ -37,7 +37,7 @@ static int data_read_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
         if(msg && msg->msg_data){
                 //int offset = msg->size - 1;
                 //*((char*)(msg->msg_data)+offset ) = 0;
-                uloga("%s(): #%u, read data '%s'\n", __func__, rpc_s->ptlmap.rank_pami, msg->msg_data);
+                //uloga("%s(): #%u, read data '%s'\n", __func__, rpc_s->ptlmap.rank_pami, msg->msg_data);
 
 		check_data(rpc_s, msg);
                 free(msg->msg_data);

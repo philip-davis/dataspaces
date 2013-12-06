@@ -207,6 +207,8 @@ static void rpc_cb_put_completion(void *ctxt, void *clientdata, pami_result_t er
 {
 	uloga("get into rpc_cb_put_completion\n");
 	struct client_data_rpc_put *ptr = (struct client_data_rpc_put *)clientdata;
+	if(!ptr)
+		return;
 
 	struct rpc_server *rpc_s = ptr->rpc_s;
 	struct rpc_request *rr = ptr->rr;
@@ -214,12 +216,16 @@ static void rpc_cb_put_completion(void *ctxt, void *clientdata, pami_result_t er
 	pami_memregion_t *remote_memregion = ptr->remote_memregion;
 	pami_memregion_t *local_memregion = ptr->local_memregion;
 
+        if(!rpc_s || !rr || !peer )
+                return;
+
 	struct msg_buf *msg = msg_buf_alloc(rpc_s, peer, 1);
 	if(msg){
 		msg->msg_rpc->cmd = rpc_put_finish;
 		memcpy(&msg->msg_rpc->mem_region, remote_memregion, sizeof(pami_memregion_t));
-		err = rpc_send(rpc_s, peer, msg);
-		if(err < 0){
+		int ret;
+		ret = rpc_send(rpc_s, peer, msg);
+		if(ret < 0){
 			free(msg);
 			uloga("%s(): #%u, rpc_send() of RPC msg "
 			"rpc_get_finish finish failed\n", __func__, rpc_s->ptlmap.rank_pami);
