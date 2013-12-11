@@ -136,17 +136,50 @@ int dimes_get (const char *var_name,
         void *data);
 
 /**
- * @brief Block till all the data buffers inserted by previously invoked dimes_put
- * operations are successfully retrieved.
+ * @brief When configure option "enable_dimes_ack" is set, this function
+ * will block till all in-memory data inserted by dimes_put() operations
+ * have been retrieved by remote reading application, then free the data
+ * buffers allocated for dimes_put(). 
+ *
+ * When configure option "enable_dimes_ack" is not set, this function is
+ * non-blocking, and will just free the data buffers allocated for
+ * dimes_put().
  *
  * @return	0 indicates success.
  */
 int dimes_put_sync_all(void);
 
-// TODO: add comments, add fortran interface
-int dimes_put_set_group(const char *group_name, int step);
+/**
+ * @brief Start the scope of a specific group.
+ *
+ * @param[in] group_name:   Name of the group.
+ * @param[in] version:      Version of the group.
+ *
+ * @return  0 indicates success.
+ */
+int dimes_put_set_group(const char *group_name, int version);
+
+/**
+ * @brief End the scope of a group. Variables written (by dimes_put()) inside
+ * a matching pair of dimes_put_set_group()/dimes_put_unset_group() are
+ * associated with the same group. Note: the scopes of different groups can
+ * not be interleaved or nested, and need to be non-overlapping source code
+ * regions. 
+ *
+ * @return  0 indicates success.
+ */
 int dimes_put_unset_group();
-int dimes_put_sync_group(const char *group_name, int step);
+
+/**
+ * @brief This function is similar to dimes_put_sync_all(), with the exception
+ * that it only sync/free on data variables associated with the given group.
+ *
+ * @param[in] group_name:   Name of the group.
+ * @param[in] version:      Version of the group.   
+ *
+ * @return  0 indicates success.
+ */
+int dimes_put_sync_group(const char *group_name, int version);
 
 #ifdef __cplusplus
 }
