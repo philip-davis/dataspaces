@@ -1,8 +1,8 @@
 1.2.0 Released May 2013
-        - Added network support: DCMF for IBM BlueGene/P
-        - Added feature: new data coupling APIs that allow point-to-point data transfers directly between tightly coupled processes by bypassing staging servers
-        - Added coupled writer/reader testing applications in C
-        - Single codebase for all supported networks
+    - Added network support: DCMF for IBM BlueGene/P
+    - Added feature: new data coupling APIs that allow point-to-point data transfers directly between tightly coupled processes by bypassing staging servers
+    - Added coupled writer/reader testing applications in C
+    - Single codebase for all supported networks
 
 1.1.0 Released November 2012
 	- Added network support: Infiniband
