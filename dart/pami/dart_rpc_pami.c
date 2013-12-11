@@ -132,6 +132,13 @@ static int test_equal_memregion(pami_memregion_t *left, pami_memregion_t *right)
 	int ret = 1;
 
 	//TODO compare the memregion
+        int i;
+        for(i = 0; i < PAMI_CLIENT_MEMREGION_SIZE_STATIC/sizeof(uintptr_t); i++){
+                if((*left)[i] != (*right)[i]){
+                        ret = 0;
+                        break;
+		}
+        }
 
 	return ret;
 }
@@ -742,7 +749,7 @@ int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_b
 	parameters.rdma.local.offset 	= 0;
 	parameters.rdma.remote.mr 	= ptr_clientdata->remote_memregion;
 	parameters.rdma.remote.offset 	= 0;
-	//parameters.put.rdone_fn 	= ;	TODO
+	parameters.put.rdone_fn 	= NULL;	//TODO
 	
 	//printf("before PAMI_Rput\n");
 	err = PAMI_Rput(rpc_s->contexts[0], &parameters);
