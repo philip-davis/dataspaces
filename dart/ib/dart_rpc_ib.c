@@ -736,7 +736,7 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
 	struct ibv_send_wr wr, *bad_wr = NULL;
 	struct ibv_sge sge;
 
-	printf("data to be fetched is size(%d) from peer(%d).\n", rr->size, peer->ptlmap.id);
+	//printf("data to be fetched is size(%d) from peer(%d).\n", rr->size, peer->ptlmap.id);
 	if(rr->type == 1) {
 		rr->data_mr = ibv_reg_mr(peer->rpc_conn.pd, rr->data, rr->size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
 		if(rr->data_mr == NULL) {
@@ -1345,11 +1345,30 @@ int rpc_server_free(struct rpc_server *rpc_s)
 //                      printf("%d %d %d\n",rpc_s->ptlmap.id, rpc_s->peer_tab[i].ptlmap.id,rpc_s->peer_tab[i].rpc_conn.qp_attr.cap.max_send_wr, rpc_s->peer_tab[i].rpc_conn.qp_attr.cap.max_recv_wr, rpc_s->peer_tab[i].sys_conn.qp_attr.cap.max_send_wr, rpc_s->peer_tab[i].sys_conn.qp_attr.cap.max_recv_wr);
 		}
 		if(rpc_s->peer_tab[i].rpc_conn.f_connected == 1) {
+
+
+			 struct timeval start, end;
+
+    long mtime, seconds, useconds;    
+
+    gettimeofday(&start, NULL);
+
+
 			err = rdma_disconnect(rpc_s->peer_tab[i].rpc_conn.id);
 			if(err != 0)
 				printf("Peer(%d) RPC rdma_disconnect err (%d). Ignore.\n", rpc_s->peer_tab[i].ptlmap.id, err);
 			rdma_destroy_qp(rpc_s->peer_tab[i].rpc_conn.id);
 			rdma_destroy_id(rpc_s->peer_tab[i].rpc_conn.id);
+
+	    gettimeofday(&end, NULL);
+
+    seconds  = end.tv_sec  - start.tv_sec;
+    useconds = end.tv_usec - start.tv_usec;
+
+    mtime = ((seconds) * 1000 + useconds/1000.0) + 0.5;
+
+
+        printf("rpc_disconnect %d %d %ld\n",rpc_s->ptlmap.id,i,mtime);
 
 		}
 		if(rpc_s->peer_tab[i].sys_conn.f_connected == 1) {
@@ -1465,12 +1484,29 @@ void build_qp_attr(struct ibv_qp_init_attr *qp_attr, struct connection *conn, st
 	qp_attr->cap.max_recv_sge = 1;
 }
 
+long gett(struct timeval start, struct timeval end){
+    long seconds, useconds;
+
+       seconds  = end.tv_sec  - start.tv_sec;
+    useconds = end.tv_usec - start.tv_usec;
+
+    return ((seconds) * 1000 + useconds/1000.0) + 0.5;
+}
+
 int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 {
 	struct addrinfo *addr;
 	struct rdma_cm_event *event = NULL;
 	struct rdma_conn_param cm_params;
 	struct con_param conpara;
+
+ struct timeval start, end1, end2, end3, end4, end5, end6;
+
+    long mtime, seconds, useconds;    
+
+    gettimeofday(&start, NULL);
+
+
 
 	char *ip;
 	char port[32];
@@ -1505,12 +1541,19 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 	}
 	freeaddrinfo(addr);
 
+       gettimeofday(&end1, NULL);
+
+
 	while(rdma_get_cm_event(peer->rpc_ec, &event) == 0) {
 		struct rdma_cm_event event_copy;
 		memcpy(&event_copy, event, sizeof(*event));
 		rdma_ack_cm_event(event);
 
 		if(event_copy.event == RDMA_CM_EVENT_ADDR_RESOLVED) {
+
+		    gettimeofday(&end2, NULL);
+
+	
 			build_context(event_copy.id->verbs, &peer->rpc_conn);
 			build_qp_attr(&peer->rpc_conn.qp_attr, &peer->rpc_conn, rpc_s);
 
@@ -1519,6 +1562,9 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 				printf("Peer %d could not connect to peer %d. Current number of qp is  %d\n rdma_create_qp %d in %s %s.\n", rpc_s->ptlmap.id, peer->ptlmap.id, rpc_s->num_qp, err, __func__, strerror(errno));
 				goto err_out;
 			}
+	
+                           gettimeofday(&end3, NULL);
+
 			rpc_s->num_qp++;
 
 			event_copy.id->context = &peer->rpc_conn;
@@ -1540,6 +1586,9 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 				goto err_out;
 			}
 		} else if(event_copy.event == RDMA_CM_EVENT_ROUTE_RESOLVED) {
+			    gettimeofday(&end4, NULL);
+
+
 			//printf("route resolved.\n");
 			memset(&cm_params, 0, sizeof(struct rdma_conn_param));
 
@@ -1560,6 +1609,7 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 				goto err_out;
 			}
 		} else if(event_copy.event == RDMA_CM_EVENT_ESTABLISHED) {
+			    gettimeofday(&end5, NULL);
 			//printf("Connection Established.\n");
 			if(peer->ptlmap.id == 0) {
 				if(rpc_s->ptlmap.appid != 0) {
@@ -1588,6 +1638,12 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 		if(check == 1)
 			break;
 	}
+
+    gettimeofday(&end6, NULL);
+
+
+
+	printf("rpc_connect %d %d %ld  %ld %ld %ld %ld %ld %ld\n",rpc_s->ptlmap.id, peer->ptlmap.id,gett(start, end1),gett(end1, end2),gett(end2, end3),gett(end3, end4),gett(end4, end5),gett(end5,end6), gett(start, end6));
 
 	return 0;
       err_out:
