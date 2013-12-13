@@ -125,10 +125,10 @@ static int sys_send(struct rpc_server *rpc_s, struct node_id *peer, struct hdr_s
 {
 
 	while(peer->sys_conn.f_connected != 1) {
-	//	printf("SYS channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
-	  //      sys_connect(rpc_s,peer);
-//		goto err_out;
-//		sleep(1);
+		//      printf("SYS channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
+		//      sys_connect(rpc_s,peer);
+//              goto err_out;
+//              sleep(1);
 	}
 
 
@@ -220,7 +220,7 @@ static int sys_process_event(struct rpc_server *rpc_s)
 	int num_ds = rpc_s->cur_num_peer - rpc_s->num_rpc_per_buff;
 
 	j = 0;
-	for(i =rpc_s->num_sp; i < rpc_s->num_sp +rpc_s->app_num_peers; i++) {
+	for(i = rpc_s->num_sp; i < rpc_s->num_sp + rpc_s->app_num_peers; i++) {
 		if(rpc_s->peer_tab[i].ptlmap.id == rpc_s->ptlmap.id) {
 			seq = i - num_ds;
 			continue;
@@ -364,7 +364,7 @@ static int sys_cleanup(struct rpc_server *rpc_s)
 // this function can only be used after rpc_server is fully initiated
 static struct node_id *rpc_get_peer(struct rpc_server *rpc_s, int peer_id)
 {
-//	printf("I am %d ask for %d %d %d\n",rpc_s->ptlmap.id, peer_id, rpc_s->app_minid, rpc_s->app_num_peers);
+//      printf("I am %d ask for %d %d %d\n",rpc_s->ptlmap.id, peer_id, rpc_s->app_minid, rpc_s->app_num_peers);
 	if(rpc_s->ptlmap.appid == 0 || peer_id >= rpc_s->app_minid + rpc_s->app_num_peers)
 		return rpc_s->peer_tab + peer_id;
 	else {
@@ -649,7 +649,7 @@ static int rpc_prepare_buffers(struct rpc_server *rpc_s, const struct node_id *p
 
 	return 0;
 
- err_out:
+      err_out:
 	printf("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
@@ -1347,11 +1347,11 @@ int rpc_server_free(struct rpc_server *rpc_s)
 		if(rpc_s->peer_tab[i].rpc_conn.f_connected == 1) {
 
 
-			 struct timeval start, end;
+			struct timeval start, end;
 
-    long mtime, seconds, useconds;    
+			long mtime, seconds, useconds;
 
-    gettimeofday(&start, NULL);
+			gettimeofday(&start, NULL);
 
 
 			err = rdma_disconnect(rpc_s->peer_tab[i].rpc_conn.id);
@@ -1360,15 +1360,15 @@ int rpc_server_free(struct rpc_server *rpc_s)
 			rdma_destroy_qp(rpc_s->peer_tab[i].rpc_conn.id);
 			rdma_destroy_id(rpc_s->peer_tab[i].rpc_conn.id);
 
-	    gettimeofday(&end, NULL);
+			gettimeofday(&end, NULL);
 
-    seconds  = end.tv_sec  - start.tv_sec;
-    useconds = end.tv_usec - start.tv_usec;
+			seconds = end.tv_sec - start.tv_sec;
+			useconds = end.tv_usec - start.tv_usec;
 
-    mtime = ((seconds) * 1000 + useconds/1000.0) + 0.5;
+			mtime = ((seconds) * 1000 + useconds / 1000.0) + 0.5;
 
 
-        printf("rpc_disconnect %d %d %ld\n",rpc_s->ptlmap.id,i,mtime);
+			// printf("rpc_disconnect %d %d %ld\n",rpc_s->ptlmap.id,i,mtime);
 
 		}
 		if(rpc_s->peer_tab[i].sys_conn.f_connected == 1) {
@@ -1431,13 +1431,13 @@ void build_context(struct ibv_context *verbs, struct connection *conn)
 	int err, flags;
 	conn->ctx = verbs;
 
-	if (!rpc_s_instance->alloc_pd_flag) {
+	if(!rpc_s_instance->alloc_pd_flag) {
 		rpc_s_instance->global_pd = ibv_alloc_pd(conn->ctx);
 		rpc_s_instance->global_ctx = verbs;
 		rpc_s_instance->alloc_pd_flag = 1;
 	}
 	conn->pd = rpc_s_instance->global_pd;
-	// uloga("%s(): conn->ctx= %x, conn->pd= %x, global_ctx= %x, global_pd= %x\n"		, __func__, conn->ctx, conn->pd, rpc_s_instance->global_ctx, rpc_s_instance->global_pd);
+	// uloga("%s(): conn->ctx= %x, conn->pd= %x, global_ctx= %x, global_pd= %x\n"           , __func__, conn->ctx, conn->pd, rpc_s_instance->global_ctx, rpc_s_instance->global_pd);
 	if(conn->pd == NULL)
 		printf("ibv_alloc_pd return NULL in %s.\n", __func__);
 	conn->comp_channel = ibv_create_comp_channel(conn->ctx);
@@ -1484,13 +1484,14 @@ void build_qp_attr(struct ibv_qp_init_attr *qp_attr, struct connection *conn, st
 	qp_attr->cap.max_recv_sge = 1;
 }
 
-long gett(struct timeval start, struct timeval end){
-    long seconds, useconds;
+long gett(struct timeval start, struct timeval end)
+{
+	long seconds, useconds;
 
-       seconds  = end.tv_sec  - start.tv_sec;
-    useconds = end.tv_usec - start.tv_usec;
+	seconds = end.tv_sec - start.tv_sec;
+	useconds = end.tv_usec - start.tv_usec;
 
-    return ((seconds) * 1000 + useconds/1000.0) + 0.5;
+	return ((seconds) * 1000 + useconds / 1000.0) + 0.5;
 }
 
 int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
@@ -1500,11 +1501,11 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 	struct rdma_conn_param cm_params;
 	struct con_param conpara;
 
- struct timeval start, end1, end2, end3, end4, end5, end6;
+	struct timeval start, end1, end2, end3, end4, end5, end6;
 
-    long mtime, seconds, useconds;    
+	long mtime, seconds, useconds;
 
-    gettimeofday(&start, NULL);
+	gettimeofday(&start, NULL);
 
 
 
@@ -1541,7 +1542,7 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 	}
 	freeaddrinfo(addr);
 
-       gettimeofday(&end1, NULL);
+	gettimeofday(&end1, NULL);
 
 
 	while(rdma_get_cm_event(peer->rpc_ec, &event) == 0) {
@@ -1551,9 +1552,9 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 
 		if(event_copy.event == RDMA_CM_EVENT_ADDR_RESOLVED) {
 
-		    gettimeofday(&end2, NULL);
+			gettimeofday(&end2, NULL);
 
-	
+
 			build_context(event_copy.id->verbs, &peer->rpc_conn);
 			build_qp_attr(&peer->rpc_conn.qp_attr, &peer->rpc_conn, rpc_s);
 
@@ -1562,8 +1563,8 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 				printf("Peer %d could not connect to peer %d. Current number of qp is  %d\n rdma_create_qp %d in %s %s.\n", rpc_s->ptlmap.id, peer->ptlmap.id, rpc_s->num_qp, err, __func__, strerror(errno));
 				goto err_out;
 			}
-	
-                           gettimeofday(&end3, NULL);
+
+			gettimeofday(&end3, NULL);
 
 			rpc_s->num_qp++;
 
@@ -1586,7 +1587,7 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 				goto err_out;
 			}
 		} else if(event_copy.event == RDMA_CM_EVENT_ROUTE_RESOLVED) {
-			    gettimeofday(&end4, NULL);
+			gettimeofday(&end4, NULL);
 
 
 			//printf("route resolved.\n");
@@ -1609,7 +1610,7 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 				goto err_out;
 			}
 		} else if(event_copy.event == RDMA_CM_EVENT_ESTABLISHED) {
-			    gettimeofday(&end5, NULL);
+			gettimeofday(&end5, NULL);
 			//printf("Connection Established.\n");
 			if(peer->ptlmap.id == 0) {
 				if(rpc_s->ptlmap.appid != 0) {
@@ -1639,11 +1640,11 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 			break;
 	}
 
-    gettimeofday(&end6, NULL);
+	gettimeofday(&end6, NULL);
 
 
 
-	printf("rpc_connect %d %d %ld  %ld %ld %ld %ld %ld %ld\n",rpc_s->ptlmap.id, peer->ptlmap.id,gett(start, end1),gett(end1, end2),gett(end2, end3),gett(end3, end4),gett(end4, end5),gett(end5,end6), gett(start, end6));
+//      printf("rpc_connect %d %d %ld  %ld %ld %ld %ld %ld %ld\n",rpc_s->ptlmap.id, peer->ptlmap.id,gett(start, end1),gett(end1, end2),gett(end2, end3),gett(end3, end4),gett(end4, end5),gett(end5,end6), gett(start, end6));
 
 	return 0;
       err_out:
@@ -2262,7 +2263,7 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 	if(err == 0)
 		return 0;
 
-err_out:
+      err_out:
 	printf("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
@@ -2411,9 +2412,9 @@ void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cm
 	return;
 }
 
-void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg,
-                        struct rpc_cmd *cmd) {
-        return;
+void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd)
+{
+	return;
 }
 
 void rpc_cache_msg(struct msg_buf *msg, struct rpc_cmd *cmd)
