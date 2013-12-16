@@ -1043,7 +1043,9 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
 	err = PMI_Barrier();	
 	assert(err == PMI_SUCCESS);
 
+#ifdef DEBUG
 	printf("'%s(%d:%d:%d:%d)': init ok.\n", __func__, dc->self->ptlmap.id, dc->self->ptlmap.appid, dc->self->ptlmap.pid, dc->self->ptlmap.nid);//partial debug
+#endif
 	//print_dc(dc);
         return dc;
 

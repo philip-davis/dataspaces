@@ -365,3 +365,14 @@ int read_data_file(const char* fname)
 	fclose(f);
 	return 0;
 }
+
+int common_get_transport_type_str(enum transport_type type, char* str)
+{
+    if (type == USE_DSPACES) {
+        sprintf(str, "DATASPACES");
+    } else if (type == USE_DIMES) {
+        sprintf(str, "DIMES");
+    } else sprintf(str, "UNKNOWN");
+
+    return 0;
+}
