@@ -114,7 +114,7 @@ lock_type = 2
 3. How to compile and run test workflow
 ----------------------------------
 
-In the tests/C and test/Fortran directory, we provide a number of PBS  job
+In the test/Fortran directory, we provide a number of PBS  job
 script  files 'job.sith'. This file  should be  editted according  to  the
 specific workflow scenario.
 
@@ -136,9 +136,31 @@ and 'test_reader') require 8 arguments as arg1-arg8:
   arg7 : block size per process in z direction (of the app data domain)
   arg8 : number of iterations
 
-dataspaces_server -s 4 -c 72 
-test_put 64 4 4 4 256 256 256 50 
-test_get 8 4 2 1 256 512 1024 50 
+Here is an example:
+  dataspaces_server -s 4 -c 72 
+  test_put 64 4 4 4 256 256 256 50 
+  test_get 8 4 2 1 256 512 1024 50 
+
+In the test/C directory, the test application executables are 'test_writer'
+and 'test_reader'. Running them requires 9 arguments:
+  arg1 : data transfer method (DATASPACES or DIMES)
+  arg2 : number of total application processes
+  arg3 : number of processes in x direction (of the process layout)
+  arg4 : number of processes in y direction (of the process layout)
+  arg5 : number of processes in z direction (of the process layout)
+  arg6 : block size per process in x direction (of the app data domain)
+  arg7 : block size per process in y direction (of the app data domain)
+  arg8 : block size per process in z direction (of the app data domain)
+  arg9 : number of iterations
+
+Here is an example:
+  dataspaces_server -s 4 -c 72
+  test_put DATASPACES 64 4 4 4 256 256 256 50
+  test_get DATASPACES 8 4 2 1 256 512 1024 50
+
+
+Both Fortran and C tests are using the same dataspaces_server executable written in C.
+Before running the Fortran test, you will need to copy dataspaces_server over from the C test directory.
 
 If you would like to write your own job script, please add command rm -f conf
 srv.lck to your script in order to remove config files from previous run.

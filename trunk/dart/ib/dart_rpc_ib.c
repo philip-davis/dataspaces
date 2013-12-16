@@ -125,10 +125,10 @@ static int sys_send(struct rpc_server *rpc_s, struct node_id *peer, struct hdr_s
 {
 
 	while(peer->sys_conn.f_connected != 1) {
-	//	printf("SYS channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
-	  //      sys_connect(rpc_s,peer);
-//		goto err_out;
-//		sleep(1);
+		//      printf("SYS channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
+		//      sys_connect(rpc_s,peer);
+//              goto err_out;
+//              sleep(1);
 	}
 
 
@@ -220,7 +220,7 @@ static int sys_process_event(struct rpc_server *rpc_s)
 	int num_ds = rpc_s->cur_num_peer - rpc_s->num_rpc_per_buff;
 
 	j = 0;
-	for(i =rpc_s->num_sp; i < rpc_s->num_sp +rpc_s->app_num_peers; i++) {
+	for(i = rpc_s->num_sp; i < rpc_s->num_sp + rpc_s->app_num_peers; i++) {
 		if(rpc_s->peer_tab[i].ptlmap.id == rpc_s->ptlmap.id) {
 			seq = i - num_ds;
 			continue;
@@ -364,7 +364,7 @@ static int sys_cleanup(struct rpc_server *rpc_s)
 // this function can only be used after rpc_server is fully initiated
 static struct node_id *rpc_get_peer(struct rpc_server *rpc_s, int peer_id)
 {
-//	printf("I am %d ask for %d %d %d\n",rpc_s->ptlmap.id, peer_id, rpc_s->app_minid, rpc_s->app_num_peers);
+//      printf("I am %d ask for %d %d %d\n",rpc_s->ptlmap.id, peer_id, rpc_s->app_minid, rpc_s->app_num_peers);
 	if(rpc_s->ptlmap.appid == 0 || peer_id >= rpc_s->app_minid + rpc_s->app_num_peers)
 		return rpc_s->peer_tab + peer_id;
 	else {
@@ -649,7 +649,7 @@ static int rpc_prepare_buffers(struct rpc_server *rpc_s, const struct node_id *p
 
 	return 0;
 
- err_out:
+      err_out:
 	printf("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
@@ -736,7 +736,7 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
 	struct ibv_send_wr wr, *bad_wr = NULL;
 	struct ibv_sge sge;
 
-	printf("data to be fetched is size(%d) from peer(%d).\n", rr->size, peer->ptlmap.id);
+	//printf("data to be fetched is size(%d) from peer(%d).\n", rr->size, peer->ptlmap.id);
 	if(rr->type == 1) {
 		rr->data_mr = ibv_reg_mr(peer->rpc_conn.pd, rr->data, rr->size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
 		if(rr->data_mr == NULL) {
@@ -1412,13 +1412,13 @@ void build_context(struct ibv_context *verbs, struct connection *conn)
 	int err, flags;
 	conn->ctx = verbs;
 
-	if (!rpc_s_instance->alloc_pd_flag) {
+	if(!rpc_s_instance->alloc_pd_flag) {
 		rpc_s_instance->global_pd = ibv_alloc_pd(conn->ctx);
 		rpc_s_instance->global_ctx = verbs;
 		rpc_s_instance->alloc_pd_flag = 1;
 	}
 	conn->pd = rpc_s_instance->global_pd;
-	// uloga("%s(): conn->ctx= %x, conn->pd= %x, global_ctx= %x, global_pd= %x\n"		, __func__, conn->ctx, conn->pd, rpc_s_instance->global_ctx, rpc_s_instance->global_pd);
+	// uloga("%s(): conn->ctx= %x, conn->pd= %x, global_ctx= %x, global_pd= %x\n"           , __func__, conn->ctx, conn->pd, rpc_s_instance->global_ctx, rpc_s_instance->global_pd);
 	if(conn->pd == NULL)
 		printf("ibv_alloc_pd return NULL in %s.\n", __func__);
 	conn->comp_channel = ibv_create_comp_channel(conn->ctx);
@@ -2206,7 +2206,7 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 	if(err == 0)
 		return 0;
 
-err_out:
+      err_out:
 	printf("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
@@ -2355,9 +2355,9 @@ void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cm
 	return;
 }
 
-void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg,
-                        struct rpc_cmd *cmd) {
-        return;
+void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd)
+{
+	return;
 }
 
 void rpc_cache_msg(struct msg_buf *msg, struct rpc_cmd *cmd)
