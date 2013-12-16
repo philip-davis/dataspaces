@@ -35,6 +35,7 @@
 #include <errno.h>
 #include <unistd.h>
 
+#include "config.h"
 #include "dimes_interface.h"
 #include "dimes_client.h"
 #include "dimes_data.h"
@@ -97,6 +98,19 @@ static size_t get_available_rdma_buffer_size()
         return options.rdma_buffer_size-total_usage;
     }
 }
+
+static void print_rdma_buffer_usage()
+{
+    uloga("%s():    rdma_buffer_size= %u bytes\n"
+          "         rdma_buffer_write_usage= %u bytes\n"
+          "         rdma_buffer_read_usage= %u bytes\n"
+          "         rdma_buffer_avail_size= %u bytes\n"
+          "         max_num_concurrent_rdma_read= %d\n",
+        __func__, options.rdma_buffer_size, options.rdma_buffer_write_usage,
+        options.rdma_buffer_read_usage, get_available_rdma_buffer_size(),
+        options.max_num_concurrent_rdma_read_op);
+}
+
 
 #define NUM_SYNC_ID 4096
 static struct {
@@ -1181,8 +1195,9 @@ static int all_fetch_done(struct query_tran_entry_d *qte, struct fetch_entry **f
                     goto err_out;
                 }
 
+                // Update rdma buffer usage
                 options.rdma_buffer_read_usage -= 
-                                obj_data_size(&fetch_tab[i]->dst_odsc);
+                            obj_data_size(&fetch_tab[i]->dst_odsc);
                 fetch_status_tab[i] = fetch_done;
                 complete_one_fetch = 1;
             } 
@@ -1221,6 +1236,7 @@ static int get_next_fetch(struct fetch_entry **fetch_tab, int *fetch_status_tab,
                 uloga("%s(): dimes_memory_alloc() failed\n", __func__);
                 goto err_out;
             }
+            // Update rdma buffer usage
             options.rdma_buffer_read_usage += read_size;
             *index = i;
             return 0;
@@ -1663,6 +1679,10 @@ static int dimes_put_sync_with_timeout(float timeout_sec, struct dimes_storage_g
                 if (err < 0) {
                     uloga("%s(): failed with dimes_memory_free()\n", __func__);
                 }
+                // Update rdma buffer usage
+                size_t data_size = obj_data_size(&p->obj_desc);
+                options.rdma_buffer_write_usage -= data_size;
+
 				list_del(&p->entry);
 				free(p);
 				break;
@@ -1709,6 +1729,9 @@ static int dimes_put_free_group(struct dimes_storage_group *group)
         if (err < 0) {
             uloga("%s(): failed with dimes_memory_free()\n", __func__);
         }
+        // Update rdma buffer usage
+        size_t data_size = obj_data_size(&p->obj_desc);
+        options.rdma_buffer_write_usage -= data_size;
 
         list_del(&p->entry);
         free(p);
@@ -1731,11 +1754,11 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 	}
 
     options.enable_pre_allocated_rdma_buffer = 0;
-    options.pre_allocated_rdma_buffer_size = 64*1024*1024; // MB
-    options.rdma_buffer_size = 64*1024*1024; // MB
+    options.pre_allocated_rdma_buffer_size = DIMES_RDMA_BUFFER_SIZE*1024*1024; // bytes
+    options.rdma_buffer_size = DIMES_RDMA_BUFFER_SIZE*1024*1024; // bytes 
     options.rdma_buffer_write_usage = 0;
     options.rdma_buffer_read_usage = 0;
-    options.max_num_concurrent_rdma_read_op = 3;
+    options.max_num_concurrent_rdma_read_op = DIMES_RDMA_MAX_NUM_CONCURRENT_READ;
 #ifdef DS_HAVE_DIMES_ACK
     options.enable_dimes_ack = 1;
 #else
@@ -1898,6 +1921,9 @@ int dimes_client_put(const char *var_name,
 				__func__, err);
 		goto err_out;
 	}
+    
+    // Update memory usage
+    options.rdma_buffer_write_usage += data_size;
 
 	return 0;
 err_out:
