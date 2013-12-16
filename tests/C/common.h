@@ -71,7 +71,8 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type);
 
 void check_data(const char *var_name, double *buf, int num_elem, int rank, int ts);
 
-
 int write_data_file(const char* fname, void *data, size_t size);
 int read_data_file(const char* fname);
+
+int commom_get_transport_type_str(enum transport_type type, char* str);
 #endif //end of __TEST_COMMON_H_

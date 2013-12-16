@@ -53,6 +53,8 @@ static struct timer timer_;
 static MPI_Comm gcomm_;
 
 static size_t elem_size_;
+
+static char transport_type_str_[256];
 /*
 Matrix representation
 +-----> (x)
@@ -135,14 +137,11 @@ static int couple_read_2d(unsigned int ts, int num_vars, enum transport_type typ
 	
 	tm_diff = tm_end-tm_st;
 	MPI_Reduce(&tm_diff, &tm_max, 1, MPI_DOUBLE, MPI_MAX, root, gcomm_);
-#ifdef DEBUG
-	//uloga("TS= %u TRANSPORT_TYPE= %d RANK= %d read time= %lf\n",
-	//	ts, type, rank_, tm_diff);	
+
 	if (rank_ == root) {
-		uloga("TS= %u TRANSPORT_TYPE= %d read MAX time= %lf\n",
-			ts, type, tm_max);
+		uloga("TS= %u TRANSPORT_TYPE= %s read MAX time= %lf\n",
+			ts, transport_type_str_, tm_max);
 	}
-#endif
 
     for (i = 0; i < num_vars; i++) {
         sprintf(var_name, "m2d_%d", i);
@@ -203,14 +202,11 @@ static int couple_read_3d(unsigned int ts, int num_vars, enum transport_type typ
 	
 	tm_diff = tm_end-tm_st;
 	MPI_Reduce(&tm_diff, &tm_max, 1, MPI_DOUBLE, MPI_MAX, root, gcomm_);
-#ifdef DEBUG
-	//uloga("TS= %u TRANSPORT_TYPE= %d RANK= %d read time= %lf\n",
-	//	ts, type, rank_, tm_diff);	
+
 	if (rank_ == root) {
-		uloga("TS= %u TRANSPORT_TYPE= %d read MAX time= %lf\n",
-			ts, type, tm_max);
+		uloga("TS= %u TRANSPORT_TYPE= %s read MAX time= %lf\n",
+			ts, transport_type_str_, tm_max);
 	}
-#endif
 
     for (i = 0; i < num_vars; i++) {
         sprintf(var_name, "m3d_%d", i);
@@ -247,6 +243,7 @@ int test_get_run(enum transport_type type, int npapp, int npx, int npy, int npz,
 	int app_id = 2;
 	common_init(npapp_, app_id);
     common_set_storage_type(row_major, type);
+    common_get_transport_type_str(type, transport_type_str_);
 
     MPI_Comm_rank(gcomm_, &rank_);
     MPI_Comm_size(gcomm_, &nproc_);
