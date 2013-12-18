@@ -37,7 +37,7 @@ Please read header files include/dataspaces.h and include/dimes_interface.h for
 detailed API documentation. 
 
 
-Test applications
+Test Applications
 =================
 
 We include two set of test code in the package. They are under tests directory.
@@ -79,7 +79,7 @@ test code, user needs to copy the staging server executable (dataspaces_server
 2. Preparing the configuration file for DataSpaces
 ---------------------------------------------------
 
-User can create a  configuration  file: 'dataspaces.conf' under C or Fotran
+User need to create a  configuration  file: 'dataspaces.conf' under C or Fotran
 test directory. This is optional because without the config file, DataSpaces
 server will use the default configuration 'dataspaces.conf'  file should  be
 editted  according to the specific  requirements for  DataSpaces  before
@@ -111,12 +111,12 @@ max_readers = 1
 lock_type = 2
 
 
-3. How to compile and run test workflow
-----------------------------------
+3. How to run test workflow
+---------------------------
 
-In the test/Fortran directory, we provide a number of PBS  job
-script  files 'job.sith'. This file  should be  editted according  to  the
-specific workflow scenario.
+In the scripts/fortran_test and scripts/c_test directory, we provide a number 
+of PBS job script file examples. These files should be modified according to
+the specific workflow scenario and the system you plan to run DataSpaces.
 
 The DataSpaces server executable has three command line options:
 
@@ -155,8 +155,8 @@ and 'test_reader'. Running them requires 9 arguments:
 
 Here is an example:
   dataspaces_server -s 4 -c 72
-  test_put DATASPACES 64 4 4 4 256 256 256 50
-  test_get DATASPACES 8 4 2 1 256 512 1024 50
+  test_writer DATASPACES 64 4 4 4 256 256 256 50
+  test_reader DATASPACES 8 4 2 1 256 512 1024 50
 
 
 Both Fortran and C tests are using the same dataspaces_server executable written in C.
