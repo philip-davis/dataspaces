@@ -906,7 +906,7 @@ err_out:
 }
 
 //Generic routine to post a request message to a peer node
-static int rpc_post_request(struct rpc_server *rpc_s, const struct node_id *peer, struct rpc_request *rr, const struct hdr_sys *hs)
+static int rpc_post_request(struct rpc_server *rpc_s, struct node_id *peer, struct rpc_request *rr, const struct hdr_sys *hs)
 {
 	int err;
 	gni_return_t status = GNI_RC_SUCCESS;
@@ -1142,7 +1142,10 @@ static int rpc_credit_return(struct rpc_server *rpc_s, struct node_id *peer)
    msg->msg_rpc->cmd = cn_ack_credit;
    msg->msg_rpc->id = rpc_s->ptlmap.id;
 
-   peer->num_msg_at_peer++; // cn_ack_credit msg NOT consume send credit
+   if (rpc_s->cmp_type == DART_CLIENT) {
+     peer->num_msg_at_peer++; // cn_ack_credit msg NOT consume send credit
+   }
+
    err = rpc_send(rpc_s, peer, msg);
    if (err < 0) {
      free(msg);

@@ -142,8 +142,11 @@ int dimes_get (const char *var_name,
  * buffers allocated for dimes_put(). 
  *
  * When configure option "enable_dimes_ack" is not set, this function is
- * non-blocking, and will just free the data buffers allocated for
- * dimes_put().
+ * non-blocking, and will just free all data buffers allocated for
+ * dimes_put() since last call to dimes_put_sync_all(). In this case, the
+ * users are responsible to coordinate (e.g. using our lock/unlock APIs in 
+ * dspaces.h) between the coupled applications to make sure that data is 
+ * fetched by the reading appication before freed.
  *
  * @return	0 indicates success.
  */
@@ -153,7 +156,7 @@ int dimes_put_sync_all(void);
  * @brief Start the scope of a specific group.
  *
  * @param[in] group_name:   Name of the group.
- * @param[in] version:      Version of the group.
+ * @param[in] version:      Current time step. 
  *
  * @return  0 indicates success.
  */
@@ -161,10 +164,9 @@ int dimes_put_set_group(const char *group_name, int version);
 
 /**
  * @brief End the scope of a group. Variables written (by dimes_put()) inside
- * a matching pair of dimes_put_set_group()/dimes_put_unset_group() are
- * associated with the same group. Note: the scopes of different groups can
- * not be interleaved or nested, and need to be non-overlapping source code
- * regions. 
+ * a matching pair of dimes_put_set_group() and dimes_put_unset_group() are
+ * associated with group 'group_name'. Note: the scopes of different groups can
+ * not be interleaved or nested, and need to be non-overlapping.
  *
  * @return  0 indicates success.
  */
@@ -172,10 +174,12 @@ int dimes_put_unset_group();
 
 /**
  * @brief This function is similar to dimes_put_sync_all(), with the exception
- * that it only sync/free on data variables associated with the given group.
+ * that it only applies to data variables that are associated with a particular
+ * group. It will free all data buffers allocated for dimes_put() since last
+ * call to dimes_put_sync_group, for data variables of the specified group.
  *
  * @param[in] group_name:   Name of the group.
- * @param[in] version:      Version of the group.   
+ * @param[in] version:      Current time step.   
  *
  * @return  0 indicates success.
  */
