@@ -1383,9 +1383,9 @@ static int dcgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         msg->cb = obj_get_desc_completion;
         msg->private = oht;
 
-	rpc_mem_info_cache(peer, msg, cmd); 
+        rpc_mem_info_cache(peer, msg, cmd); 
         err = rpc_receive_direct(rpc_s, peer, msg);
-	rpc_mem_info_reset(peer, msg, cmd);	
+        rpc_mem_info_reset(peer, msg, cmd);	
 
         if (err == 0)
                 return 0;
@@ -1426,7 +1426,6 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
         free(msg);
 
         dcg_dec_pending();
-        // uloga("'%s()': object send complete.\n", __func__);
         return 0;
 }
 
@@ -1730,12 +1729,12 @@ int dcg_obj_get(struct obj_data *od)
 
         qt_add(&dcg->qt, qte);
 
-	versions_reset();
+        versions_reset();
 
-	// TODO:  I have  intentionately  disabled the  cache here.  I
-	// should reconsider.
+        // TODO:  I have  intentionately  disabled the  cache here.  I
+        // should reconsider.
         // qce = qc_find(&dcg->qc, &od->obj_desc);
-	qce = 0;
+        qce = 0;
         if (qce) {
                 err = qte_set_odsc_from_cache(qte, qce);
                 if (err < 0) {
@@ -1751,10 +1750,10 @@ int dcg_obj_get(struct obj_data *od)
 
                 err = get_obj_descriptors(qte);
                 if (err < 0) {
-			if (err == -EAGAIN)
-				goto out_no_data;
-			else	goto err_qt_free;
-		}
+                    if (err == -EAGAIN)
+                        goto out_no_data;
+                    else	goto err_qt_free;
+                }
                 DC_WAIT_COMPLETION(qte->f_odsc_recv == 1);
         }
 
@@ -1765,8 +1764,8 @@ int dcg_obj_get(struct obj_data *od)
 
         err = dcg_obj_data_get(qte);
         if (err < 0) {
-		// FIXME: should I jump to err_qt_free ?
-		qt_free_obj_data(qte, 1);
+                // FIXME: should I jump to err_qt_free ?
+                qt_free_obj_data(qte, 1);
                 goto err_data_free; // err_out;
         }
 
@@ -1798,14 +1797,14 @@ int dcg_obj_get(struct obj_data *od)
         qt_remove(&dcg->qt, qte);
         free(qte);
 
-	return err;
+        return err;
  err_data_free:
-	qt_free_obj_data(qte, 1);
+        qt_free_obj_data(qte, 1);
  err_qt_free:
-	qt_remove(&dcg->qt, qte);
-	free(qte);
+        qt_remove(&dcg->qt, qte);
+        free(qte);
  err_out:
-	ERROR_TRACE();
+        ERROR_TRACE();
 }
 
 int dcg_get_versions(int **p_version)

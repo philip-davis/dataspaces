@@ -72,6 +72,7 @@ struct sfc_hash_cache {
 };
 
 static LIST_HEAD(sfc_hash_list);
+static int is_sfc_hash_list_free = 0;
 
 static int compute_bits(unsigned int n)
 {
@@ -127,17 +128,20 @@ int sh_find(const struct bbox *bb, struct dht_entry *de_tab[])
 
 void sh_free(void)
 {
+        if (is_sfc_hash_list_free) return;
+
         struct sfc_hash_cache *l, *t;
-	int n = 0;
+        int n = 0;
 
         list_for_each_entry_safe(l, t, &sfc_hash_list, struct sfc_hash_cache, sh_entry) {
                 free(l);
-		n++;
-	}
+                n++;
+        }
 #ifdef DEBUG
-	uloga("'%s()': SFC cached %d object descriptors, size = %zu.\n", 
-		__func__, n, sizeof(*l) *n);
+        uloga("'%s()': SFC cached %d object descriptors, size = %zu.\n", 
+            __func__, n, sizeof(*l) *n);
 #endif
+        is_sfc_hash_list_free = 1;
 }
 
 #if 0 /* DELETE this unused part. */
@@ -695,9 +699,9 @@ struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions
 
 void ssd_free(struct sspace *ssd)
 {
-	//        int i;
+        //        int i;
 
-	dht_free(ssd->dht);
+        dht_free(ssd->dht);
 
         //TODO: do I need a ls_free() routine ?
         free(ssd->storage);
@@ -1155,7 +1159,7 @@ struct obj_data *obj_data_alloc(struct obj_descriptor *odsc)
 	ALIGN_ADDR_QUAD_BYTES(od->data);
 	od->obj_desc = *odsc;
 
-        return od;
+    return od;
 }
 
 /*
