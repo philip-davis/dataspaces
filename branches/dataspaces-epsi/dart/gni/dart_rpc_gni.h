@@ -271,6 +271,7 @@ struct msg_buf {
 
 	struct rpc_cmd		*msg_rpc;
 
+    void            *original_msg_data;
 	void			*msg_data;
 	size_t			size;
 
@@ -286,14 +287,21 @@ struct msg_buf {
 	const struct node_id	*peer;
 };
 
+enum rpc_request_type {
+    DART_RPC_SEND = 0,
+    DART_RPC_RECEIVE,
+    DART_RPC_SEND_DIRECT,
+    DART_RPC_RECEIVE_DIRECT
+};
+
 struct rpc_request {
 	struct list_head	req_entry;
 	uint32_t       		index;	
-        int                     type; //0 for cmd, 1 for data
-  int f_data; //1: rr->mdh_data is using.
+    int                     type; //0 for cmd, 1 for data
+    int f_data; //1: rr->mdh_data is using.
 
 	async_callback		cb;
-  int                     refcont;
+    int                     refcont;
 
 	struct msg_buf		*msg;
 	void			*private;
@@ -310,6 +318,8 @@ struct rpc_request {
 	gni_mem_handle_t	mdh_data;
 
 	//?gni_post_descriptor_t	rdma_data_desc;
+    int     f_use_dart_mem;
+    enum rpc_request_type   rr_type;
 };
 
 enum rpc_component {
@@ -333,6 +343,7 @@ struct rpc_server{
 	gni_cq_handle_t		sys_cq_hndl;		// completion queue for system message
 	gni_smsg_attr_t		sys_local_smsg_attr;	// local system message attributes
 
+    gni_mem_handle_t    dart_mem_mdh;
 
 	unsigned int		*all_nic_addresses;
 
@@ -478,5 +489,9 @@ struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *pe
 
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
+
+#ifdef DART_UGNI_PREALLOC_RDMA
+int rpc_send_v1(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg);
+#endif
 
 #endif
