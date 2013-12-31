@@ -1183,23 +1183,19 @@ static int rpc_cb_req_completion(struct rpc_server *rpc_s, struct rpc_request *r
 	int err;
 	gni_return_t status = GNI_RC_SUCCESS;
 
-    if (rr->f_use_dart_mem) {
+    if (rr->f_use_prealloc_rdma_mem) {
 #ifdef DART_UGNI_PREALLOC_RDMA
         rr->refcont--;
         if (rr->refcont == 0) {
             if (rr->type == 1 || rr->f_data == 1) {
+                void *buf = rr->msg->msg_data;
+                rr->msg->msg_data = rr->msg->original_msg_data;
+
                 if (rr->rr_type == DART_RPC_RECEIVE ||
                     rr->rr_type == DART_RPC_RECEIVE_DIRECT) {
-                    void *buf = rr->msg->msg_data;
-                    rr->msg->msg_data = rr->msg->original_msg_data;
                     memcpy(rr->msg->msg_data, buf, rr->msg->size);
-                    rpc_dart_mem_free(buf);                    
                 }
-
-                if (rr->rr_type == DART_RPC_SEND ||
-                    rr->rr_type == DART_RPC_SEND_DIRECT) {
-                    rpc_dart_mem_free(rr->msg->msg_data);
-                }
+                rpc_dart_mem_free(buf);
             }
 
             (*rr->msg->cb)(rpc_s, rr->msg);
@@ -1236,7 +1232,7 @@ static int rpc_prepare_buffers(struct rpc_server *rpc_s, const struct node_id *p
 	gni_return_t status;
 	gni_mem_handle_t mdh;
 
-    if (rr->f_use_dart_mem) {
+    if (rr->f_use_prealloc_rdma_mem) {
 #ifdef DART_UGNI_PREALLOC_RDMA
         rr->msg->original_msg_data = rr->msg->msg_data;
         rr->msg->msg_data = rpc_dart_mem_malloc(rr->msg->size);
@@ -1342,7 +1338,7 @@ RESEND:
         }
 	}
 
-    if (rr->type == 1 && rr->f_use_dart_mem) {
+    if (rr->type == 1 && rr->f_use_prealloc_rdma_mem) {
 #ifdef DART_UGNI_PREALLOC_RDMA
         remote = peer->mdh_addr.index;
         status = GNI_EpSetEventData(peer->ep_hndl, local, (uint32_t)remote);
@@ -1448,7 +1444,7 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
 
 	if (rr->type == 1)
 	{
-        if (rr->f_use_dart_mem) {
+        if (rr->f_use_prealloc_rdma_mem) {
 #ifdef DART_UGNI_PREALLOC_RDMA
             rr->msg->original_msg_data = rr->msg->msg_data;
             rr->msg->msg_data = rpc_dart_mem_malloc(rr->msg->size);
@@ -2480,11 +2476,11 @@ int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg
 	rr->size = sizeof(*msg->msg_rpc);
 #ifdef DART_UGNI_PREALLOC_RDMA
     if (rpc_s->cmp_type == DART_CLIENT) {
-        rr->f_use_dart_mem = 1;
+        rr->f_use_prealloc_rdma_mem = 1;
         rr->rr_type = DART_RPC_SEND;
-    } else rr->f_use_dart_mem = 0;
+    } else rr->f_use_prealloc_rdma_mem = 0;
 #else
-    rr->f_use_dart_mem = 0;
+    rr->f_use_prealloc_rdma_mem = 0;
 #endif
 	do
 		rr->index = rpc_get_index();
@@ -2518,11 +2514,11 @@ inline static int __send_direct(struct rpc_server *rpc_s, struct node_id *peer, 
 	rr->f_vec = 0;
 #ifdef DART_UGNI_PREALLOC_RDMA
     if (rpc_s->cmp_type == DART_CLIENT) {
-        rr->f_use_dart_mem = 1;
+        rr->f_use_prealloc_rdma_mem = 1;
         rr->rr_type = DART_RPC_SEND_DIRECT;
     } 
 #else
-    rr->f_use_dart_mem = 0;
+    rr->f_use_prealloc_rdma_mem = 0;
 #endif
 	do
 		rr->index = rpc_get_index();
@@ -2577,11 +2573,11 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 	rr->size = msg->size;
 #ifdef DART_UGNI_PREALLOC_RDMA
     if (rpc_s->cmp_type == DART_CLIENT) {
-        rr->f_use_dart_mem = 1;
+        rr->f_use_prealloc_rdma_mem = 1;
         rr->rr_type = DART_RPC_RECEIVE_DIRECT;
-    } else rr->f_use_dart_mem = 0;
+    } else rr->f_use_prealloc_rdma_mem = 0;
 #else
-    rr->f_use_dart_mem = 0;
+    rr->f_use_prealloc_rdma_mem = 0;
 #endif
 	do
 		rr->index = rpc_get_index();
@@ -2616,11 +2612,11 @@ inline static int __receive(struct rpc_server *rpc_s, struct node_id *peer, stru
 	rr->f_vec = 0;
 #ifdef DART_UGNI_PREALLOC_RDMA
     if (rpc_s->cmp_type == DART_CLIENT) {
-        rr->f_use_dart_mem = 1;
+        rr->f_use_prealloc_rdma_mem = 1;
         rr->rr_type = DART_RPC_RECEIVE;
-    } else rr->f_use_dart_mem = 0;
+    } else rr->f_use_prealloc_rdma_mem = 0;
 #else
-    rr->f_use_dart_mem = 0;
+    rr->f_use_prealloc_rdma_mem = 0;
 #endif
 	do
 		rr->index = rpc_get_index();
