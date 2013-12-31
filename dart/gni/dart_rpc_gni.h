@@ -318,7 +318,7 @@ struct rpc_request {
 	gni_mem_handle_t	mdh_data;
 
 	//?gni_post_descriptor_t	rdma_data_desc;
-    int     f_use_dart_mem;
+    int     f_use_prealloc_rdma_mem;
     enum rpc_request_type   rr_type;
 };
 
