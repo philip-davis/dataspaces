@@ -252,5 +252,7 @@ int dspaces_get (const char *var_name,
  */
 int dspaces_put_sync(void);
 
+void dspaces_set_mpi_rank(int rank);
+
 #endif
 

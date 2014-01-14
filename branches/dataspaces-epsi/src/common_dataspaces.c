@@ -599,3 +599,8 @@ int common_dimes_put_sync_group(const char *group_name, int step)
     return dimes_client_put_sync_group(group_name, step);
 }
 #endif
+
+void common_dspaces_set_mpi_rank(int rank)
+{
+    dcg_set_mpi_rank(rank);
+}

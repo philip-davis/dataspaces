@@ -318,8 +318,8 @@ struct rpc_request {
 	gni_mem_handle_t	mdh_data;
 
 	//?gni_post_descriptor_t	rdma_data_desc;
-    int     f_use_prealloc_rdma_mem;
-    enum rpc_request_type   rr_type;
+    int f_use_prealloc_rdma_mem;
+    enum rpc_request_type rr_type;
 };
 
 enum rpc_component {
@@ -489,9 +489,5 @@ struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *pe
 
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
-
-#ifdef DART_UGNI_PREALLOC_RDMA
-int rpc_send_v1(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg);
-#endif
 
 #endif

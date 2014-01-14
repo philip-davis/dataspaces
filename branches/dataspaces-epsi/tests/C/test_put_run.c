@@ -175,6 +175,10 @@ static int couple_write_2d(unsigned int ts, int num_vars, enum transport_type ty
 	tm_diff = tm_end-tm_st;
 	MPI_Reduce(&tm_diff, &tm_max, 1, MPI_DOUBLE, MPI_MAX, root, gcomm_);
 
+#ifdef TIMING_PERF
+    uloga("TIMING_PERF put_data ts %u peer %d time %lf\n",
+            ts, common_rank(), tm_diff);
+#endif
 	if (rank_ == root) {
 		uloga("TS= %u TRANSPORT_TYPE= %s write MAX time= %lf\n",
 			ts, transport_type_str_, tm_max);
@@ -250,6 +254,10 @@ static int couple_write_3d(unsigned int ts, int num_vars, enum transport_type ty
 	tm_diff = tm_end-tm_st;
 	MPI_Reduce(&tm_diff, &tm_max, 1, MPI_DOUBLE, MPI_MAX, root, gcomm_);
 
+#ifdef TIMING_PERF
+    uloga("TIMING_PERF put_data ts %u peer %d time %lf\n",
+            ts, common_rank(), tm_diff);
+#endif
 	if (rank_ == root) {
 		uloga("TS= %u TRANSPORT_TYPE= %s write MAX time= %lf\n",
 			ts, transport_type_str_, tm_max);
@@ -287,12 +295,19 @@ int test_put_run(enum transport_type type, int npapp, int npx, int npy, int npz,
 	timer_start(&timer_);
 
 	int app_id = 1;
+    double tm_st, tm_end;
+    tm_st = timer_read(&timer_);
     common_init(npapp_, app_id);
+    tm_end = timer_read(&timer_);
     common_set_storage_type(row_major, type);
     common_get_transport_type_str(type, transport_type_str_);
 
 	MPI_Comm_rank(gcomm_, &rank_);
 	MPI_Comm_size(gcomm_, &nproc_);
+
+#ifdef TIMING_PERF
+    uloga("TIMING_PERF init_dspaces peer %d time %lf\n", common_rank(), tm_end-tm_st);
+#endif
 
     unsigned int ts;
 	if (dims == 2) {
@@ -326,7 +341,15 @@ int test_put_run(enum transport_type type, int npapp, int npx, int npy, int npz,
     }
 
     MPI_Barrier(gcomm_);
+
+    int ds_rank = common_rank();
+    tm_st = timer_read(&timer_);
     common_finalize();
+    tm_end = timer_read(&timer_);
+
+#ifdef TIMING_PERF
+    uloga("TIMING_PERF fini_dspaces peer %d time= %lf\n", ds_rank, tm_end-tm_st);
+#endif
 
 	return 0;	
 }
