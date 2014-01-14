@@ -473,8 +473,7 @@ int task_viz_render(struct task_descriptor *t, struct parallel_communicator *com
 int task_fb_indexing(struct task_descriptor *t, struct parallel_communicator *comm)
 {
     int err;
-    int npx, npy, npz;
-    double tm_st, tm_end;
+    double tm_st, tm_end, tm_end1;
 
     MPI_Comm_rank(comm->comm, &t->rank);
 
@@ -484,12 +483,13 @@ int task_fb_indexing(struct task_descriptor *t, struct parallel_communicator *co
 
     double *data = NULL;
     int xl, yl, zl, xu, yu, zu;
-    size_t elem_size = sizeof(double);
-    struct var_descriptor *var_desc;
+    struct var_descriptor *var_desc = &(t->input_vars[0]);
+    size_t elem_size = var_desc->size;
+    int num_double_elem = 0;
 
-    var_desc = &(t->input_vars[0]);
     set_data_decomposition(t, var_desc);
-    data = allocate_data(g.spx*g.spy*g.spz);
+    num_double_elem = (g.spx*g.spy*g.spz)*elem_size/sizeof(double);
+    data = allocate_data(num_double_elem);
     generate_bbox(&g, &xl, &yl, &zl, &xu, &yu, &zu);
     err = hstaging_get_var(var_desc->var_name, t->step, elem_size,
             xl, yl, zl, xu, yu, zu, data, NULL);
@@ -498,26 +498,51 @@ int task_fb_indexing(struct task_descriptor *t, struct parallel_communicator *co
         return -1;
     }
 
-    MPI_Barrier(comm->comm);
-    tm_end = MPI_Wtime();
-    if (t->rank == 0) {
-        uloga("%s(): fetch data time %lf\n", __func__, tm_end-tm_st);
-    }
-
     void* cas;
-    size_t num_elem = g.spx*g.spy*g.spz;
     const char *indopt = "<binning start=0 end=1000 nbins=100 scale=simple/>";
     char *colname = "var";
     int size_index = 0;
-    tm_st = MPI_Wtime();
-    cas = fb_build_index_double(data, num_elem, indopt, (void*)colname, &size_index); 
+    cas = fb_build_index_double(data, num_double_elem, indopt, (void*)colname, &size_index); 
+
+    // perform I/O
+    char index_fname[256];
+    sprintf(index_fname, "fb_index_process%d.dat", t->rank);
+    FILE *f = fopen(index_fname, "a");
+    if (f == NULL) {
+        uloga("%s(): failed to create file %s\n", __func__, index_fname);
+    } else {
+        char *data_buf = (char*)malloc(size_index);
+        memset(data_buf, 0, size_index);
+        size_t size = size_index;
+        size_t offset = 0;
+        size_t block_size = 512*1024; // 512KB
+        size_t bytes;
+        while (offset < size) {
+            if ((size-offset) >= block_size) {
+                bytes = block_size;
+            } else {
+                bytes = (size-offset);
+            }
+            fwrite(data_buf+offset, 1, bytes, f);
+            offset += bytes;
+        }
+        fclose(f); 
+        free(data_buf);
+    } 
+
     tm_end = MPI_Wtime();
     if (cas == 0) {
         uloga("%s(): fb_build_index_double failed\n", __func__);
     }
-   
+  
+    MPI_Barrier(comm->comm);
+    tm_end1 = MPI_Wtime();
+ 
     uloga("%s(): ts %d rank %d size_index %d build_index_time %lf\n", __func__,
         t->step, t->rank, size_index, tm_end-tm_st);
+    if (t->rank == 0) {
+        uloga("%s(): indexing data time %lf\n", __func__, tm_end1-tm_st);
+    }
 
     free(data);
     return 0;

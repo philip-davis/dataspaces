@@ -202,11 +202,10 @@ int hstaging_finalize()
 	}
 
 	if ( bk_info.workertype == hs_simulation_worker ) {
-		// check if all pending RDMA operations completed
+        // Free all previously allocated RDMA buffers
 		dimes_put_sync_all();
 
 		// TODO: make it more scalable...
-		// err = dcg_barrier(dcg);
 		int dart_rank = dcg_get_rank(dcg);
 		if ( 0 == dart_rank ) {
 			struct msg_buf *msg;
