@@ -94,4 +94,5 @@ int common_dimes_put_unset_group();
 int common_dimes_put_sync_group(const char *group_name, int step);
 #endif
 
+void common_dspaces_set_mpi_rank(int rank);
 #endif

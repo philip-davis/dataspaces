@@ -2052,8 +2052,8 @@ int rpc_process_msg_resend(struct rpc_server *rpc_s, struct node_id *peer_tab, i
     for (i = 0; i < num_peer; i++) {
         peer = peer_tab + i;
         if (peer->num_req > 0 && peer->num_msg_at_peer > 0) {
-            printf("%s(): %d resend to %d num_req= %d num_msg_at_peer= %d\n", __func__, 
-                rpc_s->ptlmap.id, peer->ptlmap.id, peer->num_req, peer->num_msg_at_peer);
+            //printf("%s(): %d resend to %d num_req= %d num_msg_at_peer= %d\n", __func__, 
+            //  rpc_s->ptlmap.id, peer->ptlmap.id, peer->num_req, peer->num_msg_at_peer);
             peer_process_send_list(rpc_s, peer);
         }
     }
@@ -2176,7 +2176,11 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 
 #ifdef DART_UGNI_PREALLOC_RDMA
     if (rpc_s->cmp_type == DART_CLIENT) {
-        rpc_dart_mem_init(rpc_s, 16*1024*1024);
+        rpc_dart_mem_init(rpc_s, 16*1024*1024); // MB
+    }
+
+    if (rpc_s->cmp_type == DART_SERVER) {
+        rpc_dart_mem_init(rpc_s, 96*1024*1024); // MB
     }
 #endif
 
@@ -2241,9 +2245,7 @@ int rpc_server_free(struct rpc_server *rpc_s)
 	}
 
 #ifdef DART_UGNI_PREALLOC_RDMA
-    if (rpc_s->cmp_type == DART_CLIENT) {
-        rpc_dart_mem_finalize(rpc_s);
-    }
+    rpc_dart_mem_finalize(rpc_s);
 #endif
 
 	//Free memory to index_list
@@ -2475,10 +2477,8 @@ int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg
 	rr->data = msg->msg_rpc;
 	rr->size = sizeof(*msg->msg_rpc);
 #ifdef DART_UGNI_PREALLOC_RDMA
-    if (rpc_s->cmp_type == DART_CLIENT) {
-        rr->f_use_prealloc_rdma_mem = 1;
-        rr->rr_type = DART_RPC_SEND;
-    } else rr->f_use_prealloc_rdma_mem = 0;
+    rr->f_use_prealloc_rdma_mem = 1;
+    rr->rr_type = DART_RPC_SEND;
 #else
     rr->f_use_prealloc_rdma_mem = 0;
 #endif
@@ -2513,10 +2513,8 @@ inline static int __send_direct(struct rpc_server *rpc_s, struct node_id *peer, 
 	rr->size = msg->size;
 	rr->f_vec = 0;
 #ifdef DART_UGNI_PREALLOC_RDMA
-    if (rpc_s->cmp_type == DART_CLIENT) {
-        rr->f_use_prealloc_rdma_mem = 1;
-        rr->rr_type = DART_RPC_SEND_DIRECT;
-    } 
+    rr->f_use_prealloc_rdma_mem = 1;
+    rr->rr_type = DART_RPC_SEND_DIRECT;
 #else
     rr->f_use_prealloc_rdma_mem = 0;
 #endif
@@ -2572,10 +2570,8 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 	rr->data = msg->msg_data;
 	rr->size = msg->size;
 #ifdef DART_UGNI_PREALLOC_RDMA
-    if (rpc_s->cmp_type == DART_CLIENT) {
-        rr->f_use_prealloc_rdma_mem = 1;
-        rr->rr_type = DART_RPC_RECEIVE_DIRECT;
-    } else rr->f_use_prealloc_rdma_mem = 0;
+    rr->f_use_prealloc_rdma_mem = 1;
+    rr->rr_type = DART_RPC_RECEIVE_DIRECT;
 #else
     rr->f_use_prealloc_rdma_mem = 0;
 #endif
@@ -2611,10 +2607,8 @@ inline static int __receive(struct rpc_server *rpc_s, struct node_id *peer, stru
 	rr->size = sizeof(*msg->msg_rpc);
 	rr->f_vec = 0;
 #ifdef DART_UGNI_PREALLOC_RDMA
-    if (rpc_s->cmp_type == DART_CLIENT) {
-        rr->f_use_prealloc_rdma_mem = 1;
-        rr->rr_type = DART_RPC_RECEIVE;
-    } else rr->f_use_prealloc_rdma_mem = 0;
+    rr->f_use_prealloc_rdma_mem = 1;
+    rr->rr_type = DART_RPC_RECEIVE;
 #else
     rr->f_use_prealloc_rdma_mem = 0;
 #endif

@@ -46,6 +46,10 @@ static struct dimes_client *dimes_c = NULL;
 //static enum storage_type st = row_major;
 static enum storage_type st = column_major;
 static int num_dims = 2;
+#ifdef TIMING_PERF
+static char log_header[256] = "";
+static struct timer tm_perf;
+#endif
 
 struct dimes_client_option {
     int enable_dimes_ack;
@@ -79,6 +83,7 @@ do {								\
 	} while (!(x))
 
 #define DIMES_CID	dimes_c->dcg->dc->self->ptlmap.id
+#define DIMES_RANK DIMES_CID - dimes_c->dcg->dc->cp_min_rank
 #define DC dimes_c->dcg->dc
 #define RPC_S dimes_c->dcg->dc->rpc_s 
 #define NUM_SP dimes_c->dcg->dc->num_sp
@@ -1544,7 +1549,9 @@ static int dimes_obj_get(struct obj_data *od)
 	struct query_tran_entry_d *qte;
 	int err = -ENOMEM;
 	int num_dht_nodes, i;
+#ifdef TIMING_PERF
     double tm_st, tm_end;
+#endif
 
 	qte = qte_alloc_d(od);
 	if (!qte)
@@ -1568,6 +1575,9 @@ static int dimes_obj_get(struct obj_data *od)
 	uloga("%s(): #%d get dht peers complete!\n", __func__, DIMES_CID);
 #endif
 
+#ifdef TIMING_PERF
+    tm_st = timer_read(&tm_perf);
+#endif
 	// Locate the RDMA buffers
 	err = dimes_locate_data(qte);
 	if ( err < 0 ) {
@@ -1579,6 +1589,12 @@ static int dimes_obj_get(struct obj_data *od)
     // TODO: check the received data location information
 #ifdef DEBUG
 	uloga("%s(): #%d locate data complete!\n", __func__, DIMES_CID);
+#endif
+#ifdef TIMING_PERF
+    tm_end = timer_read(&tm_perf);
+    uloga("TIMING_PERF locate_data ts %d peer %d time %lf %s\n",
+        od->obj_desc.version, DIMES_RANK, tm_end-tm_st, log_header);
+    tm_st = tm_end;
 #endif
 
 	// Fetch the data
@@ -1593,6 +1609,11 @@ static int dimes_obj_get(struct obj_data *od)
 	}
 #ifdef DEBUG
 	uloga("%s(): #%d fetch data complete!\n", __func__, DIMES_CID);
+#endif
+#ifdef TIMING_PERF
+    tm_end = timer_read(&tm_perf);
+    uloga("TIMING_PERF fetch_data ts %d peer %d time %lf %s\n",
+        od->obj_desc.version, DIMES_RANK, tm_end-tm_st, log_header);
 #endif
 out_no_data:
 	qt_free_obj_data_d(qte);
@@ -1753,7 +1774,7 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 		return dimes_c;
 	}
 
-    options.enable_pre_allocated_rdma_buffer = 0;
+    options.enable_pre_allocated_rdma_buffer = 1;
     options.pre_allocated_rdma_buffer_size = DIMES_RDMA_BUFFER_SIZE*1024*1024; // bytes
     options.rdma_buffer_size = DIMES_RDMA_BUFFER_SIZE*1024*1024; // bytes 
     options.rdma_buffer_write_usage = 0;
@@ -1790,6 +1811,11 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 	storage_init();
 	dart_rdma_init(RPC_S);
     dimes_memory_init();
+
+#ifdef TIMING_PERF
+    timer_init(&tm_perf, 1);
+    timer_start(&tm_perf);
+#endif
 
 #ifdef DEBUG
 	uloga("%s(): OK.\n", __func__);
@@ -1990,5 +2016,13 @@ int dimes_client_put_sync_group(const char *group_name, int step)
 
     return 0;
 }
+
+#ifdef TIMING_PERF
+int common_dimes_set_log_header(const char *str)
+{
+    strcpy(log_header, str);
+    return 0;
+}
+#endif
 
 #endif // end of #ifdef DS_HAVE_DIMES

@@ -238,8 +238,8 @@ static int init_sspace(struct ds_gspace *dsg_l, int num_sp, int max_versions)
     confs[1].dimz = 1;
 
     confs[2].ndims = 2;
-    confs[2].dimx = 20694;
-    confs[2].dimy = 20694;
+    confs[2].dimx = 1;
+    confs[2].dimy = 64;
     confs[2].dimz = 1;
 
     for (i = 0; i < MAX_NUM_SSD; i++) {
@@ -1198,26 +1198,19 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_descriptor *odsc
 */
 static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-        struct obj_data *od = msg->private;
-	// int err = -ENOMEM;
+    struct obj_data *od = msg->private;
 
-        // TODO: lookup sspace
-        struct sspace* ssd = lookup_sspace(dsg, od->obj_desc.name);
-        ssd_add_obj(ssd, od);
+    // TODO: lookup sspace
+    struct sspace* ssd = lookup_sspace(dsg, od->obj_desc.name);
+    ssd_add_obj(ssd, od);
 
-        free(msg);
+    free(msg);
 #ifdef DEBUG
-	uloga("'%s()': server %d finished receiving  %s, version %d.\n",
-		__func__, DSG_ID, od->obj_desc.name, od->obj_desc.version);
+    uloga("'%s()': server %d finished receiving  %s, version %d.\n",
+        __func__, DSG_ID, od->obj_desc.name, od->obj_desc.version);
 #endif
-	// obj_put_update_dht(...);
 
-        return 0;
-	/*
- err_out:
-        uloga("'%s()': failed with %d.\n", __func__, err);
-        return err;
-	*/
+    return 0;
 }
 
 /*
