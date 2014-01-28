@@ -126,7 +126,7 @@ struct dht {
   Shared space structure.
 */
 struct sspace {
-        int                     max_dim;
+        uint64_t                max_dim;
         unsigned int            bpd;
 
         struct dht              *dht;

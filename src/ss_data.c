@@ -45,13 +45,13 @@
   matrix.
 */
 struct matrix_view {
-        int                     lb[3];
-        int                     ub[3];
+        uint64_t                     lb[3];
+        uint64_t                     ub[3];
 };
 
 /* Generic matrix representation. */
 struct matrix {
-        int                     dimx, dimy, dimz;
+        uint64_t                     dimx, dimy, dimz;
         size_t                  size_elem;
         enum storage_type       mat_storage;
         struct matrix_view      mat_view;
@@ -74,11 +74,11 @@ struct sfc_hash_cache {
 static LIST_HEAD(sfc_hash_list);
 static int is_sfc_hash_list_free = 0;
 
-static int compute_bits(unsigned int n)
+static int compute_bits(uint64_t n)
 {
         int nr_bits = 0;
 
-        while (n) {
+        while (n>1) {
                 n = n >> 1;
                 nr_bits++;
         }
@@ -271,8 +271,8 @@ static void matrix_copy(struct matrix *a, struct matrix *b)
 
         typedef char matrix_elem_generic_t[a->size_elem];
 
-        int ai, aj, ak, bi, bj, bk;
-        int n;
+        uint64_t ai, aj, ak, bi, bj, bk;
+        uint64_t n;
 
         if (a->mat_storage == column_major && b->mat_storage == column_major) {
 
@@ -360,8 +360,8 @@ static void matrix_copyv(struct matrix *a, struct matrix *b)
 
         typedef char matrix_elem_generic_t[a->size_elem];
 
-        int ai, aj, bi, bj, bk; // , ak;
-        int n;
+        uint64_t ai, aj, bi, bj, bk; // , ak;
+        uint64_t n;
 
         if (a->mat_storage == column_major && b->mat_storage == column_major) {
 
@@ -582,22 +582,20 @@ static int ssd_get_bpd(struct sspace *ss)
 */
 static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
 {
-        const unsigned long sn = bbox_volume(&dht->bb_glb_domain) / dht->num_entries;
+        const uint64_t sn = bbox_volume(&dht->bb_glb_domain) / dht->num_entries;
         struct intv *i_tab, intv;
         struct dht_entry *de;
-        unsigned long len;
+        uint64_t len;
         int num_intv, i, j;
         int err = -ENOMEM;
 
         bbox_to_intv(&dht->bb_glb_domain, ssd->max_dim, ssd->bpd, 
                      &i_tab, &num_intv);
 
-        /*
-        printf("Global domain decomposes into: ");
-        for (i = 0; i < num_intv; i++)
-                printf("{%u,%u} ", i_tab[i].lb, i_tab[i].ub);
-        printf("\n");
-        */
+        //printf("%s(): Global domain decomposes into %d intervals: ", __func__, num_intv);
+        //for (i = 0; i < num_intv; i++)
+        //        printf("{%llu,%llu} ", i_tab[i].lb, i_tab[i].ub);
+        //printf("\n");
 
         for (i = 0, j = 0; i < dht->num_entries; i++) {
                 len = sn;
@@ -620,7 +618,8 @@ static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
                         }
                         len -= intv_size(&intv);
                         de->i_tab[de->num_intv++] = intv;
-                        // printf("{%u,%u} ", intv.lb, intv.ub);
+                        //printf("dht_entry %d index interval {%llu,%llu} size %llu \n",
+                        //        i, intv.lb, intv.ub, intv.ub-intv.lb+1);
                 }
 
                 de->i_virt.lb = de->i_tab[0].lb;
@@ -651,14 +650,15 @@ static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
 struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions)
 {
         struct sspace *ssd;
-	//        size_t size;
-        int max_dim, err = -ENOMEM;
+        //        size_t size;
+        uint64_t max_dim;
+        int err = -ENOMEM;
 
         // size = sizeof(*ssd); //  + sizeof(struct dht_entry) * num_nodes;
-	ssd = malloc(sizeof(*ssd));
+        ssd = malloc(sizeof(*ssd));
         if (!ssd)
                 goto err_out;
-	memset(ssd, 0, sizeof(*ssd));
+        memset(ssd, 0, sizeof(*ssd));
 
         ssd->storage = ls_alloc(max_versions);
         if (!ssd->storage) {
@@ -666,13 +666,13 @@ struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions
                 goto err_out;
         }
 
-	ssd->dht = dht_alloc(ssd, bb_domain, num_nodes, max_versions);
-	if (!ssd->dht) {
-		// TODO: free storage 
-		free(ssd->storage);
-		free(ssd);
-		goto err_out;
-	}
+        ssd->dht = dht_alloc(ssd, bb_domain, num_nodes, max_versions);
+        if (!ssd->dht) {
+                // TODO: free storage 
+                free(ssd->storage);
+                free(ssd);
+                goto err_out;
+        }
 
         max_dim = max(bb_domain->ub.c[0], bb_domain->ub.c[1]);
         if (bb_domain->num_dims > 2)
@@ -685,7 +685,7 @@ struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions
         if (err < 0) {
                 //TODO: do I need a ls_free() routine to clean up the
                 //      objects in the space ?
-		dht_free(ssd->dht);
+                dht_free(ssd->dht);
                 free(ssd->storage);
                 free(ssd);
                 goto err_out;

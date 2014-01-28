@@ -40,13 +40,13 @@
 #include "sfc.h"
 #include "queue.h"
 
-static inline unsigned int 
+static inline uint64_t 
 coord_dist(struct coord *c0, struct coord *c1, int dim)
 {
         return (c1->c[dim] - c0->c[dim] + 1);
 }
 
-int bbox_dist(struct bbox *bb, int dim)
+uint64_t bbox_dist(struct bbox *bb, int dim)
 {
         return coord_dist(&bb->lb, &bb->ub, dim);
 }
@@ -57,7 +57,7 @@ int bbox_dist(struct bbox *bb, int dim)
 */
 static void bbox_divide_in2_ondim(struct bbox *b0, struct bbox *b_tab, int dim)
 {
-        int n;
+        uint64_t n;
 
         n = (b0->lb.c[dim] + b0->ub.c[dim]) >> 1;
         b_tab[0] = b0[0];
@@ -188,9 +188,9 @@ int bbox_equals(const struct bbox *bb0, const struct bbox *bb1)
         else    return 0;
 }
 
-unsigned long bbox_volume(struct bbox *bb)
+uint64_t bbox_volume(struct bbox *bb)
 {
-        unsigned long n = 1;
+        uint64_t n = 1;
 
         switch (bb->num_dims) {
         case 3:
@@ -203,7 +203,7 @@ unsigned long bbox_volume(struct bbox *bb)
         return n;
 }
 
-static int compute_bits(int n)
+static int compute_bits(uint64_t n)
 {
         int nr_bits = 0;
 
@@ -223,9 +223,9 @@ static int compute_bits(int n)
 static void bbox_flat(struct bbox *bb, struct intv *itv, int bpd)
 {
         bitmask_t sfc_coord[3];
-        int ival[2], jval[2], kval[2];
+        uint64_t ival[2], jval[2], kval[2];
         int i, j, k;
-        unsigned long index;
+        uint64_t index;
 
         ival[0] = bb->lb.c[0];
         ival[1] = bb->ub.c[0];
@@ -280,9 +280,9 @@ static int intv_compar(const void *a, const void *b)
         else    return 0;
 }
 
-static int intv_compact(struct intv *i_tab, int num_itv)
+static uint64_t intv_compact(struct intv *i_tab, uint64_t num_itv)
 {
-        int i, j;
+        uint64_t i, j;
 
         for (i = 0, j = 1; j < num_itv; j++) {
                 if ((i_tab[i].ub + 1) == i_tab[j].lb)
@@ -300,14 +300,15 @@ static int intv_compact(struct intv *i_tab, int num_itv)
   Find the equivalence in 1d index space using a SFC for a bounding
   box bb.
 */
-void bbox_to_intv(const struct bbox *bb, int dim_virt, int bpd, 
+void bbox_to_intv(const struct bbox *bb, uint64_t dim_virt, int bpd, 
                   struct intv **intv, int *num_intv)
 {
         struct bbox *bb_virt;
         struct bbox b_tab[8];
         struct queue q_can, q_good;
         struct intv *i_tab, *i_tmp;
-        int n, i;
+        uint64_t n;
+        uint64_t i;
 
         n = dim_virt;
 
@@ -382,23 +383,23 @@ void bbox_to_intv(const struct bbox *bb, int dim_virt, int bpd,
 /*
   New test ...
 */
-void bbox_to_intv2(const struct bbox *bb, int dim_virt, int bpd, 
+void bbox_to_intv2(const struct bbox *bb, uint64_t dim_virt, int bpd, 
                   struct intv **intv, int *num_intv)
 {
-	struct bbox *bb_tab, *pbb;
-	int bb_size, bb_head, bb_tail;
+        struct bbox *bb_tab, *pbb;
+        int64_t bb_size, bb_head, bb_tail;
         struct intv *i_tab;
-	int i_num, i_size, i_resize = 0;
-        int n; // , i;
+        int64_t i_num, i_size, i_resize = 0;
+        uint64_t n; // , i;
 
         n = dim_virt;
         bpd = compute_bits(n);
 
-	bb_size = 4000;
-	bb_tab = malloc(sizeof(*bb_tab) * bb_size);
-	pbb = &bb_tab[bb_size-1];
-	bb_head = bb_size-1; 
-	bb_tail = 0;
+        bb_size = 4000;
+        bb_tab = malloc(sizeof(*bb_tab) * bb_size);
+        pbb = &bb_tab[bb_size-1];
+        bb_head = bb_size-1; 
+        bb_tail = 0;
 
         pbb->num_dims = bb->num_dims;
         pbb->lb.c[0] = pbb->lb.c[1] = pbb->lb.c[2] = 0;
@@ -408,72 +409,72 @@ void bbox_to_intv2(const struct bbox *bb, int dim_virt, int bpd,
         else
                 pbb->ub.c[2] = 0;
 
-	i_size = 4000;
-	i_num = 0;
-	i_tab = malloc(sizeof(*i_tab) * i_size);
+        i_size = 4000;
+        i_num = 0;
+        i_tab = malloc(sizeof(*i_tab) * i_size);
 
         n = 4;
         if (bb->num_dims == 3)
                 n = 8;
 
         while (bb_head != bb_tail) {
-		pbb = &bb_tab[bb_head];
+            pbb = &bb_tab[bb_head];
 
-                if (bbox_include(bb, pbb)) {
-                        /* 
-                         * Bounding box of proper size, can transform
-                         * it to 1d index.
-                         */
-			if (i_num == i_size) {
-				i_size = i_size + i_size/2;
-				i_tab = realloc(i_tab, sizeof(*i_tab) * i_size);
-				i_resize++;
-			}
-                        bbox_flat(pbb, &i_tab[i_num], bpd);
-			i_num++;
+            if (bbox_include(bb, pbb)) {
+                /* 
+                 * Bounding box of proper size, can transform
+                 * it to 1d index.
+                 */
+                if (i_num == i_size) {
+                    i_size = i_size + i_size/2;
+                    i_tab = realloc(i_tab, sizeof(*i_tab) * i_size);
+                    i_resize++;
                 }
-                else if (bbox_does_intersect(bb, pbb)) {
-			if ((bb_tail+n)%bb_size == (bb_head - (bb_head%n))) {
-				int bb_nsize = (bb_size + bb_size/2) & (~0x07);
-				struct bbox *bb_ntab;
-				int bb_nhead = bb_head - (bb_head % n);
+                bbox_flat(pbb, &i_tab[i_num], bpd);
+                i_num++;
+            }
+            else if (bbox_does_intersect(bb, pbb)) {
+                if ((bb_tail+n)%bb_size == (bb_head - (bb_head%n))) {
+                    int64_t bb_nsize = (bb_size + bb_size/2) & (~0x07);
+                    struct bbox *bb_ntab;
+                    int64_t bb_nhead = bb_head - (bb_head % n);
 
-				bb_ntab = malloc(sizeof(*bb_ntab) * bb_nsize);
-				if (bb_tail > bb_head) {
-					memcpy(bb_ntab, &bb_tab[bb_nhead], 
-					       sizeof(*bb_ntab)*(bb_tail-bb_nhead));
-				}
-				else {
-					memcpy(bb_ntab, &bb_tab[bb_nhead], 
-					       sizeof(*bb_ntab)*(bb_size-bb_nhead));
-					memcpy(&bb_ntab[bb_size-bb_nhead], bb_tab, 
-					       sizeof(*bb_ntab)*bb_tail);
+                    bb_ntab = malloc(sizeof(*bb_ntab) * bb_nsize);
+                    if (bb_tail > bb_head) {
+                        memcpy(bb_ntab, &bb_tab[bb_nhead], 
+                           sizeof(*bb_ntab)*(bb_tail-bb_nhead));
+                    }
+                    else {
+                        memcpy(bb_ntab, &bb_tab[bb_nhead], 
+                               sizeof(*bb_ntab)*(bb_size-bb_nhead));
+                        memcpy(&bb_ntab[bb_size-bb_nhead], bb_tab, 
+                               sizeof(*bb_ntab)*bb_tail);
 
-				}
-				bb_head = bb_head % n;
-				bb_tail = bb_size - n;
-				bb_size = bb_nsize;
+                    }
+                    bb_head = bb_head % n;
+                    bb_tail = bb_size - n;
+                    bb_size = bb_nsize;
 
-				free(bb_tab);
-				bb_tab = bb_ntab;
-				pbb = &bb_tab[bb_head];
-			}
-
-                        bbox_divide(pbb, &bb_tab[bb_tail]);
-			bb_tail = (bb_tail + n) % bb_size;
+                    free(bb_tab);
+                    bb_tab = bb_ntab;
+                    pbb = &bb_tab[bb_head];
                 }
 
-		bb_head = (bb_head + 1) % bb_size;
+                bbox_divide(pbb, &bb_tab[bb_tail]);
+                bb_tail = (bb_tail + n) % bb_size;
+            }
+
+            bb_head = (bb_head + 1) % bb_size;
         }
-	free(bb_tab);
+        free(bb_tab);
 
         // printf("total # boxes to decompose is %d.\n", i_num);
-	// printf("I had to resize the interval array %d times.\n", i_resize);
+        // printf("I had to resize the interval array %d times.\n", i_resize);
 
         qsort(i_tab, i_num, sizeof(*i_tab), &intv_compar);
         n = intv_compact(i_tab, i_num);
 
-	// printf("Compact size is: %d.\n", n);
+        // printf("Compact size is: %d.\n", n);
 
         /* Reduce the index array size to the used elements only. */
         i_tab = realloc(i_tab, sizeof(*i_tab) * n);
@@ -515,7 +516,7 @@ int intv_do_intersect(struct intv *i0, struct intv *i1)
         else    return 0;
 }
 
-unsigned long intv_size(struct intv *intv)
+uint64_t intv_size(struct intv *intv)
 {
         return intv->ub - intv->lb + 1;
 }

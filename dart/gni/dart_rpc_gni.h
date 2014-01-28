@@ -224,7 +224,7 @@ struct rpc_cmd {
 	struct mdh_addr_t	mdh_addr;
 	__u32			id;
 	// payload of the command
-	__u8			pad[218];
+	__u8			pad[280];
 };
 
 struct node_id {

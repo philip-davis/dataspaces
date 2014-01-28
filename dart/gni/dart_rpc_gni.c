@@ -2053,7 +2053,7 @@ int rpc_process_msg_resend(struct rpc_server *rpc_s, struct node_id *peer_tab, i
         peer = peer_tab + i;
         if (peer->num_req > 0 && peer->num_msg_at_peer > 0) {
             //printf("%s(): %d resend to %d num_req= %d num_msg_at_peer= %d\n", __func__, 
-            //  rpc_s->ptlmap.id, peer->ptlmap.id, peer->num_req, peer->num_msg_at_peer);
+              //rpc_s->ptlmap.id, peer->ptlmap.id, peer->num_req, peer->num_msg_at_peer);
             peer_process_send_list(rpc_s, peer);
         }
     }
@@ -2180,7 +2180,7 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
     }
 
     if (rpc_s->cmp_type == DART_SERVER) {
-        rpc_dart_mem_init(rpc_s, 96*1024*1024); // MB
+        rpc_dart_mem_init(rpc_s, 80*1024*1024); // MB
     }
 #endif
 
