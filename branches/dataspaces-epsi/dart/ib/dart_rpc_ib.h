@@ -150,7 +150,7 @@ struct rpc_cmd {
 	__u32 id;
 	struct ibv_mr mr;
 	int qp_num;
-	__u8 pad[218];		// payload of the command
+	__u8 pad[280];		// payload of the command
 	uint64_t wr_id;
 };
 
