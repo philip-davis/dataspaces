@@ -1,0 +1,166 @@
+Contents of this README file:
+ * About DataSpaces
+ * Building and Installing DataSpaces
+ * DataSpaces APIs
+ * Testing Applications
+
+
+About DataSpaces
+=================
+
+This package  contains the source  code and two test  applications for
+DataSpaces  run-time library, which  is  a  flexible interaction  and
+coordination framework to support coupled applications.
+
+DataSpaces is a distributed framework  build on a dynamic set of nodes
+of a HPC cluster,  which implements a virtual shared-space abstraction
+that can  be accessed  concurrently by all  applications in  a coupled
+simulation  workflow.  The  coupled  applications can  coordinate  and
+interact using  DataSpaces by publishing and  fetching scientific data
+of interest through the distributed in-memory space.
+
+DataSpaces provides  a simple, yet  powerful interface similar  to the
+tuple-space model, e.g., dspaces_put()/dspaces_get() to insert/retrieve data
+objects into/from the virtual space.
+
+
+Building and Installing DataSpaces
+==================================
+
+Please read the INSTALL file.
+
+
+DataSpaces APIs
+===============
+
+Please read header files include/dataspaces.h and include/dimes_interface.h for
+detailed API documentation. 
+
+
+Test Applications
+=================
+
+We include two set of test code in the package. They are under tests directory.
+The test is a simple workflow composed of two applications  (a data producer
+and a  data consumer),  which interact through DataSpaces at runtime. The
+workflow works as follow: The producer processes generates array of floating
+points number, obtain the write lock, write it to the staging area, then
+release the write lock. The consumer processes first obtain the read lock, read
+data from the staging area, and release the read lock. This produce/consume
+processes can go on for a number of iteration defined by user.
+
+The producer/consumer programs are written in C and Fortran and are located in
+C and Fortran directory respectively. The DataSpaces staging server code is
+written in C and in C directory.
+
+The test workflow include the following main source files:
+
+        'tests/C/dataspaces_server.c': DataSpaces staging server
+        'tests/C/test_writer.c' : data producer application
+        'tests/C/test_reader.c' : data consumer application
+        'tests/Fortran/test_put.F90' : data producer application
+        'tests/Fortran/test_get.F90' : data consumer application
+
+
+1. Building the example
+------------------------
+
+Under the tests directory (tests/C or tests/Fortran execute
+
+        $ make
+
+to   create  the   the following  binary   executables
+'/tests/C/dataspaces_server',  '/tests/C/test_reader', 'tests/C/test_writer',
+'tests/Fortran/test_put' and '/tests/Fortran/test_get'. Before running Fortran
+test code, user needs to copy the staging server executable (dataspaces_server
+) to Fortran directory. 
+
+
+2. Preparing the configuration file for DataSpaces
+---------------------------------------------------
+
+User need to create a  configuration  file: 'dataspaces.conf' under C or Fotran
+test directory. This is optional because without the config file, DataSpaces
+server will use the default configuration 'dataspaces.conf'  file should  be
+editted  according to the specific  requirements for  DataSpaces  before
+running  any jobs. The configuration parameters are:
+
+  ndim : number of  dimensions for the application data domain
+  dimx : size of x dimension
+  dimy : size of y dimension
+  dimz : size of z  dimension
+  max_versions :  the maximum  number of versions  (in iteration-based
+                  simulations) of a data object stored in DataSpaces
+  max_reader   :  the  maximum  number  of   concurrent  data  reading
+                  applications in the workflow
+
+Here is an example of a config file:
+
+## Config file for DataSpaces
+
+ndim = 3
+dimx = 1024
+dimy = 1024
+dimz = 1024
+
+# 
+max_versions = 10
+max_readers = 1
+
+# Lock type: 1 - generic, 2 - custom
+lock_type = 2
+
+
+3. How to run test workflow
+---------------------------
+
+In the scripts/fortran_test and scripts/c_test directory, we provide a number 
+of PBS job script file examples. These files should be modified according to
+the specific workflow scenario and the system you plan to run DataSpaces.
+
+The DataSpaces server executable has three command line options:
+
+  --server, -s    number of server instance/staging nodes
+  --cnodes, -c    number of compute nodes
+  --conf, -f      path to the configuration file
+
+The test application executables  "test_put" and "test_get" (or 'test_writer'
+and 'test_reader') require 8 arguments as arg1-arg8:
+
+  arg1 : number of total application processes
+  arg2 : number of processes in x direction (of the process layout)
+  arg3 : number of processes in y direction (of the process layout)
+  arg4 : number of processes in z direction (of the process layout)
+  arg5 : block size per process in x direction (of the app data domain)
+  arg6 : block size per process in y direction (of the app data domain)
+  arg7 : block size per process in z direction (of the app data domain)
+  arg8 : number of iterations
+
+Here is an example:
+  dataspaces_server -s 4 -c 72 
+  test_put 64 4 4 4 256 256 256 50 
+  test_get 8 4 2 1 256 512 1024 50 
+
+In the test/C directory, the test application executables are 'test_writer'
+and 'test_reader'. Running them requires 9 arguments:
+  arg1 : data transfer method (DATASPACES or DIMES)
+  arg2 : number of total application processes
+  arg3 : number of processes in x direction (of the process layout)
+  arg4 : number of processes in y direction (of the process layout)
+  arg5 : number of processes in z direction (of the process layout)
+  arg6 : block size per process in x direction (of the app data domain)
+  arg7 : block size per process in y direction (of the app data domain)
+  arg8 : block size per process in z direction (of the app data domain)
+  arg9 : number of iterations
+
+Here is an example:
+  dataspaces_server -s 4 -c 72
+  test_writer DATASPACES 64 4 4 4 256 256 256 50
+  test_reader DATASPACES 8 4 2 1 256 512 1024 50
+
+
+Both Fortran and C tests are using the same dataspaces_server executable written in C.
+Before running the Fortran test, you will need to copy dataspaces_server over from the C test directory.
+
+If you would like to write your own job script, please add command rm -f conf
+srv.lck to your script in order to remove config files from previous run.
