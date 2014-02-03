@@ -1,4 +1,4 @@
-#include "hybrid_staging_api.h"
+#include "hstaging_api.h"
 #include "hstaging_def.h"
 
 #include <stdio.h>

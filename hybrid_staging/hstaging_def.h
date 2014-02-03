@@ -9,6 +9,7 @@ extern "C" {
 #include "bbox.h"
 
 #define NAME_MAXLEN 128
+#define MAX_VAR_NAME_LEN 32
 #define MAX_NUM_TASKS 512 
 #define MAX_NUM_VARS 48 
 
@@ -64,7 +65,7 @@ struct hdr_register_resource {
 
 struct hdr_update_var {
 	int op;
-	char var_name[32];
+	char var_name[MAX_VAR_NAME_LEN];
 	int step;
 	int size;
 	struct bbox bb;
@@ -100,7 +101,7 @@ static char* var_type_name[] =
 
 ////
 struct var_descriptor {
-	char var_name[32];
+	char var_name[MAX_VAR_NAME_LEN];
 	int step; // time step
 	struct bbox bb; // global domain
 	size_t size; // size of data element
@@ -137,7 +138,6 @@ struct task_instance {
 };
 
 ////
-
 struct hstaging_var {
 	char name[NAME_MAXLEN];
 	enum hstaging_var_type type;

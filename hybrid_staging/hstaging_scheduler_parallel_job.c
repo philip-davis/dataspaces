@@ -14,7 +14,7 @@
 #include "ds_gspace.h"
 #include "dimes_server.h"
 
-#include "hybrid_staging_api.h"
+#include "hstaging_api.h"
 #include "hstaging_def.h"
 #include "mpi.h"
 
