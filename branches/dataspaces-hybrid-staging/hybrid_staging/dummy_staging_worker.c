@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 #include "common.h"
-#include "hybrid_staging_api.h"
+#include "hstaging_api.h"
 #include "mpi.h"
 
 #include "hpgv.h"
@@ -29,7 +29,7 @@ struct parallel_task {
 	int tid;
 	task_function func_ptr;
 };
-static struct parallel_task ptasks[64];
+static struct parallel_task ptasks[MAX_NUM_TASKS+1];
 static int num_tasks_ = 0;
 
 static enum hstaging_location_type loctype_;
@@ -183,6 +183,29 @@ static int update_var(const char *var_name, int ts)
     return err;
 }
 
+static int update_var_nodata(const char *var_name, int ts)
+{
+    int err;
+    struct var_descriptor var_desc;
+    int *c = NULL;
+    size_t elem_size = sizeof(double);
+
+    strcpy(var_desc.var_name, var_name);
+    var_desc.step = ts;
+    var_desc.bb.num_dims = 3;
+    var_desc.size = elem_size;
+    c = var_desc.bb.lb.c;
+    c[0] = 0;
+    c[1] = 0;
+    c[2] = 0;
+    c = var_desc.bb.ub.c;
+    c[0] = 0;
+    c[1] = 0;
+    c[2] = 0;
+    err = hstaging_update_var(&var_desc, OP_PUT);
+    return err;
+}
+
 static void set_data_decomposition(struct task_descriptor *t, struct var_descriptor *var_desc)
 {
 	g.rank = t->rank;
@@ -307,6 +330,41 @@ static int write_output_data(struct task_descriptor *t, const char *var_name, st
 	free(databuf);
 	return err;
 } 
+
+int dag_task(struct task_descriptor *t, struct parallel_communicator *comm)
+{
+    int comm_size, comm_rank;
+    MPI_Barrier(comm->comm);
+    MPI_Comm_size(comm->comm, &comm_size);
+    MPI_Comm_rank(comm->comm, &comm_rank);
+
+    uloga("%s(): task color= %d tid= %d step= %d rank= %d nproc= %d "
+        "num_input_vars= %d comm_size= %d comm_rank= %d\n", __func__, 
+        t->color, t->tid, t->step,
+        t->rank, t->nproc, t->num_input_vars, comm_size, comm_rank);
+    // Print input variable information
+    if (t->rank == 0) {
+        int i;
+        for (i = 0; i < t->num_input_vars; i++) {
+            uloga("%s(): task tid %d input vars %s step %d elem_size %d\n",
+                __func__, t->tid, t->input_vars[i].var_name, 
+                t->input_vars[i].step, t->input_vars[i].size);
+        }
+    }
+
+    unsigned int seconds = t->tid;
+    sleep(seconds);
+
+    MPI_Barrier(comm->comm);
+
+    if (t->rank == 0) {
+        char var_name[MAX_VAR_NAME_LEN];
+        sprintf(var_name, "task%d_output_var", t->tid);
+        update_var_nodata(var_name, t->step);
+    }
+        
+    return 0;
+}
 
 int task1(struct task_descriptor *t, struct parallel_communicator *comm)
 {
@@ -570,17 +628,72 @@ int dummy_s3d_staging_parallel_job(MPI_Comm comm, enum hstaging_location_type lo
     comms[level].comm = comm;
     recursive_split_mpi_comm(level, color);
 
-	add_task_function(1, task1);
-	add_task_function(2, task2);
-	add_task_function(3, task3);	
-	add_task_function(4, task4);	
-	add_task_function(5, task5);	
-	add_task_function(6, task6);	
+    add_task_function(1, task1);
+    add_task_function(2, task2);
+    add_task_function(3, task3);
+    add_task_function(4, task4);
+    add_task_function(5, task5);
+    add_task_function(6, task6);
     add_task_function(7, task_viz_render);
     add_task_function(8, task_fb_indexing);
 
     hstaging_register_bucket_resource(loctype_, mpi_nproc, mpi_rank);
     MPI_Barrier(comm);
+
+	struct task_descriptor t;
+	while (!hstaging_request_task(&t)) {
+		hstaging_put_sync_all();
+		err = exec_task_function(&t);	
+		if (t.num_input_vars > 0 && t.input_vars) {
+			free(t.input_vars);
+		}
+		if (err < 0) {
+			return err;
+		}
+	}
+
+    hstaging_put_sync_all();
+    parallel_comm_free();
+
+	return 0;
+ err_out:
+	return -1;
+}
+
+int dummy_dag_parallel_job(MPI_Comm comm, enum hstaging_location_type loc_type)
+{
+    int err;
+    int level, color;
+    int mpi_rank, mpi_nproc;
+    MPI_Comm_size(comm, &mpi_nproc);
+    MPI_Comm_rank(comm, &mpi_rank);
+    if ((mpi_nproc % BK_GROUP_BASIC_SIZE) != 0) {
+        uloga("%s(): error size needs to be multiply of %d\n",
+            __func__, BK_GROUP_BASIC_SIZE);
+        return -1;
+    }
+
+    parallel_comm_init();
+	loctype_ = loc_type;	
+    // TODO: simplify the API for recursive split of MPI comm
+    level = 0;
+    color = 1;
+    comms[level].level = level;
+    comms[level].color = color;
+    comms[level].comm = comm;
+    recursive_split_mpi_comm(level, color);
+
+    int tid;
+    for (tid = 1; tid < MAX_NUM_TASKS; tid++) {
+        add_task_function(tid, dag_task);
+    }
+    hstaging_register_bucket_resource(loctype_, mpi_nproc, mpi_rank);
+    MPI_Barrier(comm);
+
+    // put workflow input var to drive the execution of first task
+    if (mpi_rank == 0) {
+        update_var_nodata("workflow_input_var", 0);
+    }
 
 	struct task_descriptor t;
 	while (!hstaging_request_task(&t)) {

@@ -25,7 +25,7 @@
  */
 
 /*
-*  Fan Zhang (2013)  TASSL Rutgers University
+*  Fan Zhang (2014)  TASSL Rutgers University
 *  zhangfan@cac.rutgers.edu
 */
 #include <stdio.h>
@@ -35,66 +35,40 @@
 
 #include "mpi.h"
 
-#include "hstaging_partition.h"
-#include "hybrid_staging_api.h"
+#include "hstaging_api.h"
 
-extern int dummy_s3d_simulation(MPI_Comm comm, int num_ts);
-extern int dummy_s3d_staging_serial_job(MPI_Comm comm);
-extern int dummy_s3d_staging_parallel_job(MPI_Comm comm);
+extern int dummy_dag_parallel_job(MPI_Comm comm, enum hstaging_location_type loc_type);
 
-//static enum execution_mode exemode_ = hs_hybrid_staging_mode;
-static enum execution_mode exemode_ = hs_staging_mode;
-static enum core_type coretype_ = hs_worker_core;
-static enum location_type loctype_ = hs_intransit;
-static enum worker_type workertype_;
+static enum hstaging_location_type loctype_ = loc_insitu;
+static enum worker_type workertype_ = hs_simulation_worker;
 
 int main(int argc, char **argv)
 {
 	int err;
-	int appid, num_ts;
-    int num_insitu_proc, num_intransit_proc;
+	int appid, rank, nproc;
+    MPI_Comm comm;
 
-    if (argc != 4) {
-        uloga("wrong number of args\n");
-        return -1;
+	appid = 1;
+	MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_split(MPI_COMM_WORLD, appid, rank, &comm);
+	MPI_Comm_size(comm, &nproc);
+
+    if (rank == 0) {
+        uloga("DAG execution: num_worker= %d\n", nproc);
     }
+	err = hstaging_init(nproc, appid, workertype_); 
 
-    num_insitu_proc = atoi(argv[1]);
-    num_intransit_proc = atoi(argv[2]);
-    num_ts = atoi(argv[3]);
-	
-	hs_comm_init(argc, argv);
-	err = hs_comm_perform_split(exemode_, coretype_, loctype_, &workertype_);
-	if (err < 0) {
+	err = dummy_dag_parallel_job(comm, loctype_);
+	if (err < 0)
 		goto err_out;
-	}
 
-	appid = 2;
-	err = ds_init(num_intransit_proc, workertype_, appid);	
+	hstaging_finalize();
 
-	MPI_Comm comm = hs_get_communicator_l2();
-	int num_worker = 0;
-	MPI_Comm_size(comm, &num_worker);
-	switch (workertype_) {
-	case hs_simulation_worker:
-		uloga("in-transit driver: should not happen!\n");
-		goto err_out;
-		break;
-	case hs_staging_worker:
-		uloga("in-transit staging: num_worker= %d\n", num_worker);
-		err = dummy_s3d_staging_parallel_job(comm);
-		if (err < 0)
-			goto err_out;
-		break;
-	default:
-		uloga("Wrong workertype %u\n", workertype_);
-		return -1;
-	}
+	MPI_Barrier(comm);
+	MPI_Finalize();
 
-	ds_finalize();
-	hs_comm_fin();
-
-	return 0;
+	return 0;	
 err_out:
 	uloga("error out!\n");
 	return -1;	

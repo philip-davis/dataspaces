@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 #include "common.h"
-#include "hybrid_staging_api.h"
+#include "hstaging_api.h"
 #include "mpi.h"
 
 static struct timer timer;

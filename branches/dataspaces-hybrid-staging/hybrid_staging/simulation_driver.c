@@ -35,7 +35,7 @@
 
 #include "mpi.h"
 
-#include "hybrid_staging_api.h"
+#include "hstaging_api.h"
 
 extern int dummy_s3d_simulation(MPI_Comm comm, int num_ts, int npx, int npy, int npz, int spx, int spy, int spz, int dims);
 

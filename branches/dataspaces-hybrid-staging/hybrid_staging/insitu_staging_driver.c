@@ -35,20 +35,17 @@
 
 #include "mpi.h"
 
-#include "hybrid_staging_api.h"
+#include "hstaging_api.h"
 
 extern int dummy_s3d_staging_parallel_job(MPI_Comm, enum hstaging_location_type);
 
-static enum execution_mode exemode_ = hs_hybrid_staging_mode;
 static enum hstaging_location_type loctype_ = loc_insitu;
-static enum core_type coretype_ = hs_worker_core;
 static enum worker_type workertype_ = hs_staging_worker;
 
 int main(int argc, char **argv)
 {
 	int err;
 	int appid, rank, nproc;
-	int num_insitu_proc, num_intransit_proc;
 	MPI_Comm comm;
 
     appid = 2;
