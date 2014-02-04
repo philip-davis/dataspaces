@@ -37,11 +37,15 @@
 #include "dart.h"
 #include "ss_data.h"
 
+#define MAX_NUM_SSD 3 
+
 struct ds_gspace {
         struct dart_server      *ds;
 
         /* Shared space data structure. */
         struct sspace           *ssd;
+
+        struct sspace*          spaces[MAX_NUM_SSD];  
 
         /* Continuous query list. */
         struct list_head        cq_list;

@@ -123,10 +123,14 @@ static int sys_bar_send(struct rpc_server *rpc_s, int peerid)	//Done
 */
 static int sys_send(struct rpc_server *rpc_s, struct node_id *peer, struct hdr_sys *hs)	//Done
 {
-	if(peer->sys_conn.f_connected != 1) {
-		printf("SYS channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
-		goto err_out;
+
+	while(peer->sys_conn.f_connected != 1) {
+		//      printf("SYS channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
+		//      sys_connect(rpc_s,peer);
+//              goto err_out;
+//              sleep(1);
 	}
+
 
 	int err;
 
@@ -216,7 +220,7 @@ static int sys_process_event(struct rpc_server *rpc_s)
 	int num_ds = rpc_s->cur_num_peer - rpc_s->num_rpc_per_buff;
 
 	j = 0;
-	for(i = num_ds; i < rpc_s->cur_num_peer; i++) {
+	for(i = rpc_s->num_sp; i < rpc_s->num_sp + rpc_s->app_num_peers; i++) {
 		if(rpc_s->peer_tab[i].ptlmap.id == rpc_s->ptlmap.id) {
 			seq = i - num_ds;
 			continue;
@@ -360,13 +364,14 @@ static int sys_cleanup(struct rpc_server *rpc_s)
 // this function can only be used after rpc_server is fully initiated
 static struct node_id *rpc_get_peer(struct rpc_server *rpc_s, int peer_id)
 {
-	if(rpc_s->ptlmap.appid == 0)
+//      printf("I am %d ask for %d %d %d\n",rpc_s->ptlmap.id, peer_id, rpc_s->app_minid, rpc_s->app_num_peers);
+	if(rpc_s->ptlmap.appid == 0 || peer_id >= rpc_s->app_minid + rpc_s->app_num_peers)
 		return rpc_s->peer_tab + peer_id;
 	else {
 		if(peer_id < rpc_s->app_minid)
-			return rpc_s->peer_tab + peer_id;
+			return rpc_s->peer_tab + peer_id + rpc_s->app_num_peers + rpc_s->num_sp;
 		else
-			return (rpc_s->peer_tab + rpc_s->cur_num_peer - rpc_s->app_num_peers) + (peer_id - rpc_s->app_minid);
+			return (rpc_s->peer_tab + peer_id - rpc_s->app_minid + rpc_s->num_sp);
 	}
 }
 
@@ -731,7 +736,7 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
 	struct ibv_send_wr wr, *bad_wr = NULL;
 	struct ibv_sge sge;
 
-//printf("data to be fetched is size(%d) from peer(%d).\n", rr->size, peer->ptlmap.id);
+	//printf("data to be fetched is size(%d) from peer(%d).\n", rr->size, peer->ptlmap.id);
 	if(rr->type == 1) {
 		rr->data_mr = ibv_reg_mr(peer->rpc_conn.pd, rr->data, rr->size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
 		if(rr->data_mr == NULL) {
@@ -747,7 +752,6 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
 		wr.sg_list = &sge;
 		wr.num_sge = 1;
 		wr.send_flags = IBV_SEND_SIGNALED;
-
 
 		wr.wr.rdma.remote_addr = (uintptr_t) rr->msg->mr.addr;
 		wr.wr.rdma.rkey = rr->msg->mr.rkey;
@@ -1096,6 +1100,10 @@ struct rpc_server *rpc_server_init(int option, char *ip, int port, int num_buff,
 	rpc_s->listen_id = NULL;
 	rpc_s->rpc_ec = NULL;
 
+	rpc_s->alloc_pd_flag = 0;
+	rpc_s->global_pd = NULL;
+	rpc_s->global_ctx = NULL;
+
 	if(option == 1) {
 		localip = ip;
 		rpc_s->ptlmap.address.sin_addr.s_addr = inet_addr(ip);
@@ -1180,8 +1188,6 @@ int rpc_post_recv(struct rpc_server *rpc_s, struct node_id *peer)
 	rr = rr_comm_alloc(rpc_s->num_buf);
 
 	peer->rr = rr;
-
-
 
 	//rr = register_memory(peer);
 	rr->peerid = peer->ptlmap.id;
@@ -1406,7 +1412,13 @@ void build_context(struct ibv_context *verbs, struct connection *conn)
 	int err, flags;
 	conn->ctx = verbs;
 
-	conn->pd = ibv_alloc_pd(conn->ctx);
+	if(!rpc_s_instance->alloc_pd_flag) {
+		rpc_s_instance->global_pd = ibv_alloc_pd(conn->ctx);
+		rpc_s_instance->global_ctx = verbs;
+		rpc_s_instance->alloc_pd_flag = 1;
+	}
+	conn->pd = rpc_s_instance->global_pd;
+	// uloga("%s(): conn->ctx= %x, conn->pd= %x, global_ctx= %x, global_pd= %x\n"           , __func__, conn->ctx, conn->pd, rpc_s_instance->global_ctx, rpc_s_instance->global_pd);
 	if(conn->pd == NULL)
 		printf("ibv_alloc_pd return NULL in %s.\n", __func__);
 	conn->comp_channel = ibv_create_comp_channel(conn->ctx);
@@ -1436,7 +1448,6 @@ void build_context(struct ibv_context *verbs, struct connection *conn)
 		exit(EXIT_FAILURE);
 	}
 //new
-
 }
 
 void build_qp_attr(struct ibv_qp_init_attr *qp_attr, struct connection *conn, struct rpc_server *rpc_s)
@@ -1555,7 +1566,11 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 					rpc_s->app_minid = ((struct con_param *) event_copy.param.conn.private_data)->type;
 					rpc_s->ptlmap.id = ((struct con_param *) event_copy.param.conn.private_data)->pm_sp.id;
 					rpc_s->peer_tab = calloc(1, sizeof(struct node_id) * (rpc_s->num_rpc_per_buff + ((struct con_param *) event_copy.param.conn.private_data)->num_cp));
+
 					peer->ptlmap = ((struct con_param *) event_copy.param.conn.private_data)->pm_cp;
+
+//                                        printf("Client %d %d\n",rpc_s->ptlmap.id,((struct con_param *) event_copy.param.conn.private_data)->num_cp);
+
 //                                      rpc_s->app_minid = ((struct con_param *) event_copy.param.conn.private_data)->type;     //Here is a tricky design. Master Server puts app_minid into this 'type' field and return.
 //printf("id is %d, appminid is%d.\n", rpc_s->ptlmap.id, rpc_s->app_minid);
 				} else
@@ -2340,9 +2355,9 @@ void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cm
 	return;
 }
 
-void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg,
-                        struct rpc_cmd *cmd) {
-        return;
+void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd)
+{
+	return;
 }
 
 void rpc_cache_msg(struct msg_buf *msg, struct rpc_cmd *cmd)

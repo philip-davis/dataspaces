@@ -40,6 +40,7 @@ DIST_COMMON = $(noinst_HEADERS) $(srcdir)/Makefile.am \
 	$(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/config/ac_dcmf.m4 \
+	$(top_srcdir)/config/ac_dimes_conf.m4 \
 	$(top_srcdir)/config/ac_gni_ptag.m4 \
 	$(top_srcdir)/config/ac_infiniband.m4 \
 	$(top_srcdir)/config/ac_portals.m4 \

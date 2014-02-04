@@ -92,12 +92,13 @@ struct hdr_register{
 }__attribute__((__packed__));
 
 /* Header for the locking service. */
+#define LOCK_NAME_SIZE 64
 struct lockhdr {
         int                     type;
         int                     rc;
         int                     id;
         int                     lock_num;
-	char			name[16]; //lock name
+	char			name[LOCK_NAME_SIZE]; //lock name
 } __attribute__ ((__packed__));
 
 /* Header for space info. */
@@ -308,11 +309,9 @@ enum cmd_type {
 	rpc_put_finish,
 #ifdef DS_HAVE_DIMES
 	dimes_ss_info_msg,
-	dimes_locate_data_test_msg,
-	dimes_put_test_msg,
 	dimes_locate_data_msg,
 	dimes_put_msg,
-	dimes_obj_get_ack_v1_msg,
+	dimes_get_ack_msg,
 	dimes_obj_get_ack_v2_msg,
 #endif
 	/* Added for CCGrid Demo. */
@@ -388,11 +387,7 @@ struct msg_buf* msg_buf_alloc(struct rpc_server *, const struct node_id *, int);
 
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg,
 			struct rpc_cmd *cmd);
-
-inline void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg,
-                        struct rpc_cmd *cmd) {
-	return;
-}
+void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 
 #ifdef __cplusplus
 }

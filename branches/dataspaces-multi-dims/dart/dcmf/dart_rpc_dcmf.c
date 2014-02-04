@@ -1456,3 +1456,8 @@ void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg,
 {
 	peer->cached_remote_memregion = &cmd->mem_region;
 }
+
+void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg,
+                        struct rpc_cmd *cmd) {
+    return;
+}

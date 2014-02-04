@@ -45,9 +45,12 @@
 #define RECVHEADER	0
 #define SYSPAD          24   //24 default for 10 credit
 #define SYSNUM		rpc_s->num_buf
-#define RECVCREDIT     	rpc_s->num_buf/2-4
 #define SENDCREDIT	rpc_s->num_buf/2-2
+#define RECVCREDIT	rpc_s->num_buf/2-4
 #define SEC 0.1
+
+#define ENTRY_COUNT             65535
+#define INDEX_COUNT             65536
 
 #define SYS_WAIT_COMPLETION(x)					\
 	while (!(x)) {						\
@@ -61,6 +64,7 @@
 #define rank2id(rpc_s, rank)	((rank) + (rpc_s->app_minid))
 #define id2rank(rpc_s, id)	((id) - (rpc_s->app_minid))
 #define myrank(rpc_s)		id2rank(rpc_s, myid(rpc_s))
+
 
 static int first_spawned;
 static int rank_id_pmi; //this global rank_id is fetched by using pmi library.
@@ -90,6 +94,339 @@ static struct {
 	(4)message passing & data transfering functions
 	Public APIs
  =====================================================*/
+
+#ifdef DART_UGNI_PREALLOC_RDMA 
+size_t dart_buffer_size = 0;
+//Starting pointer to the memory buffer
+uint64_t dart_buffer_ptr = 0;
+
+/*linked list for free dart_buf_block. And the blocks in the list
+are sorted by block_size in ascending order.
+*/
+struct list_head free_blocks_list;
+
+/*linked list for in use dart_buf_block. And the blocks in the list
+are sorted by block_size in ascending order.
+*/
+struct list_head used_blocks_list;
+
+enum mem_block_status {
+    free_block,
+    used_block
+};
+
+/*dynamic mem block data structure*/
+struct dart_buf_block {
+    struct list_head mem_block_entry;
+    size_t block_size;
+    uint64_t block_ptr;
+    enum mem_block_status block_status;
+};
+
+#define SIZE_DART_MEM_BLOCK sizeof(struct dart_buf_block)
+
+//
+// Cleanup a blocks list
+//
+static void dart_buf_cleanup_list(struct list_head* blocks_list)
+{
+    struct dart_buf_block * mb, *tmp;
+    list_for_each_entry_safe(mb, tmp, blocks_list, struct dart_buf_block, mem_block_entry) {
+        list_del(&mb->mem_block_entry);
+        free(mb);//free the memory
+    }
+}
+
+//
+// Insert a memory block into the list that sorted by block_size.
+//
+static void dart_buf_insert_block(
+    struct dart_buf_block *block,
+    struct list_head* blocks_list)
+{
+    struct dart_buf_block *mb, *tmp;
+    int inserted = 0;
+
+    list_for_each_entry_safe(mb, tmp, blocks_list, struct dart_buf_block, mem_block_entry) {
+        if(block->block_size <= mb->block_size) {
+            //add the block befor the position of mb in the list.
+            list_add_before_pos(&block->mem_block_entry, &mb->mem_block_entry);
+            inserted = 1;
+            break;
+        }
+    }
+
+    //add the block to the tail
+    if (!inserted)
+        list_add_tail(&block->mem_block_entry, blocks_list);
+}
+
+/* 
+   Insert a memory  block into the  free blocks list,  and merge
+   contiguous free blocks into larger new one.
+*/
+static void dart_buf_insert_block_to_freelist(
+    struct dart_buf_block *block,
+    struct list_head *blocks_list)
+{
+    /*    low_memory_addresses ------->  high_memory_addresses
+    |             |    |                         |
+    | contiguous_block_before |  block |  contiguous_block_after | 
+    |                         |        |                 |
+    */
+    //the contiguous free block before 'block' in the buffer
+    struct dart_buf_block *contiguous_block_before = NULL;
+    //the contiguous free block after 'block' in the buffer
+    struct dart_buf_block *contiguous_block_after = NULL;
+
+    struct dart_buf_block * mb, *tmp;
+    list_for_each_entry_safe(mb, tmp, blocks_list, struct dart_buf_block, mem_block_entry) {
+        if(block->block_ptr == (mb->block_ptr + mb->block_size) )
+            contiguous_block_before = mb;
+        if(mb->block_ptr == (block->block_ptr + block->block_size) )
+            contiguous_block_after = mb;
+    }
+
+    if(contiguous_block_after) {
+        //update the size of the merged new free block
+        block->block_size = block->block_size + contiguous_block_after->block_size;
+        //the starting address of the merged new free block does NOT change
+
+        //remove from free blocks list
+        list_del(&contiguous_block_after->mem_block_entry);
+        free(contiguous_block_after);
+    }
+
+    if(contiguous_block_before) {
+        //update the size of the merged new free block
+        block->block_size = block->block_size + contiguous_block_before->block_size;
+        //update the starting address of the merged new free block  
+        block->block_ptr = contiguous_block_before->block_ptr;
+
+        //remove from free blocks list
+        list_del(&contiguous_block_before->mem_block_entry);
+        free(contiguous_block_before);
+    }
+
+    //add the new free block into list
+    block->block_status = free_block;
+    dart_buf_insert_block(block, blocks_list);
+}
+
+//
+// Initialize DART Buffer
+//
+int dart_buffer_init(uint64_t base_addr, size_t size)
+{
+    INIT_LIST_HEAD(&free_blocks_list);
+    INIT_LIST_HEAD(&used_blocks_list);
+
+    dart_buffer_ptr = base_addr;
+    if (dart_buffer_ptr != 0) {
+        dart_buffer_size = size;
+
+        //create the first free block
+        struct dart_buf_block *block;
+        block = (struct dart_buf_block*)malloc(SIZE_DART_MEM_BLOCK);
+        block->block_size = size;
+        block->block_ptr = dart_buffer_ptr;
+        block->block_status = free_block;
+
+        //add the block into free blocks list 
+        dart_buf_insert_block(block, &free_blocks_list);
+
+        return 0;
+    }
+    else    return -1;
+}
+
+//
+// Finalize DART Buffer 
+//
+int dart_buffer_finalize()
+{
+    //cleanup the free_blocks_list
+    dart_buf_cleanup_list(&free_blocks_list);
+
+    //cleanup the used_blocks_list
+    dart_buf_cleanup_list(&used_blocks_list);
+
+    return 0;
+}
+
+size_t dart_buffer_total_size()
+{
+    return dart_buffer_size;
+}
+
+void dart_buffer_alloc(size_t size, uint64_t *ptr)
+{
+    //If requested buffer size exceeds the total available
+    if (size > dart_buffer_size)
+        goto err_out;
+
+    //Search for usable free block with the smallest data size
+    struct dart_buf_block * mb, *tmp;
+    int found = 0;
+    list_for_each_entry_safe(mb, tmp, &free_blocks_list, struct dart_buf_block, 
+mem_block_entry){
+        if(mb->block_size >= size) {
+            //Usable free block found
+            found = 1;
+            break;
+        }
+    }
+
+    if (found) {
+        /*Usable free block 'mb' found*/
+
+        //new_free_mb is the new free memory block after allocating space from 'mb'
+        //new_used_mb is the new in_use memory block after allocating space from 'mb'
+        struct dart_buf_block * new_free_mb, * new_used_mb;
+
+        //remove 'mb' from free blocks list
+        list_del(&mb->mem_block_entry);
+
+        if(mb->block_size == size){
+            new_free_mb = NULL;
+            new_used_mb = mb;
+            new_used_mb->block_status = used_block;
+        }
+
+        if(mb->block_size > size){
+            new_free_mb = (struct dart_buf_block*)malloc(SIZE_DART_MEM_BLOCK);
+            new_free_mb->block_status = free_block;
+            new_free_mb->block_ptr = mb->block_ptr + size;
+            new_free_mb->block_size = mb->block_size - size;
+            new_used_mb = mb;
+            new_used_mb->block_status = used_block;
+            new_used_mb->block_size = size;
+        }
+
+        //add 'new_free_mb'  into free blocks list
+        if(new_free_mb != NULL)
+            dart_buf_insert_block(new_free_mb, &free_blocks_list);
+        //add 'new_used_mb' into used blocks list 
+        if(new_used_mb != NULL)
+            dart_buf_insert_block(new_used_mb, &used_blocks_list);
+
+        *ptr = (uint64_t)new_used_mb->block_ptr;
+        return;
+    }
+    else {
+        /*Could not find usable free block*/
+        fprintf(stderr, "%s: failed! no space\n", __func__);
+        goto err_out;
+    }
+
+ err_out:
+    *ptr = (uint64_t)0;
+    return;
+}
+
+void dart_buffer_free(uint64_t ptr)
+{
+    /*test if the value of ptr is valid*/
+    if (ptr == 0 || dart_buffer_ptr == 0)
+        return;
+
+    uint64_t start_ptr = dart_buffer_ptr;
+    uint64_t end_ptr = dart_buffer_ptr + dart_buffer_size - 1;
+    if ( ptr < start_ptr || ptr > end_ptr) {
+        fprintf(stderr, "%s(): error invalid address! start_ptr %llx end_ptr %llx ptr %llx\n", __func__, start_ptr, end_ptr, ptr);
+        return;
+    }
+
+    /*search for the corresponding in_use memory block for ptr*/
+    struct dart_buf_block * mb, *tmp;
+    unsigned int found = 0;//flag value init as 0!
+    list_for_each_entry_safe(mb, tmp, &used_blocks_list, struct dart_buf_block, mem_block_entry){
+        if(mb->block_ptr == ptr) {
+            found = 1;
+            break;
+        }
+    }
+
+    if (found) {
+
+        //remove 'mb' from used blocks list
+        list_del(&mb->mem_block_entry);
+
+        //add back 'mb' into free blocks list
+        dart_buf_insert_block_to_freelist(mb, &free_blocks_list);
+    }
+    else return;
+}
+
+static inline uint64_t rpc_dart_mem_malloc(size_t size)
+{
+    uint64_t buf;
+    dart_buffer_alloc(size, &buf);
+    if (!buf) {
+        printf("%s(): dart_buffer_alloc() failed\n", __func__);
+        return 0;
+    }
+
+    return buf;
+}
+
+static inline void rpc_dart_mem_free(void *ptr)
+{
+    dart_buffer_free((uint64_t)ptr);
+}
+
+static int rpc_dart_mem_init(struct rpc_server *rpc_s, size_t dart_mem_buffer_size)
+{
+    int err;
+    void *buf;
+    gni_return_t status;
+
+    buf = malloc(dart_mem_buffer_size);
+    if (!buf) {
+        printf("%s(): malloc failed\n", __func__);
+        goto err_out;
+    }
+    memset(buf, 0, dart_mem_buffer_size);
+
+    status = GNI_MemRegister(rpc_s->nic_hndl,
+                            (uint64_t)buf,
+                            (uint64_t)dart_mem_buffer_size,
+                            rpc_s->dst_cq_hndl,
+                            GNI_MEM_READWRITE,
+                            -1,
+                            &rpc_s->dart_mem_mdh);
+    if (status != GNI_RC_SUCCESS) {
+        printf("Fail: %d GNI_MemRegister returned error with %d in %s.\n",
+                rpc_s->ptlmap.id, status, __func__);
+        err = -1;
+        free(buf);
+        goto err_out;
+    }
+
+    dart_buffer_init((uint64_t)buf, dart_mem_buffer_size);
+    return 0;
+err_out:
+    return err;
+}
+
+static int rpc_dart_mem_finalize(struct rpc_server *rpc_s)
+{
+    int err;
+    gni_return_t status;
+
+    status = GNI_MemDeregister(rpc_s->nic_hndl, &rpc_s->dart_mem_mdh);
+    if ( status != GNI_RC_SUCCESS ) {
+        printf("Fail: %d GNI_MemDeregister returned error with %d in %s.\n",
+                rpc_s->ptlmap.id, status, __func__);
+    }
+
+    uint64_t addr = dart_buffer_ptr;
+    dart_buffer_finalize();
+    free(addr);
+
+    return 0;
+}
+#endif
 
 
 /* =====================================================
@@ -153,7 +490,7 @@ static int rpc_index_init(struct rpc_server *rpc_s)
 	struct rr_index *ri;
 
 	INIT_LIST_HEAD(&index_list);
-	for(i=1; i<65536; i++)
+	for(i=1; i<INDEX_COUNT-1; i++)
 	{
 		ri = calloc(1, sizeof(struct rr_index));
 		if(ri==NULL)
@@ -180,6 +517,7 @@ static uint32_t rpc_get_index(void)
 		free(ri);
 		break;
 	}
+	//	printf("Rank %d: get index %d.\n", rpc_s_instance->ptlmap.id, current_index);
 	return current_index;
 }
 
@@ -195,6 +533,8 @@ static int rpc_free_index(int index)
 
 	ri->index = index;
 	list_add_tail(&ri->index_entry, &index_list);
+
+	//	printf("Rank %d: free index %d.\n", rpc_s_instance->ptlmap.id, index);
 	
 	return 0;
 }
@@ -205,31 +545,31 @@ static int rpc_free_index(int index)
 
 static int init_gni (struct rpc_server *rpc_s)
 {
-        int err;
-	int modes = 0;
-	int device_id = DEVICE_ID;
-	gni_return_t status;
+    int err;
+    int modes = 0;
+    int device_id = DEVICE_ID;
+    gni_return_t status;
 
+    /* Try from environment first DSPACES_GNI_PTAG (decimal) and DSPACES_GNI_COOKIE (hexa)*/
+    ptag = get_ptag_env("DSPACES_GNI_PTAG");
+    if (ptag != 0)
+        cookie = get_cookie_env("DSPACES_GNI_COOKIE");
+    //uloga(" ****** (%s) from env: ptag=%d  cookie=%x.\n", __func__, ptag, cookie);
+
+    if (ptag == 0 || cookie == 0) {
 #ifdef GNI_PTAG
         ptag = GNI_PTAG;
         cookie = GNI_COOKIE;
         //uloga(" ****** (%s) from configure: ptag=%d  cookie=%x.\n", __func__, ptag, cookie);
 #else
-	/* Try from environment first DSPACES_GNI_PTAG (decimal) and DSPACES_GNI_COOKIE (hexa)*/
-	ptag = get_ptag_env("DSPACES_GNI_PTAG");
-	if (ptag != 0)
-		cookie = get_cookie_env("DSPACES_GNI_COOKIE");
-        //uloga(" ****** (%s) from env: ptag=%d  cookie=%x.\n", __func__, ptag, cookie);
-
-	if (ptag == 0 || cookie == 0) {
-		err = get_named_dom("ADIOS", &ptag, &cookie);
-		if(err != 0){
-			printf("Fail: ptag and cookie returned error. %d.\n", err);
-			goto err_out;
-		}
-            //uloga(" ****** (%s) from apstat: ptag=%d  cookie=%x.\n", __func__, ptag, cookie);
+        err = get_named_dom("ADIOS", &ptag, &cookie);
+        if(err != 0){
+            printf("Fail: ptag and cookie returned error. %d.\n", err);
+            goto err_out;
         }
+    //uloga(" ****** (%s) from apstat: ptag=%d  cookie=%x.\n", __func__, ptag, cookie);
 #endif
+    }
 
 	status = GNI_CdmCreate(rank_id_pmi, ptag, cookie, modes, &rpc_s->cdm_handle);
 	if (status != GNI_RC_SUCCESS) 
@@ -375,7 +715,7 @@ static int sys_send(struct rpc_server *rpc_s, struct node_id *peer, struct hdr_s
 	int err;
 	uint32_t local, remote;
 
-	remote = rpc_s->ptlmap.id;
+	remote = rpc_s->ptlmap.id+INDEX_COUNT;
 	local = rpc_s->ptlmap.id;
  
         status = GNI_EpSetEventData(peer->sys_ep_hndl, local, remote);
@@ -555,7 +895,7 @@ static int sys_cleanup (struct rpc_server *rpc_s)
 	gni_return_t status;
 	int i, err;
 	void *tmp;
-
+	/*
 	status = GNI_MemDeregister(rpc_s->nic_hndl, &rpc_s->sys_local_smsg_attr.mem_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
@@ -564,6 +904,7 @@ static int sys_cleanup (struct rpc_server *rpc_s)
 	}
 
 	free(rpc_s->sys_mem);
+	*///SCA SYS
 
 	for(i=0; i < rpc_s->num_rpc_per_buff; i++)
 	{
@@ -589,7 +930,7 @@ static int sys_cleanup (struct rpc_server *rpc_s)
 	status = GNI_CqDestroy(rpc_s->sys_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
-		printf("Fail: GNI_MemDeregister returned error. %d.\n", status);
+		printf("Fail: GNI_CqDestroy returned error. %d.\n", status);
 		goto err_out;
 	}
 
@@ -842,24 +1183,43 @@ static int rpc_cb_req_completion(struct rpc_server *rpc_s, struct rpc_request *r
 	int err;
 	gni_return_t status = GNI_RC_SUCCESS;
 
-	rr->refcont--;
+    if (rr->f_use_prealloc_rdma_mem) {
+#ifdef DART_UGNI_PREALLOC_RDMA
+        rr->refcont--;
+        if (rr->refcont == 0) {
+            if (rr->type == 1 || rr->f_data == 1) {
+                void *buf = rr->msg->msg_data;
+                rr->msg->msg_data = rr->msg->original_msg_data;
 
-	if (rr->refcont == 0) {
-	       if(rr->type == 1 || rr->f_data == 1)
-	       {
+                if (rr->rr_type == DART_RPC_RECEIVE ||
+                    rr->rr_type == DART_RPC_RECEIVE_DIRECT) {
+                    memcpy(rr->msg->msg_data, buf, rr->msg->size);
+                }
+                rpc_dart_mem_free(buf);
+            }
+
+            (*rr->msg->cb)(rpc_s, rr->msg);
+        }
+#endif
+    } else {
+        rr->refcont--;
+        if (rr->refcont == 0) {
+           if(rr->type == 1 || rr->f_data == 1)
+           {
 	            status = GNI_MemDeregister(rpc_s->nic_hndl, &rr->mdh_data);
 	            if(status != GNI_RC_SUCCESS)
 	            {
-		         printf("(%s) Fail: GNI_MemDeregister returned error. (%d)\n", __func__, status);
-		         return status;
+		            printf("(%s) Fail: GNI_MemDeregister returned error. (%d)\n", __func__, status);
+		            return status;
 	            }
 
-	       }
+           }
 
 	       err = (*rr->msg->cb)(rpc_s, rr->msg);
 	       if(err!=0)
-		 return -1;
-	}
+                 return -1;
+	    }
+    }
 
 	return 0;
 }
@@ -871,34 +1231,56 @@ static int rpc_prepare_buffers(struct rpc_server *rpc_s, const struct node_id *p
 	int err;
 	gni_return_t status;
 	gni_mem_handle_t mdh;
-	
-	//No Vector Operation in this version
-	//added for alignment
 
-	status = GNI_MemRegister(rpc_s->nic_hndl, (uint64_t)rr->msg->msg_data, (uint64_t)(rr->msg->size), rpc_s->dst_cq_hndl, GNI_MEM_READWRITE, -1, &mdh);
-	if (status != GNI_RC_SUCCESS)
-	{
-		printf("Fail: GNI_MemRegister returned error. %d\n", status);
-		err = -1;
-		goto err_out;
-	}
+    if (rr->f_use_prealloc_rdma_mem) {
+#ifdef DART_UGNI_PREALLOC_RDMA
+        rr->msg->original_msg_data = rr->msg->msg_data;
+        rr->msg->msg_data = rpc_dart_mem_malloc(rr->msg->size);
+        if ( !rr->msg->msg_data) {
+            printf("%s(): rpc_dart_mem_malloc failed size %u\n", __func__,
+                rpc_s->ptlmap.id, rr->msg->size);
+            err = -1;
+            goto err_out;
+        }
+        //printf("%s(): original_msg_data= %llu msg_data= %llu size= %u\n",
+        //        __func__, rr->msg->original_msg_data, rr->msg->msg_data, rr->msg->size);
+        memcpy(rr->msg->msg_data, rr->msg->original_msg_data, rr->msg->size);
 
-	rr->f_data = 1;
-	rr->mdh_data = rr->msg->msg_rpc->mdh_addr.mdh = mdh;
-	rr->msg->msg_rpc->mdh_addr.address = (uint64_t)rr->msg->msg_data;
-	rr->msg->msg_rpc->mdh_addr.length = rr->msg->size;
-	rr->msg->msg_rpc->mdh_addr.index = rr->index;
-	rr->refcont++;
+        rr->f_data = 1;
+        rr->mdh_data = rr->msg->msg_rpc->mdh_addr.mdh = rpc_s->dart_mem_mdh;
+        rr->msg->msg_rpc->mdh_addr.address = (uint64_t)rr->msg->msg_data;
+        rr->msg->msg_rpc->mdh_addr.length = rr->msg->size;
+        rr->msg->msg_rpc->mdh_addr.index = rr->index;
+        rr->refcont++;
+#endif
+    } else {
+        //No Vector Operation in this version
+        //added for alignment
+        status = GNI_MemRegister(rpc_s->nic_hndl, (uint64_t)rr->msg->msg_data, (uint64_t)(rr->msg->size), rpc_s->dst_cq_hndl, GNI_MEM_READWRITE, -1, &mdh);
+        if (status != GNI_RC_SUCCESS)
+        {
+            printf("Fail: GNI_MemRegister returned error %d data size %u\n",
+                status, rr->msg->size);
+            err = -1;
+            goto err_out;
+        }
+
+        rr->f_data = 1;
+        rr->mdh_data = rr->msg->msg_rpc->mdh_addr.mdh = mdh;
+        rr->msg->msg_rpc->mdh_addr.address = (uint64_t)rr->msg->msg_data;
+        rr->msg->msg_rpc->mdh_addr.length = rr->msg->size;
+        rr->msg->msg_rpc->mdh_addr.index = rr->index;
+        rr->refcont++;
+    }
 
 	return 0;
-
 err_out:
 	printf("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
 //Generic routine to post a request message to a peer node
-static int rpc_post_request(struct rpc_server *rpc_s, const struct node_id *peer, struct rpc_request *rr, const struct hdr_sys *hs)
+static int rpc_post_request(struct rpc_server *rpc_s, struct node_id *peer, struct rpc_request *rr, const struct hdr_sys *hs)
 {
 	int err;
 	gni_return_t status = GNI_RC_SUCCESS;
@@ -909,9 +1291,11 @@ static int rpc_post_request(struct rpc_server *rpc_s, const struct node_id *peer
 
 	uint32_t hdr_size = hs ? (uint32_t)(sizeof(struct hdr_sys)) : 0;
 
+RESEND:
+
 	if (rr->type == 0)
 	{
-		remote = rpc_s->ptlmap.id;
+		remote = rpc_s->ptlmap.id+INDEX_COUNT;
 
 	        status = GNI_EpSetEventData(peer->ep_hndl, local, remote);
 	        if(status != GNI_RC_SUCCESS)
@@ -929,11 +1313,73 @@ static int rpc_post_request(struct rpc_server *rpc_s, const struct node_id *peer
 			err = -1;
 			goto err_out;
 		}
+
+        if (status == GNI_RC_NOT_DONE) {
+            // printf("%s(): GNI_SmsgSend returns GNI_RC_NOT_DONE but peer->num_msg_at_peer is %d\n", __func__, peer->num_msg_at_peer);
+            if (rpc_s->cmp_type == DART_SERVER) {
+                printf("%s(): GNI_RC_NOT_DONE should not happen on server\n",
+                        __func__, peer->num_msg_at_peer);
+                return 0;
+            } else {
+                peer->num_msg_at_peer = 0;
+                while (peer->num_msg_at_peer <= 0) {
+                    err = rpc_process_event_with_timeout(rpc_s, 1);
+                    if (err < 0 && err != GNI_RC_TIMEOUT) {
+                        printf("%s(): rpc_process_event_with_timeout err %d\n",
+                                __func__, err);
+                        break;
+                    }
+                }
+
+                if (peer->num_msg_at_peer > 0) {
+                    goto RESEND;
+                }
+            }
+        }
 	}
 
-	if (rr->type == 1)
-	{
-	        remote = peer->mdh_addr.index+65536;
+    if (rr->type == 1 && rr->f_use_prealloc_rdma_mem) {
+#ifdef DART_UGNI_PREALLOC_RDMA
+        remote = peer->mdh_addr.index;
+        status = GNI_EpSetEventData(peer->ep_hndl, local, (uint32_t)remote);
+        if(status != GNI_RC_SUCCESS)
+        {
+            printf("(%s) 2 Fail: GNI_EpSetEventData returned error. (%d)\n", __func__, status);
+            goto err_status;
+        }
+
+        rr->msg->original_msg_data = rr->msg->msg_data;
+        rr->msg->msg_data = rpc_dart_mem_malloc(rr->msg->size);
+        if ( !rr->msg->msg_data) {
+            printf("%s(): rpc_dart_mem_malloc failed size %u\n", __func__,
+                rpc_s->ptlmap.id, rr->msg->size);
+            err = -1;
+            goto err_out;
+        }
+        //printf("%s(): original_msg_data= %llu msg_data= %llu size= %u\n",
+        //        __func__, rr->msg->original_msg_data, rr->msg->msg_data, rr->msg->size);
+        memcpy(rr->msg->msg_data, rr->msg->original_msg_data, rr->msg->size);
+
+        rdma_data_desc.type = GNI_POST_RDMA_PUT;
+        rdma_data_desc.cq_mode = GNI_CQMODE_GLOBAL_EVENT | GNI_CQMODE_REMOTE_EVENT;
+        rdma_data_desc.dlvr_mode = GNI_DLVMODE_PERFORMANCE;
+        rdma_data_desc.local_addr = (uint64_t) rr->msg->msg_data;
+        rdma_data_desc.local_mem_hndl = rpc_s->dart_mem_mdh;
+        rdma_data_desc.remote_addr = peer->mdh_addr.address;
+        rdma_data_desc.remote_mem_hndl = peer->mdh_addr.mdh;
+        rdma_data_desc.length = rr->msg->size;
+        rdma_data_desc.rdma_mode = 0;
+        rdma_data_desc.src_cq_hndl = rpc_s->src_cq_hndl;
+
+        status = GNI_PostRdma(peer->ep_hndl, &rdma_data_desc);
+        if (status != GNI_RC_SUCCESS)
+        {
+            printf("Fail: GNI_PostRdma returned error. %d\n", status);
+            goto err_status;
+        }
+#endif
+    } else if (rr->type == 1) {
+        remote = peer->mdh_addr.index;
 		status = GNI_EpSetEventData(peer->ep_hndl, local, (uint32_t)remote);
 		if(status != GNI_RC_SUCCESS)
 		{
@@ -987,7 +1433,7 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
 	uint32_t local, remote;
 
 	local = rr->index;
-	remote = peer->mdh_addr.index+65536;
+	remote = peer->mdh_addr.index;
 
 	status = GNI_EpSetEventData(peer->ep_hndl, (uint32_t)local, (uint32_t)remote);
 	if(status != GNI_RC_SUCCESS)
@@ -998,40 +1444,75 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
 
 	if (rr->type == 1)
 	{
-		status = GNI_MemRegister(rpc_s->nic_hndl, (uint64_t)rr->msg->msg_data, (uint64_t)rr->msg->size, NULL, GNI_MEM_READWRITE, -1, &rr->mdh_data);
-		if (status != GNI_RC_SUCCESS)
-		{
-		  printf("Fail: GNI_MemRegister returned error with %d.\n", status);
-			goto err_status;
-		}
+        if (rr->f_use_prealloc_rdma_mem) {
+#ifdef DART_UGNI_PREALLOC_RDMA
+            rr->msg->original_msg_data = rr->msg->msg_data;
+            rr->msg->msg_data = rpc_dart_mem_malloc(rr->msg->size);
+            if ( !rr->msg->msg_data) {
+                printf("%s(): rpc_dart_mem_malloc failed size %u\n", __func__,
+                    rpc_s->ptlmap.id, rr->msg->size);
+                err = -1;
+                goto err_out;
+            }                        
+            //printf("%s(): original_msg_data= %llu msg_data= %llu size= %u\n",
+            //    __func__, rr->msg->original_msg_data, rr->msg->msg_data, rr->msg->size);
 
-		rdma_data_desc.type = GNI_POST_RDMA_GET;
-		rdma_data_desc.cq_mode = GNI_CQMODE_GLOBAL_EVENT | GNI_CQMODE_REMOTE_EVENT; //?reconsider, need some tests.
-		rdma_data_desc.dlvr_mode = GNI_DLVMODE_PERFORMANCE;
-		rdma_data_desc.local_addr = (uint64_t) rr->msg->msg_data;
-		rdma_data_desc.local_mem_hndl = rr->mdh_data;
-		rdma_data_desc.remote_addr = peer->mdh_addr.address;
-		rdma_data_desc.remote_mem_hndl = peer->mdh_addr.mdh;
-		rdma_data_desc.length = rr->msg->size;//Must be a multiple of 4-bytes for GETs
-		rdma_data_desc.rdma_mode = 0;
-		rdma_data_desc.src_cq_hndl = rpc_s->src_cq_hndl;
-		status = GNI_PostRdma(peer->ep_hndl, &rdma_data_desc);
-		if (status != GNI_RC_SUCCESS)
-		{
-		  	  if(status == 7)
-			  {
-				 printf("status == 7.\n");
+            rdma_data_desc.type = GNI_POST_RDMA_GET;
+            rdma_data_desc.cq_mode = GNI_CQMODE_GLOBAL_EVENT | GNI_CQMODE_REMOTE_EVENT; //?reconsider, need some tests.
+            rdma_data_desc.dlvr_mode = GNI_DLVMODE_PERFORMANCE;
+            rdma_data_desc.local_addr = (uint64_t) rr->msg->msg_data;
+            rdma_data_desc.local_mem_hndl = rpc_s->dart_mem_mdh;
+            rdma_data_desc.remote_addr = peer->mdh_addr.address;
+            rdma_data_desc.remote_mem_hndl = peer->mdh_addr.mdh;
+            rdma_data_desc.length = rr->msg->size;//Must be a multiple of 4-bytes for GETs
+            rdma_data_desc.rdma_mode = 0;
+            rdma_data_desc.src_cq_hndl = rpc_s->src_cq_hndl;
+            status = GNI_PostRdma(peer->ep_hndl, &rdma_data_desc);
+            if (status != GNI_RC_SUCCESS)
+            {
+                  if(status == 7)
+                  {
+                     printf("status == 7.\n");
 
-			  }
-		  printf("Fail: GNI_PostRdma returned error with %d.\n", status);
-			goto err_status;
-		}
+                  }
+                  printf("Fail: GNI_PostRdma returned error with %d.\n", status);
+                  goto err_status;
+            }
+#endif
+        } else {
+            status = GNI_MemRegister(rpc_s->nic_hndl, (uint64_t)rr->msg->msg_data, (uint64_t)rr->msg->size, NULL, GNI_MEM_READWRITE, -1, &rr->mdh_data);
+            if (status != GNI_RC_SUCCESS)
+            {
+              printf("Fail: GNI_MemRegister returned error with %d.\n", status);
+                goto err_status;
+            }
+
+            rdma_data_desc.type = GNI_POST_RDMA_GET;
+            rdma_data_desc.cq_mode = GNI_CQMODE_GLOBAL_EVENT | GNI_CQMODE_REMOTE_EVENT; //?reconsider, need some tests.
+            rdma_data_desc.dlvr_mode = GNI_DLVMODE_PERFORMANCE;
+            rdma_data_desc.local_addr = (uint64_t) rr->msg->msg_data;
+            rdma_data_desc.local_mem_hndl = rr->mdh_data;
+            rdma_data_desc.remote_addr = peer->mdh_addr.address;
+            rdma_data_desc.remote_mem_hndl = peer->mdh_addr.mdh;
+            rdma_data_desc.length = rr->msg->size;//Must be a multiple of 4-bytes for GETs
+            rdma_data_desc.rdma_mode = 0;
+            rdma_data_desc.src_cq_hndl = rpc_s->src_cq_hndl;
+            status = GNI_PostRdma(peer->ep_hndl, &rdma_data_desc);
+            if (status != GNI_RC_SUCCESS)
+            {
+                  if(status == 7)
+                  {
+                     printf("status == 7.\n");
+
+                  }
+                  printf("Fail: GNI_PostRdma returned error with %d.\n", status);
+                  goto err_status;
+            }
+        }
 	}
 
 	rr->refcont++;
-
 	return 0;
-
 err_out:
 	printf("'%s()': failed with %d.\n", __func__, err);
 	return err;	
@@ -1050,12 +1531,14 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 	{
 	    if(peer->num_msg_at_peer == 0)
 	    {
-	      if (rpc_s->cmp_type == DART_SERVER)                 
-	           break;                                                	      
+	      if (rpc_s->cmp_type == DART_SERVER) {
+               //printf("%s(): peer->num_msg_at_peer == 0 should not happen on server\n", __func__);                 
+	           break;                         
+          }                       	      
 
 	      err = rpc_process_event_with_timeout(rpc_s, 1);
 	      if (err < 0 && err != GNI_RC_TIMEOUT)
-		goto err_out;
+            goto err_out;
 	    
 
 	      continue;
@@ -1098,28 +1581,52 @@ err_out:
 //This function sends back ACK message from rpc_s to peer. It returns underlying GNI credits to remote peer.
 static int rpc_credit_return(struct rpc_server *rpc_s, struct node_id *peer)
 {
-   struct msg_buf *msg;
-   int err;
+    struct msg_buf *msg;
+    int err;
 
-   msg = msg_buf_alloc(rpc_s, peer, 1);
-   if(!msg)
+    msg = msg_buf_alloc(rpc_s, peer, 1);
+    if(!msg)
      goto err_out;
-   msg->size = sizeof(struct rpc_cmd);
-   msg->msg_rpc->cmd = cn_ack_credit;
-   msg->msg_rpc->id = rpc_s->ptlmap.id;
+    msg->size = sizeof(struct rpc_cmd);
+    msg->msg_rpc->cmd = cn_ack_credit;
+    msg->msg_rpc->id = rpc_s->ptlmap.id;
 
-   err = rpc_send(rpc_s, peer, msg);
-   if (err < 0) {
-     free(msg);
-     goto err_out;
-   }
+    //peer->num_msg_at_peer++; // cn_ack_credit msg NOT consume send credit
+    //printf("%s(): peer->num_req= %d\n", __func__, peer->num_req);
+    //err = rpc_send(rpc_s, peer, msg);
+    //if (err < 0) {
+    //  free(msg);
+    //  goto err_out;
+    //}
 
-   return 0;
+    struct rpc_request *rr;
+    rr = calloc(1, sizeof(struct rpc_request));
+    if(!rr)
+        goto err_out;
 
+    rr->type = 0;//0 represents cmd ; 1 for data
+    rr->msg = msg;
+    rr->iodir = io_send;
+    rr->cb = (async_callback)rpc_cb_req_completion;
+    rr->data = msg->msg_rpc;
+    rr->size = sizeof(*msg->msg_rpc);
+    do
+        rr->index = rpc_get_index();
+    while(rr->index == -1);
+
+    // post request
+    err = rpc_post_request(rpc_s, peer, rr, 0);
+    if (err != 0)
+        goto err_out;
+
+    list_add_tail(&rr->req_entry, &rpc_s->rpc_list);
+    rpc_s->rr_num++;
+
+    return 0;
  err_out:
-   printf("'%s()' failed with %d.\n", __func__, err);
-   return err;
- }
+    printf("'%s()' failed with %d.\n", __func__, err);
+    return err;
+}
 
 static int rpc_process_ack(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
@@ -1130,7 +1637,10 @@ static int rpc_process_ack(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
       printf("(%s): rpc_get_peer err.\n", __func__);
       return -ENOMEM;
     }
-  peer->num_msg_at_peer = SENDCREDIT;
+
+  peer->num_msg_at_peer += RECVCREDIT;
+  if (peer->num_msg_at_peer > SENDCREDIT)
+    peer->num_msg_at_peer = SENDCREDIT;
 
   return 0;
 }
@@ -1363,7 +1873,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 
   if(n == 1)
     {
-      if(event_id >= 0 && event_id < 65536)
+      if(event_id >= INDEX_COUNT)
 	{
 	  rr = rr_comm_alloc(0);
 	  if(rr == NULL)
@@ -1372,7 +1882,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	      goto err_out;
 	    }
 	  
-	  peer = rpc_get_peer(rpc_s, (int)event_id);
+	  peer = rpc_get_peer(rpc_s, (int)event_id-INDEX_COUNT);
 	  if(peer == NULL)
 	    {
 	      printf("(%s): rpc_get_peer err.\n", __func__);
@@ -1409,8 +1919,6 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 
 	  memcpy(rr->msg->msg_rpc, tmpcmd, sizeof(struct rpc_cmd));
 
-	  peer->num_msg_at_peer = SENDCREDIT;
-
 	  do
 	    {
 	      status = GNI_SmsgRelease(peer->ep_hndl);
@@ -1421,14 +1929,17 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 		}
 	    }while(status == GNI_RC_NOT_DONE);
 
-	  peer->num_msg_recv++;
-	  if(peer->num_msg_recv == RECVCREDIT)
-	    {
-	      err = rpc_credit_return(rpc_s, peer);
-	      if(err!=0)
-		goto err_out;
-	      peer->num_msg_recv = 0;
-	    }
+      if (rr->msg->msg_rpc->cmd != cn_ack_credit) {
+        peer->num_msg_recv++;
+      }
+
+      if(peer->num_msg_recv == RECVCREDIT)
+        {
+          err = rpc_credit_return(rpc_s, peer);
+          if(err!=0)
+            goto err_out;
+          peer->num_msg_recv = 0;
+        }
 
 	  err = rpc_cb_decode(rpc_s, rr);
 	  if(err!=0)
@@ -1438,13 +1949,13 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	  free(rr);
 	  }
 
-	 if(event_id >= 65536 && event_id < 131072)
+	 if( event_id < INDEX_COUNT )
 	   {
 	     while(!GNI_CQ_STATUS_OK(event_data));
 		       
 	     list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry)
 	       {
-		 if( rr->index == event_id - 65536 )
+		 if( rr->index == event_id )
 		   {
 		     check = 1;
 		     break;
@@ -1453,6 +1964,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 		     
 	     if(check == 0)
 	       {
+		 printf("Rank %d: DST Indexing err with event_id (%d), rr_num (%d) in (%s).\n", rank_id_pmi, event_id, rpc_s->rr_num,  __func__);
 		 list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry)
 		   {
 		     printf("Rank(%d):Index(%d) with rr_num(%d).\n",rank_id_pmi, rr->index, rpc_s->rr_num);
@@ -1533,6 +2045,22 @@ err_status:
   return status;
 }
 
+int rpc_process_msg_resend(struct rpc_server *rpc_s, struct node_id *peer_tab, int num_peer)
+{
+    struct node_id *peer;
+    int i;
+    for (i = 0; i < num_peer; i++) {
+        peer = peer_tab + i;
+        if (peer->num_req > 0 && peer->num_msg_at_peer > 0) {
+            //printf("%s(): %d resend to %d num_req= %d num_msg_at_peer= %d\n", __func__, 
+            //  rpc_s->ptlmap.id, peer->ptlmap.id, peer->num_req, peer->num_msg_at_peer);
+            peer_process_send_list(rpc_s, peer);
+        }
+    }
+
+    return 0;
+}
+
 int rpc_process_event(struct rpc_server *rpc_s)
 {
 	int err;
@@ -1582,13 +2110,13 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 	rpc_s->ptlmap.appid = appid;
 
 	//Use PMI library to get necessary global information.
-        PMI_BOOL initialized;
-        if (PMI_SUCCESS == PMI_Initialized(&initialized) ) {
-                if (PMI_TRUE != initialized) {
-                        err = PMI_Init(&first_spawned);
-                        assert(err == PMI_SUCCESS);
-                }
-        }
+    PMI_BOOL initialized;
+    if (PMI_SUCCESS == PMI_Initialized(&initialized) ) {
+            if (PMI_TRUE != initialized) {
+                    err = PMI_Init(&first_spawned);
+                    assert(err == PMI_SUCCESS);
+            }
+    }
 	err = PMI_Get_size(&num_of_rank_pmi);
 	assert(err == PMI_SUCCESS);
 	err = PMI_Get_rank(&rank_id_pmi);	
@@ -1606,7 +2134,7 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 		goto err_free;
 
 
-        status = GNI_CqCreate(rpc_s->nic_hndl, 65535, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->sys_cq_hndl);
+        status = GNI_CqCreate(rpc_s->nic_hndl, ENTRY_COUNT, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->sys_cq_hndl);
         if (status != GNI_RC_SUCCESS)
         {
                 printf("Fail: GNI_CqCreate SYS returned error. %d.\n", status);
@@ -1614,14 +2142,14 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
         }
 
 
-	status = GNI_CqCreate(rpc_s->nic_hndl, 65535, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->src_cq_hndl);
+	status = GNI_CqCreate(rpc_s->nic_hndl,ENTRY_COUNT, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->src_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
 		printf("Fail: GNI_CqCreate SRC returned error. %d.\n", status);
 		goto err_out;
 	}
 
-	status = GNI_CqCreate(rpc_s->nic_hndl, 65535, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->dst_cq_hndl);
+	status = GNI_CqCreate(rpc_s->nic_hndl, ENTRY_COUNT, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->dst_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
 		printf("Fail: GNI_CqCreate DST returned error. %d.\n", status);
@@ -1645,6 +2173,18 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 	memset(rpc_s->bar_tab, 0, sizeof(*rpc_s->bar_tab) * num_rpc_per_buff);
 
 	rpc_add_service(cn_ack_credit, rpc_process_ack);
+
+#ifdef DART_UGNI_PREALLOC_RDMA
+    if (rpc_s->cmp_type == DART_CLIENT) {
+        rpc_dart_mem_init(rpc_s, 16*1024*1024); // MB
+    }
+
+    if (rpc_s->cmp_type == DART_SERVER) {
+        rpc_dart_mem_init(rpc_s, 96*1024*1024); // MB
+    }
+#endif
+
+	//	printf("rpc_cmd size is %d.\n", sizeof(struct rpc_cmd));
 
 	// Init succeeded, set the instance reference here.
 	rpc_s_instance = rpc_s;
@@ -1703,6 +2243,10 @@ int rpc_server_free(struct rpc_server *rpc_s)
 				printf("'%s()': error at flushing the event queue %d!\n", __func__, err);
 		}
 	}
+
+#ifdef DART_UGNI_PREALLOC_RDMA
+    rpc_dart_mem_finalize(rpc_s);
+#endif
 
 	//Free memory to index_list
 	list_for_each_entry_safe(ri, ri_tmp, &index_list, struct rr_index, index_entry)
@@ -1879,6 +2423,13 @@ void rpc_add_service(enum cmd_type rpc_cmd, rpc_service rpc_func)
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd)
 {
   peer->mdh_addr = cmd->mdh_addr;
+  //debug SCA
+  // printf("Rank %d: peer mdh_addr index is %d, cmd->mdh_addr->index is %d.\n", rpc_s_instance->ptlmap.id, peer->mdh_addr.index, cmd->mdh_addr.index);
+}
+
+void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg,
+                        struct rpc_cmd *cmd) {
+    return;
 }
 
 struct msg_buf *msg_buf_alloc (struct rpc_server *rpc_s, const struct node_id *peer, int num_rpcs)
@@ -1919,12 +2470,18 @@ int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg
 	if(!rr)
 		goto err_out;
 
-        rr->type = 0;//0 represents cmd ; 1 for data
+    rr->type = 0;//0 represents cmd ; 1 for data
 	rr->msg = msg;
 	rr->iodir = io_send;
 	rr->cb = (async_callback)rpc_cb_req_completion;
 	rr->data = msg->msg_rpc;
 	rr->size = sizeof(*msg->msg_rpc);
+#ifdef DART_UGNI_PREALLOC_RDMA
+    rr->f_use_prealloc_rdma_mem = 1;
+    rr->rr_type = DART_RPC_SEND;
+#else
+    rr->f_use_prealloc_rdma_mem = 0;
+#endif
 	do
 		rr->index = rpc_get_index();
 	while(rr->index == -1);
@@ -1935,7 +2492,6 @@ int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg
 	err = peer_process_send_list(rpc_s, peer);
 	if(err == 0)
 		return 0;
-
 err_out:
 	printf("'%s()': failed with %d.\n", __func__, err);
 	return err;
@@ -1950,12 +2506,18 @@ inline static int __send_direct(struct rpc_server *rpc_s, struct node_id *peer, 
 	if(!rr)
 		goto err_out;
 
-        rr->type = 1;//0 represents cmd ; 1 for data
+    rr->type = 1;//0 represents cmd ; 1 for data
 	rr->msg = msg;
 	rr->cb = (async_callback)rpc_cb_req_completion;
 	rr->data = msg->msg_data;
 	rr->size = msg->size;
 	rr->f_vec = 0;
+#ifdef DART_UGNI_PREALLOC_RDMA
+    rr->f_use_prealloc_rdma_mem = 1;
+    rr->rr_type = DART_RPC_SEND_DIRECT;
+#else
+    rr->f_use_prealloc_rdma_mem = 0;
+#endif
 	do
 		rr->index = rpc_get_index();
 	while(rr->index == -1);
@@ -1966,12 +2528,11 @@ inline static int __send_direct(struct rpc_server *rpc_s, struct node_id *peer, 
 	err = rpc_post_request(rpc_s, peer, rr, 0);
 	if (err != 0)
 	{
-	        free(rr);
+        free(rr);
 		goto err_out;
 	}
 
 	return 0;
-
 err_out:
 	printf("'%s()': failed with %d.\n", __func__, err);
 	return err;
@@ -2003,11 +2564,17 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 	if(!rr)
 		goto err_out;
 
-        rr->type = 1;//0 represents cmd ; 1 for data
+    rr->type = 1;//0 represents cmd ; 1 for data
 	rr->msg = msg;
 	rr->cb = (async_callback)rpc_cb_req_completion;
 	rr->data = msg->msg_data;
 	rr->size = msg->size;
+#ifdef DART_UGNI_PREALLOC_RDMA
+    rr->f_use_prealloc_rdma_mem = 1;
+    rr->rr_type = DART_RPC_RECEIVE_DIRECT;
+#else
+    rr->f_use_prealloc_rdma_mem = 0;
+#endif
 	do
 		rr->index = rpc_get_index();
 	while(rr->index == -1);
@@ -2018,7 +2585,6 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 	err = rpc_fetch_request(rpc_s, peer, rr);
 	if (err == 0)
 		return 0;
-
 err_out:
 	printf("'%s()': failed with %d.\n", __func__, err);
 	return err;
@@ -2033,13 +2599,19 @@ inline static int __receive(struct rpc_server *rpc_s, struct node_id *peer, stru
 	if(!rr)
 		goto err_out;
 
-        rr->type = 0;//0 represents cmd ; 1 for data
+    rr->type = 0;//0 represents cmd ; 1 for data
 	rr->msg = msg;
 	rr->iodir = io_receive;
 	rr->cb = (async_callback)rpc_cb_req_completion;
 	rr->data = msg->msg_rpc;
 	rr->size = sizeof(*msg->msg_rpc);
 	rr->f_vec = 0;
+#ifdef DART_UGNI_PREALLOC_RDMA
+    rr->f_use_prealloc_rdma_mem = 1;
+    rr->rr_type = DART_RPC_RECEIVE;
+#else
+    rr->f_use_prealloc_rdma_mem = 0;
+#endif
 	do
 		rr->index = rpc_get_index();
 	while(rr->index == -1);

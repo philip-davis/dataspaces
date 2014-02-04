@@ -41,7 +41,6 @@
 #include "dart.h"
 #include "ds_gspace.h"
 #include "ss_data.h"
-#include "timer.h"
 
 static struct dimes_server *dimes_s = NULL;
 
@@ -102,28 +101,6 @@ err_out:
 	ERROR_TRACE();
 }
 
-static int dsgrpc_dimes_put_test(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
-{
-	int err;
-	struct hdr_dimes_put *hdr = (struct hdr_dimes_put *)cmd->pad;
-	struct obj_descriptor *odsc = &hdr->odsc;
-	odsc->owner = cmd->id; // Necessary! peer did not assign this info.
-
-	if (hdr->has_rdma_data) {
-		cmd_s_add(dimes_s->cmd_store, cmd);
-	}
-
-#ifdef DEBUG	
-	uloga("%s(): get cmd from peer #%d, "
-	"with hdr->has_rdma_data=%d, "
-	"odsc->name=%s, odsc->owner=%d, data_size=%u.\n",
-		__func__, cmd->id, hdr->has_rdma_data,
-		odsc->name, odsc->owner, obj_data_size(odsc));
-#endif
-
-	return 0;
-}
-
 static int locate_data_completion_server(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
 	free(msg->msg_data);
@@ -138,10 +115,11 @@ static int locate_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd,
 	struct node_id *peer = ds_get_peer(dimes_s->dsg->ds, cmd->id);
 	struct msg_buf *msg;
 	int err = -ENOMEM;
-	int num_cmd = 0, qid;
+	int qid;
+    int num_obj = 0;
 	struct rpc_cmd *tab;
-	struct list_head cmd_list;
-	INIT_LIST_HEAD(&cmd_list);
+	struct list_head obj_loc_wrapper_list;
+	INIT_LIST_HEAD(&obj_loc_wrapper_list);
 
 #ifdef DEBUG
 	uloga("%s(): get cmd from peer #%d, "
@@ -150,10 +128,13 @@ static int locate_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd,
 		hdr->odsc.version, obj_data_size(&hdr->odsc));
 #endif
 
-	// Search in the rpc_cmd storage
-	err = cmd_s_find_all(dimes_s->cmd_store, &hdr->odsc,
-				 &cmd_list, &num_cmd);
+    struct hdr_dimes_get *hdr2 = hdr;
 
+	// Search in the metadata storage
+    err = metadata_s_find_obj_location(dimes_s->meta_store,
+                                       &hdr->odsc,
+                                       &obj_loc_wrapper_list,
+                                       &num_obj);
 	if (err < 0)
 		goto err_out;
 
@@ -164,26 +145,24 @@ static int locate_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd,
 	}
 	qid = hdr->qid;
 	hdr = (struct hdr_dimes_get *) msg->msg_rpc->pad;
-	hdr->num_de = num_cmd;
+	hdr->num_obj = num_obj;
 	hdr->qid = qid;
 
-	if (num_cmd > 0) {
-		tab = malloc(sizeof(struct rpc_cmd) * num_cmd);
+	if (num_obj > 0) {
+		tab = malloc(sizeof(struct rpc_cmd) * num_obj);
 		if (!tab)
 			goto err_out;
 
 		int i = 0;
-		struct cmd_data *cmd_data, *tmp;
-		// TODO(fan): remove the double copy of the cmd_data
-		// use the linked list cmd_list only to store the pointer values
-		list_for_each_entry_safe(cmd_data,tmp,&cmd_list,
-														 struct cmd_data, entry) {
-			list_del(&cmd_data->entry);
-			tab[i++] = cmd_data->cmd;
-			free(cmd_data);
+        struct obj_location_wrapper *obj_loc_w, *tmp;
+		list_for_each_entry_safe(obj_loc_w, tmp, &obj_loc_wrapper_list,
+								 struct obj_location_wrapper, entry) {
+            list_del(&obj_loc_w->entry);
+			tab[i++] = *(obj_loc_w->data_ref);
+			free(obj_loc_w);
 		}
 
-		msg->size = sizeof(struct rpc_cmd) * num_cmd;
+		msg->size = sizeof(struct rpc_cmd) * num_obj;
 		msg->msg_data = tab;
 		msg->cb = locate_data_completion_server;
 
@@ -196,11 +175,15 @@ static int locate_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd,
 	msg->msg_rpc->id = DIMES_SID;
 
 #ifdef DEBUG
-	uloga("%s(): #%d num_cmd= %d for request from #%d\n",
-		__func__, DIMES_SID, num_cmd, cmd->id);
+	uloga("%s(): #%d num_obj= %d for request from #%d\n",
+		__func__, DIMES_SID, num_obj, cmd->id);
 #endif
 
 	err = rpc_send(rpc_s, peer, msg);
+    //uloga("%s(): %lf name=%s version=%d num_obj=%d process_time %lf\n",
+    //    __func__, t1, hdr2->odsc.name, hdr2->odsc.version, num_obj,
+    //    t2-t1);
+
 	if (err == 0)
 		return 0;
 
@@ -208,11 +191,6 @@ static int locate_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd,
 	free(msg);
 err_out:
 	ERROR_TRACE();
-}
-
-static int dsgrpc_dimes_locate_data_test(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
-{
-	return locate_data(rpc_s, cmd, dimes_locate_data_test_msg);
 }
 
 static int dsgrpc_dimes_locate_data(struct rpc_server *rpc_s,
@@ -229,10 +207,10 @@ static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
 	struct hdr_dimes_put *hdr = (struct hdr_dimes_put*)cmd->pad;
 	struct obj_descriptor *odsc = &hdr->odsc;
-	odsc->owner = cmd->id;
+	// odsc->owner = cmd->id;
 	
 	if (hdr->has_rdma_data) {
-		cmd_s_add(dimes_s->cmd_store, cmd);
+        metadata_s_add_obj_location(dimes_s->meta_store, cmd);
 	}
 
 #ifdef DEBUG    
@@ -242,23 +220,25 @@ static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 					__func__, cmd->id, hdr->has_rdma_data,
 					odsc->name, odsc->owner, odsc->version, obj_data_size(odsc));
 #endif
-
+    
+    //uloga("%s(): %lf name=%s version=%d process_time %lf from peer %d\n", __func__,
+    //        t1, odsc->name, odsc->version, t2-t1, cmd->id);
 	return 0;
 }
 
-static int send_ack_v2(struct dimes_sync_info *p)
+static int send_ack(struct dimes_sync_info *p)
 {
 	int err;
 	struct msg_buf *msg;
 	struct node_id *peer;
-	struct hdr_dimes_get_ack_v2 *oh;
+	struct hdr_dimes_get_ack *oh;
 
 	peer = ds_get_peer(dimes_s->dsg->ds, p->dart_id);
 	msg = msg_buf_alloc(dimes_s->dsg->ds->rpc_s, peer, 1);
-	msg->msg_rpc->cmd = dimes_obj_get_ack_v2_msg;
+	msg->msg_rpc->cmd = dimes_get_ack_msg;
 	msg->msg_rpc->id = DIMES_SID;
 
-	oh = (struct hdr_dimes_get_ack_v2 *)msg->msg_rpc->pad;
+	oh = (struct hdr_dimes_get_ack *)msg->msg_rpc->pad;
 	oh->qid = p->qid;
 	oh->sync_id = p->sync_id;
 	oh->odsc = p->odsc;
@@ -274,10 +254,10 @@ static int send_ack_v2(struct dimes_sync_info *p)
 	ERROR_TRACE();
 }
 
-static int dsgrpc_dimes_obj_get_ack_v2(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int dsgrpc_dimes_get_ack(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 { 
 	int err;
-	struct hdr_dimes_get_ack_v2 *oh = (struct hdr_dimes_get_ack_v2*)cmd->pad;
+	struct hdr_dimes_get_ack *oh = (struct hdr_dimes_get_ack*)cmd->pad;
 	int qid = oh->qid;
 	int sync_id = oh->sync_id;
 	int dart_id = oh->odsc.owner;
@@ -296,7 +276,7 @@ static int dsgrpc_dimes_obj_get_ack_v2(struct rpc_server *rpc_s, struct rpc_cmd 
 	p->bytes_read += oh->bytes_read;
 	
 	if (obj_data_size(&p->odsc) == p->bytes_read) {
-		err = send_ack_v2(p);
+		err = send_ack(p);
 		if (err < 0)
 			goto err_out;
 		// Delete
@@ -328,14 +308,13 @@ struct dimes_server *dimes_server_alloc(int num_sp, int num_cp, char *conf_name)
 	}
 
 	rpc_add_service(dimes_ss_info_msg, dsgrpc_dimes_ss_info);
-	rpc_add_service(dimes_put_test_msg, dsgrpc_dimes_put_test);
-	rpc_add_service(dimes_locate_data_test_msg, dsgrpc_dimes_locate_data_test);
 	rpc_add_service(dimes_put_msg, dsgrpc_dimes_put);
 	rpc_add_service(dimes_locate_data_msg, dsgrpc_dimes_locate_data);
-	rpc_add_service(dimes_obj_get_ack_v2_msg, dsgrpc_dimes_obj_get_ack_v2);
+	rpc_add_service(dimes_get_ack_msg, dsgrpc_dimes_get_ack);
 
-	dimes_s_l->cmd_store = cmd_s_alloc(dimes_s_l->dsg->ssd->storage->size_hash);
-	if (!dimes_s_l->cmd_store) {
+	dimes_s_l->meta_store =
+        metadata_s_alloc(dimes_s_l->dsg->ssd->storage->size_hash);
+	if (!dimes_s_l->meta_store) {
 		free(dimes_s_l->dsg);
 		free(dimes_s_l);
 		goto err_out;
@@ -358,8 +337,23 @@ err_out:
 void dimes_server_free(struct dimes_server *dimes_s_l)
 {
 	dsg_free(dimes_s_l->dsg);
-	cmd_s_free(dimes_s_l->cmd_store);
+	metadata_s_free(dimes_s_l->meta_store);
 	free(dimes_s_l);
+}
+
+int dimes_server_process(struct dimes_server *dimes_s_l)
+{
+    return dsg_process(dimes_s_l->dsg);
+}
+
+int dimes_server_complete(struct dimes_server *dimes_s_l)
+{
+    return dsg_complete(dimes_s_l->dsg);
+}
+
+int dimes_server_barrier(struct dimes_server *dimes_s_l)
+{
+    return dsg_barrier(dimes_s_l->dsg);
 }
 
 #endif // end of #ifdef DS_HAVE_DIMES

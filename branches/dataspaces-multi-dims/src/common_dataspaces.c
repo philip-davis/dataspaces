@@ -216,6 +216,23 @@ void common_dspaces_unlock_on_write(const char *lock_name, void *comm)
 		ERROR_TRACE_AND_EXIT();
 }
 
+int check_bb(int xl, int yl, int zl,
+        int xu, int yu, int zu)
+{
+/*
+	if(xl < dcg->ss_domain.lb.c[0]||yl < dcg->ss_domain.lb.c[1]||
+		zl < dcg->ss_domain.lb.c[2] || xu > dcg->ss_domain.ub.c[0]||
+		yu > dcg->ss_domain.ub.c[1] || zu > dcg->ss_domain.ub.c[2])
+    {
+		return 0;
+    }
+	else
+*/
+    return 1;
+}
+
+
+
 int common_dspaces_get(const char *var_name,
 	unsigned int ver, int size,
 	int ndim,
@@ -248,6 +265,15 @@ int common_dspaces_get(const char *var_name,
 			 __func__);
 		return -EINVAL;
 	}
+
+	/*if (!check_bb(xl, yl, zl, xu, yu, zu)){
+		uloga("'%s()': bounding box is out of range!\n",
+                 __func__);
+        return -ENOMEM;
+    	}*/
+
+    //uloga("%s(): dart_id %d ver %d size %d ndims %d var %s bbox {(%d,%d,%d), (%d,%d,%d)}\n",
+    //    __func__, dcghlp_get_id(dcg), ver, size, num_dims, var_name, xl, yl, zl, xu, yu, zu);
 
 	strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
 	odsc.name[sizeof(odsc.name)-1] = '\0';
@@ -306,6 +332,16 @@ int common_dspaces_put(const char *var_name,
 			 __func__);
 		return -EINVAL;
 	}
+
+
+    /*if (!check_bb(xl, yl, zl, xu, yu, zu)){
+        uloga("'%s()': bounding box is out of range!\n",
+                 __func__);
+        return -ENOMEM;
+    	}*/
+
+    //uloga("%s(): dart_id %d ver %d size %d ndims %d var %s bbox {(%d,%d,%d), (%d,%d,%d)}\n",
+    //    __func__, dcghlp_get_id(dcg), ver, size, num_dims, var_name, xl, yl, zl, xu, yu, zu);
 
 	strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
 	odsc.name[sizeof(odsc.name)-1] = '\0';
@@ -546,4 +582,56 @@ int common_dspaces_num_space_srv(void)
 	}
 
 	return dcg_get_num_space_srv(dcg);	
+}
+
+#ifdef DS_HAVE_DIMES
+void common_dimes_set_storage_type(int fst)
+{
+    return dimes_client_set_storage_type(fst);
+}
+
+int common_dimes_get(const char *var_name,
+        unsigned int ver, int size,
+        int xl, int yl, int zl,
+        int xu, int yu, int zu,
+        void *data)
+{
+    return dimes_client_get(var_name, ver, size,
+                xl, yl, zl, xu, yu, zu, data);
+}
+
+int common_dimes_put(const char *var_name,
+        unsigned int ver, int size,
+        int xl, int yl, int zl,
+        int xu, int yu, int zu,
+        void *data)
+{
+    return dimes_client_put(var_name, ver, size,
+                xl, yl, zl, xu, yu, zu, data);
+}
+
+int common_dimes_put_sync_all(void)
+{
+    return dimes_client_put_sync_all();
+}
+
+int common_dimes_put_set_group(const char *group_name, int step)
+{
+    return dimes_client_put_set_group(group_name, step);
+}
+
+int common_dimes_put_unset_group()
+{
+    return dimes_client_put_unset_group();
+}
+
+int common_dimes_put_sync_group(const char *group_name, int step)
+{
+    return dimes_client_put_sync_group(group_name, step);
+}
+#endif
+
+void common_dspaces_set_mpi_rank(int rank)
+{
+    dcg_set_mpi_rank(rank);
 }
