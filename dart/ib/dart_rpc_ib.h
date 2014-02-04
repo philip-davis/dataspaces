@@ -122,13 +122,14 @@ struct rfshdr {
 	__u8 fname[60];		// If not enough, consider 128
 } __attribute__ ((__packed__));
 
+#define LOCK_NAME_SIZE 64
 /* Header for the locking service. */
 struct lockhdr {
 	int type;
 	int rc;
 	int id;
 	int lock_num;
-	char name[16];		/* lock name */
+	char name[LOCK_NAME_SIZE];		/* lock name */
 } __attribute__ ((__packed__));
 
 /* Header for space info. */
@@ -296,7 +297,7 @@ struct rpc_server {
 	//Fields for barrier implementation.
 	int bar_num;
 	int *bar_tab;
-	int app_minid, app_num_peers;
+	int app_minid, app_num_peers, num_sp;
 
 	//Added in IB version. Just used at the beginning of registration.
 	int num_reg;
@@ -320,6 +321,9 @@ struct rpc_server {
 	int no_more;
 	int p_count;
 
+	int alloc_pd_flag;
+	struct ibv_pd *global_pd;
+	struct ibv_context *global_ctx;
 };
 
 struct rdma_mr {
@@ -383,6 +387,7 @@ enum cmd_type {
 	sp_reg_reply,
 	peer_rdma_done,		/* Added in IB version 12 */
 	sp_announce_cp,
+	sp_announce_cp_all,
 	cn_timing,
 	/* Synchronization primitives. */
 	cp_barrier,
@@ -401,6 +406,12 @@ enum cmd_type {
 	ss_info,
 	ss_code_put,
 	ss_code_reply,
+#ifdef DS_HAVE_DIMES
+    dimes_ss_info_msg,
+    dimes_locate_data_msg,
+    dimes_put_msg,
+    dimes_get_ack_msg,
+#endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,
 	_CMD_COUNT,

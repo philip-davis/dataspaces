@@ -76,10 +76,9 @@ err_out:
 	return -1;
 }
 
-int parse_args(int argc, char **argv, int *npapp, int *npx, int *npy, int *npz,
-	int *spx, int *spy, int *spz, int *timestep)
+int parse_args_dns_les(int argc, char **argv, int *npapp, int *npx, int *npy, int *npz, int *spx, int *spy, int *spz, int *timestep, int *appid)
 {
-	if (argc < 9) {
+	if (argc < 10) {
 		uloga("Wrong number of arguments!\n");
 		return -1;
 	}
@@ -92,16 +91,63 @@ int parse_args(int argc, char **argv, int *npapp, int *npx, int *npy, int *npz,
 	*spy = atoi(argv[6]);	
 	*spz = atoi(argv[7]);	
 	*timestep = atoi(argv[8]);	
+	*appid = atoi(argv[9]);
 
 	return 0;
+}
+
+int parse_args(int argc, char **argv, enum transport_type *type, int *npapp, int *npx, int *npy, int *npz, int *spx, int *spy, int *spz, int *timestep, int *dims, size_t *elem_size, int *num_vars)
+{
+    if (argc < 10) {
+        uloga("Wrong number of arguments!\n");
+        return -1;
+    }
+
+    *type = USE_DSPACES;
+    if (0 == strcmp(argv[1], "DIMES")) {
+        *type = USE_DIMES;
+    }
+    *npapp = atoi(argv[2]);
+    *npx = atoi(argv[3]);
+    *npy = atoi(argv[4]);
+    *npz = atoi(argv[5]);
+    *spx = atoi(argv[6]);
+    *spy = atoi(argv[7]);
+    *spz = atoi(argv[8]);
+    *timestep = atoi(argv[9]);
+
+    if (argc >= 11) {
+        *dims = atoi(argv[10]);
+    } else *dims = 3;
+
+    if (argc >= 12) {
+       *elem_size = atoi(argv[11]);
+    } else *elem_size = sizeof(double);
+
+    if (argc >= 13) {
+        *num_vars = atoi(argv[12]);
+    } else *num_vars = 1;
+
+    //uloga("%s(): %d %d %d %d %d %d %d %d %d %d %u\n",
+    //    __func__, *type, *npapp, *npx, *npy, *npz, *spx, *spy, *spz,
+    //    *timestep, *dims, *elem_size);
+    return 0;
 }
 
 int common_init(int num_peers, int appid) {
         return dspaces_init(num_peers, appid);
 }
 
-void common_set_storage_type(int fst) {
-        dspaces_set_storage_type(fst);
+void common_set_storage_type(int fst, enum transport_type type) {
+        if ( type == USE_DSPACES ) {
+            dspaces_set_storage_type(fst);
+        } else if (type == USE_DIMES) {
+#ifdef DS_HAVE_DIMES
+            dimes_set_storage_type(fst);
+#else
+            uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
+#endif
+        }
 }
 
 int common_rank() {
@@ -141,21 +187,14 @@ int common_put (const char *var_name,
         int xl, int yl, int zl,
         int xu, int yu, int zu,
         void *data, enum transport_type type) {
-
-	int lb[3] = {xl, yl, zl};
-	int ub[3] = {xu, yu, zu};
         if ( type == USE_DSPACES ) {
-               /* return dspaces_put(var_name, ver, size,
+                return dspaces_put(var_name, ver, size,
                         xl, yl, zl, xu, yu, zu,
                         data);
-		*/
-		return dspaces_put(var_name, ver, size,
-			3, lb, ub,
-			data);
         } else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
                 return dimes_put(var_name, ver, size,
-                        3, lb, ub, //xl, yl, zl, xu, yu, zu,
+                        xl, yl, zl, xu, yu, zu,
                         data);
 #else
                 uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
@@ -169,21 +208,14 @@ int common_get (const char *var_name,
         int xl, int yl, int zl,
         int xu, int yu, int zu,
         void *data, enum transport_type type) {
-
-        int lb[3] = {xl, yl, zl};
-        int ub[3] = {xu, yu, zu};
         if ( type == USE_DSPACES ) {
-                /*return dspaces_get(var_name, ver, size,
+                return dspaces_get(var_name, ver, size,
                         xl, yl, zl, xu, yu, zu,
                         data);
-		*/
-		return dspaces_get(var_name, ver, size,
-			3, lb, ub,
-			data);		
         } else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
                 return dimes_get(var_name, ver, size,
-                        3, lb, ub, //xl, yl, zl, xu, yu, zu,
+                        xl, yl, zl, xu, yu, zu,
                         data);
 #else
                 uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
@@ -255,7 +287,7 @@ void check_data(const char *var_name, double *buf, int num_elem, int rank, int t
 {
         double max, min, sum, avg;
         int i;
-	int cnt = 0;
+        int cnt = 0;
 
         if (num_elem <= 0) {
                 return;
@@ -274,15 +306,73 @@ void check_data(const char *var_name, double *buf, int num_elem, int rank, int t
         }
         avg = sum / num_elem;
 #ifdef DEBUG
+/*
         uloga("%s(): var= %s, rank= %d, max= %f, min= %f, avg= %f\n",
                 __func__, var_name, rank, max, min, avg);
+*/
 #endif
 
         if (cnt > 0) {
                 uloga("%s(): var= %s, rank= %d, ts= %d, "
-			"error elem cnt= %d, total elem= %d\n",
+                "error elem cnt= %d, total elem= %d\n",
                         __func__, var_name, rank, ts, cnt, num_elem);
         }
 	
         return;
+}
+
+int write_data_file(const char* fname, void *data, size_t size)
+{
+	FILE *f = fopen(fname, "w");
+	if (f == NULL) {
+		uloga("%s(): failed to create %s\n", __func__, fname);
+		return -1;
+	}
+
+	size_t offset = 0;
+	size_t block_size = 512*1024; // 512KB
+	size_t bytes;
+	while (offset < size) {
+		if ((size-offset) >= block_size) {
+			bytes = block_size;
+		} else {
+			bytes = (size-offset);
+		}
+
+		fwrite(data+offset, 1, bytes, f);
+		offset += bytes;
+	}	
+
+	fclose(f);
+	return 0;
+}
+
+int read_data_file(const char* fname)
+{
+	FILE *f = fopen(fname, "r");
+	if (f == NULL) {
+		uloga("%s(): failed to open %s\n", __func__, fname);
+		return -1;
+	}
+
+	size_t block_size = 512*1024; // 512KB
+	void *data = malloc(block_size);
+	do {
+		fread(data, 1, block_size, f);
+	} while (!feof(f));
+
+	free(data);
+	fclose(f);
+	return 0;
+}
+
+int common_get_transport_type_str(enum transport_type type, char* str)
+{
+    if (type == USE_DSPACES) {
+        sprintf(str, "DATASPACES");
+    } else if (type == USE_DIMES) {
+        sprintf(str, "DIMES");
+    } else sprintf(str, "UNKNOWN");
+
+    return 0;
 }

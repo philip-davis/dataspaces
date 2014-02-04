@@ -29,6 +29,8 @@
 *  tjin@cac.rutgers.edu
 */
 
+// Modified in August 2013 for scalability. Marked by #SCA.
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -222,7 +224,7 @@ static int dc_connect_init(struct sockaddr_in *dest)
 
 static int dc_master_init(struct dart_client *dc) //working
 {
-  int i, j, err;
+  int i, j, k, err;
 	struct ptlid_map *dcreg;
 	struct node_id *peer;
 
@@ -230,6 +232,7 @@ static int dc_master_init(struct dart_client *dc) //working
 	int info_size, tmp_size;
 
 	int check=0;
+	int sp=0;
 
         gni_return_t status;
 	struct sockaddr_in address;
@@ -390,6 +393,7 @@ static int dc_master_init(struct dart_client *dc) //working
 
 	}
 
+	/* 1.2.0 version before SCA
 		err = rpc_smsg_init(dc->rpc_s, dc->peer_size);
 		if (err != 0){
 			printf("Rank %d: failed for rpc_smsg_init %d. (%d)\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, err);
@@ -401,37 +405,62 @@ static int dc_master_init(struct dart_client *dc) //working
 		  printf("Rank %d: failed for sys_smsg_init. (%d)\n", dc->rpc_s->ptlmap.id, err);
 			goto err_out;
 		}
-
+	*/
 		//rpc_smsg_check(dc->rpc_s);
 		//sys_smsg_check(dc->rpc_s);
 
+	// #SCA start
 
+	k=0;
+	while(k < dc->peer_size)
+	{
+		peer = &dc->peer_tab[k];
+		if(peer->ptlmap.appid == 0)
+			sp++;
+		k++;
+	}
+
+		err = rpc_smsg_init(dc->rpc_s, sp);
+		if (err != 0){
+			printf("Rank %d: failed for rpc_smsg_init %d. (%d)\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, err);
+			goto err_out;
+		}
+		/*
+		err = sys_smsg_init(dc->rpc_s, sp);
+		if (err != 0){
+		  printf("Rank %d: failed for sys_smsg_init. (%d)\n", dc->rpc_s->ptlmap.id, err);
+			goto err_out;
+			}*///SCA SYS
+
+	// #SCA end
 
 	// 4. allgather APP smsg_attr[rpc+sys]
         gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(dc->num_cp * sizeof(gni_smsg_attr_t));
-        gni_smsg_attr_t *remote_smsg_sys_array = (gni_smsg_attr_t *)malloc(dc->num_cp * sizeof(gni_smsg_attr_t));
+        /*gni_smsg_attr_t *remote_smsg_sys_array = (gni_smsg_attr_t *)malloc(dc->num_cp * sizeof(gni_smsg_attr_t));
 
 	allgather(&dc->rpc_s->sys_local_smsg_attr, remote_smsg_sys_array, sizeof(gni_smsg_attr_t));
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);	
+	*/// SCA SYS
 
 	allgather(&dc->rpc_s->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t));
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);
 
 	// 5. send APP msg_size + smsg_attr[rpc+sys]
-	info_size = dc->num_cp * sizeof(gni_smsg_attr_t) * 2;
+	//	info_size = dc->num_cp * sizeof(gni_smsg_attr_t) * 2;// SCA SYS
+	info_size = dc->num_cp * sizeof(gni_smsg_attr_t);// SCA SYS
 	send_buffer = malloc(info_size);
 
 	smsg_attr = send_buffer;
 	for(i=0,j=0;j<dc->num_cp;j++,i++){
 		smsg_attr[i] = remote_smsg_rpc_array[j];
-		i++;
-		smsg_attr[i] = remote_smsg_sys_array[j];
+		//i++;//SCA SYS
+		//		smsg_attr[i] = remote_smsg_sys_array[j];//SCA SYS
 	}	
 
 	free(remote_smsg_rpc_array);
-	free(remote_smsg_sys_array);
+	//free(remote_smsg_sys_array);//SCA SYS
 
 	tmp_size = 0;
 	while(1){
@@ -501,12 +530,19 @@ static int dc_master_init(struct dart_client *dc) //working
 
 	peer = dc->peer_tab;
 	smsg_attr = (gni_smsg_attr_t *)recv_buffer;
+	/*
 	for(j=0;j<info_size/sizeof(gni_smsg_attr_t)/2;j++){
 		dc->peer_tab[j].remote_smsg_attr = *smsg_attr;
 		smsg_attr++;
 		dc->peer_tab[j].sys_remote_smsg_attr = *smsg_attr;
 		peer++;
 		smsg_attr++;
+	*///SCA SYS
+
+	for(j=0;j<info_size/sizeof(gni_smsg_attr_t);j++){
+		dc->peer_tab[j].remote_smsg_attr = *smsg_attr;
+		peer++;
+		smsg_attr++;//SCA SYS
 
 		//peer_smsg_check(dc->rpc_s, &dc->peer_tab[j], &dc->peer_tab[j].remote_smsg_attr);
 		//peer_smsg_check(dc->rpc_s, &dc->peer_tab[j], &dc->peer_tab[j].sys_remote_smsg_attr);
@@ -516,7 +552,8 @@ static int dc_master_init(struct dart_client *dc) //working
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);	
 
-	err = PMI_Bcast(recv_buffer, dc->peer_size * sizeof(gni_smsg_attr_t) * 2);
+	//err = PMI_Bcast(recv_buffer, dc->peer_size * sizeof(gni_smsg_attr_t) * 2);//SCA SYS
+	err = PMI_Bcast(recv_buffer, dc->peer_size * sizeof(gni_smsg_attr_t));//SCA SYS
 	if (err != PMI_SUCCESS){
 		printf("Rank %d: failed for broadcast smsg attributes information to slave client. (%d)\n", dc->rpc_s->ptlmap.id, err);			
 		goto err_out;
@@ -528,6 +565,7 @@ static int dc_master_init(struct dart_client *dc) //working
 	free(recv_buffer);
 
 	// 7. smsg_config
+	/* version 1.2.0 before SCA
 	for(i=0;i<dc->peer_size;i++){
 		if(i == dc->rpc_s->ptlmap.id)
 			continue;
@@ -546,6 +584,31 @@ static int dc_master_init(struct dart_client *dc) //working
 			goto err_out;
 		}
 	}
+	*/
+
+	// #SCA start
+
+	for(i=0;i<sp;i++){
+		if(i == dc->rpc_s->ptlmap.id)
+			continue;
+
+		peer = &dc->peer_tab[i];
+
+		err = rpc_smsg_config(dc->rpc_s, peer);
+		if (err != 0){
+			printf("Rank %d: failed for config RPC SMSG for peer %d. (%d)\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, err);
+			goto err_out;
+		}
+		/*
+		err = sys_smsg_config(dc->rpc_s, peer);
+		if (err != 0){
+			printf("Rank %d: failed for config SYS SMSG for peer %d. (%d)\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, err);
+			goto err_out;
+		}
+		*///SCA SYS
+	}
+
+	// #SCA end
 
 	// 8. free connection, close socket
 	//close(connectfd);
@@ -573,7 +636,7 @@ static int dcrpc_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 	local_server_attr.ptlmap = dc->rpc_s->ptlmap;
 	local_server_attr.remote_smsg_attr= dc->rpc_s->local_smsg_attr;
-	local_server_attr.sys_remote_smsg_attr = dc->rpc_s->sys_local_smsg_attr;	
+	//local_server_attr.sys_remote_smsg_attr = dc->rpc_s->sys_local_smsg_attr;//SCA SYS	
 
 	err = PMI_Allgather(&local_server_attr, remote_server_attr, dc->num_cp * sizeof(struct peer_attr_reg));
 	if (err != PMI_SUCCESS){
@@ -624,7 +687,8 @@ err_out:
 
 static int dc_boot_slave(struct dart_client *dc, int appid)
 {
-        int i, err = -ENOMEM;
+  int i, k, err = -ENOMEM;
+  int sp = 0;
 	struct node_id *peer;
 	struct ptlid_map *dcreg;
 
@@ -708,6 +772,7 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 
 	}
 
+	/* version 1.2.0, before SCA
 		err = rpc_smsg_init(dc->rpc_s, dc->peer_size);
 		if (err != 0){
 			printf("Rank %d: failed for rpc_smsg_init %d. (%d)\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, err);
@@ -720,30 +785,62 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 			printf("Rank 0: failed for sys_smsg_init. (%d)\n", err);
 			goto err_out;
 		}
+	*/
+
+
+	// #SCA start
+
+	k=0;
+	while(k < dc->peer_size)
+	{
+		peer = &dc->peer_tab[k];
+		if(peer->ptlmap.appid == 0)
+			sp++;
+		k++;
+	}
+
+		err = rpc_smsg_init(dc->rpc_s, sp);
+		if (err != 0){
+			printf("Rank %d: failed for rpc_smsg_init %d. (%d)\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, err);
+			goto err_out;
+		}
+		/*
+		err = sys_smsg_init(dc->rpc_s, sp);
+		if (err != 0){
+		  printf("Rank %d: failed for sys_smsg_init. (%d)\n", dc->rpc_s->ptlmap.id, err);
+			goto err_out;
+			}*/// SCA SYS
+
+	// #SCA end
+
 
 	// allgather APP smsg_attr[rpc+sys]
         gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(dc->num_cp * sizeof(gni_smsg_attr_t));
-        gni_smsg_attr_t *remote_smsg_sys_array = (gni_smsg_attr_t *)malloc(dc->num_cp * sizeof(gni_smsg_attr_t));
+	/*        gni_smsg_attr_t *remote_smsg_sys_array = (gni_smsg_attr_t *)malloc(dc->num_cp * sizeof(gni_smsg_attr_t));
 
 	allgather(&dc->rpc_s->sys_local_smsg_attr, remote_smsg_sys_array, sizeof(gni_smsg_attr_t));
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);	
+	*/ //SCA SYS
 
 	allgather(&dc->rpc_s->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t));
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);	
 
 	free(remote_smsg_rpc_array);
-	free(remote_smsg_sys_array);
+	//	free(remote_smsg_sys_array);//SCA SYS
 
 	// PMI_Bcast to all slave clients.
-	recv_buffer = malloc(dc->peer_size * sizeof(gni_smsg_attr_t) * 2);
-	memset(recv_buffer,0,dc->peer_size * sizeof(gni_smsg_attr_t) * 2);
+	//	recv_buffer = malloc(dc->peer_size * sizeof(gni_smsg_attr_t) * 2);//SCA SYS
+	//memset(recv_buffer,0,dc->peer_size * sizeof(gni_smsg_attr_t) * 2);//SCA SYS
+	recv_buffer = malloc(dc->peer_size * sizeof(gni_smsg_attr_t));//SCA SYS
+	memset(recv_buffer,0,dc->peer_size * sizeof(gni_smsg_attr_t));//SCA SYS
 
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);	
 
-	err = PMI_Bcast(recv_buffer, dc->peer_size * sizeof(gni_smsg_attr_t) * 2);
+	//	err = PMI_Bcast(recv_buffer, dc->peer_size * sizeof(gni_smsg_attr_t) * 2);//SCA SYS
+	err = PMI_Bcast(recv_buffer, dc->peer_size * sizeof(gni_smsg_attr_t));//SCA SYS
 	if (err != PMI_SUCCESS){
 		printf("Rank %d: failed for broadcast information to slave clients. (%d)\n", dc->rpc_s->ptlmap.id, err);			
 		goto err_out;
@@ -756,8 +853,8 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 	for(i=0;i<dc->peer_size;i++){
 	  dc->peer_tab[i].remote_smsg_attr = *smsg_attr;
 	  smsg_attr++;
-	  dc->peer_tab[i].sys_remote_smsg_attr = *smsg_attr;
-	  smsg_attr++;
+	  //	  dc->peer_tab[i].sys_remote_smsg_attr = *smsg_attr;//SCA SYS
+	  //smsg_attr++;//SCA SYS
 
 	  //peer_smsg_check(dc->rpc_s, &dc->peer_tab[i], &dc->peer_tab[i].remote_smsg_attr);
 	  //peer_smsg_check(dc->rpc_s, &dc->peer_tab[i], &dc->peer_tab[i].sys_remote_smsg_attr);
@@ -766,6 +863,7 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 	
 
 	// smsg_config
+	/* version 1.2.0, before SCA
 	for(i=0;i<dc->peer_size;i++){
 		if(i == dc->rpc_s->ptlmap.id)
 			continue;
@@ -784,6 +882,31 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 			goto err_out;
 		}
 	}
+	*/
+
+
+	// #SCA start
+
+	for(i=0;i<sp;i++){
+		if(i == dc->rpc_s->ptlmap.id)
+			continue;
+
+		peer = &dc->peer_tab[i];
+
+		err = rpc_smsg_config(dc->rpc_s, peer);
+		if (err != 0){
+			printf("Rank %d: failed for config RPC SMSG for peer %d. (%d)\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, err);
+			goto err_out;
+		}
+		/*
+		err = sys_smsg_config(dc->rpc_s, peer);
+		if (err != 0){
+			printf("Rank %d: failed for config SYS SMSG for peer %d. (%d)\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, err);
+			goto err_out;
+			}*///SCA SYS
+	}
+
+	// #SCA end
 
 	free(recv_buffer);
 
@@ -920,7 +1043,9 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
 	err = PMI_Barrier();	
 	assert(err == PMI_SUCCESS);
 
+#ifdef DEBUG
 	printf("'%s(%d:%d:%d:%d)': init ok.\n", __func__, dc->self->ptlmap.id, dc->self->ptlmap.appid, dc->self->ptlmap.pid, dc->self->ptlmap.nid);//partial debug
+#endif
 	//print_dc(dc);
         return dc;
 

@@ -70,9 +70,7 @@ struct node_id;
 typedef unsigned char	__u8;
 typedef unsigned int	__u32;
 typedef int		__s32;
-//typedef unsigned long	__u64;
-typedef unsigned long long	__u64;
-
+typedef unsigned long	__u64;
 
 
 // Rpc prototype function, should be called in response to a remote rpc request. 
@@ -163,19 +161,20 @@ struct rfshdr {
 };
 
 // Header for the locking service.
+#define LOCK_NAME_SIZE 64
 struct lockhdr {
 	int		type;
 	int		rc;
 	int		id;
 	int		lock_num;
-	char		name[16];	// lock name
+    char	name[LOCK_NAME_SIZE];	// lock name
 };
 
 // Header for space info.
 struct hdr_ss_info {
 	int		num_dims;
 	//int		val_dims[3];
-	struct coord2 	dims;
+	struct coord2	dims;
 	int		num_space_srv;
 };
 
@@ -204,17 +203,17 @@ struct hdr_sys {
 
 // Command values defined for the system commands, sys_count should be <= 16.
 enum sys_cmd_type {
-        sys_none = 0,
-        sys_msg_req,
-        sys_msg_ret,
-        sys_msg_ack,
+	sys_none = 0,
+	sys_msg_req,
+	sys_msg_ret,
+	sys_msg_ack,
 	sys_bar_enter,
 	//        sys_bar_cont,
-        sys_count
+	sys_count
 };
 
 enum io_dir {
-        io_none = 0,
+	io_none = 0,
 	io_send,
 	io_receive,
 	io_count
@@ -253,8 +252,8 @@ struct node_id {
 	int			f_req_msg;
 	int			f_need_msg;
 
-        int                     f_unreg;
-        int                     f_reg;
+	int                     f_unreg;
+	int                     f_reg;
 
 	// Number of messages I can send to this peer without blocking.
 	int			num_msg_at_peer;
@@ -277,6 +276,7 @@ struct msg_buf {
 
 	struct rpc_cmd		*msg_rpc;
 
+    void            *original_msg_data;
 	void			*msg_data;
 	size_t			size;
 
@@ -292,14 +292,21 @@ struct msg_buf {
 	const struct node_id	*peer;
 };
 
+enum rpc_request_type {
+    DART_RPC_SEND = 0,
+    DART_RPC_RECEIVE,
+    DART_RPC_SEND_DIRECT,
+    DART_RPC_RECEIVE_DIRECT
+};
+
 struct rpc_request {
 	struct list_head	req_entry;
 	uint32_t       		index;	
-        int                     type; //0 for cmd, 1 for data
-  int f_data; //1: rr->mdh_data is using.
+    int                     type; //0 for cmd, 1 for data
+    int f_data; //1: rr->mdh_data is using.
 
 	async_callback		cb;
-  int                     refcont;
+    int                     refcont;
 
 	struct msg_buf		*msg;
 	void			*private;
@@ -316,6 +323,8 @@ struct rpc_request {
 	gni_mem_handle_t	mdh_data;
 
 	//?gni_post_descriptor_t	rdma_data_desc;
+    int f_use_prealloc_rdma_mem;
+    enum rpc_request_type rr_type;
 };
 
 enum rpc_component {
@@ -339,6 +348,7 @@ struct rpc_server{
 	gni_cq_handle_t		sys_cq_hndl;		// completion queue for system message
 	gni_smsg_attr_t		sys_local_smsg_attr;	// local system message attributes
 
+    gni_mem_handle_t    dart_mem_mdh;
 
 	unsigned int		*all_nic_addresses;
 
@@ -406,12 +416,9 @@ enum cmd_type {
 	ss_code_reply,
 #ifdef DS_HAVE_DIMES
 	dimes_ss_info_msg,
-	dimes_locate_data_test_msg,
-	dimes_put_test_msg,
 	dimes_locate_data_msg,
 	dimes_put_msg,
-	dimes_obj_get_ack_v1_msg,
-	dimes_obj_get_ack_v2_msg,
+	dimes_get_ack_msg,
 #endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,
@@ -486,9 +493,6 @@ void rpc_report_md_usage(struct rpc_server *rpc_s);
 struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *peer, int num_rpcs);
 
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
-inline void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg,
-                        struct rpc_cmd *cmd) {
-        return;
-}
+void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 
 #endif

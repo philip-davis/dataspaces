@@ -52,6 +52,9 @@ static struct timer timer_;
 
 static MPI_Comm gcomm_;
 
+static size_t elem_size_;
+
+static char transport_type_str_[256];
 /*
 Matrix representation
 +-----> (x)
@@ -59,182 +62,177 @@ Matrix representation
 |
 v (y)
 */
-static double* allocate_2d()
+static double* allocate_2d(int x, int y)
 {
-	double* tmp = NULL;
-	offx_ = (rank_ % npx_) * spx_;
-	offy_ = (rank_ / npx_) * spy_;
-
-	tmp = (double*)malloc(sizeof(double)*spx_*spy_);
-	return tmp;
+    double* tmp = NULL;
+    tmp = (double*)malloc(elem_size_ * x * y);
+    return tmp;
 }
 
-static double* allocate_3d()
+static void set_offset_2d(int rank, int npx, int npy, int spx, int spy)
 {
-	double *tmp = NULL;
-	offx_ = (rank_ % npx_) * spx_;
-	offy_ = (rank_ / npx_ % npy_) * spy_;
-	offz_ = (rank_ / npx_ / npy_) * spz_;
-
-	tmp = (double*)malloc(sizeof(double)*spx_*spy_*spz_);
-	return tmp;
+    offx_ = (rank % npx) * spx;
+    offy_ = (rank / npx) * spy;
 }
 
-static int couple_read_2d_multi_var(unsigned int ts, enum transport_type type,
-					int num_vars)
+static double* allocate_3d(int x, int y, int z)
 {
-	char var_name[128];
-	double *data = NULL;
-	int i;
+    double *tmp = NULL;
+    tmp = (double*)malloc(elem_size_* x * y * z);
+    return tmp;
+}
 
-	data = allocate_2d();
-	if (data == NULL) {
-		uloga("%s(): failed to alloc buffer\n", __func__);
-		return -1;
-	}
+static void set_offset_3d(int rank, int npx, int npy, int npz, int spx, int spy, int spz)
+{
+    offx_ = (rank % npx) * spx;
+    offy_ = (rank / npx % npy) * spy;
+    offz_ = (rank / npx / npy) * spz;
+}
+
+static int couple_read_2d(unsigned int ts, int num_vars, enum transport_type type)
+{
+    double **data_tab = (double **)malloc(sizeof(double*) * num_vars);
+    char var_name[128];
+    int i;
+    for (i = 0; i < num_vars; i++) {
+        data_tab[i] = NULL;
+    }
 
 	common_lock_on_read("m2d_lock", &gcomm_);
 
 	//get data from space
-	int elem_size = sizeof(double);
+    set_offset_2d(rank_, npx_, npy_, spx_, spy_);
+	int elem_size = elem_size_;
 	int xl = offx_;
 	int yl = offy_;
 	int zl = 0;
 	int xu = offx_ + spx_ - 1;
 	int yu = offy_ + spy_ - 1;
 	int zu = 0;
-	double tm_st, tm_end1, tm_end2;
-
-	MPI_Barrier(gcomm_);
-	tm_st = timer_read(&timer_);
-
-	for (i = 0; i < num_vars; i++) {
-		sprintf(var_name, "m2d_%d", i);
-		memset(data, 0, sizeof(double)*spx_*spy_);
-		common_get(var_name, ts, elem_size,
-				xl, yl, zl, xu, yu, zu,
-				data, type);
-		check_data(var_name, data, spx_*spy_, rank_, ts);
-	}
-
-	tm_end1 = timer_read(&timer_);
-
-	MPI_Barrier(gcomm_);
-	tm_end2 = timer_read(&timer_);
-
-#ifdef DEBUG
-	uloga("TS= %u TRANSPORT_TYPE= %d RANK= %d read time= %lf\n",
-			ts, type, rank_, tm_end1-tm_st);
-	if (rank_ == 0) {
-		uloga("TS= %u TRANSPORT_TYPE= %d read MAX time= %lf\n",
-				ts, type, tm_end2-tm_st);
-	}
-#endif
-
-	common_unlock_on_read("m2d_lock", &gcomm_);
-
-	if (data)
-		free(data);
-
-	return 0;
-}
-
-static int couple_read_2d(double *m2d, unsigned int ts, enum transport_type type)
-{
-	common_lock_on_read("m2d_lock", &gcomm_);
-
-	//get data from space
-	int elem_size = sizeof(double);
-	int xl = offx_;
-	int yl = offy_;
-	int zl = 0;
-	int xu = offx_ + spx_ - 1;
-	int yu = offy_ + spy_ - 1;
-	int zu = 0;
-	double tm_st, tm_end1, tm_end2;
+	double tm_st, tm_end, tm_max, tm_diff;
+	int root = 0;
 
 #ifdef DEBUG
 	uloga("Timestep=%u, %d read m2d: {(%d,%d,%d),(%d,%d,%d)} from space\n",
 		ts, rank_, xl,yl,zl, xu,yu,zu);
 #endif
 
+    // Allocate data
+    double *data;
+    for (i = 0; i < num_vars; i++) {
+        data = allocate_2d(spx_, spy_);
+        memset(data, 0, elem_size_*spx_*spy_);
+        data_tab[i] = data;
+    }
+
 	MPI_Barrier(gcomm_);
 	tm_st = timer_read(&timer_);
-
-	common_get("m2d", ts, elem_size,
-		xl, yl, zl, xu, yu, zu,
-		m2d, type);	
-	tm_end1 = timer_read(&timer_);
-	
-	MPI_Barrier(gcomm_);
-	tm_end2 = timer_read(&timer_);
-
-#ifdef DEBUG
-	uloga("TS= %u TRANSPORT_TYPE= %d RANK= %d read time= %lf\n",
-		ts, type, rank_, tm_end1-tm_st);	
-	if (rank_ == 0) {
-		uloga("TS= %u TRANSPORT_TYPE= %d read MAX time= %lf\n",
-			ts, type, tm_end2-tm_st);
-	}
-#endif
-
+    for (i = 0; i < num_vars; i++) {
+        sprintf(var_name, "m2d_%d", i);
+        common_get(var_name, ts, elem_size,
+            xl, yl, zl, xu, yu, zu, data_tab[i], type);
+    }	
+	tm_end = timer_read(&timer_);
 	common_unlock_on_read("m2d_lock", &gcomm_);
+	
+	tm_diff = tm_end-tm_st;
+	MPI_Reduce(&tm_diff, &tm_max, 1, MPI_DOUBLE, MPI_MAX, root, gcomm_);
 
-	check_data("m2d", m2d, spx_*spy_, rank_, ts);
+#ifdef TIMING_PERF
+    uloga("TIMING_PERF get_data ts %u peer %d time %lf\n",
+            ts, common_rank(), tm_diff);
+#endif
+	if (rank_ == root) {
+		uloga("TS= %u TRANSPORT_TYPE= %s read MAX time= %lf\n",
+			ts, transport_type_str_, tm_max);
+	}
+
+    for (i = 0; i < num_vars; i++) {
+        sprintf(var_name, "m2d_%d", i);
+        check_data(var_name, data_tab[i], 
+                   (spx_*spy_*elem_size_)/sizeof(double), rank_, ts);
+        free(data_tab[i]);
+    }
+    free(data_tab);
 
 	return 0;
 }
 
-static int couple_read_3d(double *m3d, unsigned int ts, enum transport_type type)
+static int couple_read_3d(unsigned int ts, int num_vars, enum transport_type type)
 {
+    double **data_tab = (double **)malloc(sizeof(double*) * num_vars);
+    char var_name[128];
+    int i;
+    for (i = 0; i < num_vars; i++) {
+        data_tab[i] = NULL;
+    }
+
 	common_lock_on_read("m3d_lock", &gcomm_);
 
 	//get data from space
-	int elem_size = sizeof(double);
+    set_offset_3d(rank_, npx_, npy_, npz_, spx_, spy_, spz_);
+	int elem_size = elem_size_;
 	int xl = offx_;
 	int yl = offy_;
 	int zl = offz_;
 	int xu = offx_ + spx_ - 1;
 	int yu = offy_ + spy_ - 1;
 	int zu = offz_ + spz_ - 1;
-	double tm_st, tm_end1, tm_end2;
+	double tm_st, tm_end, tm_max, tm_diff;
+	int root = 0;
 
 #ifdef DEBUG
 	uloga("Timestep=%u, %d read m3d: {(%d,%d,%d),(%d,%d,%d)} from space\n",
 		ts, rank_, xl,yl,zl, xu,yu,zu);
 #endif
 
+    // Allocate data
+    double *data;
+    for (i = 0; i < num_vars; i++) {
+        data = allocate_3d(spx_, spy_, spz_);
+        memset(data, 0, elem_size_*spx_*spy_*spz_);
+        data_tab[i] = data;
+    }
+
 	MPI_Barrier(gcomm_);
 	tm_st = timer_read(&timer_);
-
-	common_get("m3d", ts, elem_size,
-		xl, yl, zl, xu, yu, zu,
-		m3d, type);	
-	tm_end1 = timer_read(&timer_);
+    for (i = 0; i < num_vars; i++) {
+        sprintf(var_name, "m3d_%d", i);
+        common_get(var_name, ts, elem_size,
+            xl, yl, zl, xu, yu, zu, data_tab[i], type);
+    }	
+	tm_end = timer_read(&timer_);
+    common_unlock_on_read("m3d_lock", &gcomm_);
 	
-	MPI_Barrier(gcomm_);
-	tm_end2 = timer_read(&timer_);
+	tm_diff = tm_end-tm_st;
+	MPI_Reduce(&tm_diff, &tm_max, 1, MPI_DOUBLE, MPI_MAX, root, gcomm_);
 
-#ifdef DEBUG
-	uloga("TS= %u TRANSPORT_TYPE= %d RANK= %d read time= %lf\n",
-		ts, type, rank_, tm_end1-tm_st);	
-	if (rank_ == 0) {
-		uloga("TS= %u TRANSPORT_TYPE= %d read MAX time= %lf\n",
-			ts, type, tm_end2-tm_st);
-	}
+#ifdef TIMING_PERF
+    uloga("TIMING_PERF get_data ts %u peer %d time %lf\n",
+            ts, common_rank(), tm_diff);
 #endif
+	if (rank_ == root) {
+		uloga("TS= %u TRANSPORT_TYPE= %s read MAX time= %lf\n",
+			ts, transport_type_str_, tm_max);
+	}
 
-	common_unlock_on_read("m3d_lock", &gcomm_);
-
-	check_data("m3d", m3d, spx_*spy_*spz_, rank_, ts);
+    for (i = 0; i < num_vars; i++) {
+        sprintf(var_name, "m3d_%d", i);
+        check_data(var_name, data_tab[i], 
+                   (spx_*spy_*spz_*elem_size_)/sizeof(double), rank_, ts);
+        free(data_tab[i]);
+    }
+    free(data_tab);
 
 	return 0;
 }
 
-int test_get_run(int npapp, int npx, int npy, int npz,
-        int spx, int spy, int spz, int timestep, int dims, MPI_Comm gcomm)
+int test_get_run(enum transport_type type, int npapp, int npx, int npy, int npz,
+        int spx, int spy, int spz, int timestep, int dims, size_t elem_size,
+        int num_vars, MPI_Comm gcomm)
 {
 	gcomm_ = gcomm;
+	elem_size_ = elem_size;
 	timestep_ = timestep;
 	npapp_ = npapp;
 	npx_ = npx;
@@ -251,53 +249,47 @@ int test_get_run(int npapp, int npx, int npy, int npz,
 	timer_start(&timer_);
  
 	int app_id = 2;
+    double tm_st, tm_end;
+    tm_st = timer_read(&timer_);
 	common_init(npapp_, app_id);
-	common_set_storage_type(row_major);
-	//rank_ = common_rank();
-	//nproc_ = common_peers();
-	MPI_Comm_size(gcomm, &nproc_);
-	MPI_Comm_rank(gcomm, &rank_);
+    tm_end = timer_read(&timer_);
+    common_set_storage_type(row_major, type);
+    common_get_transport_type_str(type, transport_type_str_);
 
-	double *databuf = NULL;
+    MPI_Comm_rank(gcomm_, &rank_);
+    MPI_Comm_size(gcomm_, &nproc_);
+
+#ifdef TIMING_PERF
+    uloga("TIMING_PERF init_dspaces peer %d time %lf\n", common_rank(), tm_end-tm_st);
+#endif
+
+    unsigned int ts;
 	if (dims == 2) {
-		databuf = allocate_2d();
-		if (databuf) {
-			unsigned int ts;
-			for (ts = 1; ts <= timestep_; ts++){
-				memset(databuf, 0, sizeof(double)*spx_*spy_);
-#ifdef DS_HAVE_DIMES
-				if (ts % 2 == 0)	
-					couple_read_2d(databuf, ts, USE_DIMES);
-				else if (ts % 2 == 1)
-					couple_read_2d(databuf, ts, USE_DSPACES);
-#else
-				couple_read_2d(databuf, ts, USE_DSPACES);
-#endif
-			}
-		}
+        for (ts = 1; ts <= timestep_; ts++){
+            couple_read_2d(ts, num_vars, type);
+        }
 	} else if (dims == 3) {
-		databuf = allocate_3d();
-		if (databuf) {
-			unsigned int ts;
-			for (ts = 1; ts <= timestep_; ts++) {
-				memset(databuf, 0, sizeof(double)*spx_*spy_*spz_);
-#ifdef DS_HAVE_DIMES
-				if (ts % 2 == 0)	
-					couple_read_3d(databuf, ts, USE_DIMES);
-				else if (ts % 2 == 1)
-					couple_read_3d(databuf, ts, USE_DSPACES);
-#else
-				couple_read_3d(databuf, ts, USE_DSPACES);
-#endif
-			}
-		}
-	}
+        for (ts = 1; ts <= timestep_; ts++) {
+            couple_read_3d(ts, num_vars, type);
+        }
+	} else {
+        uloga("%s(): error dims= %d\n", __func__, dims);
+    }
 
-	common_barrier();
+    if (rank_ == 0) {
+        uloga("%s(): done\n", __func__);
+    }
+
+	//common_barrier();
+    MPI_Barrier(gcomm_);
+    int ds_rank = common_rank();
+    tm_st = timer_read(&timer_);
 	common_finalize();
+    tm_end = timer_read(&timer_);
 
-	if (databuf)
-		free(databuf);	
-
+#ifdef TIMING_PERF
+    uloga("TIMING_PERF fini_dspaces peer %d time= %lf\n", ds_rank, tm_end-tm_st);
+#endif
 	return 0;
 }
+

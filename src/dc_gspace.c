@@ -50,6 +50,15 @@
 
 #define DCG_ID          dcg->dc->self->ptlmap.id
 
+#ifdef TIMING_PERF
+#include "timer.h"
+static char log_header[256] = "";
+static struct timer tm_perf;
+#endif
+
+static int mpi_rank = 0;
+static int flag_set_mpi_rank = 0;
+
 /* Record the number of timing msgs received */
 static int demo_num_timing_recv;
 
@@ -112,7 +121,7 @@ struct dcg_lock {
         int                     req;
         int                     ack;
         int                     lock_num;
-	char			name[16];
+	char			name[LOCK_NAME_SIZE];
 };
 
 /* 
@@ -1383,9 +1392,9 @@ static int dcgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         msg->cb = obj_get_desc_completion;
         msg->private = oht;
 
-	rpc_mem_info_cache(peer, msg, cmd); 
+        rpc_mem_info_cache(peer, msg, cmd); 
         err = rpc_receive_direct(rpc_s, peer, msg);
-	rpc_mem_info_reset(peer, msg, cmd);	
+        rpc_mem_info_reset(peer, msg, cmd);	
 
         if (err == 0)
                 return 0;
@@ -1426,7 +1435,6 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
         free(msg);
 
         dcg_dec_pending();
-        // uloga("'%s()': object send complete.\n", __func__);
         return 0;
 }
 
@@ -1439,6 +1447,19 @@ static int dcgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 	dcg->ss_info.num_dims = hsi->num_dims;
 	dcg->ss_info.num_space_srv = hsi->num_space_srv;
+    dcg->ss_domain.num_dims = hsi->num_dims;
+    /*dcg->ss_domain.lb.c[0] = 0;
+    dcg->ss_domain.lb.c[1] = 0;
+    dcg->ss_domain.lb.c[2] = 0;
+    dcg->ss_domain.ub.c[0] = hsi->val_dims[0]-1;
+    dcg->ss_domain.ub.c[1] = hsi->val_dims[1]-1;
+    dcg->ss_domain.ub.c[2] = hsi->val_dims[2]-1;*/
+	int i;
+	for(i = 0; i < hsi->num_dims; i++){
+		dcg->ss_domain.lb.c[i] = 0;
+		dcg->ss_domain.ub.c[i] = hsi->dims.c[i]-1;
+	}
+
 	dcg->f_ss_info = 1;
 
 	// TODO: read  in the  rest of the  variables from  the header
@@ -1504,12 +1525,12 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid)
         rpc_add_service(ss_obj_cq_notify, dcgrpc_obj_cq_update);
         rpc_add_service(cp_lock, dcgrpc_lock_service);
         rpc_add_service(cn_timing, dcgrpc_time_log);
-	rpc_add_service(ss_info, dcgrpc_ss_info);
+        rpc_add_service(ss_info, dcgrpc_ss_info);
 #ifdef DS_HAVE_ACTIVESPACE
-	rpc_add_service(ss_code_reply, dcgrpc_code_reply);
+        rpc_add_service(ss_code_reply, dcgrpc_code_reply);
 #endif
-	/* Added for ccgrid demo. */
-	rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);	
+        /* Added for ccgrid demo. */
+        rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);	
 
         dcg_l->dc = dc_alloc(num_nodes, appid, dcg_l);
         if (!dcg_l->dc) {
@@ -1517,9 +1538,14 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid)
                 goto err_out;
         }
 
-	INIT_LIST_HEAD(&dcg_l->locks_list);
+        INIT_LIST_HEAD(&dcg_l->locks_list);
 
         qc_init(&dcg_l->qc);
+
+#ifdef TIMING_PERF
+        timer_init(&tm_perf, 1);
+        timer_start(&tm_perf);
+#endif
 
         dcg = dcg_l;
         return dcg_l;
@@ -1562,7 +1588,12 @@ int dcg_obj_put(struct obj_data *od)
         int sync_op_id;
         int err = -ENOMEM;
 
-        peer = dcg_which_peer();
+        if (flag_set_mpi_rank) {
+            int peer_id = mpi_rank % dcg->dc->num_sp;
+            peer = dc_get_peer(dcg->dc, peer_id);
+        } else {
+            peer = dcg_which_peer();
+        }
 
         sync_op_id = syncop_next();
         // od->obj_desc.bb_loc_dsc = od->obj_desc.bb_glb_dsc;
@@ -1594,7 +1625,6 @@ int dcg_obj_put(struct obj_data *od)
 
         dcg_inc_pending();
 
-        // return 0;
         return sync_op_id;
  err_out:
         uloga("'%s()': failed with %d.\n", __func__, err);
@@ -1700,7 +1730,6 @@ int dcg_obj_sync(int sync_op_id)
                         goto err_out;
                 }
         }
-        // sync_op_ref[0] = 0;
 
         return 0;
  err_out:
@@ -1714,8 +1743,12 @@ int dcg_obj_get(struct obj_data *od)
 {
         struct query_tran_entry *qte;
         const struct query_cache_entry *qce;
-	//        struct hdr_obj_get *oh;
+        //        struct hdr_obj_get *oh;
         int err = -ENOMEM;
+#ifdef TIMING_PERF
+        double tm_st, tm_end;
+        tm_st = timer_read(&tm_perf);
+#endif
 
         qte = qte_alloc(od, 1);
         if (!qte)
@@ -1723,12 +1756,12 @@ int dcg_obj_get(struct obj_data *od)
 
         qt_add(&dcg->qt, qte);
 
-	versions_reset();
+        versions_reset();
 
-	// TODO:  I have  intentionately  disabled the  cache here.  I
-	// should reconsider.
+        // TODO:  I have  intentionately  disabled the  cache here.  I
+        // should reconsider.
         // qce = qc_find(&dcg->qc, &od->obj_desc);
-	qce = 0;
+        qce = 0;
         if (qce) {
                 err = qte_set_odsc_from_cache(qte, qce);
                 if (err < 0) {
@@ -1744,10 +1777,10 @@ int dcg_obj_get(struct obj_data *od)
 
                 err = get_obj_descriptors(qte);
                 if (err < 0) {
-			if (err == -EAGAIN)
-				goto out_no_data;
-			else	goto err_qt_free;
-		}
+                    if (err == -EAGAIN)
+                        goto out_no_data;
+                    else	goto err_qt_free;
+                }
                 DC_WAIT_COMPLETION(qte->f_odsc_recv == 1);
         }
 
@@ -1756,10 +1789,17 @@ int dcg_obj_get(struct obj_data *od)
                 goto out_no_data;
         }
 
+#ifdef TIMING_PERF
+        tm_end = timer_read(&tm_perf);
+        uloga("TIMING_PERF locate_data ts %d peer %d time %lf %s\n",
+            od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
+        tm_st = tm_end;
+#endif
+
         err = dcg_obj_data_get(qte);
         if (err < 0) {
-		// FIXME: should I jump to err_qt_free ?
-		qt_free_obj_data(qte, 1);
+                // FIXME: should I jump to err_qt_free ?
+                qt_free_obj_data(qte, 1);
                 goto err_data_free; // err_out;
         }
 
@@ -1786,19 +1826,24 @@ int dcg_obj_get(struct obj_data *od)
         }
 
         err = dcg_obj_assemble(qte, od);
+#ifdef TIMING_PERF
+        tm_end = timer_read(&tm_perf);
+        uloga("TIMING_PERF fetch_data ts %d peer %d time %lf %s\n",
+            od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
+#endif 
  out_no_data:
         qt_free_obj_data(qte, 1);
         qt_remove(&dcg->qt, qte);
         free(qte);
 
-	return err;
+        return err;
  err_data_free:
-	qt_free_obj_data(qte, 1);
+        qt_free_obj_data(qte, 1);
  err_qt_free:
-	qt_remove(&dcg->qt, qte);
-	free(qte);
+        qt_remove(&dcg->qt, qte);
+        free(qte);
  err_out:
-	ERROR_TRACE();
+        ERROR_TRACE();
 }
 
 int dcg_get_versions(int **p_version)
@@ -2295,3 +2340,16 @@ int dcg_get_num_space_srv(struct dcg_space *dcg)
 	return dcg->ss_info.num_space_srv;
 }
 
+void dcg_set_mpi_rank(int rank)
+{
+    mpi_rank = rank;
+    flag_set_mpi_rank = 1;
+}
+
+#ifdef TIMING_PERF
+int common_dspaces_set_log_header(const char *str)
+{
+    strcpy(log_header, str);
+    return 0;
+}
+#endif

@@ -516,24 +516,25 @@ static int ds_master_init(struct dart_server *ds)//testing
 		//debug
 		//rpc_smsg_check(ds->rpc_s);
 
-
+		/*
 		err = sys_smsg_init(ds->rpc_s, ds->peer_size);
 		if (err != 0){
 			printf("Rank 0: failed for sys_smsg_init. (%d)\n", err);
 			goto err_out;
 		}
-
+		*///SCA SYS
 		//debug
 		//sys_smsg_check(ds->rpc_s);
 
 	
 	//4. allgather APP smsg_attr[rpc+sys]
         gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(ds->size_sp * sizeof(gni_smsg_attr_t));
-        gni_smsg_attr_t *remote_smsg_sys_array = (gni_smsg_attr_t *)malloc(ds->size_sp * sizeof(gni_smsg_attr_t));
+        /*gni_smsg_attr_t *remote_smsg_sys_array = (gni_smsg_attr_t *)malloc(ds->size_sp * sizeof(gni_smsg_attr_t));
 
 	allgather(&ds->rpc_s->sys_local_smsg_attr, remote_smsg_sys_array, sizeof(gni_smsg_attr_t));
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);	
+	*///SCA SYS
 
 	allgather(&ds->rpc_s->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t));
         err = PMI_Barrier();
@@ -541,11 +542,11 @@ static int ds_master_init(struct dart_server *ds)//testing
 
 	for(j=0;j<ds->size_sp;j++){
 		ds->peer_tab[j].remote_smsg_attr = remote_smsg_rpc_array[j];
-		ds->peer_tab[j].sys_remote_smsg_attr = remote_smsg_sys_array[j];
+		//		ds->peer_tab[j].sys_remote_smsg_attr = remote_smsg_sys_array[j];//SCA SYS
 	}
 
 	free(remote_smsg_rpc_array);
-	free(remote_smsg_sys_array);
+	//	free(remote_smsg_sys_array);//SCA SYS
 
 
 	// 5. recv APP msg_size + smsg_attr[rpc+sys]
@@ -590,6 +591,7 @@ static int ds_master_init(struct dart_server *ds)//testing
 
 		peer = &ds->peer_tab[ds->size_sp+count];
 		smsg_attr = (gni_smsg_attr_t *)recv_buffer;
+		/*
                 for(j=0;j<info_size/sizeof(gni_smsg_attr_t)/2;j++){
 			ds->peer_tab[ds->size_sp+count+j].remote_smsg_attr = *smsg_attr;
 			ds->peer_tab[ds->size_sp+count+j].sys_remote_smsg_attr = *(smsg_attr+1);
@@ -597,18 +599,29 @@ static int ds_master_init(struct dart_server *ds)//testing
 			smsg_attr = smsg_attr+2;
                 }
 		count = count+info_size/sizeof(gni_smsg_attr_t)/2;	
+		*///SCA SYS
+
+                for(j=0;j<info_size/sizeof(gni_smsg_attr_t);j++){
+			ds->peer_tab[ds->size_sp+count+j].remote_smsg_attr = *smsg_attr;
+			//ds->peer_tab[ds->size_sp+count+j].sys_remote_smsg_attr = *(smsg_attr+1);
+			peer++;
+			smsg_attr = smsg_attr+1;
+                }
+		count = count+info_size/sizeof(gni_smsg_attr_t);	
+
 	}
 	free(recv_buffer);
 
 	// 6. send ALL msg_size + smsg_attr[rpc+sys], bcast slave servers
-	info_size = ds->peer_size * sizeof(gni_smsg_attr_t) * 2;
+	//	info_size = ds->peer_size * sizeof(gni_smsg_attr_t) * 2;//SCA SYS
+	info_size = ds->peer_size * sizeof(gni_smsg_attr_t);//SCA SYS
 	send_buffer = malloc(info_size);
 	smsg_attr = (gni_smsg_attr_t *)send_buffer;
 	for(j=0;j<ds->peer_size;j++){
 		*smsg_attr = ds->peer_tab[j].remote_smsg_attr;
 		smsg_attr++;
-		*smsg_attr = ds->peer_tab[j].sys_remote_smsg_attr;
-		smsg_attr++;
+		//		*smsg_attr = ds->peer_tab[j].sys_remote_smsg_attr;//SCA SYS
+		//smsg_attr++;//SCA SYS
 
 		//peer_smsg_check(ds->rpc_s, &ds->peer_tab[j], &ds->peer_tab[j].remote_smsg_attr);
 		//peer_smsg_check(ds->rpc_s, &ds->peer_tab[j], &ds->peer_tab[j].sys_remote_smsg_attr);
@@ -649,7 +662,8 @@ static int ds_master_init(struct dart_server *ds)//testing
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);
 
-	err = PMI_Bcast(send_buffer, ds->peer_size * sizeof(gni_smsg_attr_t) * 2);
+	//	err = PMI_Bcast(send_buffer, ds->peer_size * sizeof(gni_smsg_attr_t) * 2);//SCA SYS
+	err = PMI_Bcast(send_buffer, ds->peer_size * sizeof(gni_smsg_attr_t));//SCA SYS
 	if (err != PMI_SUCCESS){
 		printf("Rank 0: failed for broadcast smsg attributes information to slave servers. (%d)\n", err);			
 		goto err_out;
@@ -675,12 +689,12 @@ static int ds_master_init(struct dart_server *ds)//testing
 		  printf("Rank 0: failed for config RPC SMSG for peer %d i is %d. (%d)\n", peer->ptlmap.id, i, err);
 			goto err_out;
 		}
-
+		/*
 		err = sys_smsg_config(ds->rpc_s, peer);
 		if (err != 0){
 			printf("Rank 0: failed for config SYS SMSG for peer %d. (%d)\n", peer->ptlmap.id, err);
 			goto err_out;
-		}
+			}*///SCA SYS
 	}
 
 	// 8. free connection, close socket
@@ -809,12 +823,12 @@ static int ds_boot_slave(struct dart_server *ds)
 			printf("Rank 0: failed for rpc_smsg_init %d. (%d)\n", peer->ptlmap.id, err);
 			goto err_out;
 		}
-
+		/*
 		err = sys_smsg_init(ds->rpc_s, ds->peer_size);
 		if (err != 0){
 			printf("Rank 0: failed for sys_smsg_init. (%d)\n", err);
 			goto err_out;
-		}
+			}*///SCA SYS
 		
 		//rpc_smsg_check(ds->rpc_s);
 		//sys_smsg_check(ds->rpc_s);
@@ -822,11 +836,12 @@ static int ds_boot_slave(struct dart_server *ds)
 
 	// 3. allgather APP smsg_attr[rpc+sys]
         gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(ds->size_sp * sizeof(gni_smsg_attr_t));
-        gni_smsg_attr_t *remote_smsg_sys_array = (gni_smsg_attr_t *)malloc(ds->size_sp * sizeof(gni_smsg_attr_t));
+        /*gni_smsg_attr_t *remote_smsg_sys_array = (gni_smsg_attr_t *)malloc(ds->size_sp * sizeof(gni_smsg_attr_t));
 
 	allgather(&ds->rpc_s->sys_local_smsg_attr, remote_smsg_sys_array, sizeof(gni_smsg_attr_t));
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);	
+	*/// SCA SYS
 
 	allgather(&ds->rpc_s->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t));
         err = PMI_Barrier();
@@ -834,13 +849,17 @@ static int ds_boot_slave(struct dart_server *ds)
 
 
 	// 4. bcast slave servers
-	recv_buffer = malloc(ds->peer_size * sizeof(gni_smsg_attr_t) * 2);
-	memset(recv_buffer,0,ds->peer_size * sizeof(gni_smsg_attr_t) * 2);
+	/*	recv_buffer = malloc(ds->peer_size * sizeof(gni_smsg_attr_t) * 2);
+		memset(recv_buffer,0,ds->peer_size * sizeof(gni_smsg_attr_t) * 2);*/
+
+      	recv_buffer = malloc(ds->peer_size * sizeof(gni_smsg_attr_t));// SCA SYS
+	memset(recv_buffer,0,ds->peer_size * sizeof(gni_smsg_attr_t));// SCA SYS
 
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);
 
-	err = PMI_Bcast(recv_buffer, ds->peer_size * sizeof(gni_smsg_attr_t) * 2);
+	//	err = PMI_Bcast(recv_buffer, ds->peer_size * sizeof(gni_smsg_attr_t) * 2);//SCA SYS
+	err = PMI_Bcast(recv_buffer, ds->peer_size * sizeof(gni_smsg_attr_t));//SCA SYS
 	if (err != PMI_SUCCESS){
 		printf("Rank %d: failed for broadcast smsg attributes information to slave servers. (%d)\n", ds->rpc_s->ptlmap.id, err);			
 		goto err_out;
@@ -853,8 +872,8 @@ static int ds_boot_slave(struct dart_server *ds)
 	for(j=0;j<ds->peer_size;j++){
 		ds->peer_tab[j].remote_smsg_attr = *smsg_attr;
 		smsg_attr++;
-		ds->peer_tab[j].sys_remote_smsg_attr = *smsg_attr;
-		smsg_attr++;
+		//		ds->peer_tab[j].sys_remote_smsg_attr = *smsg_attr;//SCA SYS
+		//smsg_attr++;//SCA SYS
 
 		//peer_smsg_check(ds->rpc_s, &ds->peer_tab[j], &ds->peer_tab[j].remote_smsg_attr);
 		//peer_smsg_check(ds->rpc_s, &ds->peer_tab[j], &ds->peer_tab[j].sys_remote_smsg_attr);
@@ -873,12 +892,12 @@ static int ds_boot_slave(struct dart_server *ds)
 			printf("Rank %d: failed for config SMSG for peer %d. (%d)\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id, err);
 			goto err_out;
 		}
-
+		/*
 		err = sys_smsg_config(ds->rpc_s, peer);
 		if (err != 0){
 			printf("Rank %d: failed for config SYS SMSG for peer %d. (%d)\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id, err);
 			goto err_out;
-		}
+			}*///SCA SYS
 	}
 
 	free(recv_buffer);
@@ -1093,6 +1112,9 @@ void ds_free(struct dart_server *ds)//not done
 
 int ds_process(struct dart_server *ds)
 {
+    if (ds->f_reg) {
+        rpc_process_msg_resend(ds->rpc_s, ds->peer_tab, ds->num_sp);
+    }
 	return rpc_process_event(ds->rpc_s);
 }
 

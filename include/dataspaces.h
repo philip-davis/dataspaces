@@ -196,9 +196,9 @@ void dspaces_unlock_on_write(const char *lock_name,void *comm);
  */
 int dspaces_put (const char *var_name, 
         unsigned int ver, int size,
-	int ndim,
-        int *lb, //int xl, int yl, int zl,
-        int *ub, //int xu, int yu, int zu, 
+	//int ndim,
+        int xl, int yl, int zl,//int *lb,
+        int xu, int yu, int zu,//int *ub,
         void *data);
 
 /**
@@ -227,9 +227,9 @@ int dspaces_put (const char *var_name,
  */
 int dspaces_get (const char *var_name, 
         unsigned int ver, int size,
-	int ndim,
-        int *lb, //int xl, int yl, int zl, 
-        int *ub, //int xu, int yu, int zu, 
+	//int ndim,
+        int xl, int yl, int zl, //int *lb,
+        int xu, int yu, int zu, //int *ub,
         void *data);
 
 /**
@@ -241,6 +241,8 @@ int dspaces_get (const char *var_name,
  * @return	0 indicates success.
  */
 int dspaces_put_sync(void);
+
+void dspaces_set_mpi_rank(int rank);
 
 #endif
 

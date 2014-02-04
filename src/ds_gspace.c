@@ -87,7 +87,7 @@ enum lock_action {
 struct dsg_lock {
 	struct list_head	lk_entry;
 
-	char			lk_name[16];
+	char			lk_name[LOCK_NAME_SIZE];
 
         int                     rd_notify_cnt; 
         int                     wr_notify_cnt;
@@ -121,7 +121,7 @@ static struct {
 	struct coord dims;
         int max_versions;
         int max_readers;
-	int lock_type;		/* 1 - generic, 2 - custom */
+        int lock_type;		/* 1 - generic, 2 - custom */
 } ds_conf;
 
 static struct {
@@ -132,7 +132,7 @@ static struct {
 	{"dims",		&ds_conf.dims},
         {"max_versions",        &ds_conf.max_versions},
         {"max_readers",         &ds_conf.max_readers},
-	{"lock_type",		&ds_conf.lock_type}
+        {"lock_type",		&ds_conf.lock_type}
 };
 
 static void eat_spaces(char *line)
@@ -237,6 +237,114 @@ static inline struct ds_gspace * dsg_ref_from_rpc(struct rpc_server *rpc_s)
         struct dart_server * ds = ds_ref_from_rpc(rpc_s);
 
         return ds->dart_ref;
+}
+
+struct sspace_conf {
+    int ndims;
+    int dimx, dimy, dimz;
+};
+
+// TODO: it is all hard coded for now
+static int init_sspace(struct ds_gspace *dsg_l, int num_sp, int max_versions)
+{
+    struct sspace_conf confs[MAX_NUM_SSD];
+    struct bbox domains[MAX_NUM_SSD];
+
+    int i, err;
+
+    confs[0].ndims = 2;
+    confs[0].dimx = 64;
+    confs[0].dimy = 11750400;
+    confs[0].dimz = 1;
+
+    confs[1].ndims = 2;
+    confs[1].dimx = 11750400;
+    confs[1].dimy = 64;
+    confs[1].dimz = 1;
+
+    confs[2].ndims = 2;
+    confs[2].dimx = 1;
+    confs[2].dimy = 64;
+    confs[2].dimz = 1;
+
+    for (i = 0; i < MAX_NUM_SSD; i++) {
+        domains[i].num_dims = confs[i].ndims;
+        domains[i].lb.c[0] = 0;
+        domains[i].lb.c[1] = 0;
+        domains[i].lb.c[2] = 0;
+        domains[i].ub.c[0] = confs[i].dimx - 1; 
+        domains[i].ub.c[1] = confs[i].dimy - 1; 
+        domains[i].ub.c[2] = confs[i].dimz - 1; 
+
+        dsg_l->spaces[i] = ssd_alloc(&domains[i], num_sp, max_versions);
+        if (!dsg_l->spaces[i]) {
+            uloga("%s(): ssd_alloc failed with i= %d\n", __func__, i);
+        }
+        
+        err = ssd_init(dsg_l->spaces[i], ds_get_rank(dsg_l->ds));
+        if (err < 0) {
+            uloga("%s(): ssd_init failed with i= %d\n", __func__, i);
+        }
+    }
+
+    return 0;
+}
+
+static int free_sspace(struct ds_gspace *dsg_l)
+{
+    int i;
+    for (i = 0; i < MAX_NUM_SSD; i++) {
+        ssd_free(dsg_l->spaces[i]);
+    }
+
+    return 0;
+}
+
+static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_name)
+{
+    char *var1 = "igid";
+    char *var2 = "iphase";
+    char *var3 = "dpot";
+
+    int pos;
+    size_t len = strlen(var_name);
+    if (len >= strlen(var1)) {
+        pos = len - strlen(var1);  
+        if (0 == strcmp(var_name+pos, var1)) {
+#ifdef DEBUG
+            //uloga("%s(): var_name '%s' matches str '%s'\n", __func__,
+            //    var_name, var1);
+#endif
+            return dsg_l->spaces[0];
+        }
+    }
+    
+    if (len >= strlen(var2)) {
+        pos = len - strlen(var2);  
+        if (0 == strcmp(var_name+pos, var2)) {
+#ifdef DEBUG
+            //uloga("%s(): var_name '%s' matches str '%s'\n", __func__,
+            //    var_name, var2);
+#endif
+            return dsg_l->spaces[1];
+        }
+    }
+
+    if (len >= strlen(var3)) {
+        pos = len - strlen(var3);  
+        if (0 == strcmp(var_name+pos, var3)) {
+#ifdef DEBUG
+            //uloga("%s(): var_name '%s' matches str '%s'\n", __func__,
+            //    var_name, var3);
+#endif
+            return dsg_l->spaces[2];
+        }
+    }
+
+#ifdef DEBUG
+    //uloga("%s(): var_name '%s' len %u returns default sspace\n", __func__, var_name, len);
+#endif
+    return dsg_l->ssd; // returns default sspace
 }
 
 #ifdef DS_HAVE_ACTIVESPACE
@@ -580,7 +688,7 @@ static int lock_process_wait_list(struct dsg_lock *dl)
                 switch (lock_process_request(dl, lh, 1)) {
                 case la_none:
                         /* Nothing to do. Yeah ... this should not happen! */
-		case la_wait:
+                case la_wait:
                         return 0;
 
                 case la_grant:
@@ -707,7 +815,7 @@ lock_service(struct dsg_lock *dl, struct rpc_server *rpc, struct rpc_cmd *cmd)
 
         switch (lock_process_request(dl, lh, list_empty(&dl->wait_list))) {
 
-	case la_none:
+        case la_none:
 		break;
 
         case la_wait:
@@ -992,8 +1100,10 @@ static char * obj_desc_sprint(const struct obj_descriptor *odsc)
 */
 static int dsgrpc_obj_update(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-        struct dht_entry *de = dsg->ssd->ent_self;
+        // TODO: lookup sspace 
         struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
+        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name); 
+        struct dht_entry *de = ssd->ent_self;
         int err;
 
 #ifdef DEBUG
@@ -1028,7 +1138,9 @@ static int dsgrpc_obj_update(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 */
 static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_descriptor *odsc)
 {
-	struct dht_entry *dht_tab[dsg->ssd->dht->num_entries];
+    // TODO: lookup sspace
+    struct sspace* ssd = lookup_sspace(dsg, odsc->name);
+	struct dht_entry *dht_tab[ssd->dht->num_entries];
 	/* TODO: create a separate header structure for object
 	   updates; for now just abuse the hdr_obj_get. */
 	struct hdr_obj_get *oh;
@@ -1037,7 +1149,7 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_descriptor *odsc
 	int num_de, i, min_rank, err;
 
 	/* Compute object distribution to nodes in the space. */
-	num_de = ssd_hash(dsg->ssd, &odsc->bb, dht_tab);
+	num_de = ssd_hash(ssd, &odsc->bb, dht_tab);
 	if (num_de == 0) {
 		uloga("'%s()': this should not happen, num_de == 0 ?!\n",
 			__func__);
@@ -1063,7 +1175,7 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_descriptor *odsc
 			uloga("'%s()': %s\n", __func__, str);
 			free(str);
 #endif
-			dht_add_entry(dsg->ssd->ent_self, odsc);
+			dht_add_entry(ssd->ent_self, odsc);
 			if (peer->ptlmap.id == min_rank) {
 				err = cq_check_match(odsc);
 				if (err < 0)
@@ -1111,24 +1223,19 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_descriptor *odsc
 */
 static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-        struct obj_data *od = msg->private;
-	// int err = -ENOMEM;
+    struct obj_data *od = msg->private;
 
-        ssd_add_obj(dsg->ssd, od);
+    // TODO: lookup sspace
+    struct sspace* ssd = lookup_sspace(dsg, od->obj_desc.name);
+    ssd_add_obj(ssd, od);
 
-        free(msg);
+    free(msg);
 #ifdef DEBUG
-	uloga("'%s()': finished receiving  %s, version %d.\n",
-		__func__, od->obj_desc.name, od->obj_desc.version);
+    uloga("'%s()': server %d finished receiving  %s, version %d.\n",
+        __func__, DSG_ID, od->obj_desc.name, od->obj_desc.version);
 #endif
-	// obj_put_update_dht(...);
 
-        return 0;
-	/*
- err_out:
-        uloga("'%s()': failed with %d.\n", __func__, err);
-        return err;
-	*/
+    return 0;
 }
 
 /*
@@ -1141,9 +1248,9 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         struct msg_buf *msg;
         int err;
 
-	odsc->owner = DSG_ID;
+        odsc->owner = DSG_ID;
 
-	err = -ENOMEM;
+        err = -ENOMEM;
         peer = ds_get_peer(dsg->ds, cmd->id);
         od = obj_data_alloc(odsc);
         if (!od)
@@ -1161,12 +1268,12 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         msg->cb = obj_put_completion;
 
 #ifdef DEBUG
-	uloga("'%s()': start receiving %s, version %d.\n", 
-		__func__, odsc->name, odsc->version);
+        uloga("'%s()': server %d start receiving %s, version %d.\n", 
+            __func__, DSG_ID, odsc->name, odsc->version);
 #endif
-	rpc_mem_info_cache(peer, msg, cmd); 
+        rpc_mem_info_cache(peer, msg, cmd); 
         err = rpc_receive_direct(rpc_s, peer, msg);
-	rpc_mem_info_reset(peer, msg, cmd);
+        rpc_mem_info_reset(peer, msg, cmd);
 
         if (err < 0)
                 goto err_free_msg;
@@ -1174,10 +1281,9 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	/* NOTE: This  early update, has  to be protected  by external
 	   locks in the client code. */
 
-	err = obj_put_update_dht(dsg, odsc);
-	if (err == 0)
+        err = obj_put_update_dht(dsg, odsc);
+        if (err == 0)
 	        return 0;
-
  err_free_msg:
         free(msg);
  err_free_data:
@@ -1304,9 +1410,11 @@ static int obj_send_dht_peers_completion(struct rpc_server *rpc_s, struct msg_bu
 */
 static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
+        // TODO: lookup sspace
         struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
         struct node_id *peer;
-        struct dht_entry *de_tab[dsg->ssd->dht->num_entries];
+        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name);
+        struct dht_entry *de_tab[ssd->dht->num_entries];
         struct msg_buf *msg;
         int *peer_id_tab, peer_num, i;
         int err = -ENOMEM;
@@ -1317,7 +1425,7 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
         peer = ds_get_peer(dsg->ds, cmd->id);
 
         tm_start = timer_read(&timer);
-        peer_num = ssd_hash(dsg->ssd, &oh->u.o.odsc.bb, de_tab);
+        peer_num = ssd_hash(ssd, &oh->u.o.odsc.bb, de_tab);
         tm_end = timer_read(&timer);
 #ifdef DEBUG
         printf("SRV %d %d %lf\n", DSG_ID, num++, tm_end-tm_start);
@@ -1340,9 +1448,9 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
         msg->size = sizeof(int) * (peer_num+1);
         msg->cb = obj_send_dht_peers_completion;
 
-	rpc_mem_info_cache(peer, msg, cmd);
+        rpc_mem_info_cache(peer, msg, cmd);
         err = rpc_send_direct(rpc_s, peer, msg);
-	rpc_mem_info_reset(peer, msg, cmd);
+        rpc_mem_info_reset(peer, msg, cmd);
         if (err == 0)
                 return 0;
 
@@ -1556,16 +1664,18 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
 */
 static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
+        // TODO: lookup sspace
         struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
         struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
         struct obj_descriptor odsc, *odsc_tab;
-        const struct obj_descriptor *podsc[dsg->ssd->ent_self->odsc_num];
-	int obj_versions[dsg->ssd->ent_self->odsc_size];
+        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name);
+        const struct obj_descriptor *podsc[ssd->ent_self->odsc_num];
+        int obj_versions[ssd->ent_self->odsc_size];
         int num_odsc, i;
         struct msg_buf *msg;
         int err = -ENOENT;
 
-        num_odsc = dht_find_entry_all(dsg->ssd->ent_self, &oh->u.o.odsc, podsc);
+        num_odsc = dht_find_entry_all(ssd->ent_self, &oh->u.o.odsc, podsc);
         // TODO: mark dht_find_entry as unused. 
         // podsc = dht_find_entry(dsg->ssd->ent_self, &oh->odsc);
         if (!num_odsc) {
@@ -1578,7 +1688,7 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		uloga("'%s()': %s\n", __func__, str);
 		free(str);
 #endif
-		i = dht_find_versions(dsg->ssd->ent_self, &oh->u.o.odsc, obj_versions);
+		i = dht_find_versions(ssd->ent_self, &oh->u.o.odsc, obj_versions);
                 err = obj_desc_not_found(peer, oh->qid, i, obj_versions);
                 if (err < 0)
                         goto err_out;
@@ -1598,12 +1708,12 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         if (!odsc_tab)
                 goto err_out;
 
-	for (i = 0; i < num_odsc; i++) {
-		odsc = *podsc[i];
-		/* Preserve storage type at the destination. */
-		odsc.st = oh->u.o.odsc.st;
-		bbox_intersect(&oh->u.o.odsc.bb, &odsc.bb, &odsc.bb);
-		odsc_tab[i] = odsc;
+        for (i = 0; i < num_odsc; i++) {
+            odsc = *podsc[i];
+            /* Preserve storage type at the destination. */
+            odsc.st = oh->u.o.odsc.st;
+            bbox_intersect(&oh->u.o.odsc.bb, &odsc.bb, &odsc.bb);
+            odsc_tab[i] = odsc;
         }
 
         msg = msg_buf_alloc(rpc_s, peer, 1);
@@ -1735,7 +1845,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         struct node_id *peer;
         struct msg_buf *msg;
         struct obj_data *od, *from_obj;
-	int fast_v;
+        int fast_v;
         int err = -ENOENT; 
 
         peer = ds_get_peer(dsg->ds, cmd->id);
@@ -1753,8 +1863,10 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
  }
 #endif
 
+        // TODO: lookup sspace
+        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name);
         // CRITICAL: use version here !!!
-        from_obj = ls_find(dsg->ssd->storage, &oh->u.o.odsc);
+        from_obj = ls_find(ssd->storage, &oh->u.o.odsc);
         // from_obj = ls_find_no_version(&dsg->ssd->storage, &oh->odsc);
         if (!from_obj) {
 		char *str;
@@ -1910,14 +2022,14 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         struct ds_gspace *dsg_l;
         int err = -ENOMEM;
 
-	/* Alloc routine should be called only once. */
+        /* Alloc routine should be called only once. */
         if (dsg)
                 return dsg;
 
         /* Default values */
         ds_conf.max_versions = 1;
         ds_conf.max_readers = 1;
-	ds_conf.lock_type = 1;
+        ds_conf.lock_type = 1;
 
         err = parse_conf(conf_name);
         if (err < 0) {
@@ -1925,9 +2037,12 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
 			"with defaults.\n", __func__);
         }
         else
-                uloga("'%s()' config file loaded.\n", __func__);
+            uloga("'%s()' config file loaded.\n", __func__);
 
-        /*struct bbox domain = {.num_dims = ds_conf.ndims, 
+        /*if (ds_conf.ndims == 2)
+            ds_conf.dimz = 1;
+
+        struct bbox domain = {.num_dims = ds_conf.ndims, 
                 .lb.c = {0, 0, 0}, 
                 .ub.c = {ds_conf.dimx-1, ds_conf.dimy-1, ds_conf.dimz-1}};
 	*/
@@ -1961,14 +2076,14 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         rpc_add_service(ss_obj_filter, dsgrpc_obj_filter);
         rpc_add_service(ss_obj_cq_register, dsgrpc_obj_cq_register);
         rpc_add_service(cp_lock, dsgrpc_lock_service);
-	rpc_add_service(ss_info, dsgrpc_ss_info);
+        rpc_add_service(ss_info, dsgrpc_ss_info);
 #ifdef DS_HAVE_ACTIVESPACE
-	rpc_add_service(ss_code_put, dsgrpc_bin_code_put);
+        rpc_add_service(ss_code_put, dsgrpc_bin_code_put);
 #endif
         INIT_LIST_HEAD(&dsg_l->cq_list);
         INIT_LIST_HEAD(&dsg_l->obj_desc_req_list);
         INIT_LIST_HEAD(&dsg_l->obj_data_req_list);
-	INIT_LIST_HEAD(&dsg_l->locks_list);
+        INIT_LIST_HEAD(&dsg_l->locks_list);
 
         dsg_l->ds = ds_alloc(num_sp, num_cp, dsg_l);
         if (!dsg_l->ds)
@@ -1987,6 +2102,8 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         err = ssd_init(dsg_l->ssd, ds_get_rank(dsg_l->ds));
         if (err < 0)
                 goto err_out;
+
+        init_sspace(dsg_l, num_sp, ds_conf.max_versions);
 
         return dsg_l;
  err_free:
@@ -2026,16 +2143,17 @@ struct ss_storage *dsg_dht_get_storage(void)
 void dsg_free(struct ds_gspace *dsg)
 {
         ds_free(dsg->ds);
-	ssd_free(dsg->ssd);
+        ssd_free(dsg->ssd);
+        free_sspace(dsg);
         free(dsg);
 }
 
 
 int dsg_process(struct ds_gspace *dsg)
 {
-	//        return rpc_process_event(dsg->ds->rpc_s);
 	int err;
-	err = rpc_process_event(dsg->ds->rpc_s);
+	//err = rpc_process_event(dsg->ds->rpc_s);
+    err = ds_process(dsg->ds);
 	if (err < 0)
 		rpc_report_md_usage(dsg->ds->rpc_s);
 
