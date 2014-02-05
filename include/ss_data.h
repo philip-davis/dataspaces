@@ -79,6 +79,9 @@ struct obj_data {
 
         /* Flag to mark if we should free this data object. */
         unsigned int            f_free:1;
+
+	/* Fastbit builded INDEX pointer for this obj*/
+        void *                  fb_obj;
 };
 
 struct ss_storage {
