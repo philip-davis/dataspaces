@@ -18,6 +18,7 @@ AC_DCMF
 AC_UGNI
 AC_GNI_PTAG
 AC_DIMES_CONF
+AC_FASTBIT
 
 dnl Generate flags for dataspaces lib creation which depends on the particular network transport layer. DSPACESLIB_* is used for compiling the lib, and linking testing codes.
 DSPACESLIB_CFLAGS=
@@ -65,6 +66,23 @@ if test "x$enable_dimes_ack" == "xyes"; then
         fi
 fi
 
+dnl Check if FASTSPACE is enabled
+AC_ARG_ENABLE(fastbit,
+    [AS_HELP_STRING([--enable-fastbit],
+        [Include the fastbit mechanism. By default this is not included])])
+AM_CONDITIONAL([FASTSPACE], [test "x$enable_fastbit" == "xyes"])
+
+if test "x$enable_fastbit" == "xyes"; then
+        if test -z "${HAVE_INFINIBAND_TRUE}"; then
+                DSPACESLIB_CFLAGS+="-DDS_HAVE_FASTBIT"
+                DSPACESLIB_CPPFLAGS+="-DDS_HAVE_FASTBIT"
+                echo "FASTBIT enabled!"
+        else
+                echo "FASTBIT only supported on IB"
+        fi
+fi
+
+
 dnl if test -z "${HAVE_CRAY_PMI_TRUE}";  then
 dnl   DSPACESLIB_CPPFLAGS+=" ${CRAY_PMI_CPPFLAGS}"
 dnl   DSPACESLIB_CFLAGS+=""
@@ -110,6 +128,14 @@ if test -z "${HAVE_DCMF_TRUE}"; then
   DSPACESLIB_LDADD+=" ${DCMF_LIBS}"
 fi
 
+if test -z "${HAVE_FASTBIT_TRUE}"; then
+  DSPACESLIB_CPPFLAGS+=" ${FASTBIT_CPPFLAGS}"
+  DSPACESLIB_CFLAGS+=" ${FASTBIT_CFLAGS}"
+  DSPACESLIB_LDFLAGS+=" ${FASTBIT_LDFLAGS}"
+  DSPACESLIB_LDADD+=" ${FASTBIT_LIBS}"
+fi
+
+
 AC_SUBST(DSPACESLIB_CFLAGS)
 AC_SUBST(DSPACESLIB_CPPFLAGS)
 AC_SUBST(DSPACESLIB_LDFLAGS)
@@ -123,10 +149,20 @@ AC_CONFIG_FILES([
 		tests/Makefile
 		tests/C/Makefile
 		tests/Fortran/Makefile
+		fastspace/Makefile
 		])
 
 AC_OUTPUT
 
+if test -z "${HAVE_FASTBIT_TRUE}"; then
+  echo "Have FastBit installed.";
+  echo "        - FASTBIT_CFLAGS = $FASTBIT_CFLAGS";
+  echo "        - FASTBIT_CPPFLAGS = $FASTBIT_CPPFLAGS";
+  echo "        - FASTBIT_LDFLAGS = $FASTBIT_LDFLAGS";
+  echo "        - FASTBIT_LIBS = $FASTBIT_LIBS";
+else
+  echo "No FastBit."
+fi
 
 echo "Network transport layer"
 dnl if test -z "${HAVE_CRAY_UGNI_TRUE}"; then
