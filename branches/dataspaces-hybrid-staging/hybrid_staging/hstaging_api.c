@@ -37,11 +37,18 @@ struct bucket_info {
 	/* track data get time */
 	double tm_st, tm_end;
 
-	enum worker_type workertype;
+	enum hstaging_pe_type pe_type;
     enum hstaging_location_type location_type;
     int mpi_rank, num_bucket;
 };
 static struct bucket_info bk_info;
+
+
+struct dag_info {
+    char dag_conf_file[MAX_VAR_NAME_LEN];
+    int f_done; //flag indicates that all tasks of the dag is done
+};
+static struct dag_info current_dag;
 
 #ifdef HAVE_UGNI
 static int process_event(struct dcg_space *dcg)
@@ -130,10 +137,16 @@ static int callback_hs_exec_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	return 0;
 }
 
-/*
-  RPC callback function to process msg
-*/
-static int callback_staging_exit_msg(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_hs_finish_dag(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+    struct hdr_finish_dag *hdr = (struct hdr_finish_dag*)cmd->pad;
+    uloga("%s(): dag execution time %.6f\n", __func__, hdr->dag_execution_time);
+    current_dag.f_done = 1;
+
+    return 0;
+}
+
+static int callback_hs_stop_executor(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
 	uloga("%s(): rank= %d get msg from %d\n",
 		__func__, rpc_s->ptlmap.id, cmd->id);
@@ -149,12 +162,12 @@ static int callback_staging_exit_msg(struct rpc_server *rpc_s, struct rpc_cmd *c
 */
 
 /* Initialize the dataspaces library. */
-int hstaging_init(int num_peers, int appid, enum worker_type workertype)
+int hstaging_init(int num_peers, int appid, enum hstaging_pe_type pe_type)
 {
 	int err = -ENOMEM;
 
 	/* Init the bk_info */
-	bk_info.workertype = workertype;
+	bk_info.pe_type = pe_type;
 	bk_info.f_done = 0;
 	bk_info.f_init_dspaces = 0;
 
@@ -163,8 +176,9 @@ int hstaging_init(int num_peers, int appid, enum worker_type workertype)
 	}
 
 	// TODO: does it matter to place rpc_add_service after dspaces_init()?
-	rpc_add_service(staging_exit, callback_staging_exit_msg);
+	rpc_add_service(hs_stop_executor_msg, callback_hs_stop_executor);
 	rpc_add_service(hs_exec_task_msg, callback_hs_exec_task);
+    rpc_add_service(hs_finish_dag_msg, callback_hs_finish_dag);
 
 	err = dspaces_init(num_peers, appid);
 	if (err < 0) {
@@ -195,41 +209,14 @@ int hstaging_init(int num_peers, int appid, enum worker_type workertype)
 int hstaging_finalize()
 {
 	int err;
-
 	if (!bk_info.f_init_dspaces) {
 		uloga("'%s()': library was not properly initialized!\n", __func__);
 		return -1;
 	}
 
-	if ( bk_info.workertype == hs_simulation_worker ) {
-        // Free all previously allocated RDMA buffers
-		dimes_put_sync_all();
+    // Free all previously allocated RDMA buffers
+    dimes_put_sync_all();
 
-		// TODO: make it more scalable...
-		int dart_rank = dcg_get_rank(dcg);
-		if ( 0 == dart_rank ) {
-			struct msg_buf *msg;
-			struct node_id *peer;
-			peer = dc_get_peer(dc, 0); // Send unreg msg to master srv
-
-			msg = msg_buf_alloc(dc->rpc_s, peer, 1);
-			if (!msg)
-				goto err_out;
-
-			msg->msg_rpc->cmd = insitu_unreg;
-			msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
-
-			uloga("%s(): %d send unreg msg\n",
-				__func__, dc->rpc_s->ptlmap.id);
-		
-			err = rpc_send(dc->rpc_s, peer, msg);
-			if (err < 0) {
-				free(msg);
-				goto err_out;
-			}
-		}			
-	}
-	
 	dspaces_finalize();
 	dcg = 0;
 	return 0;
@@ -329,6 +316,7 @@ int hstaging_update_var(struct var_descriptor *var_desc, enum hstaging_update_va
 	ERROR_TRACE();
 }
 
+// TODO: the logic of the function is not clear
 int hstaging_request_task(struct task_descriptor *t)
 {
 	int err;
@@ -396,9 +384,9 @@ int hstaging_set_task_done(struct task_descriptor *t)
     if (!msg)
         goto err_out;
 
-    msg->msg_rpc->cmd = hs_task_done_msg;
+    msg->msg_rpc->cmd = hs_finish_task_msg;
     msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
-    struct hdr_task_done *hdr= (struct hdr_task_done *)msg->msg_rpc->pad;
+    struct hdr_finish_task *hdr= (struct hdr_finish_task *)msg->msg_rpc->pad;
     hdr->tid = t->tid;
     hdr->step = t->step;
     hdr->color = t->color;
@@ -412,5 +400,68 @@ int hstaging_set_task_done(struct task_descriptor *t)
 
     return 0;
 err_out:
+    ERROR_TRACE();
+}
+
+int hstaging_execute_dag(const char* conf_file)
+{
+    struct msg_buf *msg;
+    struct node_id *peer;
+    int err = -ENOMEM;
+
+    peer = dc_get_peer(dc, 0); //master srv has dart id as 0
+    msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+    if (!msg)
+        goto err_out;
+
+    msg->msg_rpc->cmd = hs_exec_dag_msg;
+    msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
+    struct hdr_exec_dag *hdr= (struct hdr_exec_dag*)msg->msg_rpc->pad;
+    strcpy(hdr->dag_conf_file, conf_file);
+
+    err = rpc_send(dc->rpc_s, peer, msg);
+    if (err < 0) {
+        free(msg);
+        goto err_out;
+    }
+
+    strcpy(current_dag.dag_conf_file, conf_file);
+    current_dag.f_done = 0;
+
+    // Wait/block for the dag execution to complete
+    while (!current_dag.f_done) {
+        err = process_event(dcg);
+        if (err < 0) {
+            return err;
+        }
+    }    
+
+    return 0;
+err_out:
+    ERROR_TRACE();        
+}
+
+int hstaging_set_workflow_finished()
+{
+    struct msg_buf *msg;
+    struct node_id *peer;
+    int err = -ENOMEM;
+
+    peer = dc_get_peer(dc, 0); //master srv has dart id as 0
+    msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+    if (!msg)
+        goto err_out;
+
+    msg->msg_rpc->cmd = hs_finish_workflow_msg;
+    msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
+
+    err = rpc_send(dc->rpc_s, peer, msg);
+    if (err < 0) {
+        free(msg);
+        goto err_out;
+    }
+
+    return 0;
+ err_out:
     ERROR_TRACE();
 }

@@ -46,6 +46,12 @@ enum hstaging_update_var_op {
 	OP_GET,
 };
 
+enum hstaging_pe_type {
+    hs_manager = 0,
+    hs_executor,
+    hs_submitter,
+};
+
 enum hstaging_location_type {
 	loc_insitu = 0,
 	loc_intransit
@@ -57,6 +63,9 @@ enum hstaging_placement_hint {
 	hint_none
 };
 
+/*
+ *  Message headers 
+ */
 struct hdr_register_resource {
     int location_type;
     int num_bucket;
@@ -87,19 +96,27 @@ struct hdr_exec_task {
 	int num_input_vars;
 } __attribute__((__packed__));
 
-struct hdr_task_done {
+struct hdr_finish_task {
     int tid;
     int step;
     int color;
     int location_type;
 } __attribute__((__packed__));
 
+struct hdr_exec_dag {
+    char dag_conf_file[MAX_VAR_NAME_LEN];
+} __attribute__((__packed__));
+
+struct hdr_finish_dag {
+    double dag_execution_time;
+} __attribute__((__packed__));
+   
+
 static char* var_type_name[] =
 {
 	"depend", "put", "get"
 };
 
-////
 struct var_descriptor {
 	char var_name[MAX_VAR_NAME_LEN];
 	int step; // time step
@@ -116,8 +133,6 @@ struct task_descriptor {
 	int num_input_vars;
 	struct var_descriptor *input_vars;
 };
-
-////
 
 struct var_instance {
 	struct list_head entry;
@@ -137,7 +152,6 @@ struct task_instance {
     int size_hint;
 };
 
-////
 struct hstaging_var {
 	char name[NAME_MAXLEN];
 	enum hstaging_var_type type;
@@ -150,21 +164,27 @@ struct hstaging_task {
 	struct hstaging_var vars[MAX_NUM_VARS];	
 	int num_vars;
 	struct list_head instances_list;
+    int num_finished_ti;
 };
 
 struct hstaging_workflow {
 	struct hstaging_task tasks[MAX_NUM_TASKS];
 	int num_tasks;
+    int submitter_dart_id; // peer who submits the dag execution
 };
 
-////
 struct hstaging_workflow* read_workflow_conf_file(const char *fname);
 int free_workflow(struct hstaging_workflow *wf);
 
-int evaluate_dataflow_by_available_var(struct hstaging_workflow *wf, struct var_descriptor *var_desc);
-int get_ready_tasks(struct hstaging_workflow *wf, struct task_instance **tasks, int *n);
+int evaluate_dataflow_by_available_var(struct hstaging_workflow *wf,
+    struct var_descriptor *var_desc);
+int get_ready_tasks(struct hstaging_workflow *wf, struct task_instance **tasks,
+    int *n);
 int clear_finished_tasks(struct hstaging_workflow *wf);
-void update_task_instance_status(struct task_instance *ti, enum hstaging_task_status status);
+void update_task_instance_status(struct task_instance *ti,
+    enum hstaging_task_status status);
+
+int is_workflow_finished(struct hstaging_workflow *wf);
 
 int read_emulated_vars_sequence(struct hstaging_workflow *wf, const char *fname);
 void print_workflow(struct hstaging_workflow *wf);

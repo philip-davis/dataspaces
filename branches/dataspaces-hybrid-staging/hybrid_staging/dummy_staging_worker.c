@@ -218,7 +218,6 @@ static void set_data_decomposition(struct task_descriptor *t, struct var_descrip
                         &dims, &dimx, &dimy, &dimz);
     if (err < 0 ) {
         uloga("Failed to read %s\n", fname);
-        return err;
     }
 
 	if (g.dims == 2) {
@@ -338,12 +337,13 @@ int dag_task(struct task_descriptor *t, struct parallel_communicator *comm)
     MPI_Comm_size(comm->comm, &comm_size);
     MPI_Comm_rank(comm->comm, &comm_rank);
 
-    uloga("%s(): task color= %d tid= %d step= %d rank= %d nproc= %d "
-        "num_input_vars= %d comm_size= %d comm_rank= %d\n", __func__, 
-        t->color, t->tid, t->step,
-        t->rank, t->nproc, t->num_input_vars, comm_size, comm_rank);
     // Print input variable information
     if (t->rank == 0) {
+        uloga("%s(): task color= %d tid= %d step= %d rank= %d nproc= %d "
+            "num_input_vars= %d comm_size= %d comm_rank= %d\n", __func__, 
+            t->color, t->tid, t->step,
+            t->rank, t->nproc, t->num_input_vars, comm_size, comm_rank);
+
         int i;
         for (i = 0; i < t->num_input_vars; i++) {
             uloga("%s(): task tid %d input vars %s step %d elem_size %d\n",
@@ -689,11 +689,6 @@ int dummy_dag_parallel_job(MPI_Comm comm, enum hstaging_location_type loc_type)
     }
     hstaging_register_bucket_resource(loctype_, mpi_nproc, mpi_rank);
     MPI_Barrier(comm);
-
-    // put workflow input var to drive the execution of first task
-    if (mpi_rank == 0) {
-        update_var_nodata("workflow_input_var", 0);
-    }
 
 	struct task_descriptor t;
 	while (!hstaging_request_task(&t)) {

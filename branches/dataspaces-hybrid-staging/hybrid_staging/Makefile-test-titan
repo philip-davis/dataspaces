@@ -41,7 +41,8 @@ SRC2 = scheduler_driver.c
 SRC4 = simulation_driver.c
 SRC5 = insitu_staging_driver.c 
 SRC6 = intransit_staging_driver.c 
-SRC7 = general_dag_driver.c
+SRC7 = dag_executor.c
+SRC8 = dag_submitter.c
 
 OBJ = $(SRC:.c=.o)
 OBJ2 = $(SRC2:.c=.o)
@@ -49,14 +50,16 @@ OBJ4 = $(SRC4:.c=.o)
 OBJ5 = $(SRC5:.c=.o)
 OBJ6 = $(SRC6:.c=.o)
 OBJ7 = $(SRC7:.c=.o)
+OBJ8 = $(SRC8:.c=.o)
 
 OUT2 = ./scheduler_driver
 OUT4 = ./simulation_driver
 OUT5 = ./insitu_staging_driver
 OUT6 = ./intransit_staging_driver
-OUT7 = ./general_dag_driver
+OUT7 = ./dag_executor
+OUT8 = ./dag_submitter
 
-default: $(OUT2) $(OUT4) $(OUT5) $(OUT6) $(OUT7)
+default: $(OUT2) $(OUT4) $(OUT5) $(OUT6) $(OUT7) $(OUT8)
 
 .c.o:
 	$(CC) $(INCLUDES) $(CFLAGS) -c $< -o $@
@@ -76,7 +79,10 @@ $(OUT6): $(OBJ6) $(OBJ)
 $(OUT7): $(OBJ7) $(OBJ)
 	$(CXX) $(CFLAGS) $(INCLUDES) $(OBJ7) $(OBJ) -o $(OUT7) $(LIBS)
 
+$(OUT8): $(OBJ8) $(OBJ)
+	$(CXX) $(CFLAGS) $(INCLUDES) $(OBJ8) $(OBJ) -o $(OUT8) $(LIBS)
+
 clean:
-	rm -f $(OBJ) $(OBJ2) $(OBJ4) $(OBJ5) $(OBJ6) $(OUT2) $(OUT4) $(OUT5) $(OUT6) $(OUT7)
+	rm -f $(OBJ) $(OBJ2) $(OBJ4) $(OBJ5) $(OBJ6) $(OBJ7) $(OBJ8) $(OUT2) $(OUT4) $(OUT5) $(OUT6) $(OUT7) $(OUT8)
 
 

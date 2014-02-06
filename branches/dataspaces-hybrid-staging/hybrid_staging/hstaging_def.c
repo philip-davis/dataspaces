@@ -87,9 +87,12 @@ static int is_task_instance_ready(struct task_instance *ti)
 	return 0;
 }
 
+// TODO: what's the input variable 'n'
 int get_ready_tasks(struct hstaging_workflow *wf,
 	struct task_instance **tasks, int *n)
 {
+    if (wf == NULL) return 0;
+
 	struct hstaging_task *t = NULL;
 	int i;
 	*n = 0;
@@ -203,8 +206,11 @@ static int evaluate_task_by_available_var(struct hstaging_task *task, struct hst
 }
 
 // Evaluate the dataflow through the newly available variable
-int evaluate_dataflow_by_available_var(struct hstaging_workflow *wf, struct var_descriptor *var_desc)
+int evaluate_dataflow_by_available_var(struct hstaging_workflow *wf, 
+    struct var_descriptor *var_desc)
 {
+    if (wf == NULL) return 0;
+
 	// Update the variable and task status
 	struct hstaging_task *task = NULL;
 	int i;
@@ -317,6 +323,7 @@ static int read_workflow_task(struct hstaging_workflow *wf, char *fields[], int 
 		task->num_vars = 0;
 		task->placement_hint = hint_none;
         task->size_hint = 0;
+        task->num_finished_ti = 0;
 		INIT_LIST_HEAD(&task->instances_list);
 		wf->num_tasks++;
 	}
@@ -373,8 +380,11 @@ static void free_task_instance(struct task_instance *ti)
     free(ti);
 }
 
+// TODO: why we need this function?
 int clear_finished_tasks(struct hstaging_workflow *wf)
 {
+    if (wf == NULL) return 0;
+
     struct hstaging_task *t = NULL;
     int i;
     for (i = 0; i < wf->num_tasks; i++) {
@@ -386,6 +396,7 @@ int clear_finished_tasks(struct hstaging_workflow *wf)
             if (is_task_instance_finish(ti)) {
                 list_del(&ti->entry);
                 free_task_instance(ti);
+                t->num_finished_ti++;
             }
         }
     }
@@ -395,6 +406,8 @@ int clear_finished_tasks(struct hstaging_workflow *wf)
 
 int free_workflow(struct hstaging_workflow *wf)
 {
+    if (wf == NULL) return 0;
+
 	int i;
 	for (i = 0; i < wf->num_tasks; i++) {
 		struct hstaging_task *t = &(wf->tasks[i]);
@@ -412,7 +425,6 @@ int free_workflow(struct hstaging_workflow *wf)
 
 struct hstaging_workflow* read_workflow_conf_file(const char *fname)
 {
-	int err = -1;
 	const size_t MAX_LINE = 4096;
 	const char *DELIM = " \t\n\r"; //space, tab, line feed, carriage return
 	const int MAX_FIELDS = 50;
@@ -444,7 +456,7 @@ struct hstaging_workflow* read_workflow_conf_file(const char *fname)
 		if (line[0] == '#')
 			continue;
 
-		printf("line: %s\n", line);
+		//printf("line: %s\n", line);
 
 		// Split line into fields
 		int n = 0;
@@ -479,22 +491,52 @@ struct hstaging_workflow* read_workflow_conf_file(const char *fname)
 
 	fclose(file);
 
-	err = 0;
+    // create initial instance for tasks whose number of 
+    // input vars is 0
+    for (i = 0; i < wf->num_tasks; i++) {
+        struct hstaging_task *t = &(wf->tasks[i]);
+        if (t->num_vars == 0) {
+            new_task_instance(t, 0);
+        }  
+    }
+    
+
 	return wf;	
+}
+
+int is_workflow_finished(struct hstaging_workflow *wf) {
+    if (wf == NULL) return 0;
+
+    int i;
+    int num_finished_task = 0;
+    for (i = 0; i < wf->num_tasks; i++) {
+        struct hstaging_task *t = &(wf->tasks[i]);
+        num_finished_task += t->num_finished_ti;
+    }
+
+    if (num_finished_task == wf->num_tasks) {
+        printf("%s(): wf->num_task= %d num_finished_task %d\n",
+            __func__, wf->num_tasks, num_finished_task);
+        return 1;
+    }
+
+    return 0;
 }
 
 void print_workflow(struct hstaging_workflow *wf)
 {
 	int i;
+    printf("\nworkflow number of task %d\n", wf->num_tasks);
 	for (i = 0; i < wf->num_tasks; i++) {
 		struct hstaging_task *task = &(wf->tasks[i]);
-		printf("\ntask tid: %d placement_hint: %d ",
+		printf("task tid: %d placement_hint: %d ",
 			task->tid, task->placement_hint);
 		int j;
 		for (j = 0; j < task->num_vars; j++) {
-			printf("var '%s' type '%s'\n", task->vars[j].name,
+			printf("var '%s' type '%s' ", task->vars[j].name,
 				var_type_name[task->vars[j].type]);
 		}
+        printf("\n");
 	}
 }
 

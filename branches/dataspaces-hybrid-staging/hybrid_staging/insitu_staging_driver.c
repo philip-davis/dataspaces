@@ -40,7 +40,6 @@
 extern int dummy_s3d_staging_parallel_job(MPI_Comm, enum hstaging_location_type);
 
 static enum hstaging_location_type loctype_ = loc_insitu;
-static enum worker_type workertype_ = hs_staging_worker;
 
 int main(int argc, char **argv)
 {
@@ -55,7 +54,7 @@ int main(int argc, char **argv)
     MPI_Comm_size(comm, &nproc);
 
 	uloga("in-situ staging: num_worker= %d\n", nproc);
-	err = hstaging_init(nproc, appid, workertype_);             
+	err = hstaging_init(nproc, appid, hs_executor);             
     
 	err = dummy_s3d_staging_parallel_job(comm, loctype_);
 	if (err < 0)

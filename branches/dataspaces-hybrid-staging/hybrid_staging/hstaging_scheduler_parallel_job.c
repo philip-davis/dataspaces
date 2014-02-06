@@ -9,6 +9,7 @@
 #include <math.h>
 
 #include "debug.h"
+#include "timer.h"
 #include "list.h"
 #include "dart.h"
 #include "ds_gspace.h"
@@ -27,6 +28,8 @@ static struct dart_server *ds = NULL;
 static struct ds_gspace *dsg = NULL;
 
 static struct hstaging_workflow *wf = NULL;
+static struct timer tm; 
+static double dag_tm_st, dag_tm_end;
 
 struct job_id {
 	int tid;
@@ -581,7 +584,43 @@ static void print_rr_count()
 }
 
 
-/***********/
+static int process_dag_state()
+{
+    if (wf == NULL) return 0;
+    if (!is_workflow_finished(wf)) return 0;
+
+    // reply to the submitter of the dag
+    struct msg_buf *msg;
+    struct node_id *peer;
+    int err = -ENOMEM;
+    int dart_id = wf->submitter_dart_id;
+
+    // free workflow
+    free_workflow(wf);
+    wf = NULL;
+    dag_tm_end = timer_read(&tm);
+
+    peer = ds_get_peer(ds, dart_id); 
+    msg = msg_buf_alloc(ds->rpc_s, peer, 1);
+    if (!msg)
+        goto err_out;
+
+    msg->msg_rpc->cmd = hs_finish_dag_msg;
+    msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
+    struct hdr_finish_dag *hdr= (struct hdr_finish_dag *)msg->msg_rpc->pad;
+    hdr->dag_execution_time = (dag_tm_end-dag_tm_st);
+
+    err = rpc_send(ds->rpc_s, peer, msg);
+    if (err < 0) {
+        free(msg);
+        goto err_out;
+    }
+
+    return 0;
+ err_out:
+    ERROR_TRACE();
+}
+
 static int process_workflow_state()
 {
 	int err = -ENOMEM;
@@ -603,7 +642,7 @@ static int process_workflow_state()
                 if (!msg)
                     goto err_out;
 
-                msg->msg_rpc->cmd = staging_exit;
+                msg->msg_rpc->cmd = hs_stop_executor_msg;
                 msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
 
                 err = rpc_send(ds->rpc_s, peer, msg);
@@ -626,6 +665,8 @@ static int process_workflow_state()
 */
 static int process_jobq()
 {
+    if (wf == NULL) return 0;
+
 	struct job *j, *t;
 	int err = -ENOMEM;
 
@@ -661,17 +702,16 @@ static int process_jobq()
 	return 0;
 }
 
-static int callback_hs_task_done(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_hs_finish_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-    struct hdr_task_done *hdr = (struct hdr_task_done*)cmd->pad;
+    struct hdr_finish_task *hdr = (struct hdr_finish_task*)cmd->pad;
     struct staging_resource *rs = rs_lookup(hdr->location_type);
     if (rs == NULL) {
         uloga("%s(): should not happen rs == NULL\n", __func__);
         return 0;
     }
 
-    uloga("%s(): get job done msg for task tid= %d step= %d color= %d "
-        "location_type= %d\n",
+    uloga("%s(): finish task tid= %d step= %d color= %d location_type= %d\n",
         __func__, hdr->tid, hdr->step, hdr->color, hdr->location_type);
 
     int color = hdr->color;
@@ -725,7 +765,8 @@ static int callback_hs_reg_resource(struct rpc_server *rpc_s, struct rpc_cmd *cm
     return 0;
 }
 
-static int callback_insitu_unreg(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_hs_finish_workflow(struct rpc_server *rpc_s,
+    struct rpc_cmd *cmd)
 {
 	state.f_done = 1;
 	return 0;
@@ -753,12 +794,38 @@ static int callback_hs_update_var(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	return 0;
 }
 
+static int callback_hs_exec_dag(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+    struct hdr_exec_dag *hdr;
+    hdr = (struct hdr_exec_dag*)cmd->pad;
+
+    uloga("%s(): dag config file %s\n", __func__, hdr->dag_conf_file);
+
+    if (is_master()) {
+        wf = read_workflow_conf_file(hdr->dag_conf_file);
+        if (wf == NULL) {
+            uloga("%s(): failed to read workflow config file\n", __func__);
+            return 0;
+        }
+        
+        wf->submitter_dart_id = cmd->id;
+        state.f_done = 0;
+        state.f_send_exit_msg = 0;
+
+        print_workflow(wf);
+        dag_tm_st = timer_read(&tm);
+    }
+
+    return 0;
+}
+
 int hstaging_scheduler_parallel_init()
 {
-	rpc_add_service(insitu_unreg, callback_insitu_unreg);
+	rpc_add_service(hs_finish_workflow_msg, callback_hs_finish_workflow);
 	rpc_add_service(hs_update_var_msg, callback_hs_update_var); 
     rpc_add_service(hs_reg_resource_msg, callback_hs_reg_resource);
-    rpc_add_service(hs_task_done_msg, callback_hs_task_done);
+    rpc_add_service(hs_finish_task_msg, callback_hs_finish_task);
+    rpc_add_service(hs_exec_dag_msg, callback_hs_exec_dag);
 
 	dimes_s = dimes_server_alloc(num_sp, num_cp, conf);
 	if (!dimes_s) {
@@ -775,14 +842,8 @@ int hstaging_scheduler_parallel_init()
 	state.f_done = 0;
 	state.f_send_exit_msg = 0;
 
-	if (is_master()) {
-		wf = read_workflow_conf_file("workflow.conf");
-		if (wf == NULL) {
-			uloga("%s(): failed to read workflow config file\n", __func__);
-		} else {
-			print_workflow(wf);
-		}
-	}
+    timer_init(&tm, 1);
+    timer_start(&tm);
 
 	return 0;
 }
@@ -807,6 +868,7 @@ int hstaging_scheduler_parallel_run()
 
 		if (is_master()) {
             process_jobq();
+            process_dag_state();
 			process_workflow_state();
 		}
 	}
@@ -819,10 +881,6 @@ int hstaging_scheduler_parallel_run()
 
 int hstaging_scheduler_parallel_finish(void)
 {
-	if (is_master() && wf) {
-		free(wf);
-	}
-
 	dimes_server_barrier(dimes_s);
 	dimes_server_free(dimes_s);
 
