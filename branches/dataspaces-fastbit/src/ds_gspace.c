@@ -47,6 +47,10 @@
 #include "timer.h"
 #include "strutil.h"
 
+#ifdef DS_HAVE_FASTBIT
+#include "fastspace.h"
+#endif
+
 #define DSG_ID                  dsg->ds->self->ptlmap.id
 
 struct cont_query {
@@ -135,6 +139,16 @@ static struct {
         {"max_readers",         &ds_conf.max_readers},
 	{"lock_type",		&ds_conf.lock_type}
 };
+
+#ifdef DS_HAVE_FASTBIT
+struct metaData mtdata;         /* meta_data to store attribute name, and type */
+
+static struct query_result_list{
+        struct list_head        qr_entry;
+        void *                  qret;
+        int                     size;
+};
+#endif
 
 static void eat_spaces(char *line)
 {
@@ -1091,6 +1105,23 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 
         ssd_add_obj(dsg->ssd, od);
 
+#ifdef DS_HAVE_FASTBIT
+        int err = 0;
+        struct timeval  tv1, tv2;
+
+        gettimeofday(&tv1, NULL);
+        err = build_obj_idx(od, &mtdata);
+        gettimeofday(&tv2, NULL);
+
+        if(err){
+                printf("build_obj_idx failed\n");
+                return err;
+        }
+        uloga("rank=%d Build index Total time = %f seconds\n",rpc_s->ptlmap.id,
+             (double) (tv2.tv_usec - tv1.tv_usec)/1000000 +
+             (double) (tv2.tv_sec - tv1.tv_sec));
+#endif
+
         free(msg);
 #ifdef DEBUG
 	uloga("'%s()': finished receiving  %s, version %d.\n",
@@ -1871,6 +1902,261 @@ static int dsgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	ERROR_TRACE();
 }
 
+#ifdef DS_HAVE_FASTBIT
+static int vq_result_send_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+	free(msg->private);
+	free(msg);
+	return 0;
+}
+
+static int fb_query_return_result(struct obj_descriptor *odsc, struct node_id *peer, int qid, void *result, int *size_ret)
+{
+	//msg->msg_rpc->cmd = ss_vq_reply;
+	//rpc_send();
+	struct hdr_vq_result *hvr;
+	struct msg_buf *msg;
+	int err = -ENOMEM;
+	
+	void *query_ret;
+
+	msg = msg_buf_alloc(dsg->ds->rpc_s, peer, 1);
+	if(!msg)
+		goto err_out;
+	
+	int size = 0;
+	if(size_ret != NULL){
+		size = *size_ret;	//TODO size of result
+
+		msg->private = query_ret = malloc(size + 7);
+	//query_ret = realloc(result, size + 7);	
+	if(!query_ret){
+		printf("failed to malloc!!!!\n");
+		goto err_free_msg;
+	}
+	ALIGN_ADDR_QUAD_BYTES(query_ret);
+	memcpy(query_ret, result, size);
+	//printf("query_ret=%d\n", *(int*)query_ret);
+	//result = query_ret;
+	//ALIGN_ADDR_QUAD_BYTES(result);
+	free(result);
+
+	msg->msg_rpc->cmd = ss_vq_reply;
+	msg->msg_rpc->id = DSG_ID;
+	//msg->msg_data = result; //TODO
+	msg->msg_data = query_ret; //TODO
+	msg->size = size;
+	msg->cb = vq_result_send_completion;
+
+	hvr = (struct hdr_vq_result *)msg->msg_rpc->pad;
+	hvr->qid = qid;
+	hvr->size = size;
+	hvr->odsc = *odsc;
+	hvr->flag = 0;
+	}else{
+		printf("num of reply = %d\n", *(int*)result);
+		msg->private = query_ret = malloc(sizeof(int) + 7);
+		size = 4;
+			
+	msg->msg_rpc->cmd = ss_vq_reply;
+	msg->msg_rpc->id = DSG_ID;
+	msg->cb = vq_result_send_completion;
+
+	hvr = (struct hdr_vq_result *)msg->msg_rpc->pad;
+	hvr->qid = qid;
+	hvr->odsc = *odsc;
+	hvr->flag = 1;
+	hvr->size = *(int*)result;
+	}
+	err = rpc_send(dsg->ds->rpc_s, peer, msg);
+	if(err == 0)
+		return 0;
+err_free_msg:
+	free(msg->private);
+	free(result);
+	free(msg);
+err_out:
+	ERROR_TRACE();
+}
+
+static int local_value_query(struct hdr_value_query *hq, void* qcond, int* size_qret, struct node_id *peer)
+{
+	//parse query
+	int strsize = 100; //TODO
+	void *qret;
+        char *select, *from, *where;
+        select = malloc(sizeof(char)*strsize);
+        from = malloc(sizeof(char*)*strsize);
+        where = malloc(sizeof(char*)*strsize);
+	if(!select || !from || !where)
+		goto err_free_query;
+
+        memset(select, '\0', strsize);
+        memset(from, '\0', strsize);
+        memset(where, '\0', strsize);
+        parse_query_str(qcond, select, from, where);
+
+        printf("------select=%s, from=%s, where=%s\n", select, from, where);
+        
+        struct obj_data *od;
+        struct list_head *list;
+	struct obj_descriptor *odsc = &hq->odsc;
+	struct ss_storage *ls = dsg->ssd->storage;
+	int hq_qid = hq->qid;
+        int index = odsc->version % ls->size_hash;
+        list = &ls->obj_hash[index];
+
+
+	//create a result list to store all the result after query
+	struct list_head qr_list;
+	INIT_LIST_HEAD(&qr_list);
+	int count_qr_list = 0;
+
+	int ret_count = 0;
+	struct timeval  tv1, tv2;
+      	gettimeofday(&tv1, NULL);
+
+        list_for_each_entry(od, list, struct obj_data, obj_entry){  //====Sith====//
+        //list_for_each_entry(od, list, obj_entry){   //====Hopper====//
+        //      printf("---find od name = %s\n", od->obj_desc.name);
+       		if(strcmp(odsc->name, od->obj_desc.name) == 0 && odsc->version == od->obj_desc.version){
+			qret= malloc(obj_data_size(&od->obj_desc));
+			local_fb_query(od, select, from, where, size_qret, qret);	
+			//printf("After fb_query, size_qret=%d\n", *size_qret);
+
+			if(*size_qret > 0){
+				struct query_result_list *qr = malloc(sizeof(*qr));
+				memset(qr, 0, sizeof(*qr));
+				qr->size = *size_qret;
+				qr->qret = qret;
+				list_add(&qr->qr_entry, &qr_list);
+				count_qr_list++;	
+			}
+		}
+				//INIT_LIST_HEAD(&qr->qr_entry);
+	}
+	
+	gettimeofday(&tv2, NULL);
+    	uloga("In memory query part Total time = %f seconds\n",
+            (double) (tv2.tv_usec - tv1.tv_usec)/1000000 +
+            (double) (tv2.tv_sec - tv1.tv_sec));
+	//printf("Query result=%s\n", (char *)qret);
+
+	//qret_num_reply(&hq->odsc, peer, hq->qid, count_qr_list);
+	fb_query_return_result(&hq->odsc, peer, hq_qid, (void*)&count_qr_list, NULL);
+
+	struct query_result_list *qr;
+	list_for_each_entry(qr, &qr_list, struct query_result_list, qr_entry){ //====Sith====//
+	//list_for_each_entry(qr, &qr_list, qr_entry){  //====Hopper====//
+		//printf("qr->size=%d\n", qr->size);
+		fb_query_return_result(&hq->odsc, peer, hq_qid, qr->qret, &qr->size);
+		ret_count += qr->size;
+	}
+	printf("client%d, ret_count=%d\n", peer->ptlmap.id, ret_count);
+err_free_query:
+	free(select);
+	free(from);
+	free(where);
+	return 0;
+}
+
+static int query_receive_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+	//struct hdr_value_query *hq = (struct hdr_value_query*)msg->msg_rpc->pad;
+	struct hdr_value_query *hq = msg->private;
+	//struct query_data *qdata = msg->private;
+	//struct hdr_value_query *hq = &qdata->hq;
+	void* qcond;
+	struct node_id *peer;
+	//int num_hits;
+	void* qret;
+	int size_qret = 0;
+	int err;
+
+	//qcond = msg->msg_data; //odsc = &hq->odsc;
+	qcond = malloc(hq->size + 1);
+	memcpy(qcond, msg->msg_data, hq->size);
+	*((char*)qcond+hq->size) = '\0';
+	peer = ds_get_peer(dsg->ds, msg->peer->ptlmap.id);
+	printf("\nReceived query condition = %s\n", qcond);
+	
+	local_value_query(hq, qcond, &size_qret, peer);
+	
+	free(msg->msg_data);
+	free(qcond);
+	free(msg);	
+	return 0;
+}
+
+static int dsgrpc_value_query(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+	//ds_get_peer();
+	//msg->cb = query_receive_completion;
+	//rpc_receive_direct();
+	//struct query_data *qdata;
+
+	//printf("get into ds_value_query+++++++++++++++++\n");
+
+	//struct hdr_value_query *hq = (struct hdr_value_query*)cmd->pad;
+	struct hdr_value_query *hq = malloc(sizeof(*hq));
+	memcpy(hq, (struct hdr_value_query*)cmd->pad, sizeof(*hq));
+	struct node_id *peer;
+	struct msg_buf *msg;
+	//void *qcond;
+	int err = -ENOENT;
+
+	//printf("\nreceived hq_odsc_name=%s\n", hq->odsc.name);
+/*	struct list_head *list;
+	struct ss_storage *ls;
+	ls = dsg->ssd->storage;
+	list = &ls->obj_hash[0];
+	printf("-----------dsgrpc_value_query obj_name=%s\n",((struct obj_data*)list->next)->obj_desc.name);
+*/
+	peer = ds_get_peer(dsg->ds, cmd->id);
+
+	msg = msg_buf_alloc(rpc_s, peer, 0);
+	if(!msg)
+		goto err_free_data;
+
+	//qdata = malloc(sizeof(struct query_data));
+	//memset(qdata, 0, sizeof(struct query_data));
+	//qdata->data = malloc(4096);
+	//qdata->_data = qdata->data = malloc(hq->size + 7);
+	//ALIGN_ADDR_QUAD_BYTES(qdata->data);
+	//qdata->hq = *hq;
+
+	msg->msg_data = malloc(1028);
+	//printf("address = 0x%x\n", msg->msg_data);
+	//ALIGN_ADDR_QUAD_BYTES(msg->msg_data);
+
+	//msg->msg_data = qdata->data;
+	//msg->size = hq->size;
+	msg->size = 1024;
+	msg->cb = query_receive_completion;
+	//msg->private = &hq->odsc;
+	
+	msg->private = hq;
+	//msg->private = qdata;
+
+	//peer->mdh_addr = cmd->mdh_addr; // Modified by Tong Jin for GEMINI
+	rpc_mem_info_cache(peer, msg, cmd); 
+	err = rpc_receive_direct(rpc_s, peer, msg);
+	rpc_mem_info_reset(peer, msg, cmd);
+	/*peer->mb = cmd->mbits;
+	err = rpc_receive_direct(rpc_s, peer, msg);
+	peer->mb = MB_RPC_MSG;*/
+	if(err < 0)
+		goto err_free_msg;
+	return 0;
+err_free_msg:
+	free(msg);
+err_free_data:
+	//free(qcond);
+	return err;
+}
+
+#endif
+
 /*
   Public API starts here.
 */
@@ -1901,6 +2187,15 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         }
         else
                 uloga("'%s()' config file loaded.\n", __func__);
+
+#ifdef DS_HAVE_FASTBIT
+        char *meta_name = "metadata.txt";
+        err = parse_meta(meta_name, &mtdata);
+        if(err){
+                printf("parse_meta failed with %d\n", err);
+                goto err_out;
+        }
+#endif
 
 	if (ds_conf.ndims == 2)
 		ds_conf.dimz = 1;
@@ -1933,6 +2228,11 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
 #ifdef DS_HAVE_ACTIVESPACE
 	rpc_add_service(ss_code_put, dsgrpc_bin_code_put);
 #endif
+
+#ifdef DS_HAVE_FASTBIT
+        rpc_add_service(ss_value_query, dsgrpc_value_query);
+#endif
+
         INIT_LIST_HEAD(&dsg_l->cq_list);
         INIT_LIST_HEAD(&dsg_l->obj_desc_req_list);
         INIT_LIST_HEAD(&dsg_l->obj_data_req_list);

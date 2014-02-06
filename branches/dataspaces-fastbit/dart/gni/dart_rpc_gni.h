@@ -404,6 +404,10 @@ enum cmd_type {
 	dimes_put_msg,
 	dimes_get_ack_msg,
 #endif
+#ifdef DS_HAVE_FASTBIT
+	ss_value_query,
+	ss_vq_reply,
+#endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,
 	_CMD_COUNT

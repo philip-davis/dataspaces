@@ -81,7 +81,9 @@ struct obj_data {
         unsigned int            f_free:1;
 
 	/* Fastbit builded INDEX pointer for this obj*/
+#ifdef DS_HAVE_FASTBIT
         void *                  fb_obj;
+#endif
 };
 
 struct ss_storage {
@@ -190,6 +192,21 @@ struct hdr_bin_result {
 
 	unsigned char		pad[210]; // max is sizeof(struct rpc_cmd.pad == 218)
 } __attribute__((__packed__));
+
+#ifdef DS_HAVE_FASTBIT
+struct hdr_value_query {
+        int                     qid;
+        int                     size; //size of query condition
+        struct obj_descriptor   odsc;
+} __attribute__((__packed__));
+
+struct hdr_vq_result {
+        int                     qid;
+        int                     size;
+        int                     flag;   //0:data_qret, 1:num_qret
+        struct obj_descriptor   odsc;
+}__attribute__((__packed__));
+#endif
 
 struct sspace * ssd_alloc(struct bbox *, int, int);
 int ssd_init(struct sspace *, int);

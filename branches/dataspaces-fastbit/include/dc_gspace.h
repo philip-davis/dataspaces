@@ -104,4 +104,8 @@ int dcg_code_send(const void *, /* int, int,*/ struct obj_data *);
 int dcg_collect_timing(double, double *);
 int dcg_get_num_space_srv(struct dcg_space *);
 
+#ifdef DS_USE_FASTBIT
+int dcg_send_value_query(struct obj_data *od);
+#endif
+
 #endif /* __DCG_SPACE_H_ */

@@ -185,3 +185,10 @@ int dimes_put_sync_group(const char *group_name, int step)
     return common_dimes_put_sync_group(group_name, step);
 }
 #endif
+
+#ifdef DS_HAVE_FASTBIT
+int dspaces_value_query(char *var_name, unsigned int vers, int size_elem, void *query)
+{
+	return common_dspaces_value_query(var_name, vers, size_elem, query);
+}
+#endif
