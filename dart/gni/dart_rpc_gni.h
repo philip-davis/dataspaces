@@ -406,20 +406,15 @@ enum cmd_type {
 #endif
 #ifdef DS_HAVE_HYBRID_STAGING
     // TODO: rename msgs types for hybrid staging
-    rr_data_desc,
-    rr_req_bk,
-    rr_req_bk_reply,
-    rr_req_allocation,
-    rr_req_allocation_reply,
-    intran_req_job,
-    insitu_data_desc,
-    insitu_unreg,
-    staging_exit,
     hs_reg_resource_msg,
     hs_update_var_msg,
     hs_req_task_msg,
     hs_exec_task_msg,
-    hs_task_done_msg,
+    hs_exec_dag_msg,
+    hs_finish_task_msg,
+    hs_finish_dag_msg,
+    hs_finish_workflow_msg,
+    hs_stop_executor_msg,
 #endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,

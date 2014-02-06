@@ -40,7 +40,6 @@
 extern int dummy_dag_parallel_job(MPI_Comm comm, enum hstaging_location_type loc_type);
 
 static enum hstaging_location_type loctype_ = loc_insitu;
-static enum worker_type workertype_ = hs_simulation_worker;
 
 int main(int argc, char **argv)
 {
@@ -48,7 +47,7 @@ int main(int argc, char **argv)
 	int appid, rank, nproc;
     MPI_Comm comm;
 
-	appid = 1;
+	appid = 4;
 	MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_split(MPI_COMM_WORLD, appid, rank, &comm);
@@ -57,7 +56,7 @@ int main(int argc, char **argv)
     if (rank == 0) {
         uloga("DAG execution: num_worker= %d\n", nproc);
     }
-	err = hstaging_init(nproc, appid, workertype_); 
+	err = hstaging_init(nproc, appid, hs_executor); 
 
 	err = dummy_dag_parallel_job(comm, loctype_);
 	if (err < 0)

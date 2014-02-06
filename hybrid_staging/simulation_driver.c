@@ -39,10 +39,7 @@
 
 extern int dummy_s3d_simulation(MPI_Comm comm, int num_ts, int npx, int npy, int npz, int spx, int spy, int spz, int dims);
 
-static enum execution_mode exemode_ = hs_hybrid_staging_mode;
-static enum core_type coretype_ = hs_worker_core;
 static enum hstaging_location_type loctype_ = loc_insitu;
-static enum worker_type workertype_ = hs_simulation_worker;
 
 int main(int argc, char **argv)
 {
@@ -65,7 +62,7 @@ int main(int argc, char **argv)
 	MPI_Comm_size(comm, &nproc);
 
 	uloga("simulation: num_worker= %d\n", nproc);
-	err = hstaging_init(nproc, appid, workertype_); 
+	err = hstaging_init(nproc, appid, hs_executor); 
 
 	dims = 3;
 	err = dummy_s3d_simulation(comm, timestep, npx, npy, npz,
