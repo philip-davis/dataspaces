@@ -149,6 +149,7 @@ AC_CONFIG_FILES([
 		tests/Makefile
 		tests/C/Makefile
 		tests/Fortran/Makefile
+		tests/fastspace_c/Makefile
 		fastspace/Makefile
 		])
 

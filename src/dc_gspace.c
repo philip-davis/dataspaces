@@ -101,6 +101,10 @@ struct query_tran_entry {
 				f_odsc_recv:1,
 				f_complete:1,
 				f_err:1;
+#ifdef DS_HAVE_FASTBIT
+        int                     num_server;
+        int                     num_qret;
+#endif
 };
 
 /*
@@ -1483,6 +1487,136 @@ static int dcgrpc_time_log(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         return 0;
 }
 
+#ifdef DS_HAVE_FASTBIT
+static int check_data(void *data, int size)
+{
+	int num_data = size / sizeof(double);
+	int i;
+	for(i = 0; i < num_data; i++){
+		if(*((double*)data+i) >= 200 || *((double*)data+i) <= 0)
+			printf("error!!!\n");
+	}
+	return 0;
+}
+
+static int vq_complete_with_no_data(struct hdr_vq_result *hvr)
+{
+	struct query_tran_entry *qte;
+	int err = -ENOENT;
+	qte = qt_find(&dcg->qt, hvr->qid);
+	if(!qte)
+		goto err_out;
+	qte->f_complete = 1;	
+	return 0;
+err_out:
+	ERROR_TRACE();
+}
+
+static int obj_get_vq_result_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+	/*check the query result*//*
+	void *query;
+	query = msg->msg_data;
+	printf("Client received query result is %s\n", (char*)query);
+	*/
+	struct hdr_vq_result *hvr = msg->private;
+	struct query_tran_entry *qte;
+	int err = -ENOENT;
+
+	if(msg->msg_data){
+		//printf("start to check data....\n");
+		//check_data(msg->msg_data, hvr->size);
+	}
+
+	qte = qt_find(&dcg->qt, hvr->qid);
+	if(!qte){
+		printf("can not find qte\n");
+		goto err_out;
+	}
+
+	//TODO copy result back to the result reference
+
+	if(++qte->num_parts_rec == qte->num_qret && qte->num_server == 0){
+		printf("qte->num_parts_rec=%d\n", qte->num_parts_rec);
+		qte->f_complete = 1;
+	}
+
+	free(msg->msg_data);
+	free(msg);
+	return 0;
+err_out:
+	ERROR_TRACE();
+}
+
+static int update_num_vq_reply(struct hdr_vq_result *hvr)
+{
+	struct query_tran_entry *qte;
+	int err = -ENOENT;
+	//printf("hvr_qid=%d, hvr->size=%d\n", hvr->qid, hvr->size);
+
+	qte = qt_find(&dcg->qt, hvr->qid);
+	if(!qte){
+		printf("can not find qte\n");
+		goto err_out;
+	}
+	qte->num_qret += hvr->size;
+	qte->num_server--;
+	if(qte->num_qret == 0 && qte->num_server == 0)
+		qte->f_complete = 1;
+	return 0;
+err_out:
+	ERROR_TRACE();
+}
+
+//TODO handle query result from server
+static int dcgrpc_vq_reply(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+	//copy result back to client
+	//struct hdr_vq_result *hvr = (struct hdr_vq_result *)cmd->pad;
+	struct hdr_vq_result *hvr = malloc(sizeof(*hvr));
+	memcpy(hvr, (struct hdr_vq_result *)cmd->pad, sizeof(*hvr));
+	struct node_id *peer = dc_get_peer(dcg->dc, cmd->id);
+	struct msg_buf *msg;
+	void *result;
+	int err = -ENOMEM;
+
+	if(hvr->flag == 1){
+		printf("num_vq_reply = %d\n", hvr->size);
+		update_num_vq_reply(hvr);				
+	}else{
+	printf("received result in client=%d\n", hvr->size/sizeof(double));
+	//if(hvr->size > 0){
+	msg = msg_buf_alloc(rpc_s, peer, 1);
+	if(!msg)
+		goto err_out;
+
+        msg->msg_data = malloc(7 + hvr->size);
+        ALIGN_ADDR_QUAD_BYTES(msg->msg_data);
+	msg->size = hvr->size;
+	msg->cb = obj_get_vq_result_completion;
+	msg->private = hvr;
+	//rpc_mem_info_cache(peer, msg, cmd);
+
+	//peer->mdh_addr = cmd->mdh_addr; // Modified by Tong Jin for GEMINI
+	rpc_mem_info_cache(peer, msg, cmd); 
+        err = rpc_receive_direct(rpc_s, peer, msg);
+	rpc_mem_info_reset(peer, msg, cmd);	
+
+	if(err < 0){
+		free(msg->msg_data);
+		free(msg);
+		goto err_out;
+	}//}
+	//else
+	//	vq_complete_with_no_data(hvr);
+	}
+	return 0;
+err_out:
+	ERROR_TRACE();
+}
+#endif
+
+
 /*
   Public API starts here.
 */
@@ -1517,6 +1651,10 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid)
 #endif
 	/* Added for ccgrid demo. */
 	rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);	
+
+#ifdef DS_HAVE_FASTBIT
+        rpc_add_service(ss_vq_reply, dcgrpc_vq_reply);
+#endif
 
         dcg_l->dc = dc_alloc(num_nodes, appid, dcg_l);
         if (!dcg_l->dc) {
@@ -2302,3 +2440,113 @@ int dcg_get_num_space_srv(struct dcg_space *dcg)
 	return dcg->ss_info.num_space_srv;
 }
 
+#ifdef DS_HAVE_FASTBIT
+static int send_query_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+	free(msg);
+	return 0;
+}
+
+static int dcg_value_query_at_peers(struct query_tran_entry *qte)
+{
+	//dc_get_peer();
+	//msg->msg_rpc->cmd = ss_value_query;
+	//msg->msg_data = cond_expr;
+	struct node_id *peer; //server
+	struct msg_buf *msg;
+	struct hdr_value_query *hq;
+	int err, i;
+
+	/* TODO: assume number of client is smaller than number of server */
+	for(i = 0; i < dcg->dc->num_sp; i++){
+		int peer_id = dcg->dc->self->ptlmap.id % dcg->dc->num_sp;
+		//printf("---get peer in send value query = %d---\n", peer_id);
+		
+		/* server map to client */
+		if(peer_id == i % dcg->dc->cp_in_job){
+		//printf("num_cp=%d, C%d send query to S%d\n",dcg->dc->cp_in_job, peer_id, i);
+		peer = dc_get_peer(dcg->dc, i);
+		
+		err = -ENOMEM;
+		msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+		if(!msg)
+			goto err_out;
+
+		//int size = strlen(qte->data_ref); //TODO size of query condition		
+		int size = qte->size_od; //TODO size of query condition	
+		//qte->size_od = 0;	//reset qte->size_od;
+	
+		msg->msg_rpc->cmd = ss_value_query;
+		msg->msg_rpc->id = DCG_ID;
+	
+		msg->msg_data = qte->data_ref; //qte->data_ref = od->data = qcond
+		//msg->size = size;
+		msg->size = 1024;
+		printf("-----------msg_data size=%d-----------\n", msg->size);
+		msg->cb = send_query_completion; //TODO
+		//msg->private_var = od;
+
+		hq = (struct hdr_value_query *)msg->msg_rpc->pad;
+		hq->qid = qte->q_id;
+		hq->size = size;
+		hq->odsc = qte->q_obj;
+		//printf("\nhq_odsc_name = %s\n", hq->odsc.name);
+
+		err = rpc_send(dcg->dc->rpc_s, peer, msg);
+		if(err < 0){
+			printf("something wrong with rpc_send\n");
+			free(msg);
+			goto err_out;
+		}
+		qte->num_server++;
+		}
+	}
+	//printf("num of server has been send query = %d\n", qte->num_server);
+	return 0;
+err_out:
+	ERROR_TRACE();
+}
+
+int dcg_send_value_query(struct obj_data *od)
+{
+	struct query_tran_entry *qte;
+	int n, err = -ENOMEM;
+
+	qte = qte_alloc(od, 0);	//TODO 1or0?
+	if(!qte)
+		goto err_out;
+	qte->size_od = od->obj_desc.size;
+
+	qt_add(&dcg->qt, qte);
+
+	//printf("\nod_name=%s\n", od->obj_desc.name);
+	//printf("\nqte_odsc_name = %s\n", qte->q_obj.name);
+	
+	struct timeval tv1, tv2;
+	gettimeofday(&tv1, NULL);	
+
+	err = dcg_value_query_at_peers(qte);//send query to all servers
+	if(err < 0){
+		goto err_qte_free;
+	}
+
+	DC_WAIT_COMPLETION(qte->f_complete == 1);
+
+	gettimeofday(&tv2, NULL);
+/*	uloga("Query Total time = %f seconds\n",
+            (double) (tv2.tv_usec - tv1.tv_usec)/1000000 +
+            (double) (tv2.tv_sec - tv1.tv_sec));	
+*/	//return 0;
+	//err = dcg_query_result_assemble(qte, od);
+
+err_qte_free:
+	qt_free_obj_data(qte, 1);
+	qt_remove(&dcg->qt, qte);
+	free(qte);
+	//printf("qte has been freed---------\n");
+	return err;
+err_out:
+	ERROR_TRACE();
+}
+
+#endif

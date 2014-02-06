@@ -52,6 +52,13 @@
 #include "dimes_client.h"
 #endif
 
+#ifdef DS_HAVE_FASTBIT
+#define ALIGN_ADDR_QUAD_BYTES(a)                                \
+        unsigned long _a = (unsigned long) (a);                 \
+        _a = (_a + 7) & ~7;                                     \
+        (a) = (void *) _a;
+#endif
+
 static struct dcg_space *dcg;
 static struct timer timer;
 static int sync_op_id;
@@ -594,4 +601,55 @@ int common_dimes_put_sync_group(const char *group_name, int step)
 {
     return dimes_client_put_sync_group(group_name, step);
 }
+#endif
+
+#ifdef DS_HAVE_FASTBIT
+int common_dspaces_value_query(char *var_name, unsigned int vers, int size_elem, void *query)
+{
+        int size_query = strlen(query);
+        printf("Query_size before send=%d\n", size_query);
+        struct obj_descriptor odsc = {
+                .version = vers, .owner = -1,
+                .st = st,
+                .size = size_query};
+        struct obj_data *od;
+        //void *qcond = malloc(sizeof(char)*size_query);
+        //memcpy(qcond, query, sizeof(char)*size_query);
+        
+        int err = -ENOMEM;
+
+        if(!dcg){
+                uloga("'%s()': library was not properly initialized!\n",__func__);
+                return -EINVAL;
+        }
+
+        strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
+        odsc.name[sizeof(odsc.name)-1] = '\0';
+
+        //od = obj_data_alloc_no_data(&odsc, qcond);
+        od = malloc(sizeof(*od));
+        memset(od, 0, sizeof(*od));
+        //od->_data = od->data = malloc(size_query + 7);
+        od->_data = od->data = malloc(1024);
+        ALIGN_ADDR_QUAD_BYTES(od->data);
+        od->obj_desc = odsc;
+        memset(od->data, '\0', size_query);
+        memcpy(od->data, query, size_query);
+
+        if(!od)
+                goto err_out;
+
+        err = dcg_send_value_query(od);
+        if(err < 0){
+                obj_data_free(od);
+                uloga("'%s()': failed with %d, can not query data object.\n",
+                        __func__, err);
+                goto err_out;
+        }
+
+        return 0; //TODO
+err_out:
+        ERROR_TRACE();
+}
+
 #endif
