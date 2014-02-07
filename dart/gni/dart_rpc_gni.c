@@ -2180,7 +2180,7 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
     }
 
     if (rpc_s->cmp_type == DART_SERVER) {
-        rpc_dart_mem_init(rpc_s, 96*1024*1024); // MB
+        rpc_dart_mem_init(rpc_s, 80*1024*1024); // MB
     }
 #endif
 

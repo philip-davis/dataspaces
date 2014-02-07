@@ -831,7 +831,14 @@ static int dcgrpc_dimes_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	dimes_c->domain.ub.c[0] = hsi->val_dims[0]-1;
 	dimes_c->domain.ub.c[1] = hsi->val_dims[1]-1;
 	dimes_c->domain.ub.c[2] = hsi->val_dims[2]-1;
-*/	dimes_c->f_ss_info = 1;
+*/
+    int i;
+    for(i = 0; i < hsi->num_dims; i++){
+        dimes_c->domain.lb.c[i] = 0;
+        dimes_c->domain.ub.c[i] = hsi->dims.c[i]-1;
+    }
+
+	dimes_c->f_ss_info = 1;
 
 	return 0;
 }
@@ -850,12 +857,11 @@ static int dimes_ss_info(int *num_dims)
     if (dimes_c->dcg->f_ss_info) {
         struct bbox *bb = &(dimes_c->dcg->ss_domain);
         dimes_c->domain.num_dims = bb->num_dims;
-        dimes_c->domain.lb.c[0] = bb->lb.c[0];
-        dimes_c->domain.lb.c[1] = bb->lb.c[1];
-        dimes_c->domain.lb.c[2] = bb->lb.c[2];
-        dimes_c->domain.ub.c[0] = bb->ub.c[0];
-        dimes_c->domain.ub.c[1] = bb->ub.c[1];
-        dimes_c->domain.ub.c[2] = bb->ub.c[2];
+        int i;
+        for (i = 0; i < bb->num_dims; i++) {
+            dimes_c->domain.lb.c[i] = bb->lb.c[i];
+            dimes_c->domain.ub.c[i] = bb->ub.c[i];
+        }
         dimes_c->f_ss_info = 1;
    } else {
         peer = dc_get_peer(DC, DIMES_CID % NUM_SP);
@@ -1876,7 +1882,6 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 	rpc_add_service(dimes_ss_info_msg, dcgrpc_dimes_ss_info);
 	rpc_add_service(dimes_locate_data_msg, dcgrpc_dimes_locate_data);
 	rpc_add_service(dimes_get_ack_msg, dcgrpc_dimes_get_ack); 
-	rpc_add_service(dimes_obj_get_ack_v2_msg, dcgrpc_dimes_obj_get_ack_v2); 
 
 	err = dimes_ss_info(&num_dims);
 	if (err < 0) {

@@ -366,7 +366,7 @@ void FC_FUNC(dimes_put, DIMES_PUT) (const char *var_name,
                 *err = -ENOMEM;
         }
 
-	int ndim;
+        int ndim;
         *err =  common_dimes_put(vname, *ver, *size,
                                  //*xl, *yl, *zl, *xu, *yu, *zu, data);
                                  ndim, xl, xu, data);
