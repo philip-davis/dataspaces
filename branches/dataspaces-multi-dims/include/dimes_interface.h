@@ -95,9 +95,9 @@ void dimes_set_storage_type (int fst);
  */
 int dimes_put (const char *var_name,
         unsigned int ver, int size,
-	int ndim,
-        int *lb, //int xl, int yl, int zl,
-        int *ub, //int xu, int yu, int zu,
+    //int ndim,
+        int xl, int yl, int zl,//int *lb,
+        int xu, int yu, int zu,//int *ub,
         void *data);
 
 /**
@@ -132,9 +132,9 @@ int dimes_put (const char *var_name,
  */
 int dimes_get (const char *var_name,
         unsigned int ver, int size,
-	int ndim,
-        int *lb, //int xl, int yl, int zl,
-        int *ub, //int xu, int yu, int zu,
+    //int ndim,
+        int xl, int yl, int zl,//int *lb,
+        int xu, int yu, int zu,//int *ub,
         void *data);
 
 /**

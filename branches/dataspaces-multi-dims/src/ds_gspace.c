@@ -253,18 +253,18 @@ static int init_sspace(struct ds_gspace *dsg_l, int num_sp, int max_versions)
     int i, err;
 
     confs[0].ndims = 2;
-    confs[0].dimx = 64;
-    confs[0].dimy = 11750400;
+    confs[0].dimx = 11750400;
+    confs[0].dimy = 64;
     confs[0].dimz = 1;
 
     confs[1].ndims = 2;
-    confs[1].dimx = 11750400;
-    confs[1].dimy = 64;
+    confs[1].dimx = 64;
+    confs[1].dimy = 11750400;
     confs[1].dimz = 1;
 
     confs[2].ndims = 2;
-    confs[2].dimx = 1;
-    confs[2].dimy = 64;
+    confs[2].dimx = 64;
+    confs[2].dimy = 1;
     confs[2].dimz = 1;
 
     for (i = 0; i < MAX_NUM_SSD; i++) {
