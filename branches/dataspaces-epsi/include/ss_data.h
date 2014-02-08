@@ -126,7 +126,7 @@ struct dht {
   Shared space structure.
 */
 struct sspace {
-        uint64_t                max_dim;
+        int                     max_dim;
         unsigned int            bpd;
 
         struct dht              *dht;
@@ -230,8 +230,10 @@ static inline void obj_data_free(struct obj_data *od)
 
 void obj_data_free_with_data(struct obj_data *);
 // size_t obj_data_size(struct obj_data *);
-size_t obj_data_size(struct obj_descriptor *);
-size_t obj_data_sizev(struct obj_descriptor *);
+//size_t obj_data_size(struct obj_descriptor *);
+//size_t obj_data_sizev(struct obj_descriptor *);
+__u64 obj_data_size(struct obj_descriptor *);
+__u64 obj_data_sizev(struct obj_descriptor *);
 
 int obj_desc_equals(const struct obj_descriptor *, const struct obj_descriptor *);
 int obj_desc_equals_no_owner(const struct obj_descriptor *, const struct obj_descriptor *);

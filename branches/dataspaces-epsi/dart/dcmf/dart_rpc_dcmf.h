@@ -53,7 +53,8 @@ extern "C" {
 typedef unsigned char   __u8;
 typedef unsigned int    __u32;
 typedef int             __s32;
-typedef unsigned long   __u64;
+//typedef unsigned long   __u64;
+typedef unsigned long long  __u64;
 
 struct msg_buf;
 struct rpc_server;
@@ -69,6 +70,10 @@ typedef int (*rpc_service)(struct rpc_server*, struct rpc_cmd*);
   Asynchronous callback function to be used when a transfer completes.
 */
 typedef int (*completion_callback)(struct rpc_server *, struct msg_buf *);
+
+struct coord2{
+        int c[10];       //TODO-Q
+};
 
 struct ptlid_map {
 	size_t rank_dcmf; //ibm dcmf rank
@@ -89,34 +94,35 @@ struct hdr_register{
 /* Header for the locking service. */
 #define LOCK_NAME_SIZE 64
 struct lockhdr {
-	int                     type;
-	int                     rc;
-	int                     id;
-	int                     lock_num;
+        int                     type;
+        int                     rc;
+        int                     id;
+        int                     lock_num;
 	char			name[LOCK_NAME_SIZE]; //lock name
 } __attribute__ ((__packed__));
 
 /* Header for space info. */
 struct hdr_ss_info {
 	int			num_dims;
-	int			val_dims[3];
+	//int			val_dims[3];
+	struct coord2		dims;
 	int			num_space_srv;		
 } __attribute__((__packed__));
 
 /* Rpc command structure. */
 struct rpc_cmd {
-	__u8            cmd;            // type of command
-	__u64           srcnid; //ibm dcmf rank id
-	__u64           dstnid; //ibm dcmf rank id
-	__u32           srcpid; //default is 0
-	__u32           dstpid; //default is 0
-	__u8            num_msg;
-	__u32           id; //Dart ID
+        __u8            cmd;            // type of command
+        __u64           srcnid; //ibm dcmf rank id
+        __u64           dstnid; //ibm dcmf rank id
+        __u32           srcpid; //default is 0
+        __u32           dstpid; //default is 0
+        __u8            num_msg;
+        __u32           id; //Dart ID
 
-	DCMF_Memregion_t	mem_region; //DCMF memory region created for remote node
-	size_t			mem_size; //Size for created DCMF memory region
+        DCMF_Memregion_t	mem_region; //DCMF memory region created for remote node
+        size_t			mem_size; //Size for created DCMF memory region
 
-	__u8            pad[280];// payload of the command
+        __u8            pad[280];// payload of the command TODO-Q
 } __attribute__((__packed__));
 
 /*
@@ -124,10 +130,10 @@ struct rpc_cmd {
   time_tab[] should fit into the pad field of a 'struct rpc_cmd'.
 */
 struct hdr_timing {
-	/* Timer offsets into the table to be determined by the
-	   applications. */
-	int             time_num;
-	double          time_tab[20];
+        /* Timer offsets into the table to be determined by the
+           applications. */
+        int             time_num;
+        double          time_tab[20];
 };
 
 /* 
@@ -135,11 +141,11 @@ struct hdr_timing {
    be 64. Fields names and size may change.
 */
 struct hdr_sys {
-	unsigned long sys_cmd:4;
-	unsigned long sys_msg:4;
-	unsigned long sys_pad0:8;
-	unsigned long sys_pad1:16;
-	unsigned long sys_id:32;
+        unsigned long sys_cmd:4;
+        unsigned long sys_msg:4;
+        unsigned long sys_pad0:8;
+        unsigned long sys_pad1:16;
+        unsigned long sys_id:32;
 };
 
 struct sys_request{
@@ -152,18 +158,18 @@ struct sys_request{
    <= 16.
 */
 enum sys_cmd_type {
-	sys_none = 0,
-	sys_msg_req,
-	sys_msg_ret,
-	sys_bar_enter,
-	sys_count
+        sys_none = 0,
+        sys_msg_req,
+        sys_msg_ret,
+        sys_bar_enter,
+        sys_count
 };
 
 enum io_dir {
-	io_none = 0,
-	io_send,
-	io_receive,
-	io_count
+        io_none = 0,
+        io_send,
+        io_receive,
+        io_count
 };
 
 struct rpc_request{
@@ -266,34 +272,34 @@ struct node_id {
 };
 
 enum cmd_type { 
-	cn_data = 1,
-	cn_init_read,
-	cn_read,
-	cn_large_file, 
-	cn_register, 
-	cn_route, 
-	cn_unregister,
-	cn_resume_transfer,     /* Hint for server to start async transfers. */
-	cn_suspend_transfer,    /* Hint for server to stop async transfers. */
-	sp_reg_request,
-	sp_reg_reply,
-	sp_announce_cp,
-	cn_timing,
-	/* Synchronization primitives. */
-	cp_barrier,
-	cp_lock,
-	/* Shared spaces specific. */
-	ss_obj_put,
-	ss_obj_update,
-	ss_obj_get_dht_peers,
-	ss_obj_get_desc,
-	ss_obj_query,
-	ss_obj_cq_register,
-	ss_obj_cq_notify,
-	ss_obj_get,
-	ss_obj_filter,
-	ss_obj_info,
-	ss_info,
+        cn_data = 1,
+        cn_init_read,
+        cn_read,
+        cn_large_file, 
+        cn_register, 
+        cn_route, 
+        cn_unregister,
+        cn_resume_transfer,     /* Hint for server to start async transfers. */
+        cn_suspend_transfer,    /* Hint for server to stop async transfers. */
+        sp_reg_request,
+        sp_reg_reply,
+        sp_announce_cp,
+        cn_timing,
+        /* Synchronization primitives. */
+        cp_barrier,
+        cp_lock,
+        /* Shared spaces specific. */
+        ss_obj_put,
+        ss_obj_update,
+        ss_obj_get_dht_peers,
+        ss_obj_get_desc,
+        ss_obj_query,
+        ss_obj_cq_register,
+        ss_obj_cq_notify,
+        ss_obj_get,
+        ss_obj_filter,
+        ss_obj_info,
+        ss_info,
 #ifdef DS_HAVE_ACTIVESPACE
 	ss_code_put,
 	ss_code_reply,
@@ -306,6 +312,7 @@ enum cmd_type {
 	dimes_locate_data_msg,
 	dimes_put_msg,
 	dimes_get_ack_msg,
+	dimes_obj_get_ack_v2_msg,
 #endif
 	/* Added for CCGrid Demo. */
 	CN_TIMING_AVG,
@@ -313,21 +320,21 @@ enum cmd_type {
 };
 
 enum lock_type {
-	lk_read_get,
-	lk_read_release,
-	lk_write_get,
-	lk_write_release,
-	lk_grant
+        lk_read_get,
+        lk_read_release,
+        lk_write_get,
+        lk_write_release,
+        lk_grant
 };
 
 static inline void rpc_server_inc_reply(struct rpc_server *rpc_s)
 {
-	rpc_s->num_rep_posted++;
+        rpc_s->num_rep_posted++;
 }
 
 static inline void rpc_server_dec_reply(struct rpc_server *rpc_s)
 {
-	rpc_s->num_rep_freed++;
+        rpc_s->num_rep_freed++;
 }
 
 /*
@@ -336,17 +343,17 @@ static inline void rpc_server_dec_reply(struct rpc_server *rpc_s)
 static int default_completion_callback(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
 	if(msg)
-		free(msg);
-	return 0;
+        	free(msg);
+        return 0;
 }
 
 static int default_completion_with_data_callback(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
 	if(msg && msg->msg_data){
-		free(msg->msg_data);
-		free(msg);
+        	free(msg->msg_data);
+        	free(msg);
 	}
-	return 0;
+        return 0;
 }
 
 struct rpc_server* rpc_server_init(int, int, void *, enum rpc_component);

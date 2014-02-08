@@ -59,13 +59,15 @@ void dimes_client_free(void);
 void dimes_client_set_storage_type (int fst);
 int dimes_client_get (const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+        int ndim,
+        int *lb, //int xl, int yl, int zl,
+        int *ub, //int xu, int yu, int zu,
         void *data);
 int dimes_client_put (const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+        int ndim,
+        int *lb, //int xl, int yl, int zl,
+        int *ub, //int xu, int yu, int zu,
         void *data);
 int dimes_client_put_sync_all(void);
 int dimes_client_put_set_group(const char *group_name, int step);

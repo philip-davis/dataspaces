@@ -2053,7 +2053,7 @@ int rpc_process_msg_resend(struct rpc_server *rpc_s, struct node_id *peer_tab, i
         peer = peer_tab + i;
         if (peer->num_req > 0 && peer->num_msg_at_peer > 0) {
             //printf("%s(): %d resend to %d num_req= %d num_msg_at_peer= %d\n", __func__, 
-              //rpc_s->ptlmap.id, peer->ptlmap.id, peer->num_req, peer->num_msg_at_peer);
+            //  rpc_s->ptlmap.id, peer->ptlmap.id, peer->num_req, peer->num_msg_at_peer);
             peer_process_send_list(rpc_s, peer);
         }
     }

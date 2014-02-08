@@ -105,20 +105,32 @@ void dspaces_unlock_on_write(const char *lock_name, void *comm)
 
 int dspaces_get(const char *var_name,
 	unsigned int ver, int size,
-	int xl, int yl, int zl,
-	int xu, int yu, int zu,
+	//int ndim,
+	int xl, int yl, int zl, //int *lb,
+	int xu, int yu, int zu, //int *ub,
 	void *data)
 {
-	return common_dspaces_get(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
+	//return common_dspaces_get(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
+	
+	int lb[3] = {xl, yl, zl};
+	int ub[3] = {xu, yu, zu};	
+	return common_dspaces_get(var_name, ver, size, 3, lb, ub, data);
+	//return common_dspaces_get(var_name, ver, size, ndim, lb, ub, data);
 }
 
 int dspaces_put(const char *var_name, 
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu, 
+ 	//int ndim,
+        int xl, int yl, int zl, //int *lb,
+        int xu, int yu, int zu, //int *ub,
         void *data)
 {
-	return common_dspaces_put(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
+	//return common_dspaces_put(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
+	//return common_dspaces_put(var_name, ver, size, ndim, lb, ub, data);
+	
+	int lb[3] = {xl, yl, zl};
+	int ub[3] = {xu, yu, zu};
+	return common_dspaces_put(var_name, ver, size, 3, lb, ub, data);
 }
 
 int dspaces_put_sync(void)
@@ -154,20 +166,28 @@ int dimes_put_sync_all(void)
 
 int dimes_get (const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+        //int ndim,
+        int xl, int yl, int zl,//int *lb,
+        int xu, int yu, int zu,//int *ub,
         void *data)
 {
-	return common_dimes_get(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
+    int lb[3] = {xl, yl, zl};
+    int ub[3] = {xu, yu, zu};
+    return common_dimes_get(var_name, ver, size, 3, lb, ub, data);
+	//return common_dimes_get(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
 }
 
 int dimes_put (const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+        //int ndim,
+        int xl, int yl, int zl,//int *lb,
+        int xu, int yu, int zu,//int *ub,
         void *data)
 {
-	return common_dimes_put(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
+    int lb[3] = {xl, yl, zl};
+    int ub[3] = {xu, yu, zu};
+    return common_dimes_put(var_name, ver, size, 3, lb, ub, data);
+	//return common_dimes_put(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
 }
 
 int dimes_put_set_group(const char *group_name, int step)

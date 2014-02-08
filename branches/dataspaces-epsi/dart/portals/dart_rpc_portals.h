@@ -180,7 +180,7 @@ struct rpc_cmd {
         __u32           id;
 
         // __u8            pad[90];        // payload of the command
-        __u8            pad[280];
+        __u8            pad[218];
 } __attribute__((__packed__));
 
 /*

@@ -172,8 +172,8 @@ void dspaces_unlock_on_write(const char *lock_name,void *comm);
  * 	  descriptor.
  * 
  * Memory buffer pointed by pointer "data" is a sub-region of the
- * global n-dimensional array (n <= 3) in user application, which is described
- * by the local bounding box {(xl, yl, zl), (xu, yu, zu)}.
+ * global n-dimensional array (n <= 10) in user application, which is described
+ * by the local bounding box {(lb[0],lb[1],..,lb[n-1]), (ub[0],ub[1],..,ub[n-1])}.
  *
  * This routine is non-blocking, and successful return of the routine does not 
  * guarantee the completion of data transfer from client process to dataspaces 
@@ -184,34 +184,29 @@ void dspaces_unlock_on_write(const char *lock_name,void *comm);
  * @param[in] ver:		Version of the variable.
  * @param[in] size:		Size (in bytes) for each element of the global
  *				array.
- * @param[in] xl:		x-coordinate for the lower corner of the local
- *				bounding box.
- * @param[in] yl:		y-coordinate for the lower corner of the local
- *				bounding box.
- * @param[in] zl:		z-coordinate for the lower corner of the local
- *				bounding box.
- * @param[in] xu:		x-coordinate for the upper corner of the local
- *				bounding box.
- * @param[in] yu:		y-coordinate for the upper corner of the local
- *				bounding box.
- * @param[in] zu:		z-coordinate for the upper corner of the local
- *				bounding box.
+ * @param[in] ndim:		the number of dimensions for the local bounding
+ *				box. 
+ * @param[in] lb:		coordinates for the lower corner of the local
+ *  				bounding box.
+ * @param[in] ub:		coordinates for the upper corner of the local
+ *  				bounding box. 
  * @param[in] data:		Pointer to user data buffer. 
  *
  * @return	0 indicates success.
  */
 int dspaces_put (const char *var_name, 
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu, 
+	//int ndim,
+        int xl, int yl, int zl,//int *lb,
+        int xu, int yu, int zu,//int *ub,
         void *data);
 
 /**
  * @brief Query the space to retrieve data specified by a geometric descriptor.
  *
  * Memory buffer pointed by pointer "data" is a sub-region of the
- * global n-dimensional array (n <= 3) in user application, which is described
- * by the local bounding box {(xl, yl, zl), (xu, yu, zu)}.
+ * global n-dimensional array (n <= 10) in user application, which is described
+ * by the local bounding box {(lb[0],lb[1],..,lb[n-1]), (ub[0],ub[1],..,ub[n-1])}.
  *
  * After successful return of the routine, received data is copied into user
  * buffer pointed by "data".
@@ -220,17 +215,11 @@ int dspaces_put (const char *var_name,
  * @param[in] ver:		Version of the variable.
  * @param[in] size:		Size (in bytes) for each element of the global
  *				array.
- * @param[in] xl:		x-coordinate for the lower corner of the local
+ * @param[in] ndim:		the number of dimensions for the local bounding
+ *				box. 
+ * @param[in] lb:		coordinates for the lower corner of the local
  *				bounding box.
- * @param[in] yl:		y-coordinate for the lower corner of the local
- *				bounding box.
- * @param[in] zl:		z-coordinate for the lower corner of the local
- *				bounding box.
- * @param[in] xu:		x-coordinate for the upper corner of the local
- *				bounding box.
- * @param[in] yu:		y-coordinate for the upper corner of the local
- *				bounding box.
- * @param[in] zu:		z-coordinate for the upper corner of the local
+ * @param[in] ub:		coordinates for the lower corner of the local
  *				bounding box.
  * @param[in] data:		Pointer to user data buffer. 
  * 
@@ -238,8 +227,9 @@ int dspaces_put (const char *var_name,
  */
 int dspaces_get (const char *var_name, 
         unsigned int ver, int size,
-        int xl, int yl, int zl, 
-        int xu, int yu, int zu, 
+	//int ndim,
+        int xl, int yl, int zl, //int *lb,
+        int xu, int yu, int zu, //int *ub,
         void *data);
 
 /**
