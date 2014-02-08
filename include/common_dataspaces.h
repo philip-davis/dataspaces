@@ -50,14 +50,16 @@ void common_dspaces_lock_on_write(const char *lock_name, void *comm);
 void common_dspaces_unlock_on_write(const char *lock_name,void *comm);
 int common_dspaces_get (const char *var_name, 
         unsigned int ver, int size,
-        int xl, int yl, int zl, 
-        int xu, int yu, int zu, 
+	int ndim,
+        int *lb, //int xl, int yl, int zl, 
+        int *ub, //int xu, int yu, int zu, 
         void *data);
 int common_dspaces_get_versions(int **);
 int common_dspaces_put (const char *var_name, 
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu, 
+	int ndim,
+        int *lb, //int xl, int yl, int zl,
+        int *ub, //int xu, int yu, int zu, 
         void *data);
 
 int common_dspaces_select(char *var_name, unsigned int ver,
@@ -80,13 +82,15 @@ int common_dspaces_num_space_srv(void);
 void common_dimes_set_storage_type(int fst);
 int common_dimes_get(const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+        int ndim,
+        int *lb, //int xl, int yl, int zl,
+        int *ub, //int xu, int yu, int zu, 
         void *data);
 int common_dimes_put(const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+        int ndim,
+        int *lb, //int xl, int yl, int zl,
+        int *ub, //int xu, int yu, int zu, 
         void *data);
 int common_dimes_put_sync_all(void);
 int common_dimes_put_set_group(const char *group_name, int step);

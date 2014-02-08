@@ -82,6 +82,10 @@ typedef int (*async_callback)(struct rpc_server *rpc_s, struct rpc_request *rr);
 // Asynchronous callback function to be used when a transfer completes.
 typedef int (*completion_callback)(struct rpc_server *rpc_s, struct msg_buf *msg);
 
+struct coord2{
+	int c[10];	//TODO-Q
+};
+
 typedef enum {
 	unset = 0,
 	set
@@ -169,7 +173,8 @@ struct lockhdr {
 // Header for space info.
 struct hdr_ss_info {
 	int		num_dims;
-	int		val_dims[3];
+	//int		val_dims[3];
+	struct coord2	dims;
 	int		num_space_srv;
 };
 

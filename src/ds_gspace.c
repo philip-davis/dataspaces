@@ -116,8 +116,9 @@ static struct timer timer;
 
 /* Server configuration parameters */
 static struct {
-        int ndims;
-        int dimx, dimy, dimz;
+        int ndim;
+        //int dimx, dimy, dimz;
+	struct coord dims;
         int max_versions;
         int max_readers;
         int lock_type;		/* 1 - generic, 2 - custom */
@@ -127,10 +128,8 @@ static struct {
         const char      *opt;
         int             *pval;
 } options[] = {
-        {"ndim",                &ds_conf.ndims},
-        {"dimx",                &ds_conf.dimx},
-        {"dimy",                &ds_conf.dimy},
-        {"dimz",                &ds_conf.dimz},
+        {"ndim",                &ds_conf.ndim},
+	{"dims",		&ds_conf.dims},
         {"max_versions",        &ds_conf.max_versions},
         {"max_readers",         &ds_conf.max_readers},
         {"lock_type",		&ds_conf.lock_type}
@@ -169,12 +168,38 @@ static int parse_line(int lineno, char *line)
         t[0] = '\0';
         eat_spaces(line);
         t++;
-        eat_spaces(t);
+        //eat_spaces(t);
 
         n = sizeof(options) / sizeof(options[0]);
-        for (i = 0; i < n; i++) {
+
+/*        for (i = 0; i < n; i++) {
                 if (strcmp(line, options[i].opt) == 0) {
                         *options[i].pval = atoi(t);
+                        break;
+                }
+        }
+*/
+        for (i = 0; i < n; i++) {
+                if (strcmp(line, options[1].opt) == 0){ /**< when "dims" */
+                    //get coordination
+                    int idx = 0;
+                    char* crd;
+                    crd = strtok(t, ",");
+                    while(crd != NULL){
+                        ((struct coord*)options[1].pval)->c[idx] = atoi(crd);
+                        crd = strtok(NULL, ",");
+                        idx++;
+                    }
+                    if(idx != *(int*)options[0].pval){
+                        uloga("index=%d, ndims=%d\n",idx, *(int*)options[0].pval);
+                        uloga("The number of coordination should the same with number of dimension!\n");
+                        return -EINVAL;
+                    }
+                    break;
+                }
+                if (strcmp(line, options[i].opt) == 0) {
+                        eat_spaces(line);
+                        *(int*)options[i].pval = atoi(t);
                         break;
                 }
         }
@@ -228,18 +253,18 @@ static int init_sspace(struct ds_gspace *dsg_l, int num_sp, int max_versions)
     int i, err;
 
     confs[0].ndims = 2;
-    confs[0].dimx = 64;
-    confs[0].dimy = 11750400;
+    confs[0].dimx = 11750400;
+    confs[0].dimy = 64;
     confs[0].dimz = 1;
 
     confs[1].ndims = 2;
-    confs[1].dimx = 11750400;
-    confs[1].dimy = 64;
+    confs[1].dimx = 64;
+    confs[1].dimy = 11750400;
     confs[1].dimz = 1;
 
     confs[2].ndims = 2;
-    confs[2].dimx = 1;
-    confs[2].dimy = 64;
+    confs[2].dimx = 64;
+    confs[2].dimy = 1;
     confs[2].dimz = 1;
 
     for (i = 0; i < MAX_NUM_SSD; i++) {
@@ -1970,10 +1995,15 @@ static int dsgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	msg->msg_rpc->id = DSG_ID;
 
 	hsi = (struct hdr_ss_info *) msg->msg_rpc->pad;
-	hsi->num_dims = ds_conf.ndims;
-	hsi->val_dims[bb_x] = ds_conf.dimx;
-	hsi->val_dims[bb_y] = ds_conf.dimy;
-	hsi->val_dims[bb_z] = ds_conf.dimz;
+	hsi->num_dims = ds_conf.ndim;
+//	hsi->val_dims[bb_x] = ds_conf.dimx;
+//	hsi->val_dims[bb_y] = ds_conf.dimy;
+//	hsi->val_dims[bb_z] = ds_conf.dimz;
+        int i; 
+        for(i = 0; i < hsi->num_dims; i++){
+                hsi->dims.c[i] = ds_conf.dims.c[i]; 
+        }
+
 	hsi->num_space_srv = dsg->ds->size_sp;
 
 	err = rpc_send(rpc_s, peer, msg);
@@ -2003,25 +2033,30 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
 
         err = parse_conf(conf_name);
         if (err < 0) {
-                ds_conf.ndims = 3;
-                ds_conf.dimx = 4096;
-                ds_conf.dimy = 4096;
-                ds_conf.dimz = 4096;
-
 		uloga("'%s()' error loading config file, starting "
 			"with defaults.\n", __func__);
         }
         else
             uloga("'%s()' config file loaded.\n", __func__);
 
-        if (ds_conf.ndims == 2)
+        /*if (ds_conf.ndims == 2)
             ds_conf.dimz = 1;
 
         struct bbox domain = {.num_dims = ds_conf.ndims, 
                 .lb.c = {0, 0, 0}, 
                 .ub.c = {ds_conf.dimx-1, ds_conf.dimy-1, ds_conf.dimz-1}};
-        double tm_start, tm_end;
+	*/
+        struct bbox domain;
+        memset(&domain, 0, sizeof(struct bbox));
+        domain.num_dims = ds_conf.ndim;
+	printf("ds_conf.ndim = %d\n", domain.num_dims);
+	int i;
+        for(i = 0; i < domain.num_dims; i++){
+            domain.lb.c[i] = 0;
+            domain.ub.c[i] = ds_conf.dims.c[i] - 1;
+        }
 
+        double tm_start, tm_end;
         timer_init(&timer, 1);
         timer_start(&timer);
 
@@ -2062,9 +2097,7 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
                 goto err_out;
         tm_end = timer_read(&timer);
 
-#ifdef DEBUG
         printf("SRV %d %d %lf\n", DSG_ID, -1, tm_end-tm_start);
-#endif
 
         err = ssd_init(dsg_l->ssd, ds_get_rank(dsg_l->ds));
         if (err < 0)
