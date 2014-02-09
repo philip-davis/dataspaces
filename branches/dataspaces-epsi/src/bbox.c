@@ -157,7 +157,7 @@ void bbox_intersect(struct bbox *b0, const struct bbox *b1, struct bbox *b2)
         int i;
 
         b2->num_dims = b0->num_dims;
-        for (i = 0; i < 10; i++) {	//TODO 3 to 10
+        for (i = 0; i < BBOX_MAX_NDIM; i++) {	//TODO 3 to 10
                 b2->lb.c[i] = max(b0->lb.c[i], b1->lb.c[i]);
                 b2->ub.c[i] = min(b0->ub.c[i], b1->ub.c[i]);
         }

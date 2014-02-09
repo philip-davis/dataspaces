@@ -51,8 +51,9 @@ enum bb_dim {
         bb_z = 2
 };
 
+#define BBOX_MAX_NDIM 3
 struct coord {
-        int c[10];
+        int c[BBOX_MAX_NDIM];
 };
 
 struct bbox {
@@ -63,7 +64,7 @@ struct bbox {
 struct intv {
         // unsigned int lb, ub;
         //unsigned long lb, ub;
-	__u64 lb, ub;
+        __u64 lb, ub;
 };
 
 //int bbox_dist(struct bbox *, int);

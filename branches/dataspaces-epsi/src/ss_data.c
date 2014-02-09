@@ -45,15 +45,15 @@
   matrix.
 */
 struct matrix_view {
-        int                     lb[10];	//TODO-Q
-        int                     ub[10];	
+        int                     lb[BBOX_MAX_NDIM];	//TODO-Q
+        int                     ub[BBOX_MAX_NDIM];	
 };
 
 /* Generic matrix representation. */
 struct matrix {
         //int                     dimx, dimy, dimz;
-	int			dist[10];	//TODO-Q
-	int 			num_dims;
+        int			dist[BBOX_MAX_NDIM];	//TODO-Q
+        int 			num_dims;
         size_t                  size_elem;
         enum storage_type       mat_storage;
         struct matrix_view      mat_view;
@@ -352,14 +352,14 @@ static void matrix_copy(struct matrix *a, struct matrix *b)
         char *A = a->pdata;
         char *B = b->pdata;
 
-	__u64 a0, a1, a2, a3, a4, a5, a6, a7, a8, a9;
+        __u64 a0, a1, a2, a3, a4, a5, a6, a7, a8, a9;
         __u64 aloc=0, aloc1=0, aloc2=0, aloc3=0, aloc4=0, aloc5=0, aloc6=0, aloc7=0, aloc8=0, aloc9=0;
         __u64 b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
         __u64 bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
 
 
 	
-        for(a9 = a->mat_view.lb[9], b9 = b->mat_view.lb[9];	//TODO-Q
+        /*for(a9 = a->mat_view.lb[9], b9 = b->mat_view.lb[9];	//TODO-Q
             a9 <= a->mat_view.ub[9]; a9++, b9++){
             aloc9 = a9 * a->dist[8];
             bloc9 = a9 * b->dist[8];
@@ -386,7 +386,7 @@ static void matrix_copy(struct matrix *a, struct matrix *b)
         for(a3 = a->mat_view.lb[3], b3 = b->mat_view.lb[3];
             a3 <= a->mat_view.ub[3]; a3++, b3++){
             aloc3 = (aloc4 + a3) * a->dist[2];
-            bloc3 = (bloc4 + b3) * b->dist[2];
+            bloc3 = (bloc4 + b3) * b->dist[2];*/
             for(a2 = a->mat_view.lb[2], b2 = b->mat_view.lb[2];
                 a2 <= a->mat_view.ub[2]; a2++, b2++){
                 aloc2 = (aloc3 + a2) * a->dist[1];
@@ -404,7 +404,7 @@ static void matrix_copy(struct matrix *a, struct matrix *b)
                     }
                 }
             }
-        }}}}}}}
+        /*}}}}}}}*/
 }
 
 
