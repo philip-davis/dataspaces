@@ -1030,13 +1030,13 @@ static int dimes_locate_data(struct query_tran_entry_d *qte)
 }
 
 struct matrix_view_d {
-	int lb[10]; //int lb[3];
-	int ub[10]; //int ub[3];
+	int lb[BBOX_MAX_NDIM]; //int lb[3];
+	int ub[BBOX_MAX_NDIM]; //int ub[3];
 };
 
 struct matrix_d {
 	//int dimx, dimy, dimz;
-	int 	dist[10];
+	int 	dist[BBOX_MAX_NDIM];
 	int 	num_dims;
 	size_t size_elem;
 	enum storage_type mat_storage;
@@ -1070,70 +1070,69 @@ static int matrix_rdma_copy(struct matrix_d *a, struct matrix_d *b, int tran_id)
 	int err = -ENOMEM;
 
 	__u64 a0, a1, a2, a3, a4, a5, a6, a7, a8, a9;
-        __u64 aloc=0, aloc1=0, aloc2=0, aloc3=0, aloc4=0, aloc5=0, aloc6=0, aloc7=0, aloc8=0, aloc9=0;
-        __u64 b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
-        __u64 bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
+    __u64 aloc=0, aloc1=0, aloc2=0, aloc3=0, aloc4=0, aloc5=0, aloc6=0, aloc7=0, aloc8=0, aloc9=0;
+    __u64 b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
+    __u64 bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
 
 	__u64 n = 0;
 	n = a->mat_view.ub[0] - a->mat_view.lb[0] + 1;
 	a0 = a->mat_view.lb[0];
-        b0 = b->mat_view.lb[0];
+    b0 = b->mat_view.lb[0];
 
-        for(a9 = a->mat_view.lb[9], b9 = b->mat_view.lb[9];     //TODO-Q
-            a9 <= a->mat_view.ub[9]; a9++, b9++){
-            aloc9 = a9 * a->dist[8];
-            bloc9 = a9 * b->dist[8];
-        for(a8 = a->mat_view.lb[8], b8 = b->mat_view.lb[8];     //TODO-Q
-            a8 <= a->mat_view.ub[8]; a8++, b8++){
-            aloc8 = (aloc9 + a8) * a->dist[7];
-            bloc8 = (bloc9 + b8) * b->dist[7];
-        for(a7 = a->mat_view.lb[7], b7 = b->mat_view.lb[7];     //TODO-Q
-            a7 <= a->mat_view.ub[7]; a7++, b7++){
-            aloc7 = (aloc8 + a7) * a->dist[6];
-            bloc7 = (bloc8 + b7) * b->dist[6];
-        for(a6 = a->mat_view.lb[6], b6 = b->mat_view.lb[6];     //TODO-Q
-            a6 <= a->mat_view.ub[6]; a6++, b6++){
-            aloc6 = (aloc7 + a6) * a->dist[5];
-            bloc6 = (bloc7 + b6) * b->dist[5];
-        for(a5 = a->mat_view.lb[5], b5 = b->mat_view.lb[5];     //TODO-Q
-            a5 <= a->mat_view.ub[5]; a5++, b5++){
-            aloc5 = (aloc6 + a5) * a->dist[4];
-            bloc5 = (bloc6 + b5) * b->dist[4];
-        for(a4 = a->mat_view.lb[4], b4 = b->mat_view.lb[4];
-            a4 <= a->mat_view.ub[4]; a4++, b4++){
-            aloc4 = (aloc5 + a4) * a->dist[3];
-            bloc4 = (bloc5 + b4) * b->dist[3];
-        for(a3 = a->mat_view.lb[3], b3 = b->mat_view.lb[3];
-            a3 <= a->mat_view.ub[3]; a3++, b3++){
-            aloc3 = (aloc4 + a3) * a->dist[2];
-            bloc3 = (bloc4 + b3) * b->dist[2];
-            for(a2 = a->mat_view.lb[2], b2 = b->mat_view.lb[2];
-                a2 <= a->mat_view.ub[2]; a2++, b2++){
-                aloc2 = (aloc3 + a2) * a->dist[1];
-                bloc2 = (bloc3 + b2) * b->dist[1];
-                for(a1 = a->mat_view.lb[1], b1 = b->mat_view.lb[1];
-                    a1 <= a->mat_view.ub[1]; a1++, b1++){
-                    aloc1 = (aloc2 + a1) * a->dist[0];
-                    bloc1 = (bloc2 + b1) * b->dist[0];
-                   /* for(a0 = a->mat_view.lb[0], b0 = b->mat_view.lb[0];
-                        a0 <= a->mat_view.ub[0]; a0++, b0++){
-                        aloc = aloc1 + a0;
-                        bloc = bloc1 + b0;
-		   */
-			aloc = aloc1 + a0;
-			bloc = bloc1 + b0;
-			src_offset = bloc * a->size_elem;
-			dst_offset = aloc * a->size_elem;
-			bytes = n * a->size_elem;
-			err = dart_rdma_schedule_read(tran_id, src_offset, dst_offset, bytes);
-                                if (err < 0)
-                                        goto err_out;
+    /*for(a9 = a->mat_view.lb[9], b9 = b->mat_view.lb[9];     //TODO-Q
+        a9 <= a->mat_view.ub[9]; a9++, b9++){
+        aloc9 = a9 * a->dist[8];
+        bloc9 = a9 * b->dist[8];
+    for(a8 = a->mat_view.lb[8], b8 = b->mat_view.lb[8];     //TODO-Q
+        a8 <= a->mat_view.ub[8]; a8++, b8++){
+        aloc8 = (aloc9 + a8) * a->dist[7];
+        bloc8 = (bloc9 + b8) * b->dist[7];
+    for(a7 = a->mat_view.lb[7], b7 = b->mat_view.lb[7];     //TODO-Q
+        a7 <= a->mat_view.ub[7]; a7++, b7++){
+        aloc7 = (aloc8 + a7) * a->dist[6];
+        bloc7 = (bloc8 + b7) * b->dist[6];
+    for(a6 = a->mat_view.lb[6], b6 = b->mat_view.lb[6];     //TODO-Q
+        a6 <= a->mat_view.ub[6]; a6++, b6++){
+        aloc6 = (aloc7 + a6) * a->dist[5];
+        bloc6 = (bloc7 + b6) * b->dist[5];
+    for(a5 = a->mat_view.lb[5], b5 = b->mat_view.lb[5];     //TODO-Q
+        a5 <= a->mat_view.ub[5]; a5++, b5++){
+        aloc5 = (aloc6 + a5) * a->dist[4];
+        bloc5 = (bloc6 + b5) * b->dist[4];
+    for(a4 = a->mat_view.lb[4], b4 = b->mat_view.lb[4];
+        a4 <= a->mat_view.ub[4]; a4++, b4++){
+        aloc4 = (aloc5 + a4) * a->dist[3];
+        bloc4 = (bloc5 + b4) * b->dist[3];
+    for(a3 = a->mat_view.lb[3], b3 = b->mat_view.lb[3];
+        a3 <= a->mat_view.ub[3]; a3++, b3++){
+        aloc3 = (aloc4 + a3) * a->dist[2];
+        bloc3 = (bloc4 + b3) * b->dist[2]; */
+        for(a2 = a->mat_view.lb[2], b2 = b->mat_view.lb[2];
+            a2 <= a->mat_view.ub[2]; a2++, b2++){
+            aloc2 = (aloc3 + a2) * a->dist[1];
+            bloc2 = (bloc3 + b2) * b->dist[1];
+            for(a1 = a->mat_view.lb[1], b1 = b->mat_view.lb[1];
+                a1 <= a->mat_view.ub[1]; a1++, b1++){
+                aloc1 = (aloc2 + a1) * a->dist[0];
+                bloc1 = (bloc2 + b1) * b->dist[0];
+               /* for(a0 = a->mat_view.lb[0], b0 = b->mat_view.lb[0];
+                    a0 <= a->mat_view.ub[0]; a0++, b0++){
+                    aloc = aloc1 + a0;
+                    bloc = bloc1 + b0;
+               */
+                aloc = aloc1 + a0;
+                bloc = bloc1 + b0;
+                src_offset = bloc * a->size_elem;
+                dst_offset = aloc * a->size_elem;
+                bytes = n * a->size_elem;
+                err = dart_rdma_schedule_read(tran_id, src_offset, dst_offset, bytes);
+                if (err < 0)
+                        goto err_out;
+	}} /*}}}}}}}*/
 
-	}}}}}}}}}
-        return 0;
+    return 0;
 err_out:
-        ERROR_TRACE();
-
+    ERROR_TRACE();
 }
 
 /*
