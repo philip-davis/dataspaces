@@ -432,6 +432,18 @@ static int default_completion_callback(struct rpc_server *rpc_s, struct msg_buf 
 	return 0;
 }
 
+
+static struct node_id *peer_alloc()
+{
+          struct node_id *peer = 0;
+          peer = malloc(sizeof(*peer));
+          if(!peer)
+                 return 0;
+          memset(peer, 0, sizeof(*peer));
+          return peer;
+}
+
+
 static int default_completion_with_data_callback(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
 	if(msg->msg_data)

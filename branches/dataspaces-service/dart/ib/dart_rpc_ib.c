@@ -1569,7 +1569,7 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 
 					peer->ptlmap = ((struct con_param *) event_copy.param.conn.private_data)->pm_cp;
 
-//                                        printf("Client %d %d\n",rpc_s->ptlmap.id,((struct con_param *) event_copy.param.conn.private_data)->num_cp);
+                                        printf("Client %d %d\n",rpc_s->ptlmap.id,((struct con_param *) event_copy.param.conn.private_data)->num_cp);
 
 //                                      rpc_s->app_minid = ((struct con_param *) event_copy.param.conn.private_data)->type;     //Here is a tricky design. Master Server puts app_minid into this 'type' field and return.
 //printf("id is %d, appminid is%d.\n", rpc_s->ptlmap.id, rpc_s->app_minid);

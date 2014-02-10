@@ -30,7 +30,7 @@ static int sp_rank_cnt = 1;
 static int cp_rank_cnt = 0;
 extern void rpc_server_dec_reply(struct rpc_server *);
 
-
+/*
 static struct node_id *peer_alloc()
 {
          struct node_id *peer = 0;
@@ -40,7 +40,7 @@ static struct node_id *peer_alloc()
          memset(peer, 0, sizeof(*peer));
          return peer;
 }
-
+*/
 
 static struct app_info *app_alloc()
 {
@@ -380,6 +380,12 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct hdr_register *hdr)
 
 
 	temp_peer->ptlmap = hdr->pm_cp;
+
+        INIT_LIST_HEAD(&temp_peer->req_list);
+        temp_peer->num_msg_at_peer = rpc_s->max_num_msg;
+        temp_peer->num_msg_ret = 0;
+
+
 	//temp_peer->ptlmap.id = app->app_peer_tab[0].ptlmap.id + app->app_cnt_peers;
 
 
@@ -414,10 +420,11 @@ static int ds_disseminate(struct dart_server *ds)	//Done
 		pptlmap = msg->msg_data = malloc(msg->size);
 		if(!msg->msg_data)
 			goto err_out_free;
-	//	for(k = 0; k < ds->peer_size; k++){
-		struct node_id *temp_peer;
+		for(k = 0; k < ds->peer_size; k++){
+	/*	struct node_id *temp_peer;
           	list_for_each_entry(temp_peer, &ds->peer_list, struct node_id, peer_entry) {
-			*pptlmap++ = temp_peer->ptlmap;
+			*pptlmap++ = temp_peer->ptlmap;*/
+			*pptlmap++ = (cpeer++)->ptlmap;
 		}
 
 		cpeer = ds->peer_tab;
@@ -567,6 +574,13 @@ static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 			app->app_cnt_peers++;
 			app->app_num_peers = app->app_cnt_peers;
 		}
+
+	        struct node_id *temp_peer = peer_alloc();
+	        list_add(&temp_peer->peer_entry, &ds->peer_list);
+	
+		temp_peer->ptlmap = *pm;
+
+
 		peer++;
 		pm = pm + 1;
 	}
@@ -913,7 +927,7 @@ int ds_boot_master(struct dart_server *ds)	//Done
          }
 
 	if(ds->connected>4){
-	temp_peer = node_find(ds, 2);
+	temp_peer =ds_node_find(ds, 2);
 
 	printf("peer# %d (%s:%d)\n",temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
 }
@@ -1039,6 +1053,18 @@ int ds_boot_slave(struct dart_server *ds)	//Done
 	int i, err, check, connected, connect_count = 0;
 	check = 0;
 	connected = 0;
+
+
+        struct node_id *temp_peer = peer_alloc();
+        list_add(&temp_peer->peer_entry, &ds->peer_list);
+
+        err = rpc_read_config(&temp_peer->ptlmap.address);   ////
+        temp_peer->ptlmap.id = 0;
+
+
+
+
+
 	err = rpc_read_config(&peer->ptlmap.address);
 	if(err < 0)
 		goto err_out;
@@ -1074,6 +1100,20 @@ int ds_boot_slave(struct dart_server *ds)	//Done
 		if(err != 0 && err != -ETIME)
 			goto err_out;
 	}
+
+
+
+         list_for_each_entry(temp_peer, &ds->peer_list, struct node_id, peer_entry) {
+                printf("peer# %d (%s:%d)\n",temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
+         }
+
+
+
+        printf("***********************************\n");
+
+
+
+
 
 //printf("howdy 0.\n");
 	//Connect to all other nodes except MS_Server. All the peer info have been stored in peer_tab already.
