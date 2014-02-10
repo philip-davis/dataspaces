@@ -328,6 +328,9 @@ struct rdma_mr {
 };
 
 struct node_id {
+
+        struct list_head peer_entry;
+
 	struct ptlid_map ptlmap;
 	struct rdma_mr peer_mr;
 
