@@ -39,6 +39,8 @@
 #ifndef __DATASPACES_H_
 #define __DATASPACES_H_
 
+#include <stdint.h>
+
 /**
  * @file dataspaces.h
  * @brief DataSpaces APIs.
@@ -196,9 +198,8 @@ void dspaces_unlock_on_write(const char *lock_name,void *comm);
  */
 int dspaces_put (const char *var_name, 
         unsigned int ver, int size,
-	//int ndim,
-        int xl, int yl, int zl,//int *lb,
-        int xu, int yu, int zu,//int *ub,
+        uint64_t xl, uint64_t yl, uint64_t zl,
+        uint64_t xu, uint64_t yu, uint64_t zu,
         void *data);
 
 /**
@@ -227,9 +228,8 @@ int dspaces_put (const char *var_name,
  */
 int dspaces_get (const char *var_name, 
         unsigned int ver, int size,
-	//int ndim,
-        int xl, int yl, int zl, //int *lb,
-        int xu, int yu, int zu, //int *ub,
+        uint64_t xl, uint64_t yl, uint64_t zl,
+        uint64_t xu, uint64_t yu, uint64_t zu,
         void *data);
 
 /**

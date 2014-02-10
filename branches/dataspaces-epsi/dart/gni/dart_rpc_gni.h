@@ -70,7 +70,7 @@ struct node_id;
 typedef unsigned char	__u8;
 typedef unsigned int	__u32;
 typedef int		__s32;
-typedef unsigned long	__u64;
+typedef uint64_t __u64;
 
 
 // Rpc prototype function, should be called in response to a remote rpc request. 
@@ -83,7 +83,7 @@ typedef int (*async_callback)(struct rpc_server *rpc_s, struct rpc_request *rr);
 typedef int (*completion_callback)(struct rpc_server *rpc_s, struct msg_buf *msg);
 
 struct coord2{
-	int c[10];	//TODO-Q
+	__u64 c[3];	//TODO-Q
 };
 
 typedef enum {
@@ -173,8 +173,7 @@ struct lockhdr {
 // Header for space info.
 struct hdr_ss_info {
 	int		num_dims;
-	//int		val_dims[3];
-	struct coord2	dims;
+	struct  coord2	dims;
 	int		num_space_srv;
 };
 

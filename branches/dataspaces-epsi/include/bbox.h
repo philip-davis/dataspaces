@@ -35,6 +35,7 @@
 #define __BBOX_H_
 
 #include <stdio.h>
+#include <stdint.h>
 #include "strutil.h"
 
 #define max(a,b) (a) > (b) ? (a):(b)
@@ -43,7 +44,7 @@
 typedef unsigned char 		__u8;
 typedef unsigned int 		__u32;
 typedef int			__s32;
-typedef unsigned long long	__u64; //TODO
+typedef uint64_t	__u64; //TODO
 
 enum bb_dim {
         bb_x = 0,
@@ -53,7 +54,7 @@ enum bb_dim {
 
 #define BBOX_MAX_NDIM 3
 struct coord {
-        int c[BBOX_MAX_NDIM];
+        __u64 c[BBOX_MAX_NDIM];
 };
 
 struct bbox {
@@ -62,12 +63,9 @@ struct bbox {
 };
 
 struct intv {
-        // unsigned int lb, ub;
-        //unsigned long lb, ub;
         __u64 lb, ub;
 };
 
-//int bbox_dist(struct bbox *, int);
 __u64 bbox_dist(struct bbox *, int);
 void bbox_divide(struct bbox *b0, struct bbox *b_tab);
 int bbox_include(const struct bbox *, const struct bbox *);
@@ -75,11 +73,8 @@ int bbox_does_intersect(const struct bbox *, const struct bbox *);
 void bbox_intersect(struct bbox *, const struct bbox *, struct bbox *);
 int bbox_equals(const struct bbox *, const struct bbox *);
 
-//unsigned long bbox_volume(struct bbox *);
 __u64 bbox_volume(struct bbox *);
-//void bbox_to_intv(const struct bbox *, int, int, struct intv **, int *);
 void bbox_to_intv(const struct bbox *, __u64, int, struct intv **, int *);
-//void bbox_to_intv2(const struct bbox *, int, int, struct intv **, int *);
 void bbox_to_intv2(const struct bbox *, __u64, int, struct intv **, int *);
 void bbox_to_origin(struct bbox *, const struct bbox *);
 
@@ -87,16 +82,13 @@ int intv_do_intersect(struct intv *, struct intv *);
 //unsigned long intv_size(struct intv *);
 __u64 intv_size(struct intv *);
 
-//static unsigned int next_pow_2(int n)
 static __u64 next_pow_2(__u64 n)
 {
-        //unsigned int i;
         __u64 i;
 
         if (n < 0)
                 return 0;
 
-        //i = ~(~0U >> 1);
         i = ~(~0ULL >> 1);
         while (i && !(i&n)) {
                 i = i >>1;
@@ -115,13 +107,13 @@ static void coord_print(struct coord *c, int num_dims)
 {
         switch (num_dims) {
         case 3:
-                printf("{%d, %d, %d}", c->c[0], c->c[1], c->c[2]);
+                printf("{%llu, %llu, %llu}", c->c[0], c->c[1], c->c[2]);
                 break;
         case 2:
-                printf("{%d, %d}", c->c[0], c->c[1]);
+                printf("{%llu, %llu}", c->c[0], c->c[1]);
                 break;
         case 1:
-                printf("{%d}", c->c[0]);
+                printf("{%llu}", c->c[0]);
         }
 }
 
@@ -136,7 +128,7 @@ static char * coord_sprint(const struct coord *c, int num_dims)
         asprintf(&str, "{%d", c->c[0]);
         for(i = 1; i < num_dims; i++){
                 char *tmp;
-                asprintf(&tmp, ", %d", c->c[i]);
+                asprintf(&tmp, ", %llu", c->c[i]);
                 str = str_append(str, tmp);
         }
         str = str_append_const(str, "}");
@@ -155,15 +147,15 @@ static void bbox_print(struct bbox *bb)
 
 static char * bbox_sprint(const struct bbox *bb)
 {
-	char *str;
+        char *str;
 
-	asprintf(&str, "{lb = ");
+        asprintf(&str, "{lb = ");
         str = str_append(str, coord_sprint(&bb->lb, bb->num_dims));
         str = str_append_const(str, ", ub = ");
         str = str_append(str, coord_sprint(&bb->ub, bb->num_dims));
         str = str_append_const(str, "}\n");
 
-	return str;
+        return str;
 }
 
 #endif /* __BBOX_H_ */

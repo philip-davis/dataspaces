@@ -216,80 +216,59 @@ void common_dspaces_unlock_on_write(const char *lock_name, void *comm)
 		ERROR_TRACE_AND_EXIT();
 }
 
-int check_bb(int xl, int yl, int zl,
-        int xu, int yu, int zu)
-{
-/*
-	if(xl < dcg->ss_domain.lb.c[0]||yl < dcg->ss_domain.lb.c[1]||
-		zl < dcg->ss_domain.lb.c[2] || xu > dcg->ss_domain.ub.c[0]||
-		yu > dcg->ss_domain.ub.c[1] || zu > dcg->ss_domain.ub.c[2])
-    {
-		return 0;
-    }
-	else
-*/
-    return 1;
-}
-
-
-
 int common_dspaces_get(const char *var_name,
 	unsigned int ver, int size,
 	int ndim,
-	int *lb, //int xl, int yl, int zl,
-	int *ub, //int xu, int yu, int zu,
+	uint64_t *lb,
+	uint64_t *ub,
 	void *data)
 {
         struct obj_descriptor odsc = {
                 .version = ver, .owner = -1, 
                 .st = st,
                 .size = size,
-                .bb = {.num_dims = num_dims, //ndim, 
-                      // .lb.c = {xl, yl, zl}, 
-                      // .ub.c = {xu, yu, zu}
+                .bb = {.num_dims = num_dims, 
 		}
-	};
-	memset(odsc.bb.lb.c, 0, sizeof(int)*num_dims);
-	memset(odsc.bb.ub.c, 0, sizeof(int)*num_dims);
+        };
+        memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*num_dims);
+        memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*num_dims);
 
-        //memcpy(odsc.bb.lb.c, lb, sizeof(int)*odsc.bb.num_dims);
-        //memcpy(odsc.bb.ub.c, ub, sizeof(int)*odsc.bb.num_dims);
-        memcpy(odsc.bb.lb.c, lb, sizeof(int)*ndim);
-        memcpy(odsc.bb.ub.c, ub, sizeof(int)*ndim);
+        memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
+        memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
 
         struct obj_data *od;
         int err = -ENOMEM;
 
-	if (!dcg) {
-		uloga("'%s()': library was not properly initialized!\n",
-			 __func__);
-		return -EINVAL;
-	}
+        if (!dcg) {
+            uloga("'%s()': library was not properly initialized!\n",
+                 __func__);
+            return -EINVAL;
+        }
 
-	/*if (!check_bb(xl, yl, zl, xu, yu, zu)){
+        /*if (!check_bb(xl, yl, zl, xu, yu, zu)){
 		uloga("'%s()': bounding box is out of range!\n",
                  __func__);
         return -ENOMEM;
     	}*/
 
-    //uloga("%s(): dart_id %d ver %d size %d ndims %d var %s bbox {(%d,%d,%d), (%d,%d,%d)}\n",
-    //    __func__, dcghlp_get_id(dcg), ver, size, num_dims, var_name, xl, yl, zl, xu, yu, zu);
+        //uloga("%s(): dart_id %d ver %d size %d ndims %d var %s bbox {(%d,%d,%d), (%d,%d,%d)}\n",
+        //    __func__, dcghlp_get_id(dcg), ver, size, num_dims, var_name, xl, yl, zl, xu, yu, zu);
 
-	strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
-	odsc.name[sizeof(odsc.name)-1] = '\0';
+        strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
+        odsc.name[sizeof(odsc.name)-1] = '\0';
 
         od = obj_data_alloc_no_data(&odsc, data);
         if (!od) {
-		uloga("'%s()': failed, can not allocate data object.\n", 
-			__func__);
-                return -ENOMEM;
-	}
+            uloga("'%s()': failed, can not allocate data object.\n", 
+                __func__);
+                    return -ENOMEM;
+        }
 
         err = dcg_obj_get(od);
-	obj_data_free(od);
+        obj_data_free(od);
         if (err < 0 && err != -EAGAIN) 
-		uloga("'%s()': failed with %d, can not get data object.\n",
-			__func__, err);
+            uloga("'%s()': failed with %d, can not get data object.\n",
+                __func__, err);
 
         return err;
 }
@@ -301,57 +280,53 @@ int common_dspaces_get_versions(int **p_versions)
 
 int common_dspaces_put(const char *var_name, 
         unsigned int ver, int size,
-	int ndim,
-        int *lb, //int xl, int yl, int zl,
-        int *ub, //int xu, int yu, int zu, 
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
         void *data)
 {
         struct obj_descriptor odsc = {
                 .version = ver, .owner = -1, 
                 .st = st,
                 .size = size,
-                .bb = {.num_dims = num_dims, //ndim
-                       //.lb.c = {xl, yl, zl}, 
-                       //.ub.c = {xu, yu, zu}
+                .bb = {.num_dims = num_dims,
 		}
-	};
+        };
 
-	memset(odsc.bb.lb.c, 0, sizeof(int)*num_dims);
-	memset(odsc.bb.ub.c, 0, sizeof(int)*num_dims);
+        memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*num_dims);
+        memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*num_dims);
 
-        //memcpy(odsc.bb.lb.c, lb, sizeof(int)*odsc.bb.num_dims);
-        //memcpy(odsc.bb.ub.c, ub, sizeof(int)*odsc.bb.num_dims);
-        memcpy(odsc.bb.lb.c, lb, sizeof(int)*ndim);
-        memcpy(odsc.bb.ub.c, ub, sizeof(int)*ndim);
+        memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
+        memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
 
         struct obj_data *od;
         int err = -ENOMEM;
 
-	if (!dcg) {
-		uloga("'%s()': library was not properly initialized!\n",
-			 __func__);
-		return -EINVAL;
-	}
+        if (!dcg) {
+            uloga("'%s()': library was not properly initialized!\n",
+                 __func__);
+            return -EINVAL;
+        }
 
 
-    /*if (!check_bb(xl, yl, zl, xu, yu, zu)){
+        /*if (!check_bb(xl, yl, zl, xu, yu, zu)){
         uloga("'%s()': bounding box is out of range!\n",
                  __func__);
         return -ENOMEM;
     	}*/
 
-    //uloga("%s(): dart_id %d ver %d size %d ndims %d var %s bbox {(%d,%d,%d), (%d,%d,%d)}\n",
-    //    __func__, dcghlp_get_id(dcg), ver, size, num_dims, var_name, xl, yl, zl, xu, yu, zu);
+        //uloga("%s(): dart_id %d ver %d size %d ndims %d var %s bbox {(%d,%d,%d), (%d,%d,%d)}\n",
+        //    __func__, dcghlp_get_id(dcg), ver, size, num_dims, var_name, xl, yl, zl, xu, yu, zu);
 
-	strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
-	odsc.name[sizeof(odsc.name)-1] = '\0';
+        strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
+        odsc.name[sizeof(odsc.name)-1] = '\0';
 
         od = obj_data_alloc_with_data(&odsc, data);
         if (!od) {
-		uloga("'%s()': failed, can not allocate data object.\n", 
-			__func__);
+            uloga("'%s()': failed, can not allocate data object.\n", 
+                __func__);
                 return -ENOMEM;
-	}
+        }
 
         err = dcg_obj_put(od);
         if (err < 0) {
@@ -368,9 +343,9 @@ int common_dspaces_put(const char *var_name,
 
 int common_dspaces_select(char *var_name, unsigned int vers,
 	int ndim,
-        int *lb, //int xl, int yl, int zl,
-        int *ub, //int xu, int yu, int zu, 
-        void *data)
+    uint64_t *lb, //int xl, int yl, int zl,
+    uint64_t *ub, //int xu, int yu, int zu, 
+    void *data)
 {
         // TODO: 'size' is hardcoded to 8 !!!
         struct obj_descriptor odsc = {
@@ -382,8 +357,8 @@ int common_dspaces_select(char *var_name, unsigned int vers,
                        //.ub.c = {xu, yu, zu}
                 },
         };
-        memcpy(odsc.bb.lb.c, lb, sizeof(int)*odsc.bb.num_dims);
-        memcpy(odsc.bb.ub.c, ub, sizeof(int)*odsc.bb.num_dims);
+        memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*odsc.bb.num_dims);
+        memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*odsc.bb.num_dims);
 
         struct obj_data *od;
         int err = -ENOMEM;
@@ -416,9 +391,9 @@ int common_dspaces_select(char *var_name, unsigned int vers,
 
 int common_dspaces_cq_register(char *var_name,
 	int ndim,
-        int *lb, //int xl, int yl, int zl,
-        int *ub, //int xu, int yu, int zu, 
-        void *data)
+    uint64_t *lb, //int xl, int yl, int zl,
+    uint64_t *ub, //int xu, int yu, int zu, 
+    void *data)
 {
         // TODO: 'size' is hardcoded to 8 !!!
         struct obj_descriptor odsc = {
@@ -430,8 +405,8 @@ int common_dspaces_cq_register(char *var_name,
                        //.ub.c = {xu, yu, zu}
                 },
         };
-        memcpy(odsc.bb.lb.c, lb, sizeof(int)*odsc.bb.num_dims);
-        memcpy(odsc.bb.ub.c, ub, sizeof(int)*odsc.bb.num_dims);
+        memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*odsc.bb.num_dims);
+        memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*odsc.bb.num_dims);
 
         struct obj_data *od; // , *odt;
         int err = -ENOMEM;
@@ -593,8 +568,8 @@ void common_dimes_set_storage_type(int fst)
 int common_dimes_get(const char *var_name,
         unsigned int ver, int size,
         int ndim,
-        int *lb, //int xl, int yl, int zl,
-        int *ub, //int xu, int yu, int zu, 
+        uint64_t *lb, //int xl, int yl, int zl,
+        uint64_t *ub, //int xu, int yu, int zu, 
         void *data)
 {
     return dimes_client_get(var_name, ver, size,
@@ -604,8 +579,8 @@ int common_dimes_get(const char *var_name,
 int common_dimes_put(const char *var_name,
         unsigned int ver, int size,
         int ndim,
-        int *lb, //int xl, int yl, int zl,
-        int *ub, //int xu, int yu, int zu, 
+        uint64_t *lb, //int xl, int yl, int zl,
+        uint64_t *ub, //int xu, int yu, int zu, 
         void *data)
 {
     return dimes_client_put(var_name, ver, size,

@@ -180,10 +180,8 @@ int bbox_equals(const struct bbox *bb0, const struct bbox *bb1)
     return 0;
 }
 
-//unsigned long bbox_volume(struct bbox *bb)
 __u64 bbox_volume(struct bbox *bb)
 {
-    //unsigned long n = 1;
     __u64 n = 1;
     int ndims = bb->num_dims;
     int i;
@@ -194,7 +192,6 @@ __u64 bbox_volume(struct bbox *bb)
     return n;
 }
 
-//static int compute_bits(int n)
 static int compute_bits(__u64 n)
 {
         int nr_bits = 0;
@@ -217,7 +214,6 @@ static void bbox_flat(struct bbox *bb, struct intv *itv, int bpd)
     int dims = bb->num_dims;
     bitmask_t* sfc_coord;
     int i, j, k;
-    //int index;
     __u64 index;
 
     //sfc_coord = malloc(sizeof(bitmask_t)*dims);
@@ -264,9 +260,9 @@ static int intv_compar(const void *a, const void *b)
         else    return 0;
 }
 
-static int intv_compact(struct intv *i_tab, int num_itv)
+static __u64 intv_compact(struct intv *i_tab, __u64 num_itv)
 {
-        int i, j;
+        __u64 i, j;
 
         for (i = 0, j = 1; j < num_itv; j++) {
                 if ((i_tab[i].ub + 1) == i_tab[j].lb)
@@ -277,7 +273,9 @@ static int intv_compact(struct intv *i_tab, int num_itv)
                 }
         }
 
-	printf("in intv_compact, num_itv=%d, i=%d\n", num_itv, i);
+#ifdef DEBUG
+        printf("in intv_compact, num_itv=%llu, i=%llu\n", num_itv, i);
+#endif
         return (i+1);
 }
 
@@ -285,7 +283,6 @@ static int intv_compact(struct intv *i_tab, int num_itv)
   Find the equivalence in 1d index space using a SFC for a bounding
   box bb.
 */
-//void bbox_to_intv(const struct bbox *bb, int dim_virt, int bpd, 
 void bbox_to_intv(const struct bbox *bb, __u64 dim_virt, int bpd, 
                   struct intv **intv, int *num_intv)
 {
@@ -298,8 +295,6 @@ void bbox_to_intv(const struct bbox *bb, __u64 dim_virt, int bpd,
     __u64 max;
     int i, n;
 
-    //n = dim_virt; //n is the next power of 2 that includes the user's bbox
-    //bpd = compute_bits(n); //TODO
     max = dim_virt; //n is the next power of 2 that includes the user's bbox
     bpd = compute_bits(max); //TODO
 
@@ -307,10 +302,11 @@ void bbox_to_intv(const struct bbox *bb, __u64 dim_virt, int bpd,
     memset(bb_virt, 0, sizeof(struct bbox));
     bb_virt->num_dims = bb->num_dims;
 
+#ifdef DEBUG
     printf("bbox_to_intv ndims=%d\n", bb->num_dims);
+#endif
 
     for(i = 0; i < bb->num_dims; i++){
-        //bb_virt->ub.c[i] = n - 1;
         bb_virt->ub.c[i] = max - 1;
     }
 
@@ -374,7 +370,6 @@ void bbox_to_intv(const struct bbox *bb, __u64 dim_virt, int bpd,
 /*
   New test ...
 */
-//void bbox_to_intv2(const struct bbox *bb, int dim_virt, int bpd, 
 void bbox_to_intv2(const struct bbox *bb, __u64 dim_virt, int bpd, 
                   struct intv **intv, int *num_intv)
 {
@@ -383,7 +378,6 @@ void bbox_to_intv2(const struct bbox *bb, __u64 dim_virt, int bpd,
     struct intv *i_tab;
     __u64 n, i;
     int i_num, i_size, i_resize = 0;
-    //int n, i;
 
 //printf("dim_virt=%llu,bpd=%d,lb[%d,%d,%d,%d],ub[%d,%d,%d,%d]\n", dim_virt,bpd,bb->lb.c[0],bb->lb.c[1],bb->lb.c[2],bb->lb.c[3],
 //					bb->ub.c[0],bb->ub.c[1],bb->ub.c[2],bb->ub.c[3]);
@@ -451,15 +445,17 @@ void bbox_to_intv2(const struct bbox *bb, __u64 dim_virt, int bpd,
 
                 bb_head = (bb_head + 1) % bb_size;
     }
+#ifdef DEBUG
 	printf("============bb_size = %d, total_size=%d===========\n", bb_size, bb_size*sizeof(*bb_tab));
-        free(bb_tab);
-        // printf("I had to resize the interval array %d times.\n", i_resize);
+#endif
+    free(bb_tab);
+    // printf("I had to resize the interval array %d times.\n", i_resize);
 
 
     qsort(i_tab, i_num, sizeof(*i_tab), &intv_compar);
     n = intv_compact(i_tab, i_num);
-   //printf("after compact, n = %llu, i_tab[300]=[%llu, %llu]", n, i_tab[300].lb, i_tab[300].ub);
-        // printf("Compact size is: %d.\n", n);
+    //printf("after compact, n = %llu, i_tab[300]=[%llu, %llu]", n, i_tab[300].lb, i_tab[300].ub);
+    // printf("Compact size is: %d.\n", n);
 
     /** Reduce the index array size to the used elements only. **/
     i_tab = realloc(i_tab, sizeof(*i_tab) * n);
@@ -501,7 +497,6 @@ int intv_do_intersect(struct intv *i0, struct intv *i1)
         else    return 0;
 }
 
-//unsigned long intv_size(struct intv *intv)
 __u64 intv_size(struct intv *intv)
 {
         return intv->ub - intv->lb + 1;

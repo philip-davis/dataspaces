@@ -109,10 +109,10 @@ struct dht_entry {
            entry.
         int                     size_objs, num_objs;
         struct obj_descriptor   *od_tab;
-	*/
+        */
 
-	int			odsc_size, odsc_num;
-	struct list_head	odsc_hash[1];
+        int			odsc_size, odsc_num;
+        struct list_head	odsc_hash[1];
 };
 
 struct dht {
@@ -126,7 +126,7 @@ struct dht {
   Shared space structure.
 */
 struct sspace {
-        int                     max_dim;
+        __u64                   max_dim;
         unsigned int            bpd;
 
         struct dht              *dht;
@@ -229,9 +229,6 @@ static inline void obj_data_free(struct obj_data *od)
 */
 
 void obj_data_free_with_data(struct obj_data *);
-// size_t obj_data_size(struct obj_data *);
-//size_t obj_data_size(struct obj_descriptor *);
-//size_t obj_data_sizev(struct obj_descriptor *);
 __u64 obj_data_size(struct obj_descriptor *);
 __u64 obj_data_sizev(struct obj_descriptor *);
 

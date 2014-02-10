@@ -387,7 +387,8 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl, size_t siz
         if (options.enable_pre_allocated_rdma_buffer) {
             dimes_buffer_alloc(size, &buf);
             if (!buf) {
-                uloga("%s(): dimes_buffer_malloc() failed\n", __func__);
+                uloga("%s(): dimes_buffer_alloc() failed size %u bytes\n",
+                      __func__, size);
                 return -1;
             }
 
@@ -1030,8 +1031,8 @@ static int dimes_locate_data(struct query_tran_entry_d *qte)
 }
 
 struct matrix_view_d {
-	int lb[BBOX_MAX_NDIM]; //int lb[3];
-	int ub[BBOX_MAX_NDIM]; //int ub[3];
+	__u64 lb[BBOX_MAX_NDIM]; //int lb[3];
+	__u64 ub[BBOX_MAX_NDIM]; //int ub[3];
 };
 
 struct matrix_d {
@@ -1932,9 +1933,9 @@ void dimes_client_set_storage_type(int fst)
 
 int dimes_client_get(const char *var_name,
         unsigned int ver, int size,
-	int ndim,
-        int *lb, //int xl, int yl, int zl,
-        int *ub, //int xu, int yu, int zu,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
         void *data)
 {
 	struct obj_descriptor odsc = {
@@ -1942,17 +1943,13 @@ int dimes_client_get(const char *var_name,
 			.st = st,
 			.size = size,
 			.bb = {.num_dims = num_dims,
-			//	   .lb.c = {xl, yl, zl},
-			//	   .ub.c = {xu, yu, zu}
 		}
 	};
-	memset(odsc.bb.lb.c, 0, sizeof(int)*num_dims);
-        memset(odsc.bb.ub.c, 0, sizeof(int)*num_dims);
+	memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*num_dims);
+    memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*num_dims);
 
-        //memcpy(odsc.bb.lb.c, lb, sizeof(int)*odsc.bb.num_dims);
-        //memcpy(odsc.bb.ub.c, ub, sizeof(int)*odsc.bb.num_dims);
-        memcpy(odsc.bb.lb.c, lb, sizeof(int)*ndim);
-        memcpy(odsc.bb.ub.c, ub, sizeof(int)*ndim);	
+    memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
+    memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);	
 
 	struct obj_data *od;
 	int err = -ENOMEM;
@@ -1988,9 +1985,9 @@ err_out:
 
 int dimes_client_put(const char *var_name,
         unsigned int ver, int size,
-	int ndim,
-        int *lb, //int xl, int yl, int zl,
-        int *ub, //int xu, int yu, int zu,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
         void *data)
 {
     // TODO: assign owner id is important.
@@ -1999,17 +1996,13 @@ int dimes_client_put(const char *var_name,
 			.st = st,
 			.size = size,
 			.bb = {.num_dims = num_dims,
-			//	   .lb.c = {xl, yl, zl},
-			//	   .ub.c = {xu, yu, zu}
 			}
 	};
-	memset(odsc.bb.lb.c, 0, sizeof(int)*num_dims);
-        memset(odsc.bb.ub.c, 0, sizeof(int)*num_dims);
+	memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*num_dims);
+    memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*num_dims);
 
-        //memcpy(odsc.bb.lb.c, lb, sizeof(int)*odsc.bb.num_dims);
-        //memcpy(odsc.bb.ub.c, ub, sizeof(int)*odsc.bb.num_dims);
-        memcpy(odsc.bb.lb.c, lb, sizeof(int)*ndim);
-        memcpy(odsc.bb.ub.c, ub, sizeof(int)*ndim);
+    memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
+    memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
 
 	int err = -ENOMEM;
 
@@ -2035,7 +2028,8 @@ int dimes_client_put(const char *var_name,
     err = dimes_memory_alloc(&mem_obj->rdma_handle, data_size,
                              dimes_memory_rdma);
     if (err < 0) {
-        uloga("%s(): dimes_memory_alloc() failed\n", __func__);
+        uloga("%s(): dimes_memory_alloc() failed size %u bytes\n",
+            __func__, data_size);
         free(mem_obj);
         goto err_out;
     }
