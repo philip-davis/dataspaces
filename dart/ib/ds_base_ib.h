@@ -80,7 +80,7 @@ static inline struct node_id *ds_get_peer(struct dart_server *ds, int n)
 }				// //
 
 
-static inline struct node_id *node_find(struct dart_server *ds, int nodeid)
+static inline struct node_id *ds_node_find(struct dart_server *ds, int nodeid)
 {
          struct node_id *temp_peer;
          list_for_each_entry(temp_peer, &ds->peer_list, struct node_id, peer_entry) {
