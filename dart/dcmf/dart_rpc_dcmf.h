@@ -37,6 +37,7 @@ extern "C" {
 #endif
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -53,8 +54,7 @@ extern "C" {
 typedef unsigned char   __u8;
 typedef unsigned int    __u32;
 typedef int             __s32;
-//typedef unsigned long   __u64;
-typedef unsigned long long  __u64;
+typedef uint64_t __u64;
 
 struct msg_buf;
 struct rpc_server;
@@ -72,7 +72,7 @@ typedef int (*rpc_service)(struct rpc_server*, struct rpc_cmd*);
 typedef int (*completion_callback)(struct rpc_server *, struct msg_buf *);
 
 struct coord2{
-        int c[10];       //TODO-Q
+    __u64 c[3];       //TODO-Q
 };
 
 struct ptlid_map {
@@ -104,7 +104,6 @@ struct lockhdr {
 /* Header for space info. */
 struct hdr_ss_info {
 	int			num_dims;
-	//int			val_dims[3];
 	struct coord2		dims;
 	int			num_space_srv;		
 } __attribute__((__packed__));

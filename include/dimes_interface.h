@@ -35,6 +35,8 @@
 extern "C" {
 #endif
 
+#include <stdint.h>
+
 /** @file dimes_interface.h
  *  @brief DIMES data coupling APIs for performing RDMA-based memory-to-memory
  *  redistribution of global array between tightly coupled applications.
@@ -95,9 +97,8 @@ void dimes_set_storage_type (int fst);
  */
 int dimes_put (const char *var_name,
         unsigned int ver, int size,
-    //int ndim,
-        int xl, int yl, int zl,//int *lb,
-        int xu, int yu, int zu,//int *ub,
+        uint64_t xl, uint64_t yl, uint64_t zl,
+        uint64_t xu, uint64_t yu, uint64_t zu,
         void *data);
 
 /**
@@ -132,9 +133,8 @@ int dimes_put (const char *var_name,
  */
 int dimes_get (const char *var_name,
         unsigned int ver, int size,
-    //int ndim,
-        int xl, int yl, int zl,//int *lb,
-        int xu, int yu, int zu,//int *ub,
+        uint64_t xl, uint64_t yl, uint64_t zl,
+        uint64_t xu, uint64_t yu, uint64_t zu,
         void *data);
 
 /**

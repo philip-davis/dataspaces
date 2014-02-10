@@ -45,15 +45,14 @@
   matrix.
 */
 struct matrix_view {
-        int                     lb[BBOX_MAX_NDIM];	//TODO-Q
-        int                     ub[BBOX_MAX_NDIM];	
+        __u64   lb[BBOX_MAX_NDIM];	//TODO-Q
+        __u64   ub[BBOX_MAX_NDIM];	
 };
 
 /* Generic matrix representation. */
 struct matrix {
-        //int                     dimx, dimy, dimz;
-        int			dist[BBOX_MAX_NDIM];	//TODO-Q
-        int 			num_dims;
+        __u64   dist[BBOX_MAX_NDIM];	//TODO-Q
+        int 			        num_dims;
         size_t                  size_elem;
         enum storage_type       mat_storage;
         struct matrix_view      mat_view;
@@ -247,10 +246,10 @@ static void matrix_init(struct matrix *mat, enum storage_type st,
                         struct bbox *bb_glb, struct bbox *bb_loc, 
                         void *pdata, size_t se)
 {
-        int i;
-        int ndims = bb_glb->num_dims;
+    int i;
+    int ndims = bb_glb->num_dims;
 	
-        memset(mat, 0, sizeof(struct matrix));
+    memset(mat, 0, sizeof(struct matrix));
 
     for(i = 0; i < ndims; i++){
         mat->dist[i] = bbox_dist(bb_glb, i);
@@ -263,89 +262,6 @@ static void matrix_init(struct matrix *mat, enum storage_type st,
     mat->pdata = pdata;
     mat->size_elem = se;
 }
-
-/*
-static void matrix_copy(struct matrix *a, struct matrix *b)
-{
-
-        typedef char matrix_elem_generic_t[a->size_elem];
-
-        int ai, aj, ak, bi, bj, bk;
-        int n;
-
-        if (a->mat_storage == column_major && b->mat_storage == column_major) {
-
-                matrix_elem_generic_t (*A)[a->dimz][a->dimx][a->dimy] = a->pdata;
-                matrix_elem_generic_t (*B)[b->dimz][b->dimx][b->dimy] = b->pdata;
-
-                // Column major data representation (Fortran style) 
-                n = a->mat_view.ub[bb_y] - a->mat_view.lb[bb_y] + 1;
-                ak = a->mat_view.lb[bb_y];
-                bk = b->mat_view.lb[bb_y];
-                for (ai = a->mat_view.lb[bb_z], bi = b->mat_view.lb[bb_z]; 
-                     ai <= a->mat_view.ub[bb_z]; ai++, bi++) {
-                        for (aj = a->mat_view.lb[bb_x], bj = b->mat_view.lb[bb_x]; 
-                             aj <= a->mat_view.ub[bb_x]; aj++, bj++)
-                                memcpy(&(*A)[ai][aj][ak], 
-                                       &(*B)[bi][bj][bk],
-                                       a->size_elem * n);
-                }
-        }
-        else if (a->mat_storage == column_major && b->mat_storage == row_major) {
-
-                matrix_elem_generic_t (*A)[a->dimz][a->dimx][a->dimy] = a->pdata;
-                matrix_elem_generic_t (*B)[b->dimz][b->dimy][b->dimx] = b->pdata;
-
-                for (ai = a->mat_view.lb[bb_z], bi = b->mat_view.lb[bb_z];
-                     ai <= a->mat_view.ub[bb_z]; ai++, bi++) {
-                        for (aj = a->mat_view.lb[bb_x], bj = b->mat_view.lb[bb_x];
-                             aj <= a->mat_view.ub[bb_x]; aj++, bj++) {
-                                for (ak = a->mat_view.lb[bb_y], bk = b->mat_view.lb[bb_y];
-                                     ak <= a->mat_view.ub[bb_y]; ak++, bk++) 
-                                        memcpy(&(*A)[ai][aj][ak], 
-                                               &(*B)[bi][bk][bj],
-                                               a->size_elem);
-                                // (*A)[ai][aj][ak] = (*B)[bi][bk][bj];
-                        }
-                }
-        }
-        else if (a->mat_storage == row_major && b->mat_storage == column_major) {
-
-                matrix_elem_generic_t (*A)[a->dimz][a->dimy][a->dimx] = a->pdata;
-                matrix_elem_generic_t (*B)[b->dimz][b->dimx][b->dimy] = b->pdata;
-
-                for (ai = a->mat_view.lb[bb_z], bi = b->mat_view.lb[bb_z];
-                     ai <= a->mat_view.ub[bb_z]; ai++, bi++) {
-                        for (aj = a->mat_view.lb[bb_y], bj = b->mat_view.lb[bb_y];
-                             aj <= a->mat_view.ub[bb_y]; aj++, bj++) {
-                                for (ak = a->mat_view.lb[bb_x], bk = b->mat_view.lb[bb_x];
-                                     ak <= a->mat_view.ub[bb_x]; ak++, bk++)
-                                        memcpy(&(*A)[ai][aj][ak], 
-                                               &(*B)[bi][bk][bj],
-                                               a->size_elem);
-                                // (*A)[ai][aj][ak] = (*B)[bi][bk][bj];
-                        }
-                }
-        }
-        else if (a->mat_storage == row_major && b->mat_storage == row_major) {
-
-                matrix_elem_generic_t (*A)[a->dimz][a->dimy][a->dimx] = a->pdata;
-                matrix_elem_generic_t (*B)[b->dimz][b->dimy][b->dimx] = b->pdata;
-
-                n = a->mat_view.ub[bb_x] - a->mat_view.lb[bb_x] + 1;
-                ak = a->mat_view.lb[bb_x];
-                bk = b->mat_view.lb[bb_x];
-                for (ai = a->mat_view.lb[bb_z], bi = b->mat_view.lb[bb_z];
-                     ai <= a->mat_view.ub[bb_z]; ai++, bi++) {
-                        for (aj = a->mat_view.lb[bb_y], bj = b->mat_view.lb[bb_y];
-                             aj <= a->mat_view.ub[bb_y]; aj++, bj++)
-                                memcpy(&(*A)[ai][aj][ak],
-                                       &(*B)[bi][bj][bk],
-                                       a->size_elem * n);
-                }
-        }
-}
-*/
 
 static void matrix_copy(struct matrix *a, struct matrix *b)
 {
@@ -611,7 +527,7 @@ static struct ss_storage *ls_alloc(int max_versions)
         return ls;
 }
 
-static int ssd_get_max_dim(struct sspace *ss)
+static __u64 ssd_get_max_dim(struct sspace *ss)
 {
         return ss->max_dim;
 }
@@ -627,11 +543,9 @@ static int ssd_get_bpd(struct sspace *ss)
 */
 static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
 {
-        //const unsigned long sn = bbox_volume(&dht->bb_glb_domain) / dht->num_entries;
         const __u64 sn = bbox_volume(&dht->bb_glb_domain) / dht->num_entries;
         struct intv *i_tab, intv;
         struct dht_entry *de;
-        //unsigned long len;
         __u64 len;
         int num_intv, i, j;
         int err = -ENOMEM;
@@ -642,7 +556,7 @@ static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
         /*
         printf("Global domain decomposes into: ");
         for (i = 0; i < num_intv; i++)
-                printf("{%u,%u} ", i_tab[i].lb, i_tab[i].ub);
+                printf("{%llu,%llu} ", i_tab[i].lb, i_tab[i].ub);
         printf("\n");
         */
 
@@ -667,7 +581,7 @@ static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
                         }
                         len -= intv_size(&intv);
                         de->i_tab[de->num_intv++] = intv;
-                        // printf("{%u,%u} ", intv.lb, intv.ub);
+                        // printf("{%llu,%llu} ", intv.lb, intv.ub);
                 }
 
                 de->i_virt.lb = de->i_tab[0].lb;
@@ -698,16 +612,13 @@ static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
 struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions)
 {
         struct sspace *ssd;
-	//        size_t size;
-        //int max_dim;
         __u64 max_dim;
-	int err = -ENOMEM;
+        int err = -ENOMEM;
 
-        // size = sizeof(*ssd); //  + sizeof(struct dht_entry) * num_nodes;
-	ssd = malloc(sizeof(*ssd));
+        ssd = malloc(sizeof(*ssd));
         if (!ssd)
                 goto err_out;
-	memset(ssd, 0, sizeof(*ssd));
+        memset(ssd, 0, sizeof(*ssd));
 
         ssd->storage = ls_alloc(max_versions);
         if (!ssd->storage) {
@@ -715,23 +626,19 @@ struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions
                 goto err_out;
         }
 
-	ssd->dht = dht_alloc(ssd, bb_domain, num_nodes, max_versions);
-	if (!ssd->dht) {
-		// TODO: free storage 
-		free(ssd->storage);
-		free(ssd);
-		goto err_out;
-	}
+        ssd->dht = dht_alloc(ssd, bb_domain, num_nodes, max_versions);
+        if (!ssd->dht) {
+            // TODO: free storage 
+            free(ssd->storage);
+            free(ssd);
+            goto err_out;
+        }
 
-        //max_dim = max(bb_domain->ub.c[0], bb_domain->ub.c[1]);
-        //if (bb_domain->num_dims > 2)
-        //        max_dim = max(max_dim, bb_domain->ub.c[2]);
         int i;
         max_dim = bb_domain->ub.c[0];
         for(i = 1; i < bb_domain->num_dims; i++){
                 max_dim = max(bb_domain->ub.c[i], max_dim);
         }
-
 
         ssd->max_dim = next_pow_2(max_dim);
         ssd->bpd = compute_bits(ssd->max_dim);
@@ -740,7 +647,7 @@ struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions
         if (err < 0) {
                 //TODO: do I need a ls_free() routine to clean up the
                 //      objects in the space ?
-		dht_free(ssd->dht);
+                dht_free(ssd->dht);
                 free(ssd->storage);
                 free(ssd);
                 goto err_out;
@@ -1309,14 +1216,11 @@ void obj_data_free(struct obj_data *od)
 	free(od);
 }
 
-// size_t obj_data_size(struct obj_data *od)
-//size_t obj_data_size(struct obj_descriptor *obj_desc)
 __u64 obj_data_size(struct obj_descriptor *obj_desc)
 {
-        return obj_desc->size * bbox_volume(&obj_desc->bb);
+    return obj_desc->size * bbox_volume(&obj_desc->bb);
 }
 
-//size_t obj_data_sizev(struct obj_descriptor *odsc)
 __u64 obj_data_sizev(struct obj_descriptor *odsc)
 {
 	//size_t size = 1; // sizeof(iovec_t);

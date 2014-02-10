@@ -33,6 +33,7 @@
 #define __DART_RPC_PORTALS_H_
 
 #include <stdlib.h>
+#include <stdint.h>
 
 #include "config.h"
 #include "list.h"
@@ -78,7 +79,7 @@
 typedef unsigned char   __u8;
 typedef unsigned int    __u32;
 typedef int             __s32;
-typedef unsigned long   __u64;
+typedef uint64_t __u64;
 
 struct msg_buf;
 struct rpc_server;
@@ -179,8 +180,8 @@ struct rpc_cmd {
         __u64           mbits;
         __u32           id;
 
-        // __u8            pad[90];        // payload of the command
-        __u8            pad[218];
+        // payload of the command
+        __u8            pad[280];
 } __attribute__((__packed__));
 
 /*
