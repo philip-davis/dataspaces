@@ -2343,7 +2343,7 @@ void rpc_print_connection_err(struct rpc_server *rpc_s, struct node_id *peer, st
 		printf("Connection Timewait Exit ");
 	else if(event.event == RDMA_CM_EVENT_CONNECT_REQUEST)
 		printf("Connection Timewait Exit ");
-	printf("peer# %d (%s)  to peer# %d (%s).\n", rpc_s->ptlmap.id, inet_ntoa(rpc_s->ptlmap.address.sin_addr), peer->ptlmap.id, inet_ntoa(peer->ptlmap.address.sin_addr));
+	printf("peer# %d (%s)  to peer# %d (%s:%d)\n", rpc_s->ptlmap.id, inet_ntoa(rpc_s->ptlmap.address.sin_addr), peer->ptlmap.id, inet_ntoa(peer->ptlmap.address.sin_addr));
 	return;
 }
 
