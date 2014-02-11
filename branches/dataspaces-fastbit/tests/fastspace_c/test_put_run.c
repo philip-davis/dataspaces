@@ -160,7 +160,8 @@ static int couple_write_2d(unsigned int ts, int num_vars, enum transport_type ty
 	MPI_Barrier(gcomm_);
 	tm_st = timer_read(&timer_);
     for (i = 0; i < num_vars; i++) {
-        sprintf(var_name, "m2d_%d", i);
+        //sprintf(var_name, "m2d_%d", i);
+        sprintf(var_name, "m2d");
         common_put(var_name, ts, elem_size,
             xl, yl, zl, xu, yu, zu, data_tab[i], type);
         if (type == USE_DSPACES) {
