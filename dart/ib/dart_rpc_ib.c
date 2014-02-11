@@ -105,6 +105,19 @@ static int sys_bar_arrive(struct rpc_server *rpc_s, struct hdr_sys *hs)	//Done
 	return 0;
 }
 
+
+struct node_id *rpc_server_find(struct rpc_server *rpc_s, int nodeid)
+{
+         struct node_id *temp_peer;
+          list_for_each_entry(temp_peer, &rpc_s->peer_list, struct node_id, peer_entry) {
+                if(temp_peer->ptlmap.id == nodeid)
+                         return temp_peer;
+         }
+        return 0;
+}
+
+
+
 static int sys_bar_send(struct rpc_server *rpc_s, int peerid)	//Done
 {
 	//struct node_id *peer = &rpc_s->peer_tab[peerid];
@@ -1178,6 +1191,10 @@ struct rpc_server *rpc_server_init(int option, char *ip, int port, int num_buff,
 
 	//other dart init operation
 	INIT_LIST_HEAD(&rpc_s->rpc_list);
+
+
+        INIT_LIST_HEAD(&rpc_s->peer_list);
+
 
 	//TODO: for server and client, num_rpc_per_buff should be different: S, s+c; C c; NEED CHECK
 	rpc_s->bar_tab = malloc(sizeof(*rpc_s->bar_tab) * num_rpc_per_buff);

@@ -16,7 +16,7 @@ struct dart_client {
 	struct node_id *self;
 
 
-        struct list_head peer_list; //list of peers(servers and clients)
+        //struct list_head peer_list; //list of peers(servers and clients)
 
 	int connected;
 	/* Number of compute peers in the app job. */
@@ -49,7 +49,7 @@ static inline struct node_id *dc_get_peer(struct dart_client *dc, int n)
 		return (dc->peer_tab + dc->num_cp + n);
 }				// //
 
-
+/*
 static inline struct node_id *dc_node_find(struct dart_client *dc, int nodeid)
 {
          struct node_id *temp_peer;
@@ -59,7 +59,7 @@ static inline struct node_id *dc_node_find(struct dart_client *dc, int nodeid)
          }
          return 0;
 }
-
+*/
 
 static inline struct dart_client *dc_ref_from_rpc(struct rpc_server *rpc_s)
 {
