@@ -70,15 +70,19 @@ dnl Check if FASTSPACE is enabled
 AC_ARG_ENABLE(fastbit,
     [AS_HELP_STRING([--enable-fastbit],
         [Include the fastbit mechanism. By default this is not included])])
-AM_CONDITIONAL([FASTSPACE], [test "x$enable_fastbit" == "xyes"])
+AM_CONDITIONAL([FASTBIT], [test "x$enable_fastbit" == "xyes"])
 
 if test "x$enable_fastbit" == "xyes"; then
         if test -z "${HAVE_INFINIBAND_TRUE}"; then
                 DSPACESLIB_CFLAGS+="-DDS_HAVE_FASTBIT"
                 DSPACESLIB_CPPFLAGS+="-DDS_HAVE_FASTBIT"
                 echo "FASTBIT enabled!"
+	elif test -z "${HAVE_UGNI_TRUE}"; then
+                DSPACESLIB_CFLAGS+=" -DDS_HAVE_FASTBIT"
+                DSPACESLIB_CPPFLAGS+=" -DDS_HAVE_FASTBIT"
+                echo "FASTBIT enabled!"
         else
-                echo "FASTBIT only supported on IB"
+                echo "FASTBIT only supported on IB and GNI"
         fi
 fi
 
