@@ -358,7 +358,7 @@ int fb_build_result_set(void *ca, const char *select, const char *from, const ch
 	}
 	else{
 	ibis::array_t<double> *getret;
-        getret = qh->q.getQualifiedDoubles("temp");
+        getret = qh->q.getQualifiedDoubles("name");
 	*size = getret->size()*sizeof(double);
 	std::copy(getret->begin(),getret->end(), (double*)qret);
 	
