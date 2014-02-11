@@ -288,6 +288,9 @@ struct rpc_server {
 	int num_peers;		// total number of peers
 	struct node_id *peer_tab;
 
+        struct list_head peer_list; //list of peers(servers and clients)
+	
+
 	//Fields for barrier implementation.
 	int bar_num;
 	int *bar_tab;
@@ -319,6 +322,10 @@ struct rpc_server {
 	struct ibv_pd *global_pd;
 	struct ibv_context *global_ctx;
 };
+
+struct node_id *rpc_server_find(struct rpc_server *rpc_s, int nodeid);
+
+
 
 struct rdma_mr {
 	struct ibv_mr mr;
