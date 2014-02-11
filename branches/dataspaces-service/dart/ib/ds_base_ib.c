@@ -352,7 +352,7 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct hdr_register *hdr)
 	}
 
 	struct node_id *temp_peer = peer_alloc();
-	list_add(&temp_peer->peer_entry, &ds->peer_list);
+	list_add(&temp_peer->peer_entry, &ds->rpc_s->peer_list);
 
 	/* COMMENTED:
 	   First check if app has registered all its compute nodes already ! 
@@ -422,7 +422,7 @@ static int ds_disseminate(struct dart_server *ds)	//Done
 			goto err_out_free;
 		for(k = 0; k < ds->peer_size; k++){
 	/*	struct node_id *temp_peer;
-          	list_for_each_entry(temp_peer, &ds->peer_list, struct node_id, peer_entry) {
+          	list_for_each_entry(temp_peer, &ds->rpc_s->peer_list, struct node_id, peer_entry) {
 			*pptlmap++ = temp_peer->ptlmap;*/
 			*pptlmap++ = (cpeer++)->ptlmap;
 		}
@@ -482,6 +482,47 @@ static int ds_disseminate(struct dart_server *ds)	//Done
 				goto err_out_free;
 		}
 	}
+/*
+        cpeer = ds->peer_tab;
+
+        list_for_each_entry(app, &ds->app_list, struct app_info, app_entry) {
+                for(i = app->app_peer_tab[0].ptlmap.id; i < app->app_peer_tab[0].ptlmap.id + app->app_num_peers; i++) {
+                        cpeer = ds->peer_tab;
+                        peer = ds_get_peer(ds, i);
+
+                        err = -ENOMEM;
+                        msg = msg_buf_alloc(ds->rpc_s, peer, 1);
+                        if(!msg)
+                                goto err_out;
+                        msg->cb = default_completion_with_data_callback;
+                        msg->size = sizeof(struct ptlid_map) * (ds->size_sp + ds->size_cp);
+                        pptlmap = msg->msg_data = malloc(msg->size);
+                        if(!msg->msg_data)
+                                goto err_out_free;
+                        for(k = 0; k < ds->size_sp + ds->size_cp; k++)
+                                *pptlmap++ = (cpeer++)->ptlmap;
+                        cpeer = ds->peer_tab;
+                        msg->msg_rpc->cmd = sp_announce_cp_all;
+                        msg->msg_rpc->id = ds->self->ptlmap.id;
+                        hreg = (struct hdr_register *) msg->msg_rpc->pad;
+                        hreg->pm_cp = cpeer->ptlmap;
+                        hreg->num_cp = ds->size_cp;
+                        hreg->num_sp = ds->size_sp;
+                        err = rpc_send(ds->rpc_s, peer, msg);
+                        if(err < 0) {
+                                free(msg->msg_data);
+                                goto err_out_free;
+                        }
+                        err = rpc_process_event(ds->rpc_s);
+                        if(err != 0)
+                                goto err_out_free;
+                }
+        }
+
+
+*/
+
+
 	return 0;
       err_out_free:free(msg);
       err_out:printf("'%s()' failed with %d.\n", __func__, err);
@@ -576,9 +617,16 @@ static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 		}
 
 	        struct node_id *temp_peer = peer_alloc();
-	        list_add(&temp_peer->peer_entry, &ds->peer_list);
+	        list_add(&temp_peer->peer_entry, &ds->rpc_s->peer_list);
 	
 		temp_peer->ptlmap = *pm;
+
+
+
+                INIT_LIST_HEAD(&temp_peer->req_list);
+                temp_peer->num_msg_at_peer = rpc_s->max_num_msg;
+                temp_peer->num_msg_ret = 0;
+
 
 
 		peer++;
@@ -690,7 +738,7 @@ static void *ds_master_listen(void *server)
                                         peer->ptlmap = conpara.pm_cp;
                                         peer->ptlmap.id = sp_rank_cnt;
 					struct node_id *temp_peer = peer_alloc();
-					list_add(&temp_peer->peer_entry, &ds->peer_list);
+					list_add(&temp_peer->peer_entry, &ds->rpc_s->peer_list);
 					temp_peer->ptlmap = conpara.pm_cp;
                                         temp_peer->ptlmap.id = sp_rank_cnt;
 
@@ -922,12 +970,12 @@ int ds_boot_master(struct dart_server *ds)	//Done
 		printf("waitting %d\n",ds->connected);
 
          struct node_id *temp_peer;
-         list_for_each_entry(temp_peer, &ds->peer_list, struct node_id, peer_entry) {
+         list_for_each_entry(temp_peer, &ds->rpc_s->peer_list, struct node_id, peer_entry) {
 		printf("peer# %d (%s:%d)\n",temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
          }
 
 	if(ds->connected>4){
-	temp_peer =ds_node_find(ds, 2);
+	temp_peer =rpc_server_find(ds->rpc_s, 2);
 
 	printf("peer# %d (%s:%d)\n",temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
 }
@@ -1056,7 +1104,7 @@ int ds_boot_slave(struct dart_server *ds)	//Done
 
 
         struct node_id *temp_peer = peer_alloc();
-        list_add(&temp_peer->peer_entry, &ds->peer_list);
+        list_add(&temp_peer->peer_entry, &ds->rpc_s->peer_list);
 
         err = rpc_read_config(&temp_peer->ptlmap.address);   ////
         temp_peer->ptlmap.id = 0;
@@ -1103,7 +1151,7 @@ int ds_boot_slave(struct dart_server *ds)	//Done
 
 
 
-         list_for_each_entry(temp_peer, &ds->peer_list, struct node_id, peer_entry) {
+         list_for_each_entry(temp_peer, &ds->rpc_s->peer_list, struct node_id, peer_entry) {
                 printf("peer# %d (%s:%d)\n",temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
          }
 
@@ -1329,6 +1377,16 @@ static int ds_boot(struct dart_server *ds)	//Done
 
 		//added in IB version
 //printf("I am master server.\n");//DEBUG
+//
+		
+	        struct node_id *temp_peer = peer_alloc();
+
+		temp_peer->ptlmap = ds->rpc_s->ptlmap;
+	
+			
+	        list_add(&temp_peer->peer_entry, &ds->rpc_s->peer_list);
+		
+
 		err = ds_boot_master(ds);
 		if(err != 0)
 			goto err_flock;
@@ -1401,7 +1459,7 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref)
 	INIT_LIST_HEAD(&ds->app_list);
 
 
-        INIT_LIST_HEAD(&ds->peer_list);
+ //       INIT_LIST_HEAD(&ds->rpc_s->peer_list);
 
 
 	cp_rank_cnt = num_sp;

@@ -36,7 +36,7 @@ struct dart_server {
 	struct list_head app_list;	/* List of applications */
 
 
-	struct list_head peer_list; //list of peers(servers and clients)
+	//struct list_head peer_list; //list of peers(servers and clients)
 
 
 	int connected;
@@ -79,7 +79,7 @@ static inline struct node_id *ds_get_peer(struct dart_server *ds, int n)
 	return (ds->peer_tab + n);
 }				// //
 
-
+/*
 static inline struct node_id *ds_node_find(struct dart_server *ds, int nodeid)
 {
          struct node_id *temp_peer;
@@ -89,7 +89,7 @@ static inline struct node_id *ds_node_find(struct dart_server *ds, int nodeid)
          }
          return 0;
 }
-
+*/
 
 
 
