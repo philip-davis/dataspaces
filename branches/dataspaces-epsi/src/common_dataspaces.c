@@ -245,15 +245,6 @@ int common_dspaces_get(const char *var_name,
             return -EINVAL;
         }
 
-        /*if (!check_bb(xl, yl, zl, xu, yu, zu)){
-		uloga("'%s()': bounding box is out of range!\n",
-                 __func__);
-        return -ENOMEM;
-    	}*/
-
-        //uloga("%s(): dart_id %d ver %d size %d ndims %d var %s bbox {(%d,%d,%d), (%d,%d,%d)}\n",
-        //    __func__, dcghlp_get_id(dcg), ver, size, num_dims, var_name, xl, yl, zl, xu, yu, zu);
-
         strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
         odsc.name[sizeof(odsc.name)-1] = '\0';
 
@@ -308,15 +299,6 @@ int common_dspaces_put(const char *var_name,
             return -EINVAL;
         }
 
-
-        /*if (!check_bb(xl, yl, zl, xu, yu, zu)){
-        uloga("'%s()': bounding box is out of range!\n",
-                 __func__);
-        return -ENOMEM;
-    	}*/
-
-        //uloga("%s(): dart_id %d ver %d size %d ndims %d var %s bbox {(%d,%d,%d), (%d,%d,%d)}\n",
-        //    __func__, dcghlp_get_id(dcg), ver, size, num_dims, var_name, xl, yl, zl, xu, yu, zu);
 
         strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
         odsc.name[sizeof(odsc.name)-1] = '\0';

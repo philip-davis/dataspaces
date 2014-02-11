@@ -130,7 +130,7 @@ static int couple_read_2d(unsigned int ts, int num_vars, enum transport_type typ
     for (i = 0; i < num_vars; i++) {
         sprintf(var_name, "m2d_%d", i);
         common_get(var_name, ts, elem_size,
-            xl, yl, zl, xu, yu, zu, data_tab[i], type);
+            yl, xl, zl, yu, xu, zu, data_tab[i], type);
     }	
 	tm_end = timer_read(&timer_);
 	common_unlock_on_read("m2d_lock", &gcomm_);
@@ -199,7 +199,7 @@ static int couple_read_3d(unsigned int ts, int num_vars, enum transport_type typ
     for (i = 0; i < num_vars; i++) {
         sprintf(var_name, "m3d_%d", i);
         common_get(var_name, ts, elem_size,
-            xl, yl, zl, xu, yu, zu, data_tab[i], type);
+            zl, yl, xl, zu, yu, xu, data_tab[i], type);
     }	
 	tm_end = timer_read(&timer_);
     common_unlock_on_read("m3d_lock", &gcomm_);
