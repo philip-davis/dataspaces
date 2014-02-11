@@ -111,6 +111,11 @@ int dspaces_get(const char *var_name,
 {
 	uint64_t lb[3] = {xl, yl, zl};
 	uint64_t ub[3] = {xu, yu, zu};	
+#ifdef DEBUG
+    uloga("%s(): rank %d var %s ver %d elem_size %d lb={%llu, %llu, %llu} "
+        "ub={%llu, %llu, %llu}\n", __func__, common_dspaces_rank(), var_name,
+        ver, size, xl, yl, zl, xu, yu, zu);
+#endif
 	return common_dspaces_get(var_name, ver, size, 3, lb, ub, data);
 }
 
@@ -122,6 +127,11 @@ int dspaces_put(const char *var_name,
 {
 	uint64_t lb[3] = {xl, yl, zl};
 	uint64_t ub[3] = {xu, yu, zu};
+#ifdef DEBUG
+    uloga("%s(): rank %d var %s ver %d elem_size %d lb={%llu, %llu, %llu} "
+        "ub={%llu, %llu, %llu}\n", __func__, common_dspaces_rank(), var_name,
+        ver, size, xl, yl, zl, xu, yu, zu);
+#endif    
 	return common_dspaces_put(var_name, ver, size, 3, lb, ub, data);
 }
 

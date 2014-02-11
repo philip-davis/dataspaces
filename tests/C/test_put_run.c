@@ -162,7 +162,7 @@ static int couple_write_2d(unsigned int ts, int num_vars, enum transport_type ty
     for (i = 0; i < num_vars; i++) {
         sprintf(var_name, "m2d_%d", i);
         common_put(var_name, ts, elem_size,
-            xl, yl, zl, xu, yu, zu, data_tab[i], type);
+            yl, xl, zl, yu, xu, zu, data_tab[i], type);
         if (type == USE_DSPACES) {
             common_put_sync(type);
         }
@@ -243,7 +243,7 @@ static int couple_write_3d(unsigned int ts, int num_vars, enum transport_type ty
     for (i = 0; i < num_vars; i++) {
         sprintf(var_name, "m3d_%d", i);
         common_put(var_name, ts, elem_size,
-            xl, yl, zl, xu, yu, zu, data_tab[i], type);
+            zl, yl, xl, zu, yu, xu, data_tab[i], type);
         if (type == USE_DSPACES) {
             common_put_sync(type);
         }

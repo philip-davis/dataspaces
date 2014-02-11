@@ -1856,7 +1856,7 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 		return dimes_c;
 	}
 
-    options.enable_pre_allocated_rdma_buffer = 1;
+    options.enable_pre_allocated_rdma_buffer = 0;
     options.pre_allocated_rdma_buffer_size = DIMES_RDMA_BUFFER_SIZE*1024*1024; // bytes
     options.rdma_buffer_size = DIMES_RDMA_BUFFER_SIZE*1024*1024; // bytes 
     options.rdma_buffer_write_usage = 0;
