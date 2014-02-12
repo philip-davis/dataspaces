@@ -118,7 +118,7 @@ static int sys_bar_send(struct rpc_server *rpc_s, int peerid)	//Done
 
 //printf("inside %s\n", __func__);
 
-//      printf("sys_bar_send %d %d %d\n",rpc_s->ptlmap.id, peer->ptlmap.id, peerid);
+      printf("sys_bar_send %d %d %d\n",rpc_s->ptlmap.id, peer->ptlmap.id, peerid);
 
 	memset(&hs, 0, sizeof(struct hdr_sys));
 	hs.sys_cmd = sys_bar_enter;
@@ -233,14 +233,25 @@ static int sys_process_event(struct rpc_server *rpc_s)
 	int num_ds = rpc_s->cur_num_peer - rpc_s->num_rpc_per_buff;
 
 	j = 0;
-	for(i = rpc_s->num_sp; i < rpc_s->num_sp + rpc_s->app_num_peers; i++) {
-		if(rpc_s->peer_tab[i].ptlmap.id == rpc_s->ptlmap.id) {
+//	for(i = rpc_s->num_sp; i < rpc_s->num_sp + rpc_s->app_num_peers; i++) {
+	for(i = rpc_s->app_minid; i< rpc_s->app_minid + rpc_s->app_num_peers; i++) {
+
+
+		peer = rpc_get_peer(rpc_s,i);
+		if(peer==NULL)
+			continue;
+
+//		if(rpc_s->peer_tab[i].ptlmap.id == rpc_s->ptlmap.id) {
+		if(peer->ptlmap.id == rpc_s->ptlmap.id) {
 			seq = i - num_ds;
 			continue;
 		}
-		peer = rpc_s->peer_tab + i;
+	//	peer = rpc_s->peer_tab + i;
 		if(peer->sys_conn.f_connected == 0)
 			continue;
+
+		printf("poll %d\n",peer->ptlmap.id);
+
 		my_pollfd[j].fd = peer->sys_conn.comp_channel->fd;
 		my_pollfd[j].events = POLLIN;
 		my_pollfd[j].revents = 0;
@@ -259,7 +270,8 @@ static int sys_process_event(struct rpc_server *rpc_s)
 		for(i = 0; i < j; i++) {
 			//Check SYS channel
 			if(my_pollfd[i].revents != 0) {
-				peer = rpc_s->peer_tab + which_peer[i];
+				peer = rpc_get_peer(rpc_s, which_peer[i]);
+//				peer = rpc_s->peer_tab + which_peer[i];
 
 				err = ibv_get_cq_event(peer->sys_conn.comp_channel, &ev_cq, &ev_ctx);
 				if(err == -1 && errno == EAGAIN) {
@@ -353,7 +365,8 @@ static int sys_cleanup(struct rpc_server *rpc_s)
 	int i, err = 0;
 	struct node_id *peer;
 	for(i = 0; i < rpc_s->cur_num_peer - 1; i++) {
-		peer = &rpc_s->peer_tab[i];
+		peer = rpc_get_peer(rpc_s,i);
+//		peer = &rpc_s->peer_tab[i];
 		if(peer->sys_conn.f_connected == 0 || peer->ptlmap.id == rpc_s->ptlmap.id)
 			continue;
 		err = rdma_destroy_id(peer->sys_conn.id);
@@ -377,6 +390,8 @@ static int sys_cleanup(struct rpc_server *rpc_s)
 // this function can only be used after rpc_server is fully initiated
 static struct node_id *rpc_get_peer(struct rpc_server *rpc_s, int peer_id)
 {
+	return rpc_server_find(rpc_s,peer_id);
+/*
 //      printf("I am %d ask for %d %d %d\n",rpc_s->ptlmap.id, peer_id, rpc_s->app_minid, rpc_s->app_num_peers);
 	if(rpc_s->ptlmap.appid == 0 || peer_id >= rpc_s->app_minid + rpc_s->app_num_peers)
 		return rpc_s->peer_tab + peer_id;
@@ -386,6 +401,7 @@ static struct node_id *rpc_get_peer(struct rpc_server *rpc_s, int peer_id)
 		else
 			return (rpc_s->peer_tab + peer_id - rpc_s->app_minid + rpc_s->num_sp);
 	}
+*/
 }
 
 //added in IB version, get remote notification of finished RDMA operation, clean up memory.
@@ -1159,7 +1175,7 @@ struct rpc_server *rpc_server_init(int option, char *ip, int port, int num_buff,
 	}
 
 	rpc_s->ptlmap.address.sin_port = rdma_get_src_port(rpc_s->listen_id);
-//printf("RPC listening on port %d.\n", ntohs(rpc_s->ptlmap.address.sin_port));
+	printf("RPC listening on port %d.\n", ntohs(rpc_s->ptlmap.address.sin_port));
 
 	//TODO: sys part if needed
 
@@ -1297,6 +1313,19 @@ static int rpc_server_finish(struct rpc_server *rpc_s)
 	int i, err;
 
 
+         list_for_each_entry(peer, &rpc_s->peer_list, struct node_id, peer_entry) {
+                if(peer->rpc_conn.f_connected == 1) {
+                        while(peer->num_req) {
+                                err = peer_process_send_list(rpc_s, peer);
+                                if(err < 0) {
+                                        printf("'%s()': encountered an error %d, skipping.\n", __func__, err);
+                                        sleep(10);
+                                }
+                        }
+                }
+	}
+
+/*
 	peer = rpc_s->peer_tab;
 	for(i = 0; i < rpc_s->num_peers; i++, peer++) {
 		if(peer->rpc_conn.f_connected == 1) {
@@ -1309,7 +1338,7 @@ static int rpc_server_finish(struct rpc_server *rpc_s)
 			}
 		}
 	}
-
+*/
 
 	return 0;
 }
@@ -1354,27 +1383,49 @@ int rpc_server_free(struct rpc_server *rpc_s)
 
 	//TODO: add a sys_list for sys msg, so that it will be easy to clean up remaining sys messages.
 	//disconnect all the links, deregister the memory, free all the allocation
-	for(i = 0; i < rpc_s->num_peers; i++) {
-		if(rpc_s->peer_tab[i].ptlmap.id == rpc_s->ptlmap.id)
+//	for(i = 0; i < rpc_s->num_peers; i++) {
+	struct node_id *peer;
+         list_for_each_entry(peer, &rpc_s->peer_list, struct node_id, peer_entry) {
+	//	if(rpc_s->peer_tab[i].ptlmap.id == rpc_s->ptlmap.id)
+		if(peer->ptlmap.id == rpc_s->ptlmap.id)
 			continue;
 
 		if(rpc_s->ptlmap.id == 0 || rpc_s->ptlmap.id == 12) {
 //                      printf("%d %d %d\n",rpc_s->ptlmap.id, rpc_s->peer_tab[i].ptlmap.id,rpc_s->peer_tab[i].rpc_conn.qp_attr.cap.max_send_wr, rpc_s->peer_tab[i].rpc_conn.qp_attr.cap.max_recv_wr, rpc_s->peer_tab[i].sys_conn.qp_attr.cap.max_send_wr, rpc_s->peer_tab[i].sys_conn.qp_attr.cap.max_recv_wr);
 		}
-		if(rpc_s->peer_tab[i].rpc_conn.f_connected == 1) {
-			err = rdma_disconnect(rpc_s->peer_tab[i].rpc_conn.id);
+
+//		if(rpc_s->peer_tab[i].rpc_conn.f_connected == 1) {
+		if(peer->rpc_conn.f_connected == 1) {
+
+//			err = rdma_disconnect(rpc_s->peer_tab[i].rpc_conn.id);
+			err = rdma_disconnect(peer->rpc_conn.id);
+
 			if(err != 0)
-				printf("Peer(%d) RPC rdma_disconnect err (%d). Ignore.\n", rpc_s->peer_tab[i].ptlmap.id, err);
-			rdma_destroy_qp(rpc_s->peer_tab[i].rpc_conn.id);
-			rdma_destroy_id(rpc_s->peer_tab[i].rpc_conn.id);
+				printf("Peer(%d) RPC rdma_disconnect err (%d). Ignore.\n",peer->ptlmap.id, err);
+//				printf("Peer(%d) RPC rdma_disconnect err (%d). Ignore.\n", rpc_s->peer_tab[i].ptlmap.id, err);
+//			rdma_destroy_qp(rpc_s->peer_tab[i].rpc_conn.id);
+//			rdma_destroy_id(rpc_s->peer_tab[i].rpc_conn.id);
+                        rdma_destroy_qp(peer->rpc_conn.id);
+                        rdma_destroy_id(peer->rpc_conn.id);
+
+
 
 		}
-		if(rpc_s->peer_tab[i].sys_conn.f_connected == 1) {
-			err = rdma_disconnect(rpc_s->peer_tab[i].sys_conn.id);
+//		if(rpc_s->peer_tab[i].sys_conn.f_connected == 1) {
+                if(peer->sys_conn.f_connected == 1) {
+
+//			err = rdma_disconnect(rpc_s->peer_tab[i].sys_conn.id);
+                        err = rdma_disconnect(peer->sys_conn.id);
+
 			if(err != 0)
-				printf("Peer(%d) SYS rdma_disconnect err (%d). Ignore.\n", rpc_s->peer_tab[i].ptlmap.id, err);
-			rdma_destroy_qp(rpc_s->peer_tab[i].sys_conn.id);
-			rdma_destroy_id(rpc_s->peer_tab[i].sys_conn.id);
+                                printf("Peer(%d) SYS rdma_disconnect err (%d). Ignore.\n",peer->ptlmap.id, err);
+//				printf("Peer(%d) SYS rdma_disconnect err (%d). Ignore.\n", rpc_s->peer_tab[i].ptlmap.id, err);
+//			rdma_destroy_qp(rpc_s->peer_tab[i].sys_conn.id);
+//			rdma_destroy_id(rpc_s->peer_tab[i].sys_conn.id);
+
+                        rdma_destroy_qp(peer->sys_conn.id);
+                        rdma_destroy_id(peer->sys_conn.id);
+
 
 		}
 	}
@@ -1396,8 +1447,8 @@ int rpc_server_free(struct rpc_server *rpc_s)
 
 void rpc_server_set_peer_ref(struct rpc_server *rpc_s, struct node_id peer_tab[], int num_peers)	//Done
 {
-	rpc_s->num_peers = num_peers;
-	rpc_s->peer_tab = peer_tab;
+//	rpc_s->num_peers = num_peers;
+//	rpc_s->peer_tab = peer_tab;
 }
 
 void rpc_server_set_rpc_per_buff(struct rpc_server *rpc_s, int num_rpc_per_buff)	//Done
@@ -1549,7 +1600,7 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 				goto err_out;
 			//}
 
-//                      printf("I am %d to peer %d done preapreing buffer\n",rpc_s->ptlmap.id,peer->ptlmap.id);
+                      printf("I am %d to peer %d done preapreing buffer %s %d\n",rpc_s->ptlmap.id,peer->ptlmap.id, inet_ntoa(peer->ptlmap.address.sin_addr),ntohs(peer->ptlmap.address.sin_port));
 
 			err = rdma_resolve_route(event_copy.id, 200);
 			if(err != 0) {
@@ -1557,7 +1608,7 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 				goto err_out;
 			}
 		} else if(event_copy.event == RDMA_CM_EVENT_ROUTE_RESOLVED) {
-			//printf("route resolved.\n");
+			printf("route resolved.\n");
 			memset(&cm_params, 0, sizeof(struct rdma_conn_param));
 
 			conpara.pm_cp = rpc_s->ptlmap;
@@ -1577,16 +1628,17 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 				goto err_out;
 			}
 		} else if(event_copy.event == RDMA_CM_EVENT_ESTABLISHED) {
-			//printf("Connection Established.\n");
+			printf("Connection Established.\n");
 			if(peer->ptlmap.id == 0) {
 				if(rpc_s->ptlmap.appid != 0) {
 					rpc_s->app_minid = ((struct con_param *) event_copy.param.conn.private_data)->type;
 					rpc_s->ptlmap.id = ((struct con_param *) event_copy.param.conn.private_data)->pm_sp.id;
-					rpc_s->peer_tab = calloc(1, sizeof(struct node_id) * (rpc_s->num_rpc_per_buff + ((struct con_param *) event_copy.param.conn.private_data)->num_cp));
+					//rpc_s->peer_tab = calloc(1, sizeof(struct node_id) * (rpc_s->num_rpc_per_buff + ((struct con_param *) event_copy.param.conn.private_data)->num_cp));
 
 					peer->ptlmap = ((struct con_param *) event_copy.param.conn.private_data)->pm_cp;
 
                                         printf("Client %d %d\n",rpc_s->ptlmap.id,((struct con_param *) event_copy.param.conn.private_data)->num_cp);
+				        rpc_s->num_peers = rpc_s->num_rpc_per_buff + ((struct con_param *) event_copy.param.conn.private_data)->num_cp;
 
 //                                      rpc_s->app_minid = ((struct con_param *) event_copy.param.conn.private_data)->type;     //Here is a tricky design. Master Server puts app_minid into this 'type' field and return.
 //printf("id is %d, appminid is%d.\n", rpc_s->ptlmap.id, rpc_s->app_minid);
@@ -1777,12 +1829,21 @@ static int __process_event(struct rpc_server *rpc_s, int timeout)	//Done
 
 
 	j = 0;
-	for(i = 0; i < rpc_s->cur_num_peer; i++) {
-		if(rpc_s->peer_tab[i].ptlmap.id == rpc_s->ptlmap.id) {
+	for(i = 0; i < rpc_s->num_peers; i++) {
+
+                peer = rpc_get_peer(rpc_s,i);
+                if(peer==NULL)
+                        continue;
+
+              // printf("processing peer# %d (%s:%d)\n",peer->ptlmap.id, inet_ntoa(eer->ptlmap.address.sin_addr),ntohs(peer->ptlmap.address.sin_port));
+
+
+//		if(rpc_s->peer_tab[i].ptlmap.id == rpc_s->ptlmap.id) {
+		if(peer->ptlmap.id == rpc_s->ptlmap.id) {
 			seq = i;
 			continue;
 		}
-		peer = rpc_s->peer_tab + i;
+//		peer = rpc_s->peer_tab + i;
 
 		if(peer->sys_conn.f_connected == 0) {
 		} else {
@@ -1822,7 +1883,9 @@ static int __process_event(struct rpc_server *rpc_s, int timeout)	//Done
 	} else if(err > 0) {
 		for(i = 0; i < j; i++) {
 			if(sys_peer[i] == 1 && my_pollfd[i].revents != 0) {
-				peer = rpc_s->peer_tab + which_peer[i];
+		                peer = rpc_get_peer(rpc_s,which_peer[i]);
+
+//				peer = rpc_s->peer_tab + which_peer[i];
 				err = ibv_get_cq_event(peer->sys_conn.comp_channel, &ev_cq, &ev_ctx);
 				if(err == -1 && errno == EAGAIN) {
 //                                      printf("comp_events_completed is %d.\n", peer->sys_conn.cq->comp_events_completed);     //debug
@@ -1912,7 +1975,10 @@ static int __process_event(struct rpc_server *rpc_s, int timeout)	//Done
 */
 			}
 			if(sys_peer[i] == 0 && my_pollfd[i].revents != 0) {
-				peer = rpc_s->peer_tab + which_peer[i];
+
+                                peer = rpc_get_peer(rpc_s,which_peer[i]);
+
+//				peer = rpc_s->peer_tab + which_peer[i];
 				err = ibv_get_cq_event(peer->rpc_conn.comp_channel, &ev_cq, &ev_ctx);
 				if(err == -1 && errno == EAGAIN) {
 //                                      printf("comp_events_completed is %d.\n", peer->rpc_conn.cq->comp_events_completed);     //debug
