@@ -291,7 +291,9 @@ struct rpc_server {
 //	struct node_id *peer_tab;
 
         struct list_head peer_list; //list of peers(servers and clients)
-	
+
+	//count number of sys connection
+	int sys_conn_count;
 
 	//Fields for barrier implementation.
 	int bar_num;
