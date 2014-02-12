@@ -7,7 +7,7 @@ struct dart_client {
 	struct rpc_server *rpc_s;
 
 	int peer_size;
-	struct node_id *peer_tab;
+//	struct node_id *peer_tab;
 	struct node_id *cn_peers;
 
 	int num_sp, num_cp, num_cp_all;
@@ -39,12 +39,18 @@ struct dart_client {
 
 static inline struct node_id *dc_get_peer(struct dart_client *dc, int n)
 {
+
+	return rpc_server_find(dc->rpc_s, n);
+ 
+
+	/*
 	if(n < dc->num_sp || n>=dc->cp_min_rank + dc->num_cp)
 		return dc->peer_tab + n;
 	else if(n < dc->cp_min_rank + dc->num_cp && n >= dc->cp_min_rank)
 		return (dc->peer_tab + dc->num_sp) + (n - dc->cp_min_rank);
 	else
 		return (dc->peer_tab + dc->num_cp + n);
+	*/
 }				// //
 
 /*

@@ -286,7 +286,7 @@ struct rpc_server {
 
 	// Reference  to peers  table; storage  space is  allocated in dart client or server.
 	int num_peers;		// total number of peers
-	struct node_id *peer_tab;
+//	struct node_id *peer_tab;
 
         struct list_head peer_list; //list of peers(servers and clients)
 	
@@ -322,8 +322,6 @@ struct rpc_server {
 	struct ibv_pd *global_pd;
 	struct ibv_context *global_ctx;
 };
-
-struct node_id *rpc_server_find(struct rpc_server *rpc_s, int nodeid);
 
 
 
@@ -504,5 +502,10 @@ void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg,
 struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *peer, int num_rpcs);
 
 void rpc_print_connection_err(struct rpc_server *rpc_s, struct node_id *peer, struct rdma_cm_event event);
+
+
+struct node_id *rpc_server_find(struct rpc_server *rpc_s, int nodeid);
+
+
 
 #endif
