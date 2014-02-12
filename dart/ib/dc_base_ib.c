@@ -97,38 +97,46 @@ static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 	struct ptlid_map *pm;
 	int i;
 	pm = (struct ptlid_map *) msg->msg_data;
-	dc->peer_tab = rpc_s->peer_tab;
-	dc->cn_peers = dc_get_peer(dc, rpc_s->app_minid);
-	peer = dc->peer_tab;
+//	dc->peer_tab = rpc_s->peer_tab;
+//	dc->cn_peers = dc_get_peer(dc, rpc_s->app_minid);
+//	peer = dc->peer_tab;
 
-	peer++;
-	pm++;
-	for(i = 0; i < dc->num_sp + dc->num_cp - 1; i++) {
-		peer->ptlmap = *pm;
+//	peer++;
+//	pm++;
 
-//      printf("Client %d peer %d:  %s %d \n",rpc_s->ptlmap.id, i+1, inet_ntoa(peer->ptlmap.address.sin_addr),ntohs(peer->ptlmap.address.sin_port));
+	for(i = 0; i < dc->num_sp + dc->num_cp; i++) {
+                struct node_id *temp_peer = peer_alloc();
 
+		temp_peer->ptlmap = *pm;
 
-		if(peer->ptlmap.address.sin_addr.s_addr == dc->rpc_s->ptlmap.address.sin_addr.s_addr && peer->ptlmap.address.sin_port == dc->rpc_s->ptlmap.address.sin_port)
-			dc->self = peer;
+      		printf("Client %d peer %d:  %s %d \n",rpc_s->ptlmap.id, temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
+		if(temp_peer->ptlmap.id == 0)
+			continue;
 
-	        struct node_id *temp_peer = peer_alloc();
+		if(temp_peer->ptlmap.address.sin_addr.s_addr == dc->rpc_s->ptlmap.address.sin_addr.s_addr && temp_peer->ptlmap.address.sin_port == dc->rpc_s->ptlmap.address.sin_port)
+			dc->self = temp_peer;
+
         	list_add(&temp_peer->peer_entry, &dc->rpc_s->peer_list);
 		
-		temp_peer->ptlmap = *pm;
 
 	        INIT_LIST_HEAD(&temp_peer->req_list);
 	        temp_peer->num_msg_at_peer = rpc_s->max_num_msg;
         	temp_peer->num_msg_ret = 0;
 
 
-
-		INIT_LIST_HEAD(&peer->req_list);
-		peer->num_msg_at_peer = rpc_s->max_num_msg;
-		peer->num_msg_ret = 0;
-		peer++;
 		pm = pm + 1;
 	}
+
+
+i = 0;
+struct node_id *temp_peer;
+list_for_each_entry(temp_peer, &rpc_s->peer_list, struct node_id, peer_entry) {
+                i++;
+                printf("after %d peer# %d (%s:%d)\n",i, temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
+        if(i==100) break;
+}
+
+
 	dc->cp_min_rank = dc->rpc_s->app_minid;
 	dc->f_reg = 1;
 	free(msg->msg_data);
@@ -136,7 +144,7 @@ static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 	return 0;
 }
 
-
+/*
 static int announce_cp_completion_all(struct rpc_server *rpc_s, struct msg_buf *msg)	//Done
 {
 	struct dart_client *dc = dc_ref_from_rpc(rpc_s);
@@ -145,8 +153,8 @@ static int announce_cp_completion_all(struct rpc_server *rpc_s, struct msg_buf *
 	int i;
 	pm = (struct ptlid_map *) msg->msg_data;
 	dc->peer_tab = rpc_s->peer_tab;
-	dc->cn_peers = dc_get_peer(dc, rpc_s->app_minid);
-	peer = rpc_s->peer_tab;// + (rpc_s->ptlmap.id % dc->num_sp);
+//	dc->cn_peers = dc_get_peer(dc, rpc_s->app_minid);
+	peer = dc->peer_tab;
 
 	peer++;
 	pm++;
@@ -185,6 +193,7 @@ static int announce_cp_completion_all(struct rpc_server *rpc_s, struct msg_buf *
 	free(msg);
 	return 0;
 }
+*/
 
 static int dcrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Done
 {
@@ -195,7 +204,9 @@ static int dcrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Do
 	int err = -ENOMEM;
 	dc->num_sp = hreg->num_sp;
 	dc->num_cp = hreg->num_cp;
-	peer = rpc_s->peer_tab;
+//	peer = rpc_s->peer_tab;
+	peer = dc_get_peer(dc, 0);
+
 	msg = msg_buf_alloc(rpc_s, peer, 0);
 	if(!msg)
 		goto err_out;
@@ -222,7 +233,7 @@ static int dcrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Do
 	return err;
 }
 
-
+/*
 static int dcrpc_announce_cp_all(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Done
 {
 	struct dart_client *dc = dc_ref_from_rpc(rpc_s);
@@ -259,7 +270,7 @@ static int dcrpc_announce_cp_all(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	
       err_out:printf("'%s()' failed with %d.\n", __func__, err);
 	return err;
 }
-
+*/
 
 //RPC routine  to wait for  server confirmation that it  processed ourunregister message and all our other messages.
 static int dcrpc_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Done
@@ -403,7 +414,7 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 {
 	struct node_id *peer = malloc(sizeof(struct node_id));
 	memset(peer, 0, sizeof(struct node_id));
-	dc->peer_tab = peer;
+//	dc->peer_tab = peer;
 	dc->rpc_s->cur_num_peer = 2;	//diff another 2
 	struct rdma_conn_param cm_params;
 	struct con_param conpara;
@@ -420,18 +431,18 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 
         err = rpc_read_config(&temp_peer->ptlmap.address);   ////
 	temp_peer->ptlmap.id = 0;
-/*
-                INIT_LIST_HEAD(&temp_peer->req_list);
-                temp_peer->num_msg_at_peer = rpc_s->max_num_msg;
-                temp_peer->num_msg_ret = 0;
-*/
+
+        INIT_LIST_HEAD(&temp_peer->req_list);
+        temp_peer->num_msg_at_peer = dc->rpc_s->max_num_msg;
+        temp_peer->num_msg_ret = 0;
 
 
-	err = rpc_read_config(&peer->ptlmap.address);	////
+
+	err = rpc_read_config(&temp_peer->ptlmap.address);	////
 	if(err < 0)
 		goto err_out;
 	//Connect to master server, build rpc channel and sys channel;
-	err = rpc_connect(dc->rpc_s, peer);
+	err = rpc_connect(dc->rpc_s, temp_peer);
 	if(err != 0) {
 		printf("rpc_connect err %d in %s.\n", err, __func__);
 		goto err_out;
@@ -443,10 +454,12 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 
 	dc->cp_min_rank = dc->rpc_s->app_minid;
 //        dc->rpc_s->peer_tab = peer;       //diff
-	dc->rpc_s->peer_tab[0] = peer[0];	//diff
-	dc->rpc_s->peer_tab[1].ptlmap = dc->rpc_s->ptlmap;
-	INIT_LIST_HEAD(&dc->rpc_s->peer_tab[0].req_list);
-	free(peer);
+
+//	dc->rpc_s->peer_tab[0] = peer[0];	//diff
+//	dc->rpc_s->peer_tab[1].ptlmap = dc->rpc_s->ptlmap;
+//	INIT_LIST_HEAD(&dc->rpc_s->peer_tab[0].req_list);
+
+//	free(peer);
 
 	//Waiting for dissemination msg from master server;
 	while(dc->f_reg == 0) {
@@ -479,6 +492,8 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 	}
 
 
+
+	sleep(5);
 
 	int rc;
 	dc->rpc_s->thread_alive = 1;
@@ -556,7 +571,7 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 		if(check_cp[peer->ptlmap.id] == 1 && dc->comm == NULL) {
 			count = 0;
 			do {
-//                              printf("SYS connect %d %d\n",dc->rpc_s->ptlmap.id,peer->ptlmap.id);
+                              printf("SYS connect %d %d\n",dc->rpc_s->ptlmap.id,peer->ptlmap.id);
 				err = sys_connect(dc->rpc_s, peer);
 				count++;
 			} while(count < 3 && err != 0);
@@ -573,8 +588,28 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 
 
 /*
-	while(dc->f_reg_all == 0) {
-		err = rpc_process_event_with_timeout(dc->rpc_s, 1);
+		if(connected != connect_count){
+			printf("Connected number doesn't match needed.\n");
+			err = -1;
+			goto err_out;
+		}
+*/
+//      }
+
+/*
+	for(i=0;i<dc->num_sp + dc->num_cp;i++){
+		peer = &dc->peer_tab[i];
+		if((peer->rpc_conn.f_connected && peer->sys_conn.f_connected) || peer->ptlmap.id == dc->self->ptlmap.id)
+			continue;
+		printf("Peer %d is not connected!\n", peer->ptlmap.id);
+		err = -1;
+		goto err_out;
+	}
+*/
+
+
+//	while(dc->f_reg_all == 0) {
+//		err = rpc_process_event_with_timeout(dc->rpc_s, 1);
 /*
 	printf("waitting %d\n",dc->connected);
 
@@ -595,11 +630,10 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 
 
 */
-		if(err != 0 && err != -ETIME)
-			goto err_out;
-	}
-*/
-//        MPI_Barrier(*(MPI_Comm *)dc->comm);
+
+//		if(err != 0 && err != -ETIME)
+//			goto err_out;
+//	}
 
 //         struct node_id *temp_peer;
          list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
@@ -666,7 +700,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 	rpc_add_service(cp_barrier, dcrpc_barrier);
 	rpc_add_service(cn_unregister, dcrpc_unregister);
 	rpc_add_service(sp_announce_cp, dcrpc_announce_cp);
-	rpc_add_service(sp_announce_cp_all, dcrpc_announce_cp_all);
+//	rpc_add_service(sp_announce_cp_all, dcrpc_announce_cp_all);
 
 	if(comm!=NULL){
 		MPI_Comm dup_comm;
@@ -695,6 +729,9 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 	}
 	dc->rpc_s->app_num_peers = num_peers;
 	dc->rpc_s->num_peers = dc->peer_size = dc->rpc_s->cur_num_peer;
+
+	dc->rpc_s->num_peers = dc->num_cp + dc->num_sp;
+
 	printf("dc_alloc succeed %d.\n", dc->rpc_s->ptlmap.id);
 	err = dc_barrier(dc);
 	if(err < 0) {
@@ -719,8 +756,8 @@ void dc_free(struct dart_client *dc)
 	err = rpc_server_free(dc->rpc_s);
 	if(err != 0)
 		printf("rpc_server_free err in %s.\n", __func__);
-	if(dc->peer_tab)
-		free(dc->peer_tab);
+//	if(dc->peer_tab)
+//		free(dc->peer_tab);
 	free(dc);
 }
 
