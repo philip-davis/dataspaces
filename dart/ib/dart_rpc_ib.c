@@ -91,8 +91,6 @@ int log2_ceil(int n)		//Done
 static int sys_bar_arrive(struct rpc_server *rpc_s, struct hdr_sys *hs)	//Done
 {
 	rpc_s->bar_tab[hs->sys_id] = hs->sys_pad1;
-
-//printf("inside %s\n", __func__);
 	return 0;
 }
 
@@ -118,7 +116,6 @@ static int sys_bar_send(struct rpc_server *rpc_s, int peerid)	//Done
 
 //printf("inside %s\n", __func__);
 
-      printf("sys_bar_send %d %d %d\n",rpc_s->ptlmap.id, peer->ptlmap.id, peerid);
 
 	memset(&hs, 0, sizeof(struct hdr_sys));
 	hs.sys_cmd = sys_bar_enter;
@@ -138,8 +135,8 @@ static int sys_send(struct rpc_server *rpc_s, struct node_id *peer, struct hdr_s
 {
 
 	while(peer->sys_conn.f_connected != 1) {
-		//      printf("SYS channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
-		//      sys_connect(rpc_s,peer);
+		      printf("SYS channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
+		      sys_connect(rpc_s,peer);
 //              goto err_out;
 //              sleep(1);
 	}
@@ -173,7 +170,7 @@ static int sys_send(struct rpc_server *rpc_s, struct node_id *peer, struct hdr_s
 	sge.length = sizeof(struct hdr_sys);
 	sge.lkey = sm->sys_mr->lkey;
 
-//printf("inside %s\n", __func__);
+	printf("send sys bar %s\n", __func__);
 	err = ibv_post_send(peer->sys_conn.qp, &wr, &bad_wr);
 	if(err < 0) {
 		printf("Fail: ibv_post_send returned error in %s. (%d)\n", __func__, err);
@@ -191,7 +188,6 @@ static int sys_dispatch_event(struct rpc_server *rpc_s, struct hdr_sys *hs)	//Do
 {
 	int err = 0;
 
-//printf("inside %s\n", __func__);
 	switch (hs->sys_cmd) {
 	case sys_none:
 		break;
@@ -220,8 +216,8 @@ static int sys_dispatch_event(struct rpc_server *rpc_s, struct hdr_sys *hs)	//Do
 static int sys_process_event(struct rpc_server *rpc_s)
 {
 	struct node_id *peer;
-	struct pollfd my_pollfd[rpc_s->num_rpc_per_buff - 1];
-	int which_peer[rpc_s->num_rpc_per_buff - 1];
+	struct pollfd my_pollfd[rpc_s->app_num_peers - 1];
+	int which_peer[rpc_s->app_num_peers - 1];
 	int timeout = 30;
 
 	struct ibv_cq *ev_cq;
@@ -250,7 +246,7 @@ static int sys_process_event(struct rpc_server *rpc_s)
 		if(peer->sys_conn.f_connected == 0)
 			continue;
 
-		printf("poll %d\n",peer->ptlmap.id);
+		printf("CLIENT %d: syspoll %d\n",rpc_s->ptlmap.id,peer->ptlmap.id);
 
 		my_pollfd[j].fd = peer->sys_conn.comp_channel->fd;
 		my_pollfd[j].events = POLLIN;
@@ -816,11 +812,13 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 
 	//check peer->req_list
 	while(!list_empty(&peer->req_list)) {
-//printf("posted is %d.\n", peer->req_posted);
+	//printf("posted is %d.\n", peer->req_posted);
 		if(rpc_s->com_type == 1 || peer->req_posted > 100) {
 			for(i = 0; i < 10; i++)	//performance here
 			{
+
 				err = rpc_process_event_with_timeout(rpc_s, 1);
+
 				//if(err == -ETIME)
 				//break;
 				//if ((rpc_s->com_type == 1) && (err == 0))
@@ -846,6 +844,7 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 
 		if(rr->msg->msg_data) {
 			err = rpc_prepare_buffers(rpc_s, peer, rr, rr->iodir);
+
 			if(err != 0)
 				goto err_out;
 		}
@@ -860,6 +859,8 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 
 		// Message is sent, consume one credit. (dont need anymore?)
 		peer->num_msg_at_peer--;
+
+
 		list_del(&rr->req_entry);
 
 		//list_add_tail(&rr->req_entry, &rpc_s->rpc_list);
@@ -1118,6 +1119,8 @@ struct rpc_server *rpc_server_init(int option, char *ip, int port, int num_buff,
 	rpc_s = calloc(1, sizeof(*rpc_s));
 	if(!rpc_s)
 		goto err_out;
+
+	rpc_s->sys_conn_count = 0;
 
 	rpc_s->dart_ref = dart_ref;
 	rpc_s->num_buf = num_buff;
@@ -1816,9 +1819,9 @@ void rpc_add_service(enum cmd_type rpc_cmd, rpc_service rpc_func)	//Done
 static int __process_event(struct rpc_server *rpc_s, int timeout)	//Done
 {
 	struct node_id *peer;
-	struct pollfd my_pollfd[2 * rpc_s->cur_num_peer - 2];
-	int which_peer[2 * rpc_s->cur_num_peer - 2];
-	int sys_peer[2 * rpc_s->cur_num_peer - 2];
+	struct pollfd my_pollfd[2 * rpc_s->num_peers - 2];
+	int which_peer[2 * rpc_s->num_peers - 2];
+	int sys_peer[2 * rpc_s->num_peers - 2];
 	// initialize file descriptor set
 	int i, j, seq, ret, err = 0;
 	struct ibv_cq *ev_cq;
@@ -1870,8 +1873,6 @@ static int __process_event(struct rpc_server *rpc_s, int timeout)	//Done
 		return 0;
 
 	err = poll(my_pollfd, j, timeout);
-
-//        printf("%d %d %d\n",rpc_s->ptlmap.id,rpc_s->cur_num_peer,j);
 
 
 
@@ -2125,6 +2126,7 @@ int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg
 //              goto err_out;
 	}
 
+
 	struct rpc_request *rr;
 	int err = -ENOMEM;
 
@@ -2146,6 +2148,7 @@ int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg
 	peer->req_posted++;
 
 	err = peer_process_send_list(rpc_s, peer);
+
 	if(err == 0)
 		return 0;
 
