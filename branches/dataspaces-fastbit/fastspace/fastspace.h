@@ -11,7 +11,9 @@ enum DATATYPE
 struct metaData{
 	int 		num_attr;
         char 		*attr[MAX];
-        enum DATATYPE 	type[MAX];
+        //enum DATATYPE 	type[MAX];
+	char 		type[MAX];
+	void		*pointer[MAX];
 };
 
 int parse_meta(char* meta_conf, struct metaData* mtdata);

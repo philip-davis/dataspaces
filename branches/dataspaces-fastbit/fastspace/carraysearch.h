@@ -13,9 +13,11 @@ extern "C" {
     struct FastBitQuery;
     struct FastBitResultSet;
 
-    void* fb_build_index_int32(int32_t*, size_t, const char*);
-    void* fb_build_index_float(float*, size_t, const char*);
-    void* fb_build_index_double(double*, size_t, const char*, void*);
+//    void* fb_build_index_int32(int32_t*, size_t, const char*);
+//    void* fb_build_index_float(float*, size_t, const char*);
+    void* fb_build_index_double(int, double**, size_t, const char*, void**);
+    void* fb_build_index(int, void**, void*, size_t, const char*, void**);
+
     void fb_free_data(void*);
 
     int fb_count_hits(void*, const char*, double);
