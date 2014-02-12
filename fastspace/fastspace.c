@@ -1,4 +1,5 @@
 #include<stdio.h>
+#include<stdlib.h>
 #include<string.h>
 #include "debug.h"
 #include "carraysearch.h"
@@ -6,6 +7,8 @@
 #include "list.h"
 
 #define NUM_TYPE 8
+#define TYPE_MAX 4 //length of a data type name(s(short), i(int), l(long), f(float), d(double))
+#define NAME_MAX 10 //length of variable name
 char* type_name[NUM_TYPE] = {"SHORT", "USHORT", "INT", "UINT", "LONG", "ULONG", "FLOAT", "DOUBLE"};
 
 static void eat_spaces(char *line)
@@ -49,15 +52,18 @@ int parse_meta(char* meta_conf, struct metaData* mtdata)
 		eat_spaces(t);
 
                 //mtdata->attr[i] = buff;
-                //mtdata->attr[i] = malloc(sizeof(buff));
-		memcpy(mtdata->attr, buff, sizeof(buff));
-		for(j = 0; j < NUM_TYPE; j++){
+                mtdata->attr[i] = malloc(sizeof(NAME_MAX));
+		memcpy(mtdata->attr[i], buff, sizeof(buff));
+
+		mtdata->type[i] = *t;	
+
+		/*for(j = 0; j < NUM_TYPE; j++){
 			if(strcmp(t, type_name[j]) == 0){
-				mtdata->type[i] = j;
+				mtdata->type[i] = '';
 			}
-		}
+		}*/
+		printf("attr=%s\ntype=%c\n", mtdata->attr[i], mtdata->type[i]);
 	}
-	printf("attr=%s\ntype=%d\n", mtdata->attr, mtdata->type[0]);
 	return 0;
 }
 
@@ -144,6 +150,7 @@ void parse_query_str(void *query, char *select, char *from, char *where)
 	}
 }
 
+/*
 int build_obj_idx(struct obj_data* obj, struct metaData *mtdata)
 {
 	//idx = fastbit_build_index(obj->data)
@@ -157,19 +164,54 @@ int build_obj_idx(struct obj_data* obj, struct metaData *mtdata)
 		if(cas == 0)
 			return -2;//TODO
 	}
-	/*else if(mtdata->type[0] == INT){
+	else if(mtdata->type[0] == INT){
 		cas = fb_build_index_int32((double*)obj->data, nelem, 0);
 		if(cas == 0)
 			return -2;//TODO
-	}*/
+	}
 	obj->fb_obj = cas; 	//TODO only store index to save memory
 
-	/* for test index with query *//*
-	int num;
-	const char *op = ">";
-	num = fb_count_hits(obj->fb_obj, op, 10);
-	printf("\nbuild_obj_idx, num_hits = %d\n", num);
-	*/
+	// for test index with query 
+	//int num;
+	//const char *op = ">";
+	//num = fb_count_hits(obj->fb_obj, op, 10);
+	//printf("\nbuild_obj_idx, num_hits = %d\n", num);
+	
+	return 0;
+}*/
+
+int build_obj_idx(struct obj_data* obj, struct metaData *mtdata)
+{
+        int nelem = obj_data_size(&obj->obj_desc)/(obj->obj_desc.size);
+
+	//Follow the struct metaData to split obj->data into multiple variables
+        int num_col = mtdata->num_attr;
+	void *tmp = NULL; 
+        tmp = malloc(obj_data_size(&obj->obj_desc));
+        int stride = 0, cur_pt = 0;
+        int i, j;	
+        for(i = 0; i < num_col; i++){
+		mtdata->pointer[i] = (void*)(tmp + cur_pt);
+                if(mtdata->type[i] == 'd'){	//DataType is DOUBLE
+                        for(j = 0; j < nelem; j++){
+                                *(double*)(tmp + cur_pt) = *(double*)(obj->data + j*(obj->obj_desc.size) + stride);
+				cur_pt += sizeof(double);
+                        }
+                        stride += sizeof(double);
+                }
+        }
+	free(obj->_data);
+	obj->data = obj->_data = tmp;
+
+	void *cas;
+        char **colname = mtdata->attr;
+        const char *indopt = NULL; 
+
+	cas = fb_build_index(num_col, mtdata->pointer, mtdata->type, nelem, 0, mtdata->attr);
+	if(cas == 0)
+		return -2;
+
+	obj->fb_obj = cas;
 	return 0;
 }
 

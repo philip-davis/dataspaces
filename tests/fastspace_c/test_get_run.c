@@ -281,7 +281,7 @@ int test_get_run(enum transport_type type, int npapp, int npx, int npy, int npz,
     MPI_Comm_rank(gcomm_, &rank_);
     MPI_Comm_size(gcomm_, &nproc_);
 
-    /*unsigned int ts;
+   /* unsigned int ts;
 	if (dims == 2) {
         for (ts = 1; ts <= timestep_; ts++){
             couple_read_2d(ts, num_vars, type);
@@ -308,7 +308,8 @@ int test_get_run(enum transport_type type, int npapp, int npx, int npy, int npz,
                         memset(m2d, 0, sizeof(double)*spx_*spy_);
                         if (rank_ == 0)
                                 uloga("%s: At timestep %u\n", __func__, ts);
-                        char* qcond = "select name where name>0 and name<200";
+                        //char* qcond = "select name where name>0 and name<200";
+			char* qcond = "select count(var1) where var2>3 and var2<8 and var1>5";
                         couple_value_query_2d(m2d, ts, USE_DSPACES, (void*)qcond);
 		}
 	}	
@@ -318,7 +319,7 @@ int test_get_run(enum transport_type type, int npapp, int npx, int npy, int npz,
 	common_finalize();
 	if(m2d)
 		free(m2d);
-
+	
 	return 0;
 }
 
