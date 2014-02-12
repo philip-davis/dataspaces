@@ -907,6 +907,8 @@ int ds_boot_master(struct dart_server *ds)	//Done
 	struct connection *conn;
 
 
+	
+
         int rc;
         ds->rpc_s->thread_alive = 1;
         rc = pthread_create(&(ds->rpc_s->comm_thread), NULL, ds_master_listen, (void *) ds);
@@ -1047,6 +1049,8 @@ int ds_boot_master(struct dart_server *ds)	//Done
 		sleep(1);
 	}
 
+
+	ds->rpc_s->ptlmap.id = 0;
 
 	printf("'%s()': all the peer are registered.%d %d\n", __func__, ds->peer_size, ds->size_cp);
 	ds->rpc_s->cur_num_peer = ds->rpc_s->num_rpc_per_buff;	//diff    
@@ -1193,6 +1197,8 @@ int ds_boot_slave(struct dart_server *ds)	//Done
         peer->ptlmap.id = 0;
 
 	list_add(&peer->peer_entry, &ds->rpc_s->peer_list);
+
+
 
 	if(err < 0)
 		goto err_out;
@@ -1385,8 +1391,11 @@ static int ds_boot(struct dart_server *ds)	//Done
 
 		temp_peer->ptlmap = ds->rpc_s->ptlmap;
 	
-	    list_add(&temp_peer->peer_entry, &ds->rpc_s->peer_list);
-		
+	        list_add(&temp_peer->peer_entry, &ds->rpc_s->peer_list);
+                INIT_LIST_HEAD(&temp_peer->req_list);
+                temp_peer->num_msg_at_peer = ds->rpc_s->max_num_msg;
+                temp_peer->num_msg_ret = 0;
+	
 		err = ds_boot_master(ds);
 		if(err != 0)
 			goto err_flock;

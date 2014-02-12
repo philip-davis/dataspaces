@@ -352,8 +352,13 @@ static void *dc_listen(void *client)
 			conpara = *(struct con_param *) event_copy.param.conn.private_data;
 			peer = dc_get_peer(dc, conpara.pm_cp.id);
 			if(conpara.type == 0) {
-//                              printf("Client %d: SYS connect request from %d\n",dc->rpc_s->ptlmap.id,peer->ptlmap.id);
+                               // printf("Client %d: SYS connect request from %d\n",dc->rpc_s->ptlmap.id,peer->ptlmap.id);
 				con = &peer->sys_conn;
+				if(con->f_connected ==1)
+				{
+	                                printf("Client %d: SYS connect request from %d, but I am already connected\n",dc->rpc_s->ptlmap.id,peer->ptlmap.id);
+				}
+				dc->rpc_s->sys_conn_count++;
 			} else {
 				con = &peer->rpc_conn;
 			}
@@ -503,12 +508,12 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 		exit(-1);
 	}
 
-	int n = log2_ceil(dc->num_cp);
-	int *check_cp = malloc(sizeof(int) * (dc->num_cp + dc->cp_min_rank));
+	int n = log2_ceil(dc->peer_size);
+	int *check_cp = malloc(sizeof(int) * (dc->peer_size + dc->cp_min_rank));
 
 	int j;
 
-	for(j = 0; j < dc->num_cp + dc->cp_min_rank; j++)
+	for(j = 0; j < dc->peer_size + dc->cp_min_rank; j++)
 		check_cp[j] = 0;
 
 	int *a = malloc(sizeof(int) * n);
@@ -518,7 +523,10 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 	int smaller_cid = 0;
 	int greater_cid = 0;
 
-	for(k = dc->cp_min_rank; k < dc->num_cp + dc->cp_min_rank; k++) {
+        printf("MIN %d %d\n", dc->cp_min_rank, dc->peer_size + dc->cp_min_rank);
+
+
+	for(k = dc->cp_min_rank; k < dc->peer_size + dc->cp_min_rank; k++) {
 
 		a[0] = 1;
 		for(j = 1; j < n; j++) {
@@ -527,8 +535,8 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 
 		for(j = 0; j < n; j++) {
 			a[j] = (a[j] + k - dc->cp_min_rank);
-			if(a[j] > dc->num_cp - 1)
-				a[j] = a[j] % dc->num_cp;
+			if(a[j] > dc->peer_size - 1)
+				a[j] = a[j] % dc->peer_size;
 
 			if(k == dc->rpc_s->ptlmap.id) {
 				check_cp[a[j] + dc->cp_min_rank] = 1;
@@ -540,7 +548,7 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 			}
 		}
 	}
-	for(k = dc->cp_min_rank; k < dc->num_cp + dc->cp_min_rank; k++) {
+	for(k = dc->cp_min_rank; k < dc->peer_size + dc->cp_min_rank; k++) {
 		if(check_cp[k] == 1) {
 			if(k < dc->rpc_s->ptlmap.id)
 				smaller_cid++;
@@ -582,6 +590,19 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 		}
 	}
 
+sleep(15);
+
+/*
+	while(dc->rpc_s->sys_conn_count!= greater_cid){
+	//	err = rpc_process_event_with_timeout(dc->rpc_s, 1);
+        //        if(err != 0 && err != -ETIME)
+        //                goto err_out;
+        	printf("I am %d %d %d\n",dc->self->ptlmap.id, dc->rpc_s->sys_conn_count, greater_cid);
+        
+        	sleep(1);
+        }
+*/
+		
 
 
 	//Function: connect to all other nodes except MS_Server.
@@ -694,7 +715,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 
 	dc->connected = 0;
 	// dc->peer_tab = (struct node_id *) (dc+1);
-	// dc->peer_size = num_peers;
+	 dc->peer_size = num_peers;
 
 ////    rpc_add_service(cn_register, dcrpc_register);
 	rpc_add_service(cp_barrier, dcrpc_barrier);
@@ -728,16 +749,19 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 		goto err_out;
 	}
 	dc->rpc_s->app_num_peers = num_peers;
-	dc->rpc_s->num_peers = dc->peer_size = dc->rpc_s->cur_num_peer;
+//	dc->peer_size = dc->rpc_s->cur_num_peer;
 
 	dc->rpc_s->num_peers = dc->num_cp + dc->num_sp;
 
-	printf("dc_alloc succeed %d.\n", dc->rpc_s->ptlmap.id);
+//	printf("dc_alloc succeed %d.\n", dc->rpc_s->ptlmap.id);
 	err = dc_barrier(dc);
 	if(err < 0) {
 		free(dc);
 		goto err_out;
 	}
+
+        printf("dc_alloc succeed %d.\n", dc->rpc_s->ptlmap.id);
+
 //printf("barrier is ok.\n");
 	return dc;
       err_out:printf("'%s()': failed with %d.\n", __func__, err);
