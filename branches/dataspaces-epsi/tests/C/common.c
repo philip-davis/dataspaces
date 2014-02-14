@@ -76,7 +76,7 @@ err_out:
 	return -1;
 }
 
-int parse_args_dns_les(int argc, char **argv, int *npapp, int *npx, int *npy, int *npz, int *spx, int *spy, int *spz, int *timestep, int *appid)
+int parse_args_dns_les(int argc, char **argv, int *npapp, int *npx, int *npy, int *npz, uint64_t *spx, uint64_t *spy, uint64_t *spz, int *timestep, int *appid)
 {
 	if (argc < 10) {
 		uloga("Wrong number of arguments!\n");
@@ -87,16 +87,16 @@ int parse_args_dns_les(int argc, char **argv, int *npapp, int *npx, int *npy, in
 	*npx = atoi(argv[2]);	
 	*npy = atoi(argv[3]);	
 	*npz = atoi(argv[4]);	
-	*spx = atoi(argv[5]);	
-	*spy = atoi(argv[6]);	
-	*spz = atoi(argv[7]);	
+	*spx = atoll(argv[5]);	
+	*spy = atoll(argv[6]);	
+	*spz = atoll(argv[7]);	
 	*timestep = atoi(argv[8]);	
 	*appid = atoi(argv[9]);
 
 	return 0;
 }
 
-int parse_args(int argc, char **argv, enum transport_type *type, int *npapp, int *npx, int *npy, int *npz, int *spx, int *spy, int *spz, int *timestep, int *dims, size_t *elem_size, int *num_vars)
+int parse_args(int argc, char **argv, enum transport_type *type, int *npapp, int *npx, int *npy, int *npz, uint64_t *spx, uint64_t *spy, uint64_t *spz, int *timestep, int *dims, size_t *elem_size, int *num_vars)
 {
     if (argc < 10) {
         uloga("Wrong number of arguments!\n");
@@ -111,9 +111,9 @@ int parse_args(int argc, char **argv, enum transport_type *type, int *npapp, int
     *npx = atoi(argv[3]);
     *npy = atoi(argv[4]);
     *npz = atoi(argv[5]);
-    *spx = atoi(argv[6]);
-    *spy = atoi(argv[7]);
-    *spz = atoi(argv[8]);
+    *spx = atoll(argv[6]);
+    *spy = atoll(argv[7]);
+    *spz = atoll(argv[8]);
     *timestep = atoi(argv[9]);
 
     if (argc >= 11) {
@@ -184,8 +184,8 @@ void common_unlock_on_write(const char *lock_name, void *gcomm) {
 
 int common_put (const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+        uint64_t xl, uint64_t yl, uint64_t zl,
+        uint64_t xu, uint64_t yu, uint64_t zu,
         void *data, enum transport_type type) {
         if ( type == USE_DSPACES ) {
                 return dspaces_put(var_name, ver, size,
@@ -205,8 +205,8 @@ int common_put (const char *var_name,
 
 int common_get (const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+        uint64_t xl, uint64_t yl, uint64_t zl,
+        uint64_t xu, uint64_t yu, uint64_t zu,
         void *data, enum transport_type type) {
         if ( type == USE_DSPACES ) {
                 return dspaces_get(var_name, ver, size,

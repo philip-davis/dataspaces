@@ -32,10 +32,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <errno.h>
 
 #include "debug.h"
 #include "ss_data.h"
+#include "queue.h"
 
 // TODO: I should  import the header file with  the definition for the
 // iovec_t data type.
@@ -75,7 +77,30 @@ struct sfc_hash_cache {
 static LIST_HEAD(sfc_hash_list);
 static int is_sfc_hash_list_free = 0;
 
-//static int compute_bits(unsigned int n)
+static uint64_t next_pow_2_v2(uint64_t n)
+{
+        uint64_t i;
+
+        i = 1;
+        while (i < n) {
+            i = i << 1;
+        }
+
+        return i;
+}
+
+static int compute_bits_v2(__u64 n)
+{
+        int nr_bits = 0;
+
+        while (n>1) {
+                n = n >> 1;
+                nr_bits++;
+        }
+
+        return nr_bits;
+}
+
 static int compute_bits(__u64 n)
 {
         int nr_bits = 0;
@@ -413,6 +438,36 @@ static void matrix_copyv(struct matrix *a, struct matrix *b)
 	*/
 }
 
+static void get_bbox_max_dim(const struct bbox *bb, uint64_t *out_max_dim,
+    int *out_dim)
+{
+    int i;
+    uint64_t max_dim = 0;
+    for (i = 0; i < bb->num_dims; i++) {
+        if (max_dim < bb->ub.c[i]) {
+            max_dim = bb->ub.c[i];
+            *out_dim = i;
+        }
+    }
+    *out_max_dim = max_dim;
+}
+
+static void get_bbox_max_dim_size(const struct bbox *bb, uint64_t *out_max_dim_size,
+    int *out_dim)
+{
+    int i;
+    uint64_t max_dim_size = 0;
+    for (i = 0; i < bb->num_dims; i++) {
+        uint64_t size = bb->ub.c[i]-bb->lb.c[i]+1;
+        if (max_dim_size < size) {
+            max_dim_size = size;
+            *out_dim = i;
+        }
+    }
+    *out_max_dim_size = max_dim_size;    
+    
+}
+
 static struct dht_entry * dht_entry_alloc(struct sspace *ssd, int size_hash)
 {
 	struct dht_entry *de;
@@ -431,6 +486,9 @@ static struct dht_entry * dht_entry_alloc(struct sspace *ssd, int size_hash)
 	for (i = 0; i < size_hash; i++)
 		INIT_LIST_HEAD(&de->odsc_hash[i]);
 
+    de->num_bbox = 0;
+    de->size_bb_tab = 0;
+    de->bb_tab = NULL;
 	return de;
 }
 
@@ -490,6 +548,20 @@ static void dht_free(struct dht *dht)
 		free(dht->ent_tab[i]);
 
 	free(dht);
+}
+
+static void dht_free_v2(struct dht *dht)
+{
+    int i;
+
+    for (i = 0; i < dht->num_entries; i++) {
+        if (dht->ent_tab[i]->bb_tab) {
+            free(dht->ent_tab[i]->bb_tab);
+        }
+        free(dht->ent_tab[i]);
+    }
+
+    free(dht);
 }
 
 static int dht_intersect(struct dht_entry *de, struct intv *itv)
@@ -671,6 +743,168 @@ void ssd_free(struct sspace *ssd)
 
         sh_free();
 }
+
+struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max_versions)
+{
+        struct sspace *ssd = NULL;
+        int err = -ENOMEM;
+        int i, j, k;
+        int dim;
+        int nbits_max_dim = 0;
+        uint64_t max_dim = 0;
+        get_bbox_max_dim(bb_domain, &max_dim, &dim);
+        max_dim = next_pow_2_v2(max_dim);
+        nbits_max_dim = compute_bits_v2(max_dim);
+        //printf("%s(): max_dim= %llu nbits_max_dim= %d\n",
+        //    __func__, max_dim, nbits_max_dim);
+
+        // decompose the global bbox       
+        int num_divide_iteration = compute_bits_v2(next_pow_2_v2(num_nodes));
+        struct bbox *bb, *b1, *b2;        
+        struct queue q1, q2;
+        queue_init(&q1);
+        queue_init(&q2);
+    
+        //printf("%s(): num_nodes= %d num_divide_iteration= %d\n", __func__,
+        //    num_nodes, num_divide_iteration);
+
+        bb = malloc(sizeof(struct bbox));
+        memcpy(bb, bb_domain, sizeof(struct bbox));
+        queue_enqueue(&q1, bb);
+        for (i = 0; i < num_divide_iteration; i++) {
+            struct queue *src_q, *dst_q;
+            if (!queue_is_empty(&q1) && queue_is_empty(&q2)) {
+                src_q = &q1;
+                dst_q = &q2;
+            } else if (!queue_is_empty(&q2) && queue_is_empty(&q1)) {
+                src_q = &q2;
+                dst_q = &q1;
+            } else {
+                printf("%s(): error, both q1 and q2 is (non)empty.\n", __func__);
+            }
+
+            while (!queue_is_empty(src_q)) {
+                uint64_t max_dim_size;
+                struct bbox b_tab[2];
+
+                bb = queue_dequeue(src_q);
+                get_bbox_max_dim_size(bb, &max_dim_size, &dim);
+                bbox_divide_in2_ondim(bb, b_tab, dim);                    
+                free(bb); bb = NULL;
+                b1 = malloc(sizeof(struct bbox));
+                b2 = malloc(sizeof(struct bbox));
+                *b1 = b_tab[0];
+                *b2 = b_tab[1];
+                queue_enqueue(dst_q, b1);
+                queue_enqueue(dst_q, b2);
+            }
+        }
+
+        struct queue *q;
+        if (!queue_is_empty(&q1)) q = &q1;
+        else if (!queue_is_empty(&q2)) q = &q2;
+
+        ssd = malloc(sizeof(*ssd));
+        if (!ssd)
+                goto err_out;
+        memset(ssd, 0, sizeof(*ssd));
+
+        ssd->max_dim = max_dim;
+        ssd->bpd = nbits_max_dim;
+        ssd->storage = ls_alloc(max_versions);
+        if (!ssd->storage) {
+                free(ssd);
+                goto err_out;
+        }
+
+        ssd->total_num_bbox = queue_size(q);
+        ssd->dht = dht_alloc(ssd, bb_domain, num_nodes, max_versions);
+        if (!ssd->dht) {
+            // TODO: free storage 
+            free(ssd->storage);
+            free(ssd);
+            goto err_out;
+        } 
+        for (i = 0; i < num_nodes; i++) {
+            ssd->dht->ent_tab[i]->rank = i;
+        }
+
+        int n = ceil(ssd->total_num_bbox*1.0 / ssd->dht->num_entries);
+        for (i = 0; i < ssd->dht->num_entries; i++) {
+            ssd->dht->ent_tab[i]->size_bb_tab = n;
+            ssd->dht->ent_tab[i]->bb_tab = malloc(sizeof(struct bbox)*n);
+        }
+        //printf("%s(): ssd->total_num_bbox= %d ssd->dht->num_entries= %d"
+        //    " max_num_bbox_per_dht_entry= %d\n",
+        //    __func__, ssd->total_num_bbox, ssd->dht->num_entries, n);
+
+        // simple round-robing mapping of decomposed bbox to dht entries
+        i = 0;
+        while (! queue_is_empty(q)) {
+            bb = queue_dequeue(q);
+            j = i++ % ssd->dht->num_entries;
+            k = ssd->dht->ent_tab[j]->num_bbox++;
+            ssd->dht->ent_tab[j]->bb_tab[k] = *bb;
+            free(bb);  
+        }
+
+        /*
+        for (i = 0; i < ssd->dht->num_entries; i++) {
+            printf("dht entry %d size_bb_tab= %d num_bbox= %d\n", i,
+                ssd->dht->ent_tab[i]->size_bb_tab,
+                ssd->dht->ent_tab[i]->num_bbox);
+            for (j = 0; j < ssd->dht->ent_tab[i]->num_bbox; j++) {
+                bbox_print(&ssd->dht->ent_tab[i]->bb_tab[j]);
+            }        
+            printf("\n");
+        }
+        */
+
+        return ssd;
+ err_out:
+        uloga("'%s()': failed with %d\n", __func__, err);
+        return NULL;
+}
+
+void ssd_free_v2(struct sspace *ssd)
+{
+        dht_free_v2(ssd->dht);
+
+        //TODO: do I need a ls_free() routine ?
+        free(ssd->storage);
+        free(ssd);
+
+        sh_free();        
+}
+
+int ssd_hash_v2(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[])
+{
+        int i, j, num_nodes;
+
+        num_nodes = sh_find(bb, de_tab);
+        if (num_nodes > 0)
+                /* This is great, I hit the cache. */
+                return num_nodes;
+
+        num_nodes = 0;
+        for (i = 0; i < ss->dht->num_entries; i++) {
+            for (j = 0; j < ss->dht->ent_tab[i]->num_bbox; j++) {
+                if (bbox_does_intersect(bb, &ss->dht->ent_tab[i]->bb_tab[j])) {
+                    //bbox_print(bb);
+                    //bbox_print(&ss->dht->ent_tab[i]->bb_tab[j]);
+                    //printf(" i= %d rank= %d\n", i, ss->dht->ent_tab[i]->rank);
+                    de_tab[num_nodes++] = ss->dht->ent_tab[i];
+                    break;
+                }
+            }
+        }
+ 
+        /* Cache the results for later use. */
+        sh_add(bb, de_tab, num_nodes);
+
+        return num_nodes;
+}
+
 
 /*
   Initialize the dht structure.

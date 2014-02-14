@@ -880,8 +880,13 @@ static int dimes_ss_info(int *num_dims)
     }
 	
 	*num_dims = dimes_c->dcg->ss_info.num_dims;
+#ifdef DS_SSD_HASH_V2
+	dimes_c->ssd = ssd_alloc_v2(&dimes_c->domain,
+                             dimes_c->dcg->ss_info.num_space_srv, 1);
+#else
 	dimes_c->ssd = ssd_alloc(&dimes_c->domain,
                              dimes_c->dcg->ss_info.num_space_srv, 1);
+#endif
 	if (!dimes_c->ssd) {
 		uloga("%s(): ssd_alloc failed!\n",__func__);
 		err = -1;
@@ -952,7 +957,11 @@ static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
 	int err = -ENOMEM;
 
 	// Update the DHT nodes
+#ifdef DS_SSD_HASH_V2
+	num_dht_nodes = ssd_hash_v2(dimes_c->ssd, &mem_obj->obj_desc.bb, dht_nodes);
+#else
 	num_dht_nodes = ssd_hash(dimes_c->ssd, &mem_obj->obj_desc.bb, dht_nodes);
+#endif
 	if (num_dht_nodes <= 0) {
 		uloga("%s(): error! ssd_hash() return %d\n",
 				__func__, num_dht_nodes);
@@ -1641,7 +1650,11 @@ static int dimes_obj_get(struct obj_data *od)
 	qt_add_d(&dimes_c->qt, qte);
 
 	/* get dht nodes */
+#ifdef DS_SSD_HASH_V2
+	num_dht_nodes = ssd_hash_v2(dimes_c->ssd, &od->obj_desc.bb, dht_nodes);
+#else
 	num_dht_nodes = ssd_hash(dimes_c->ssd, &od->obj_desc.bb, dht_nodes);
+#endif
 	if (num_dht_nodes <= 0) {
 		uloga("%s(): error! ssd_hash() return %d\n", __func__, num_dht_nodes);
 		goto err_qt_free;
@@ -1913,7 +1926,11 @@ void dimes_client_free(void) {
 	}
 
     if (dimes_c->ssd) {
+#ifdef DS_SSD_HASH_V2
+        ssd_free_v2(dimes_c->ssd);
+#else
         ssd_free(dimes_c->ssd);
+#endif
     }
 	free(dimes_c);
 	dimes_c = NULL;

@@ -58,13 +58,13 @@ void common_lock_on_write(const char *lock_name, void *gcomm);
 void common_unlock_on_write(const char *lock_name, void *gcomm); 
 int common_put (const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+        uint64_t xl, uint64_t yl, uint64_t zl,
+        uint64_t xu, uint64_t yu, uint64_t zu,
         void *data, enum transport_type type);
 int common_get (const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+        uint64_t xl, uint64_t yl, uint64_t zl,
+        uint64_t xu, uint64_t yu, uint64_t zu, 
         void *data, enum transport_type type); 
 int common_put_sync(enum transport_type type); 
 int common_run_server(int num_sp, int num_cp, enum transport_type type);

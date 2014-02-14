@@ -79,8 +79,9 @@ void bbox_to_intv2(const struct bbox *, __u64, int, struct intv **, int *);
 void bbox_to_origin(struct bbox *, const struct bbox *);
 
 int intv_do_intersect(struct intv *, struct intv *);
-//unsigned long intv_size(struct intv *);
 __u64 intv_size(struct intv *);
+
+void bbox_divide_in2_ondim(const struct bbox *b0, struct bbox *b_tab, int dim);
 
 static __u64 next_pow_2(__u64 n)
 {
