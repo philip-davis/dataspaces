@@ -117,8 +117,7 @@ static struct timer timer;
 /* Server configuration parameters */
 static struct {
         int ndim;
-        //int dimx, dimy, dimz;
-	struct coord dims;
+        struct coord dims;
         int max_versions;
         int max_readers;
         int lock_type;		/* 1 - generic, 2 - custom */
@@ -129,7 +128,7 @@ static struct {
         int             *pval;
 } options[] = {
         {"ndim",                &ds_conf.ndim},
-	{"dims",		&ds_conf.dims},
+        {"dims",		&ds_conf.dims},
         {"max_versions",        &ds_conf.max_versions},
         {"max_readers",         &ds_conf.max_readers},
         {"lock_type",		&ds_conf.lock_type}
@@ -168,25 +167,17 @@ static int parse_line(int lineno, char *line)
         t[0] = '\0';
         eat_spaces(line);
         t++;
-        //eat_spaces(t);
 
         n = sizeof(options) / sizeof(options[0]);
 
-/*        for (i = 0; i < n; i++) {
-                if (strcmp(line, options[i].opt) == 0) {
-                        *options[i].pval = atoi(t);
-                        break;
-                }
-        }
-*/
         for (i = 0; i < n; i++) {
                 if (strcmp(line, options[1].opt) == 0){ /**< when "dims" */
-                    //get coordination
+                    //get coordinates
                     int idx = 0;
                     char* crd;
                     crd = strtok(t, ",");
                     while(crd != NULL){
-                        ((struct coord*)options[1].pval)->c[idx] = atoi(crd);
+                        ((struct coord*)options[1].pval)->c[idx] = atoll(crd);
                         crd = strtok(NULL, ",");
                         idx++;
                     }
@@ -241,24 +232,22 @@ static inline struct ds_gspace * dsg_ref_from_rpc(struct rpc_server *rpc_s)
 
 struct sspace_conf {
     int ndims;
-    int dimx, dimy, dimz;
+    uint64_t dimx, dimy, dimz;
 };
 
 // TODO: it is all hard coded for now
 static int init_sspace(struct ds_gspace *dsg_l, int num_sp, int max_versions)
 {
     struct sspace_conf confs[MAX_NUM_SSD];
-    struct bbox domains[MAX_NUM_SSD];
-
     int i, err;
 
     confs[0].ndims = 2;
     confs[0].dimx = 11750400;
-    confs[0].dimy = 64;
+    confs[0].dimy = 1;
     confs[0].dimz = 1;
 
     confs[1].ndims = 2;
-    confs[1].dimx = 64;
+    confs[1].dimx = 9;
     confs[1].dimy = 11750400;
     confs[1].dimz = 1;
 
@@ -268,15 +257,18 @@ static int init_sspace(struct ds_gspace *dsg_l, int num_sp, int max_versions)
     confs[2].dimz = 1;
 
     for (i = 0; i < MAX_NUM_SSD; i++) {
-        domains[i].num_dims = confs[i].ndims;
-        domains[i].lb.c[0] = 0;
-        domains[i].lb.c[1] = 0;
-        domains[i].lb.c[2] = 0;
-        domains[i].ub.c[0] = confs[i].dimx - 1; 
-        domains[i].ub.c[1] = confs[i].dimy - 1; 
-        domains[i].ub.c[2] = confs[i].dimz - 1; 
+        struct bbox domain;
+        memset(&domain, 0, sizeof(struct bbox));
+        domain.num_dims = confs[i].ndims;
+        domain.lb.c[0] = 0;
+        domain.lb.c[1] = 0;
+        domain.lb.c[2] = 0;
+        domain.ub.c[0] = confs[i].dimx - 1; 
+        domain.ub.c[1] = confs[i].dimy - 1; 
+        domain.ub.c[2] = confs[i].dimz - 1; 
 
-        dsg_l->spaces[i] = ssd_alloc(&domains[i], num_sp, max_versions);
+        dsg_l->spaces[i] = ssd_alloc_v2(&domain, num_sp, max_versions);
+
         if (!dsg_l->spaces[i]) {
             uloga("%s(): ssd_alloc failed with i= %d\n", __func__, i);
         }
@@ -294,7 +286,7 @@ static int free_sspace(struct ds_gspace *dsg_l)
 {
     int i;
     for (i = 0; i < MAX_NUM_SSD; i++) {
-        ssd_free(dsg_l->spaces[i]);
+        ssd_free_v2(dsg_l->spaces[i]);
     }
 
     return 0;
@@ -302,6 +294,7 @@ static int free_sspace(struct ds_gspace *dsg_l)
 
 static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_name)
 {
+#ifdef DS_SSD_HASH_V2
     char *var1 = "igid";
     char *var2 = "iphase";
     char *var3 = "dpot";
@@ -311,10 +304,6 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
     if (len >= strlen(var1)) {
         pos = len - strlen(var1);  
         if (0 == strcmp(var_name+pos, var1)) {
-#ifdef DEBUG
-            //uloga("%s(): var_name '%s' matches str '%s'\n", __func__,
-            //    var_name, var1);
-#endif
             return dsg_l->spaces[0];
         }
     }
@@ -322,10 +311,6 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
     if (len >= strlen(var2)) {
         pos = len - strlen(var2);  
         if (0 == strcmp(var_name+pos, var2)) {
-#ifdef DEBUG
-            //uloga("%s(): var_name '%s' matches str '%s'\n", __func__,
-            //    var_name, var2);
-#endif
             return dsg_l->spaces[1];
         }
     }
@@ -333,18 +318,14 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
     if (len >= strlen(var3)) {
         pos = len - strlen(var3);  
         if (0 == strcmp(var_name+pos, var3)) {
-#ifdef DEBUG
-            //uloga("%s(): var_name '%s' matches str '%s'\n", __func__,
-            //    var_name, var3);
-#endif
             return dsg_l->spaces[2];
         }
     }
 
-#ifdef DEBUG
-    //uloga("%s(): var_name '%s' len %u returns default sspace\n", __func__, var_name, len);
-#endif
     return dsg_l->ssd; // returns default sspace
+#else
+    return dsg_l->ssd;
+#endif
 }
 
 #ifdef DS_HAVE_ACTIVESPACE
@@ -1149,7 +1130,11 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_descriptor *odsc
 	int num_de, i, min_rank, err;
 
 	/* Compute object distribution to nodes in the space. */
+#ifdef DS_SSD_HASH_V2
+	num_de = ssd_hash_v2(ssd, &odsc->bb, dht_tab);
+#else
 	num_de = ssd_hash(ssd, &odsc->bb, dht_tab);
+#endif
 	if (num_de == 0) {
 		uloga("'%s()': this should not happen, num_de == 0 ?!\n",
 			__func__);
@@ -1425,7 +1410,11 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
         peer = ds_get_peer(dsg->ds, cmd->id);
 
         tm_start = timer_read(&timer);
+#ifdef DS_SSD_HASH_V2
+        peer_num = ssd_hash_v2(ssd, &oh->u.o.odsc.bb, de_tab);
+#else 
         peer_num = ssd_hash(ssd, &oh->u.o.odsc.bb, de_tab);
+#endif
         tm_end = timer_read(&timer);
 #ifdef DEBUG
         printf("SRV %d %d %lf\n", DSG_ID, num++, tm_end-tm_start);
@@ -1465,6 +1454,7 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
   RPC routine to return the peer ids for the DHT entries that have
   descriptors for data objects.
 */
+/*
 static int __dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
         struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
@@ -1519,6 +1509,7 @@ static int __dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd 
         uloga("'%s()': failed with %d.\n", __func__, err);
         return err;
 }
+*/
 
 /*
   Rpc routine to  locate the servers that may  have object descriptors
@@ -2039,18 +2030,11 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         else
             uloga("'%s()' config file loaded.\n", __func__);
 
-        /*if (ds_conf.ndims == 2)
-            ds_conf.dimz = 1;
-
-        struct bbox domain = {.num_dims = ds_conf.ndims, 
-                .lb.c = {0, 0, 0}, 
-                .ub.c = {ds_conf.dimx-1, ds_conf.dimy-1, ds_conf.dimz-1}};
-	*/
         struct bbox domain;
         memset(&domain, 0, sizeof(struct bbox));
         domain.num_dims = ds_conf.ndim;
-	printf("ds_conf.ndim = %d\n", domain.num_dims);
-	int i;
+        printf("ds_conf.ndim = %d\n", domain.num_dims);
+        int i;
         for(i = 0; i < domain.num_dims; i++){
             domain.lb.c[i] = 0;
             domain.ub.c[i] = ds_conf.dims.c[i] - 1;
@@ -2060,10 +2044,6 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         timer_init(&timer, 1);
         timer_start(&timer);
 
-	/*
-	dsg_lock_init((ds_conf.lock_type == 1) ? lock_generic : lock_custom, 
-			ds_conf.max_readers);
-	*/
         dsg = dsg_l = malloc(sizeof(*dsg_l));
         if (!dsg_l)
                 goto err_out;
@@ -2090,20 +2070,26 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
                 goto err_free;
 
         tm_start = timer_read(&timer);
+
+#ifdef DS_SSD_HASH_V2
+        dsg_l->ssd = ssd_alloc_v2(&domain, num_sp, ds_conf.max_versions);
+        init_sspace(dsg_l, num_sp, ds_conf.max_versions);
+#else
         dsg_l->ssd = ssd_alloc(&domain, num_sp, ds_conf.max_versions);
+#endif
         if (!dsg_l->ssd)
                 /* Yes, I don't free resources here, but we should
                    fail anyway. */
                 goto err_out;
         tm_end = timer_read(&timer);
 
-        printf("SRV %d %d %lf\n", DSG_ID, -1, tm_end-tm_start);
+#ifdef DEBUG
+        printf("SRV %d %lf\n", DSG_ID, tm_end-tm_start);
+#endif
 
         err = ssd_init(dsg_l->ssd, ds_get_rank(dsg_l->ds));
         if (err < 0)
                 goto err_out;
-
-        init_sspace(dsg_l, num_sp, ds_conf.max_versions);
 
         return dsg_l;
  err_free:
@@ -2143,8 +2129,12 @@ struct ss_storage *dsg_dht_get_storage(void)
 void dsg_free(struct ds_gspace *dsg)
 {
         ds_free(dsg->ds);
-        ssd_free(dsg->ssd);
+#ifdef DS_SSD_HASH_V2
+        ssd_free_v2(dsg->ssd);
         free_sspace(dsg);
+#else
+        ssd_free(dsg->ssd);
+#endif
         free(dsg);
 }
 

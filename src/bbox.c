@@ -55,6 +55,22 @@ __u64 bbox_dist(struct bbox *bb, int dim)
 }
 
 /*
+  Split the bounding box b0 in two along dimension dim, and store the
+  result in b_tab.
+*/
+void bbox_divide_in2_ondim(const struct bbox *b0, struct bbox *b_tab, int dim)
+{
+    uint64_t n;
+
+    n = (b0->lb.c[dim] + b0->ub.c[dim]) >> 1;
+    b_tab[0] = b0[0];
+    b_tab[1] = b0[0];
+
+    b_tab[0].ub.c[dim] = n;
+    b_tab[1].lb.c[dim] = n+1;
+}
+
+/*
   Generic routine to split a box in 4 or 8 based on the number of
   dimensions.
 */

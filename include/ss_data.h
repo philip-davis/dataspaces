@@ -113,6 +113,11 @@ struct dht_entry {
 
         int			odsc_size, odsc_num;
         struct list_head	odsc_hash[1];
+
+        // for v2 
+        int num_bbox;
+        int size_bb_tab;
+        struct bbox             *bb_tab;
 };
 
 struct dht {
@@ -135,6 +140,9 @@ struct sspace {
         int                     rank;
         /* Pointer into "dht.ent_tab" corresponding to this node. */
         struct dht_entry        *ent_self;
+
+        // for v2 
+        int total_num_bbox;
 };
 
 /* Header structure for obj_get requests. */
@@ -203,6 +211,9 @@ struct obj_data *ssd_lookup(struct sspace *, char *);
 void ssd_remove(struct sspace *, struct obj_data *);
 void ssd_try_remove_free(struct sspace *, struct obj_data *);
 
+struct sspace * ssd_alloc_v2(const struct bbox *, int, int);
+void ssd_free_v2(struct sspace *);
+int ssd_hash_v2(struct sspace *, const struct bbox *, struct dht_entry *[]);
 
 int dht_add_entry(struct dht_entry *, const struct obj_descriptor *);
 const struct obj_descriptor * dht_find_entry(struct dht_entry *, const struct obj_descriptor *);

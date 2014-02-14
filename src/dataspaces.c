@@ -44,11 +44,45 @@
 
 #include "debug.h"
 #include "common_dataspaces.h"
+#include "config.h"
 
 #ifdef DS_HAVE_DIMES
 #include "dimes_interface.h"
 #endif
 
+#ifdef HAVE_UGNI
+#include <pmi.h>
+#include <rca_lib.h>
+#endif
+
+#if defined(HAVE_UGNI)
+int get_topology_info(int *out_pmi_rank, int *out_nid, 
+    rca_mesh_coord_t *out_xyz)
+{
+    int rc;
+    int rank, size;
+
+    rc = PMI_Get_rank(&rank);
+    if (rc!=PMI_SUCCESS)
+        PMI_Abort(rc,"PMI_Get_rank failed");
+
+    rc = PMI_Get_size(&size);
+    if (rc!=PMI_SUCCESS)
+        PMI_Abort(rc,"PMI_Get_size failed");
+
+    int nid;
+    rc = PMI_Get_nid(rank, &nid);
+    if (rc!=PMI_SUCCESS)
+        PMI_Abort(rc,"PMI_Get_nid failed");
+
+    rca_get_meshcoord( (uint16_t) nid, out_xyz);
+    *out_pmi_rank = rank;
+    *out_nid = nid; 
+
+    fflush(stdout);
+    return 0;
+}
+#endif
 /* 
    C interface for DataSpaces.
 */
@@ -111,9 +145,12 @@ int dspaces_get(const char *var_name,
 {
 	uint64_t lb[3] = {xl, yl, zl};
 	uint64_t ub[3] = {xu, yu, zu};	
-#ifdef DEBUG
-    uloga("%s(): rank %d var %s ver %d elem_size %d lb={%llu, %llu, %llu} "
-        "ub={%llu, %llu, %llu}\n", __func__, common_dspaces_rank(), var_name,
+#if defined(TIMING_PERF) && defined(HAVE_UGNI)
+    int nid, pmi_rank;
+    rca_mesh_coord_t xyz;
+    get_topology_info(&pmi_rank, &nid, &xyz);
+    uloga("%s(): pmi_rank %d nid %d coord { %u %u %u } var %s ver %d elem_size %d lb={ %llu %llu %llu } ub={ %llu %llu %llu }\n", 
+        __func__, pmi_rank, nid, xyz.mesh_x, xyz.mesh_y, xyz.mesh_z, var_name,
         ver, size, xl, yl, zl, xu, yu, zu);
 #endif
 	return common_dspaces_get(var_name, ver, size, 3, lb, ub, data);
@@ -127,11 +164,14 @@ int dspaces_put(const char *var_name,
 {
 	uint64_t lb[3] = {xl, yl, zl};
 	uint64_t ub[3] = {xu, yu, zu};
-#ifdef DEBUG
-    uloga("%s(): rank %d var %s ver %d elem_size %d lb={%llu, %llu, %llu} "
-        "ub={%llu, %llu, %llu}\n", __func__, common_dspaces_rank(), var_name,
+#if defined(TIMING_PERF) && defined(HAVE_UGNI)
+    int nid, pmi_rank;
+    rca_mesh_coord_t xyz;
+    get_topology_info(&pmi_rank, &nid, &xyz);
+    uloga("%s(): pmi_rank %d nid %d coord { %u %u %u } var %s ver %d elem_size %d lb={ %llu %llu %llu } ub={ %llu %llu %llu }\n",     
+        __func__, pmi_rank, nid, xyz.mesh_x, xyz.mesh_y, xyz.mesh_z, var_name,
         ver, size, xl, yl, zl, xu, yu, zu);
-#endif    
+#endif 
 	return common_dspaces_put(var_name, ver, size, 3, lb, ub, data);
 }
 
@@ -174,6 +214,14 @@ int dimes_get (const char *var_name,
 {
     uint64_t lb[3] = {xl, yl, zl};
     uint64_t ub[3] = {xu, yu, zu};
+#if defined(TIMING_PERF) && defined(HAVE_UGNI)
+    int nid, pmi_rank;
+    rca_mesh_coord_t xyz;
+    get_topology_info(&pmi_rank, &nid, &xyz);
+    uloga("%s(): pmi_rank %d nid %d coord { %u %u %u } var %s ver %d elem_size %d lb={ %llu %llu %llu } ub={ %llu %llu %llu }\n",
+        __func__, pmi_rank, nid, xyz.mesh_x, xyz.mesh_y, xyz.mesh_z, var_name,
+        ver, size, xl, yl, zl, xu, yu, zu);
+#endif
     return common_dimes_get(var_name, ver, size, 3, lb, ub, data);
 }
 
@@ -185,6 +233,14 @@ int dimes_put (const char *var_name,
 {
     uint64_t lb[3] = {xl, yl, zl};
     uint64_t ub[3] = {xu, yu, zu};
+#if defined(TIMING_PERF) && defined(HAVE_UGNI)
+    int nid, pmi_rank;
+    rca_mesh_coord_t xyz;
+    get_topology_info(&pmi_rank, &nid, &xyz);
+    uloga("%s(): pmi_rank %d nid %d coord { %u %u %u } var %s ver %d elem_size %d lb={ %llu %llu %llu } ub={ %llu %llu %llu }\n",
+        __func__, pmi_rank, nid, xyz.mesh_x, xyz.mesh_y, xyz.mesh_z, var_name,
+        ver, size, xl, yl, zl, xu, yu, zu);
+#endif
     return common_dimes_put(var_name, ver, size, 3, lb, ub, data);
 }
 

@@ -37,7 +37,7 @@
 //# of processors in x-y-z direction
 static int npx_, npy_, npz_;
 //block size per processor per direction
-static int spx_, spy_, spz_;
+static uint64_t spx_, spy_, spz_;
 //# of iterations
 static int timestep_;
 //# of processors in the application
@@ -45,7 +45,7 @@ static int npapp_;
 
 static int rank_, nproc_;
 
-static int offx_, offy_, offz_;
+static uint64_t offx_, offy_, offz_;
 
 static struct timer timer_;
 
@@ -62,22 +62,22 @@ Matrix representation
 v (y)
 */
 // TODO(fan): split the function into 2
-static double* allocate_2d(int x, int y)
+static double* allocate_2d(uint64_t x, uint64_t y)
 {
 	double* tmp = NULL;
 	tmp = (double*)malloc(elem_size_ * x * y);
 	return tmp;
 }
 
-static void set_offset_2d(int rank, int npx, int npy, int spx, int spy)
+static void set_offset_2d(int rank, int npx, int npy, uint64_t spx, uint64_t spy)
 {
 	offx_ = (rank % npx) * spx;
 	offy_ = (rank / npx) * spy;
 }
 
-static int generate_2d(double *m2d, unsigned int ts, int spx, int spy)
+static int generate_2d(double *m2d, unsigned int ts, uint64_t spx, uint64_t spy)
 {
-    int num_double = (spx*spy*elem_size_) / sizeof(double);
+    uint64_t num_double = (spx*spy*elem_size_) / sizeof(double);
 	// double value = 1.0*(rank_) + 0.0001*ts;
 	double value = ts;
 	int i;
@@ -88,23 +88,23 @@ static int generate_2d(double *m2d, unsigned int ts, int spx, int spy)
 	return 0;
 }
 
-static double* allocate_3d(int x, int y, int z)
+static double* allocate_3d(uint64_t x, uint64_t y, uint64_t z)
 {
 	double *tmp = NULL;
 	tmp = (double*)malloc(elem_size_* x * y * z);
 	return tmp;
 }
 
-static void set_offset_3d(int rank, int npx, int npy, int npz, int spx, int spy, int spz)
+static void set_offset_3d(int rank, int npx, int npy, int npz, uint64_t spx, uint64_t spy, uint64_t spz)
 {
 	offx_ = (rank % npx) * spx;
 	offy_ = (rank / npx % npy) * spy;
 	offz_ = (rank / npx / npy) * spz;
 }
 
-static int generate_3d(double *m3d, unsigned int ts, int spx, int spy, int spz)
+static int generate_3d(double *m3d, unsigned int ts, uint64_t spx, uint64_t spy, uint64_t spz)
 {
-    int num_double = (spx*spy*spz*elem_size_) / sizeof(double);
+    uint64_t num_double = (spx*spy*spz*elem_size_) / sizeof(double);
 	double value = ts;
 	int i;
 	for (i = 0; i < num_double; i++) {
@@ -131,17 +131,17 @@ static int couple_write_2d(unsigned int ts, int num_vars, enum transport_type ty
 	//put the m2d into the space
 	set_offset_2d(rank_, npx_, npy_, spx_, spy_);
 	int elem_size = elem_size_;
-	int xl = offx_;
-	int yl = offy_;
-	int zl = 0;
-	int xu = offx_ + spx_ - 1;
-	int yu = offy_ + spy_ - 1;
-	int zu = 0;
+	uint64_t xl = offx_;
+	uint64_t yl = offy_;
+	uint64_t zl = 0;
+	uint64_t xu = offx_ + spx_ - 1;
+	uint64_t yu = offy_ + spy_ - 1;
+	uint64_t zu = 0;
 	double tm_st, tm_end, tm_max, tm_diff;
 	int root = 0;
 
 #ifdef DEBUG
-	uloga("Timestep=%u, %d write m2d:{(%d,%d,%d),(%d,%d,%d)} into space\n",
+	uloga("Timestep=%u, %d write m2d:{(%llu,%llu,%llu),(%llu,%llu,%llu)} into space\n",
 		ts, rank_, xl,yl,zl,xu,yu,zu);
 #endif
 
@@ -212,17 +212,17 @@ static int couple_write_3d(unsigned int ts, int num_vars, enum transport_type ty
 	//put the m3d into the space
 	set_offset_3d(rank_, npx_, npy_, npz_, spx_, spy_, spz_);
 	int elem_size = elem_size_;
-	int xl = offx_;
-	int yl = offy_;
-	int zl = offz_;
-	int xu = offx_ + spx_ - 1;
-	int yu = offy_ + spy_ - 1;
-	int zu = offz_ + spz_ - 1;
+	uint64_t xl = offx_;
+	uint64_t yl = offy_;
+	uint64_t zl = offz_;
+	uint64_t xu = offx_ + spx_ - 1;
+	uint64_t yu = offy_ + spy_ - 1;
+	uint64_t zu = offz_ + spz_ - 1;
 	double tm_st, tm_end, tm_max, tm_diff;
 	int root = 0;
 
 #ifdef DEBUG
-	uloga("Timestep=%u, %d write m3d:{(%d,%d,%d),(%d,%d,%d)} into space\n",
+	uloga("Timestep=%u, %d write m3d:{(%llu,%llu,%llu),(%llu,%llu,%llu)} into space\n",
 		ts, rank_, xl,yl,zl,xu,yu,zu);
 #endif
 
@@ -274,8 +274,8 @@ static int couple_write_3d(unsigned int ts, int num_vars, enum transport_type ty
 }
 
 int test_put_run(enum transport_type type, int npapp, int npx, int npy, int npz,
-    int spx, int spy, int spz, int timestep, int dims, size_t elem_size,
-    int num_vars, MPI_Comm gcomm)
+    uint64_t spx, uint64_t spy, uint64_t spz, int timestep, int dims,
+    size_t elem_size, int num_vars, MPI_Comm gcomm)
 {
 	gcomm_ = gcomm;
 	elem_size_ = elem_size;
