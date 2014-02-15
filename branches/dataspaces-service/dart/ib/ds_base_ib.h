@@ -28,8 +28,13 @@ struct dart_server {
 
 	/* List (array) of peer nodes; this should be of fixed size. */
 	int peer_size;
+
+	int current_client_size;
+
 //	struct node_id *peer_tab;
 	struct node_id *cn_peers;
+
+	int s_connected;
 
 	/* Number of compute node peers; number of server peers. */
 	int num_cp, num_sp;
