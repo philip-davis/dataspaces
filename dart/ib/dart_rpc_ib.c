@@ -566,6 +566,7 @@ static struct rpc_request *rr_comm_alloc(int num_rpc)	//Done
 	size_t size;
 
 	size = sizeof(*rr) + sizeof(*rr->msg) + sizeof(struct rpc_cmd) * num_rpc + 7;
+
 	rr = malloc(size);
 	if(!rr)
 		return 0;
@@ -821,6 +822,7 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 
 	//check peer->req_list
 	while(!list_empty(&peer->req_list)) {
+	printf("I am %d, process send to %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
 	//printf("posted is %d.\n", peer->req_posted);
 		if(rpc_s->com_type == 1 || peer->req_posted > 100) {
 			for(i = 0; i < 10; i++)	//performance here
@@ -1207,6 +1209,10 @@ struct rpc_server *rpc_server_init(int option, char *ip, int port, int num_buff,
 	}
 
 	rpc_s->ptlmap.address.sin_port = rdma_get_src_port(rpc_s->listen_id);
+
+
+//	rpc_s->ptlmap.appid =0;
+//	rpc_s->ptlmap.local_id = 0;
 
 	//TODO: sys part if needed
 
@@ -1604,12 +1610,17 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 	}
 	freeaddrinfo(addr);
 
+        struct node_id *temp_peer;
+
+
 	while(rdma_get_cm_event(peer->rpc_ec, &event) == 0) {
 		struct rdma_cm_event event_copy;
 		memcpy(&event_copy, event, sizeof(*event));
 		rdma_ack_cm_event(event);
 
 		if(event_copy.event == RDMA_CM_EVENT_ADDR_RESOLVED) {
+
+
 			build_context(event_copy.id->verbs, &peer->rpc_conn);
 			build_qp_attr(&peer->rpc_conn.qp_attr, &peer->rpc_conn, rpc_s);
 
@@ -1639,6 +1650,8 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 			}
 		} else if(event_copy.event == RDMA_CM_EVENT_ROUTE_RESOLVED) {
 //			printf("route resolved.\n");
+//
+
 			memset(&cm_params, 0, sizeof(struct rdma_conn_param));
 
 			conpara.pm_cp = rpc_s->ptlmap;
@@ -1658,6 +1671,7 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 				goto err_out;
 			}
 		} else if(event_copy.event == RDMA_CM_EVENT_ESTABLISHED) {
+
 //			printf("Connection Established.\n");
 			if(peer->ptlmap.id == 0) {
 				if(rpc_s->ptlmap.appid != 0) {
@@ -1667,7 +1681,7 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 
 					peer->ptlmap = ((struct con_param *) event_copy.param.conn.private_data)->pm_cp;
 
- //                                       printf("Client %d %d\n",rpc_s->ptlmap.id,((struct con_param *) event_copy.param.conn.private_data)->num_cp);
+                                       printf("Client %d will get %d total peers\n",rpc_s->ptlmap.id,((struct con_param *) event_copy.param.conn.private_data)->num_cp);
 				        rpc_s->num_peers = rpc_s->num_rpc_per_buff + ((struct con_param *) event_copy.param.conn.private_data)->num_cp;
 
 //                                      rpc_s->app_minid = ((struct con_param *) event_copy.param.conn.private_data)->type;     //Here is a tricky design. Master Server puts app_minid into this 'type' field and return.
@@ -1687,6 +1701,8 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 		if(check == 1)
 			break;
 	}
+
+
 
 	return 0;
       err_out:
@@ -1864,8 +1880,7 @@ static int __process_event(struct rpc_server *rpc_s, int timeout)	//Done
                 peer = rpc_get_peer(rpc_s,i);
                 if(peer==NULL)
                         continue;
-
-              // printf("processing peer# %d (%s:%d)\n",peer->ptlmap.id, inet_ntoa(eer->ptlmap.address.sin_addr),ntohs(peer->ptlmap.address.sin_port));
+	               //printf("processing peer# %d (%s:%d)\n",peer->ptlmap.id, inet_ntoa(peer->ptlmap.address.sin_addr),ntohs(peer->ptlmap.address.sin_port));
 
 
 //		if(rpc_s->peer_tab[i].ptlmap.id == rpc_s->ptlmap.id) {
@@ -2344,7 +2359,7 @@ int rpc_receivev(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf 
 /*
 	Other operations
 */
-int rpc_read_config(struct sockaddr_in *address)	////done
+int rpc_read_config(int appid, struct sockaddr_in *address)	////done
 {
 	char *ip;
 	char *port;
@@ -2365,7 +2380,11 @@ int rpc_read_config(struct sockaddr_in *address)	////done
 		return 0;
 	}
 
-	f = fopen("conf", "rt");
+	char conf_filename[20];
+
+	sprintf(conf_filename, "conf.%d",appid);
+
+	f = fopen(conf_filename, "rt");
 	if(!f) {
 		err = -ENOENT;
 		goto err_out;
@@ -2392,12 +2411,17 @@ int rpc_read_config(struct sockaddr_in *address)	////done
 	return err;
 }
 
-int rpc_write_config(struct rpc_server *rpc_s)	////done
+int rpc_write_config(int appid, struct rpc_server *rpc_s)	////done
 {
 	FILE *f;
 	int err;
 
-	f = fopen("conf", "wt");
+	char conf_filename[20];
+	 sprintf(conf_filename, "conf.%d",appid);
+
+        f = fopen(conf_filename, "wt");
+
+
 	if(!f)
 		goto err_out;
 
