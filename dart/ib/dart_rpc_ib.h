@@ -86,6 +86,7 @@ struct ptlid_map {
 	struct sockaddr_in address;
 	int id;
 	int appid;
+//	int local_id;
 };
 
 /* Registration header structure.  */
@@ -337,7 +338,11 @@ struct node_id {
         struct list_head peer_entry;
 
 	struct ptlid_map ptlmap;
-	struct rdma_mr peer_mr;
+//	struct rdma_mr peer_mr;
+//
+	int local_id;
+
+	int num_peer_in_app;
 
 	// struct for peer connection
 	struct rdma_event_channel *rpc_ec;
@@ -358,6 +363,7 @@ struct node_id {
 	int f_need_msg;
 
 	int ch_num;		// added for IB version, connected channel num 
+
 
 	// Number of messages I can send to this peer without blocking.
 	int num_msg_at_peer;
@@ -391,7 +397,9 @@ enum cmd_type {
 	sp_reg_reply,
 	peer_rdma_done,		/* Added in IB version 12 */
 	sp_announce_cp,
+	cp_announce_cp,
 	sp_announce_cp_all,
+	cp_disseminate_cs,
 	cn_timing,
 	/* Synchronization primitives. */
 	cp_barrier,
@@ -440,6 +448,18 @@ static int default_completion_callback(struct rpc_server *rpc_s, struct msg_buf 
 }
 
 
+static int file_lock(int fd, int op)
+{
+        if(op) {
+                while(lockf(fd, F_TLOCK, (off_t) 1) != 0) {
+                }
+                return 0;
+        } else
+                return lockf(fd, F_ULOCK, (off_t) 1);
+}
+
+
+
 static struct node_id *peer_alloc()
 {
           struct node_id *peer = 0;
@@ -480,8 +500,8 @@ void rpc_server_set_rpc_per_buff(struct rpc_server *rpc_s, int num_rpc_per_buff)
 struct rpc_server *rpc_server_get_instance(void);
 int rpc_server_get_id(void);
 
-int rpc_read_config(struct sockaddr_in *address);	//
-int rpc_write_config(struct rpc_server *rpc_s);	//
+int rpc_read_config(int appid, struct sockaddr_in *address);	//
+int rpc_write_config(int appid, struct rpc_server *rpc_s);	//
 
 int rpc_process_event(struct rpc_server *rpc_s);
 int rpc_process_event_with_timeout(struct rpc_server *rpc_s, int timeout);

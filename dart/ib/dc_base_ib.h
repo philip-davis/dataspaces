@@ -7,6 +7,8 @@ struct dart_client {
 	struct rpc_server *rpc_s;
 
 	int peer_size;
+
+	int local_id;
 //	struct node_id *peer_tab;
 	struct node_id *cn_peers;
 
