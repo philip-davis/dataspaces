@@ -48,9 +48,11 @@ struct query_tran_d {
 	int                     num_ent;
 };
 
+#define MAX_NUM_SSD 3
 struct dimes_client {
 	struct dcg_space *dcg;
 	struct sspace *ssd; //only used for hashing
+    struct sspace *spaces[MAX_NUM_SSD];
 	struct bbox domain;
 	struct query_tran_d qt;
 	int    f_ss_info;

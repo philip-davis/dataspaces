@@ -111,13 +111,13 @@ struct dht_entry {
         struct obj_descriptor   *od_tab;
         */
 
-        int			odsc_size, odsc_num;
-        struct list_head	odsc_hash[1];
-
         // for v2 
         int num_bbox;
         int size_bb_tab;
         struct bbox             *bb_tab;
+
+        int			odsc_size, odsc_num;
+        struct list_head	odsc_hash[1];
 };
 
 struct dht {

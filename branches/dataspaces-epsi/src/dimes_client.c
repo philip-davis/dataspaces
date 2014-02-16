@@ -51,6 +51,100 @@ static char log_header[256] = "";
 static struct timer tm_perf;
 #endif
 
+struct sspace_conf {
+    int ndims;
+    uint64_t dimx, dimy, dimz;
+};
+
+// TODO: it is all hard coded for now
+static int init_sspace_dimes(struct dimes_client *d, int num_sp, int max_versions)
+{
+    struct sspace_conf confs[MAX_NUM_SSD];
+    int i, err;
+
+    confs[0].ndims = 2;
+    confs[0].dimx = 11750400;
+    confs[0].dimy = 1;
+    confs[0].dimz = 1;
+
+    confs[1].ndims = 2;
+    confs[1].dimx = 9;
+    confs[1].dimy = 11750400;
+    confs[1].dimz = 1;
+
+    confs[2].ndims = 2;
+    confs[2].dimx = 64;
+    confs[2].dimy = 1;
+    confs[2].dimz = 1;
+
+    for (i = 0; i < MAX_NUM_SSD; i++) {
+        struct bbox domain;
+        memset(&domain, 0, sizeof(struct bbox));
+        domain.num_dims = confs[i].ndims;
+        domain.lb.c[0] = 0;
+        domain.lb.c[1] = 0;
+        domain.lb.c[2] = 0;
+        domain.ub.c[0] = confs[i].dimx - 1; 
+        domain.ub.c[1] = confs[i].dimy - 1; 
+        domain.ub.c[2] = confs[i].dimz - 1; 
+
+        d->spaces[i] = ssd_alloc_v2(&domain, num_sp, max_versions);
+
+        if (!d->spaces[i]) {
+            uloga("%s(): ssd_alloc failed with i= %d\n", __func__, i);
+        }
+    }
+
+    return 0;
+}
+
+static int free_sspace_dimes(struct dimes_client *d)
+{
+    int i;
+    for (i = 0; i < MAX_NUM_SSD; i++) {
+        ssd_free_v2(d->spaces[i]);
+    }
+
+    return 0;
+}
+
+static struct sspace* lookup_sspace_dimes(struct dimes_client *d, const char* var_name)
+{
+#ifdef DS_SSD_HASH_V2
+    char *var1 = "igid";
+    char *var2 = "iphase";
+    char *var3 = "dpot";
+
+    int pos;
+    size_t len = strlen(var_name);
+    if (len >= strlen(var1)) {
+        pos = len - strlen(var1);  
+        if (0 == strcmp(var_name+pos, var1)) {
+            return d->spaces[0];
+        }
+    }
+    
+    if (len >= strlen(var2)) {
+        pos = len - strlen(var2);  
+        if (0 == strcmp(var_name+pos, var2)) {
+            return d->spaces[1];
+        }
+    }
+
+    if (len >= strlen(var3)) {
+        pos = len - strlen(var3);  
+        if (0 == strcmp(var_name+pos, var3)) {
+            return d->spaces[2];
+        }
+    }
+
+    return d->ssd; // returns default sspace
+#else
+    return d->ssd;
+#endif
+}
+
+
 struct dimes_client_option {
     int enable_dimes_ack;
     int enable_pre_allocated_rdma_buffer;
@@ -883,6 +977,7 @@ static int dimes_ss_info(int *num_dims)
 #ifdef DS_SSD_HASH_V2
 	dimes_c->ssd = ssd_alloc_v2(&dimes_c->domain,
                              dimes_c->dcg->ss_info.num_space_srv, 1);
+    init_sspace_dimes(dimes_c, dimes_c->dcg->ss_info.num_space_srv, 1);
 #else
 	dimes_c->ssd = ssd_alloc(&dimes_c->domain,
                              dimes_c->dcg->ss_info.num_space_srv, 1);
@@ -958,7 +1053,8 @@ static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
 
 	// Update the DHT nodes
 #ifdef DS_SSD_HASH_V2
-	num_dht_nodes = ssd_hash_v2(dimes_c->ssd, &mem_obj->obj_desc.bb, dht_nodes);
+    struct sspace *ssd = lookup_sspace_dimes(dimes_c, mem_obj->obj_desc.name);
+	num_dht_nodes = ssd_hash_v2(ssd, &mem_obj->obj_desc.bb, dht_nodes);
 #else
 	num_dht_nodes = ssd_hash(dimes_c->ssd, &mem_obj->obj_desc.bb, dht_nodes);
 #endif
@@ -1651,7 +1747,8 @@ static int dimes_obj_get(struct obj_data *od)
 
 	/* get dht nodes */
 #ifdef DS_SSD_HASH_V2
-	num_dht_nodes = ssd_hash_v2(dimes_c->ssd, &od->obj_desc.bb, dht_nodes);
+    struct sspace *ssd = lookup_sspace_dimes(dimes_c, od->obj_desc.name);
+	num_dht_nodes = ssd_hash_v2(ssd, &od->obj_desc.bb, dht_nodes);
 #else
 	num_dht_nodes = ssd_hash(dimes_c->ssd, &od->obj_desc.bb, dht_nodes);
 #endif
@@ -1928,6 +2025,7 @@ void dimes_client_free(void) {
     if (dimes_c->ssd) {
 #ifdef DS_SSD_HASH_V2
         ssd_free_v2(dimes_c->ssd);
+        free_sspace_dimes(dimes_c);
 #else
         ssd_free(dimes_c->ssd);
 #endif
