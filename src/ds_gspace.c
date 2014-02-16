@@ -236,7 +236,7 @@ struct sspace_conf {
 };
 
 // TODO: it is all hard coded for now
-static int init_sspace(struct ds_gspace *dsg_l, int num_sp, int max_versions)
+static int init_sspace_ds(struct ds_gspace *dsg_l, int num_sp, int max_versions)
 {
     struct sspace_conf confs[MAX_NUM_SSD];
     int i, err;
@@ -282,7 +282,7 @@ static int init_sspace(struct ds_gspace *dsg_l, int num_sp, int max_versions)
     return 0;
 }
 
-static int free_sspace(struct ds_gspace *dsg_l)
+static int free_sspace_ds(struct ds_gspace *dsg_l)
 {
     int i;
     for (i = 0; i < MAX_NUM_SSD; i++) {
@@ -292,7 +292,7 @@ static int free_sspace(struct ds_gspace *dsg_l)
     return 0;
 }
 
-static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_name)
+static struct sspace* lookup_sspace_ds(struct ds_gspace *dsg_l, const char* var_name)
 {
 #ifdef DS_SSD_HASH_V2
     char *var1 = "igid";
@@ -1083,7 +1083,7 @@ static int dsgrpc_obj_update(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
         // TODO: lookup sspace 
         struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
-        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name); 
+        struct sspace* ssd = lookup_sspace_ds(dsg, oh->u.o.odsc.name); 
         struct dht_entry *de = ssd->ent_self;
         int err;
 
@@ -1120,7 +1120,7 @@ static int dsgrpc_obj_update(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_descriptor *odsc)
 {
     // TODO: lookup sspace
-    struct sspace* ssd = lookup_sspace(dsg, odsc->name);
+    struct sspace* ssd = lookup_sspace_ds(dsg, odsc->name);
 	struct dht_entry *dht_tab[ssd->dht->num_entries];
 	/* TODO: create a separate header structure for object
 	   updates; for now just abuse the hdr_obj_get. */
@@ -1211,7 +1211,7 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
     struct obj_data *od = msg->private;
 
     // TODO: lookup sspace
-    struct sspace* ssd = lookup_sspace(dsg, od->obj_desc.name);
+    struct sspace* ssd = lookup_sspace_ds(dsg, od->obj_desc.name);
     ssd_add_obj(ssd, od);
 
     free(msg);
@@ -1398,7 +1398,7 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
         // TODO: lookup sspace
         struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
         struct node_id *peer;
-        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name);
+        struct sspace* ssd = lookup_sspace_ds(dsg, oh->u.o.odsc.name);
         struct dht_entry *de_tab[ssd->dht->num_entries];
         struct msg_buf *msg;
         int *peer_id_tab, peer_num, i;
@@ -1659,7 +1659,7 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
         struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
         struct obj_descriptor odsc, *odsc_tab;
-        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name);
+        struct sspace* ssd = lookup_sspace_ds(dsg, oh->u.o.odsc.name);
         const struct obj_descriptor *podsc[ssd->ent_self->odsc_num];
         int obj_versions[ssd->ent_self->odsc_size];
         int num_odsc, i;
@@ -1855,7 +1855,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 #endif
 
         // TODO: lookup sspace
-        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name);
+        struct sspace* ssd = lookup_sspace_ds(dsg, oh->u.o.odsc.name);
         // CRITICAL: use version here !!!
         from_obj = ls_find(ssd->storage, &oh->u.o.odsc);
         // from_obj = ls_find_no_version(&dsg->ssd->storage, &oh->odsc);
@@ -2073,7 +2073,7 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
 
 #ifdef DS_SSD_HASH_V2
         dsg_l->ssd = ssd_alloc_v2(&domain, num_sp, ds_conf.max_versions);
-        init_sspace(dsg_l, num_sp, ds_conf.max_versions);
+        init_sspace_ds(dsg_l, num_sp, ds_conf.max_versions);
 #else
         dsg_l->ssd = ssd_alloc(&domain, num_sp, ds_conf.max_versions);
 #endif
@@ -2131,7 +2131,7 @@ void dsg_free(struct ds_gspace *dsg)
         ds_free(dsg->ds);
 #ifdef DS_SSD_HASH_V2
         ssd_free_v2(dsg->ssd);
-        free_sspace(dsg);
+        free_sspace_ds(dsg);
 #else
         ssd_free(dsg->ssd);
 #endif
