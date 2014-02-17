@@ -398,8 +398,10 @@ enum cmd_type {
 	peer_rdma_done,		/* Added in IB version 12 */
 	sp_announce_cp,
 	cp_announce_cp,
+	sp_announce_app,
 	sp_announce_cp_all,
 	cp_disseminate_cs,
+	sp_annouce_app,
 	cn_timing,
 	/* Synchronization primitives. */
 	cp_barrier,

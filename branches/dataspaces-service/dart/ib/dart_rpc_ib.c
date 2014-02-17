@@ -813,7 +813,7 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 
 	//check peer->req_list
 	while(!list_empty(&peer->req_list)) {
-	printf("I am %d, process send to %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
+//	printf("I am %d, process send to %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
 	//printf("posted is %d.\n", peer->req_posted);
 		if(rpc_s->com_type == 1 || peer->req_posted > 100) {
 			for(i = 0; i < 10; i++)	//performance here
@@ -1649,13 +1649,15 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 //			printf("Connection Established.\n");
 			if(peer->ptlmap.id == 0) {
 				if(rpc_s->ptlmap.appid != 0) {
+
+//					printf("I was %d now I am %d minid %d %d\n", rpc_s->ptlmap.id, ((struct con_param *) event_copy.param.conn.private_data)->pm_sp.id, rpc_s->app_minid, ((struct con_param *) event_copy.param.conn.private_data)->type);
 					rpc_s->app_minid = ((struct con_param *) event_copy.param.conn.private_data)->type;
 					rpc_s->ptlmap.id = ((struct con_param *) event_copy.param.conn.private_data)->pm_sp.id;
 					//rpc_s->peer_tab = calloc(1, sizeof(struct node_id) * (rpc_s->num_rpc_per_buff + ((struct con_param *) event_copy.param.conn.private_data)->num_cp));
 
 					peer->ptlmap = ((struct con_param *) event_copy.param.conn.private_data)->pm_cp;
 
-                                       printf("Client %d will get %d total peers\n",rpc_s->ptlmap.id,((struct con_param *) event_copy.param.conn.private_data)->num_cp);
+//                                       printf("Client %d will get %d total peers\n",rpc_s->ptlmap.id,((struct con_param *) event_copy.param.conn.private_data)->num_cp);
 				        rpc_s->num_peers = rpc_s->num_rpc_per_buff + ((struct con_param *) event_copy.param.conn.private_data)->num_cp;
 
 //                                      rpc_s->app_minid = ((struct con_param *) event_copy.param.conn.private_data)->type;     //Here is a tricky design. Master Server puts app_minid into this 'type' field and return.
@@ -2137,7 +2139,7 @@ int rpc_process_event_with_timeout(struct rpc_server *rpc_s, int timeout)	//Done
 int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)	//Done
 {
 	if(peer->rpc_conn.f_connected != 1) {
-              printf("RPC channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
+//              printf("RPC channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
 		rpc_connect(rpc_s, peer);
 //              goto err_out;
 	}
