@@ -116,7 +116,7 @@ static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 
 		temp_peer->ptlmap = *pm;
 
-      		printf("Client %d peer %d:  %s %d \n",rpc_s->ptlmap.id, temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
+//      		printf("AAA Client %d peer %d:  %s %d \n",rpc_s->ptlmap.id, temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
 
 //		if(temp_peer->ptlmap.address.sin_addr.s_addr == dc->rpc_s->ptlmap.address.sin_addr.s_addr && temp_peer->ptlmap.address.sin_port == dc->rpc_s->ptlmap.address.sin_port)
 //			dc->self = temp_peer;
@@ -144,8 +144,8 @@ list_for_each_entry(temp_peer, &rpc_s->peer_list, struct node_id, peer_entry) {
 
 	dc->cp_min_rank = dc->rpc_s->app_minid;
 	dc->f_reg = 1;
-	free(msg->msg_data);
-	free(msg);
+	//free(msg->msg_data);
+	//free(msg);
 	return 0;
 }
 
@@ -164,11 +164,10 @@ static int announce_cp_completion_all(struct rpc_server *rpc_s, struct msg_buf *
 
                 temp_peer->ptlmap = *pm;
 
-                printf("Client %d peer %d:  %s %d \n",rpc_s->ptlmap.id, temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
+//                printf("HELLO Client %d peer %d:  %s %d \n",rpc_s->ptlmap.id, temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
 
               if(temp_peer->ptlmap.address.sin_addr.s_addr == dc->rpc_s->ptlmap.address.sin_addr.s_addr && temp_peer->ptlmap.address.sin_port == dc->rpc_s->ptlmap.address.sin_port){
 
-		printf("hello\n");
                       dc->self = temp_peer;
 			dc->rpc_s->ptlmap.id = temp_peer->ptlmap.id;
 	}
@@ -259,7 +258,7 @@ static int dcrpc_announce_cp_all(struct rpc_server *rpc_s, struct rpc_cmd *cmd) 
         dc->num_sp = hreg->num_sp;
         dc->num_cp = hreg->num_cp;
 
-        printf("about to get peers from client master, #server %d # of clients # %d of my peer size %d\n", hreg->num_sp , hreg->num_cp , dc->peer_size);
+//        printf("Me is %d about to get peers from client master %d, #server %d # of clients # %d of my peer size %d\n", rpc_s->ptlmap.id,hreg->pm_cp.id, hreg->num_sp , hreg->num_cp , dc->peer_size);
 //      peer = rpc_s->peer_tab;
         peer = dc_get_peer(dc, 0);
 
@@ -278,13 +277,28 @@ static int dcrpc_announce_cp_all(struct rpc_server *rpc_s, struct rpc_cmd *cmd) 
         msg->id = cmd->wr_id;
         msg->mr = cmd->mr;
 
+	struct node_id *temp_peer;
 
-        err = rpc_receive_direct(rpc_s, peer, msg);
+//        err = rpc_receive_direct(rpc_s, peer, msg);
+        list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
+//               printf("BEEPA I am now %d peer# %d (%s:%d)\n",dc->rpc_s->ptlmap.id, temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
+}
+
+	rpc_s->ptlmap.id = rpc_s->ptlmap.id + hreg->pm_cp.id;
 
         peer->ptlmap.id = hreg->pm_cp.id;
 
 	rpc_s->num_peers = peer->ptlmap.id+1;
-	
+
+//	rpc_s->num_peers=60;
+
+
+
+        err = rpc_receive_direct(rpc_s, peer, msg);
+
+        list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
+//               printf("BEEPB I am now %d peer# %d (%s:%d)\n",dc->rpc_s->ptlmap.id, temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
+}	
         dc->cp_min_rank = dc->rpc_s->app_minid =  peer->ptlmap.id;
 
         if(err < 0) {
@@ -308,7 +322,7 @@ static int dcrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Do
 	dc->num_sp = hreg->num_sp;
 	dc->num_cp = hreg->num_cp;
 
-	printf("about to get peers from master, #server %d # of clients # %d of my peer size %d\n", hreg->num_sp , hreg->num_cp , dc->peer_size);
+//	printf("about to get peers from master, #server %d # of clients # %d of my peer size %d\n", hreg->num_sp , hreg->num_cp , dc->peer_size);
 //	peer = rpc_s->peer_tab;
 	peer = dc_get_peer(dc, 0);
 
@@ -456,6 +470,17 @@ static void *dc_listen(void *client)
 		if(event_copy.event == RDMA_CM_EVENT_CONNECT_REQUEST) {
 			conpara = *(struct con_param *) event_copy.param.conn.private_data;
 			peer = dc_get_peer(dc, conpara.pm_cp.id);
+
+			int kk=0;	
+	
+			while(peer==NULL){
+				if(kk<4)
+					printf("STUCK %d, waitting for %d %d\n",dc->rpc_s->ptlmap.id,conpara.pm_cp.id, dc->rpc_s->num_peers);
+				kk++;
+				rpc_process_event_with_timeout(dc->rpc_s, 1);
+				//sleep(1);
+				peer = dc_get_peer(dc, conpara.pm_cp.id);
+			}
 			if(conpara.type == 0) {
                                // printf("Client %d: SYS connect request from %d\n",dc->rpc_s->ptlmap.id,peer->ptlmap.id);
 				con = &peer->sys_conn;
@@ -715,7 +740,7 @@ static int dc_disseminate_dc(struct dart_client *dc)       //Done
         int i, k, err;
 //      cpeer = ds->peer_tab;
 
-	printf("Current %d %d min rank %d, peer size %d\n",dc->num_sp, dc->num_cp, dc->cp_min_rank, dc->peer_size);
+//	printf("Current %d %d min rank %d, peer size %d\n",dc->num_sp, dc->num_cp, dc->cp_min_rank, dc->peer_size);
         //send to slave servers all the peers' info
         for(i = 1; i < dc->peer_size; i++) {
                 peer = dc_get_peer(dc, i+ dc->cp_min_rank);
@@ -724,14 +749,17 @@ static int dc_disseminate_dc(struct dart_client *dc)       //Done
                 if(!msg)
                         goto err_out;
                 msg->cb = default_completion_with_data_callback;
-                msg->size = sizeof(struct ptlid_map) * (dc->num_sp + dc->num_sp);
+                msg->size = sizeof(struct ptlid_map) * (dc->num_sp + dc->num_cp);
                 pptlmap = msg->msg_data = malloc(msg->size);
                 if(!msg->msg_data)
                         goto err_out_free;
                 struct node_id *temp_peer;
+		k = 0;
                 list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
+			//memcpy(&pptlmap[k],&temp_peer->ptlmap,sizeof(struct ptlid_map));
                         *pptlmap++ = temp_peer->ptlmap;
                 }
+
 
                 msg->msg_rpc->cmd = cp_announce_cp;
                 msg->msg_rpc->id = dc->self->ptlmap.id;
@@ -740,7 +768,7 @@ static int dc_disseminate_dc(struct dart_client *dc)       //Done
                 hreg->num_cp = dc->num_cp;
                 hreg->num_sp = dc->num_sp;
 
-                printf("sending to peer %d\n",peer->ptlmap.id);
+//                printf("sending to peer %d\n",peer->ptlmap.id);
 
                 err = rpc_send(dc->rpc_s, peer, msg);
                 if(err < 0) {
@@ -785,16 +813,16 @@ int dc_boot_master(struct dart_client *dc)
 	dc->rpc_s->ptlmap.id = 0;
 
         printf("'%s()': all the peer in my app are registered. %d\n", __func__, dc->peer_size);
-        dc->rpc_s->cur_num_peer = dc->rpc_s->num_rpc_per_buff;
+        dc->rpc_s->cur_num_peer = dc->peer_size;//dc->rpc_s->num_rpc_per_buff;
 
 	//err = ds_disseminate(dc);
 	
 
          struct node_id *temp_peer;
-         list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
+/*         list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
                 printf("Clientpeer# %d (%s:%d)\n",temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
          }
-
+*/
 
 	struct node_id *master_peer = peer_alloc();
 
@@ -825,9 +853,9 @@ int dc_boot_master(struct dart_client *dc)
 
         list_add(&master_peer->peer_entry, &dc->rpc_s->peer_list);
 
-         list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
-                printf("Clientpeer# %d (%s:%d)\n",temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
-         }
+//         list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
+//                printf("Clientpeer# %d (%s:%d)\n",temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
+//         }
 
 
 	dc_disseminate(dc);
@@ -838,10 +866,10 @@ int dc_boot_master(struct dart_client *dc)
 
 	//
 
-	printf("here is the list of my peers\n");
-         list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
-                printf("Clientpeer# %d (%s:%d)\n",temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
-         }
+//	printf("here is the list of my peers\n");
+//         list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
+//                printf("Clientpeer# %d (%s:%d)\n",temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
+//         }
 
 	//send peers info in my app to master server
 
@@ -884,9 +912,9 @@ int dc_boot_slave(struct dart_client *dc)       //Done
 
 
 	struct node_id *temp_peer;
-         list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
+/*         list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
                 printf("BEGIN peer# %d (%s:%d)\n",temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
-}
+}*/
         if(err < 0)
                 goto err_out;
         if(peer->ptlmap.address.sin_addr.s_addr == dc->rpc_s->ptlmap.address.sin_addr.s_addr && peer->ptlmap.address.sin_port == dc->rpc_s->ptlmap.address.sin_port) {
@@ -909,9 +937,10 @@ int dc_boot_slave(struct dart_client *dc)       //Done
                 goto err_out;
         }
 
-        list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
-               printf("BEGIN peer# %d (%s:%d)\n",temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
-}
+//        list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
+//             printf("BEGIN peer# %d (%s:%d)\n",temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
+//}
+//	printf("BEGIN I am peer# %d (%s:%d)\n",dc->rpc_s->ptlmap.id, inet_ntoa(dc->rpc_s->ptlmap.address.sin_addr),ntohs(dc->rpc_s->ptlmap.address.sin_port));
 /*
         err = sys_connect(dc->rpc_s, peer);
         if(err != 0) {
@@ -936,10 +965,10 @@ int dc_boot_slave(struct dart_client *dc)       //Done
 
         //Waiting for dissemination msg from master server;
         while(dc->f_reg == 0) {
-         list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
-                printf("peer# %d (%s:%d)\n",temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
-         }
-	sleep(2);
+         //list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
+//                printf("peer# %d (%s:%d)\n",temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
+//         }
+//	sleep(2);
 
 		
                 err = rpc_process_event_with_timeout(dc->rpc_s, 1);
@@ -948,9 +977,9 @@ int dc_boot_slave(struct dart_client *dc)       //Done
         }
 
 
-        list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
-               printf("FINISH peer# %d (%s:%d)\n",temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
-}
+        //list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
+//               printf("FINISH I am now peer# %d (%s:%d)\n",dc->rpc_s->ptlmap.id, inet_ntoa(dc->rpc_s->ptlmap.address.sin_addr),ntohs(dc->rpc_s->ptlmap.address.sin_port));
+//}
 
 
 /*
@@ -1023,7 +1052,7 @@ static int dc_boot(struct dart_client *dc, int appid)
                 if(err != 0)
                         goto err_flock;
         }
-        dc->rpc_s->cur_num_peer = dc->rpc_s->num_rpc_per_buff;
+        //dc->rpc_s->cur_num_peer = dc->rpc_s->num_rpc_per_buff;
         close(fd);
         remove(fil_lock);
 
@@ -1088,7 +1117,7 @@ int i;
 
                 int count = 0;
                 peer = dc_get_peer(dc, i);
-                if(i < dc->cp_min_rank) {
+          /*      if(i < dc->cp_min_rank) {
                         do {
                                 err = rpc_connect(dc->rpc_s, peer);
                                 count++;
@@ -1099,10 +1128,11 @@ int i;
                         }
 
                 }
+	*/
                 if(check_cp[peer->ptlmap.id] == 1) {
                         count = 0;
                         do {
-                                printf("SYS connect %d %d\n",dc->rpc_s->ptlmap.id,peer->ptlmap.id);
+//                                printf("SYS connect %d %d\n",dc->rpc_s->ptlmap.id,peer->ptlmap.id);
                                 err = sys_connect(dc->rpc_s, peer);
                                 count++;
                         } while(count < 3 && err != 0);
@@ -1114,7 +1144,7 @@ int i;
         }
 
 
-sleep(10);
+//sleep(10);
 
 
         return 0;
@@ -1214,7 +1244,7 @@ static int dc_boot2(struct dart_client *dc, int appid)	//Done
 
 
 
-	sleep(5);
+	//sleep(5);
 
 	int rc;
 	dc->rpc_s->thread_alive = 1;
@@ -1305,7 +1335,7 @@ static int dc_boot2(struct dart_client *dc, int appid)	//Done
 	}
 
 
-sleep(10);
+//sleep(10);
 
 	//Function: connect to all other nodes except MS_Server.
 
@@ -1398,7 +1428,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 	}
 
 
-//printf("barrier is ok.\n");
+//	printf("%d barrier is ok.\n",dc->rpc_s->ptlmap.id);
 	return dc;
       err_out:printf("'%s()': failed with %d.\n", __func__, err);
 	return NULL;
