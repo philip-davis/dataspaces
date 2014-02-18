@@ -62,46 +62,46 @@ Matrix representation
 |
 v (y)
 */
-static double* allocate_2d(int x, int y)
+static double *allocate_2d(int x, int y)
 {
-    double* tmp = NULL;
-    tmp = (double*)malloc(elem_size_ * x * y);
-    return tmp;
+	double *tmp = NULL;
+	tmp = (double *) malloc(elem_size_ * x * y);
+	return tmp;
 }
 
 static void set_offset_2d(int rank, int npx, int npy, int spx, int spy)
 {
-    offx_ = (rank % npx) * spx;
-    offy_ = (rank / npx) * spy;
+	offx_ = (rank % npx) * spx;
+	offy_ = (rank / npx) * spy;
 }
 
-static double* allocate_3d(int x, int y, int z)
+static double *allocate_3d(int x, int y, int z)
 {
-    double *tmp = NULL;
-    tmp = (double*)malloc(elem_size_* x * y * z);
-    return tmp;
+	double *tmp = NULL;
+	tmp = (double *) malloc(elem_size_ * x * y * z);
+	return tmp;
 }
 
 static void set_offset_3d(int rank, int npx, int npy, int npz, int spx, int spy, int spz)
 {
-    offx_ = (rank % npx) * spx;
-    offy_ = (rank / npx % npy) * spy;
-    offz_ = (rank / npx / npy) * spz;
+	offx_ = (rank % npx) * spx;
+	offy_ = (rank / npx % npy) * spy;
+	offz_ = (rank / npx / npy) * spz;
 }
 
 static int couple_read_2d(unsigned int ts, int num_vars, enum transport_type type)
 {
-    double **data_tab = (double **)malloc(sizeof(double*) * num_vars);
-    char var_name[128];
-    int i;
-    for (i = 0; i < num_vars; i++) {
-        data_tab[i] = NULL;
-    }
+	double **data_tab = (double **) malloc(sizeof(double *) * num_vars);
+	char var_name[128];
+	int i;
+	for(i = 0; i < num_vars; i++) {
+		data_tab[i] = NULL;
+	}
 
 	common_lock_on_read("m2d_lock", &gcomm_);
 
 	//get data from space
-    set_offset_2d(rank_, npx_, npy_, spx_, spy_);
+	set_offset_2d(rank_, npx_, npy_, spx_, spy_);
 	int elem_size = elem_size_;
 	int xl = offx_;
 	int yl = offy_;
@@ -113,78 +113,73 @@ static int couple_read_2d(unsigned int ts, int num_vars, enum transport_type typ
 	int root = 0;
 
 #ifdef DEBUG
-	uloga("Timestep=%u, %d read m2d: {(%d,%d,%d),(%d,%d,%d)} from space\n",
-		ts, rank_, xl,yl,zl, xu,yu,zu);
+	uloga("Timestep=%u, %d read m2d: {(%d,%d,%d),(%d,%d,%d)} from space\n", ts, rank_, xl, yl, zl, xu, yu, zu);
 #endif
 
-    // Allocate data
-    double *data;
-    for (i = 0; i < num_vars; i++) {
-        data = allocate_2d(spx_, spy_);
-        memset(data, 0, elem_size_*spx_*spy_);
-        data_tab[i] = data;
-    }
+	// Allocate data
+	double *data;
+	for(i = 0; i < num_vars; i++) {
+		data = allocate_2d(spx_, spy_);
+		memset(data, 0, elem_size_ * spx_ * spy_);
+		data_tab[i] = data;
+	}
 
 	MPI_Barrier(gcomm_);
 	tm_st = timer_read(&timer_);
-    for (i = 0; i < num_vars; i++) {
-        sprintf(var_name, "m2d_%d", i);
-        common_get(var_name, ts, elem_size,
-            xl, yl, zl, xu, yu, zu, data_tab[i], type);
-    }	
+	for(i = 0; i < num_vars; i++) {
+		sprintf(var_name, "m2d_%d", i);
+		common_get(var_name, ts, elem_size, xl, yl, zl, xu, yu, zu, data_tab[i], type);
+	}
 	tm_end = timer_read(&timer_);
 	common_unlock_on_read("m2d_lock", &gcomm_);
-	
-	tm_diff = tm_end-tm_st;
+
+	tm_diff = tm_end - tm_st;
 	MPI_Reduce(&tm_diff, &tm_max, 1, MPI_DOUBLE, MPI_MAX, root, gcomm_);
 
-	if (rank_ == root) {
-		uloga("TS= %u TRANSPORT_TYPE= %s read MAX time= %lf\n",
-			ts, transport_type_str_, tm_max);
+	if(rank_ == root) {
+		uloga("TS= %u TRANSPORT_TYPE= %s read MAX time= %lf\n", ts, transport_type_str_, tm_max);
 	}
 
-    for (i = 0; i < num_vars; i++) {
-        sprintf(var_name, "m2d_%d", i);
-        check_data(var_name, data_tab[i], 
-                   (spx_*spy_*elem_size_)/sizeof(double), rank_, ts);
-        free(data_tab[i]);
-    }
-    free(data_tab);
+	for(i = 0; i < num_vars; i++) {
+		sprintf(var_name, "m2d_%d", i);
+		check_data(var_name, data_tab[i], (spx_ * spy_ * elem_size_) / sizeof(double), rank_, ts);
+		free(data_tab[i]);
+	}
+	free(data_tab);
 
 	return 0;
 }
 
 static int couple_read_3d(unsigned int ts, int num_vars, enum transport_type type)
 {
-    double **data_tab = (double **)malloc(sizeof(double*) * num_vars);
-    char var_name[128];
-    int i;
-    for (i = 0; i < num_vars; i++) {
-        data_tab[i] = NULL;
-    }
+	double **data_tab = (double **) malloc(sizeof(double *) * num_vars);
+	char var_name[128];
+	int i;
+	for(i = 0; i < num_vars; i++) {
+		data_tab[i] = NULL;
+	}
 
 
-int current_ts=0;
+	int current_ts = 0;
 
-while(current_ts<ts){
+	while(current_ts < ts) {
 
-common_lock_on_read("meta_timestep", &gcomm_);
+		common_lock_on_read("meta_timestep", &gcomm_);
 
-        sprintf(var_name, "current_timestep", i);
-        common_get(var_name, 0, sizeof(int),
-           0,0,0,0,0,0, &current_ts, type);
+		sprintf(var_name, "current_timestep", i);
+		common_get(var_name, 0, sizeof(int), 0, 0, 0, 0, 0, 0, &current_ts, type);
 
 //if(rank_ == 0)
-//	printf("current time step is %d\n", current_ts);
-sleep(1);
-common_unlock_on_read("meta_timestep", &gcomm_);
-}
+//      printf("current time step is %d\n", current_ts);
+		sleep(1);
+		common_unlock_on_read("meta_timestep", &gcomm_);
+	}
 
 
 	common_lock_on_read("m3d_lock", &gcomm_);
 
 	//get data from space
-    set_offset_3d(rank_, npx_, npy_, npz_, spx_, spy_, spz_);
+	set_offset_3d(rank_, npx_, npy_, npz_, spx_, spy_, spz_);
 	int elem_size = elem_size_;
 	int xl = offx_;
 	int yl = offy_;
@@ -196,50 +191,44 @@ common_unlock_on_read("meta_timestep", &gcomm_);
 	int root = 0;
 
 #ifdef DEBUG
-	uloga("Timestep=%u, %d read m3d: {(%d,%d,%d),(%d,%d,%d)} from space\n",
-		ts, rank_, xl,yl,zl, xu,yu,zu);
+	uloga("Timestep=%u, %d read m3d: {(%d,%d,%d),(%d,%d,%d)} from space\n", ts, rank_, xl, yl, zl, xu, yu, zu);
 #endif
 
-    // Allocate data
-    double *data;
-    for (i = 0; i < num_vars; i++) {
-        data = allocate_3d(spx_, spy_, spz_);
-        memset(data, 0, elem_size_*spx_*spy_*spz_);
-        data_tab[i] = data;
-    }
+	// Allocate data
+	double *data;
+	for(i = 0; i < num_vars; i++) {
+		data = allocate_3d(spx_, spy_, spz_);
+		memset(data, 0, elem_size_ * spx_ * spy_ * spz_);
+		data_tab[i] = data;
+	}
 
 	MPI_Barrier(gcomm_);
 	tm_st = timer_read(&timer_);
-    for (i = 0; i < num_vars; i++) {
-        sprintf(var_name, "m3d_%d", i);
-        common_get(var_name, ts, elem_size,
-            xl, yl, zl, xu, yu, zu, data_tab[i], type);
-    }	
+	for(i = 0; i < num_vars; i++) {
+		sprintf(var_name, "m3d_%d", i);
+		common_get(var_name, ts, elem_size, xl, yl, zl, xu, yu, zu, data_tab[i], type);
+	}
 	tm_end = timer_read(&timer_);
-    common_unlock_on_read("m3d_lock", &gcomm_);
-	
-	tm_diff = tm_end-tm_st;
+	common_unlock_on_read("m3d_lock", &gcomm_);
+
+	tm_diff = tm_end - tm_st;
 	MPI_Reduce(&tm_diff, &tm_max, 1, MPI_DOUBLE, MPI_MAX, root, gcomm_);
 
-	if (rank_ == root) {
-		uloga("TS= %u TRANSPORT_TYPE= %s read MAX time= %lf\n",
-			ts, transport_type_str_, tm_max);
+	if(rank_ == root) {
+		uloga("TS= %u TRANSPORT_TYPE= %s read MAX time= %lf\n", ts, transport_type_str_, tm_max);
 	}
 
-    for (i = 0; i < num_vars; i++) {
-        sprintf(var_name, "m3d_%d", i);
-        check_data(var_name, data_tab[i], 
-                   (spx_*spy_*spz_*elem_size_)/sizeof(double), rank_, ts);
-        free(data_tab[i]);
-    }
-    free(data_tab);
+	for(i = 0; i < num_vars; i++) {
+		sprintf(var_name, "m3d_%d", i);
+		check_data(var_name, data_tab[i], (spx_ * spy_ * spz_ * elem_size_) / sizeof(double), rank_, ts);
+		free(data_tab[i]);
+	}
+	free(data_tab);
 
 	return 0;
 }
 
-int test_get_run(enum transport_type type, int npapp, int npx, int npy, int npz,
-        int spx, int spy, int spz, int timestep, int appid,  int dims, size_t elem_size,
-        int num_vars, MPI_Comm gcomm)
+int test_get_run(enum transport_type type, int npapp, int npx, int npy, int npz, int spx, int spy, int spz, int timestep, int appid, int dims, size_t elem_size, int num_vars, MPI_Comm gcomm)
 {
 	gcomm_ = gcomm;
 	elem_size_ = elem_size;
@@ -247,7 +236,7 @@ int test_get_run(enum transport_type type, int npapp, int npx, int npy, int npz,
 	npapp_ = npapp;
 	npx_ = npx;
 	npy_ = npy;
-	npz_ = npz; 
+	npz_ = npz;
 	if(npx_)
 		spx_ = spx;
 	if(npy_)
@@ -257,37 +246,35 @@ int test_get_run(enum transport_type type, int npapp, int npx, int npy, int npz,
 
 	timer_init(&timer_, 1);
 	timer_start(&timer_);
- 
-//	int app_id = 4;
+
+//      int app_id = 4;
 	common_init(npapp_, appid);
-    common_set_storage_type(row_major, type);
-    common_get_transport_type_str(type, transport_type_str_);
+	common_set_storage_type(row_major, type);
+	common_get_transport_type_str(type, transport_type_str_);
 
-    MPI_Comm_rank(gcomm_, &rank_);
-    MPI_Comm_size(gcomm_, &nproc_);
+	MPI_Comm_rank(gcomm_, &rank_);
+	MPI_Comm_size(gcomm_, &nproc_);
 
-    unsigned int ts;
-	if (dims == 2) {
-        for (ts = 1; ts <= timestep_; ts++){
-            couple_read_2d(ts, num_vars, type);
-        }
-	} else if (dims == 3) {
-        for (ts = 1; ts <= timestep_; ts++) {
-	sleep(4);
-            couple_read_3d(ts, num_vars, type);
-        }
+	unsigned int ts;
+	if(dims == 2) {
+		for(ts = 1; ts <= timestep_; ts++) {
+			couple_read_2d(ts, num_vars, type);
+		}
+	} else if(dims == 3) {
+		for(ts = 1; ts <= timestep_; ts++) {
+			sleep(4);
+			couple_read_3d(ts, num_vars, type);
+		}
 	} else {
-        uloga("%s(): error dims= %d\n", __func__, dims);
-    }
+		uloga("%s(): error dims= %d\n", __func__, dims);
+	}
 
-    if (rank_ == 0) {
-        uloga("%s(): done\n", __func__);
-    }
-
+	if(rank_ == 0) {
+		uloga("%s(): done\n", __func__);
+	}
 	//common_barrier();
-    MPI_Barrier(gcomm_);
+	MPI_Barrier(gcomm_);
 	common_finalize();
 
 	return 0;
 }
-
