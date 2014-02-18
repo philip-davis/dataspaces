@@ -365,6 +365,11 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct hdr_register *hdr)
 
 	ds->current_client_size++;
 
+	ds->peer_size = ds->peer_size + hdr->num_cp;
+	ds->num_cp = ds->num_cp + hdr->num_cp;
+	ds->size_cp = ds->size_cp + hdr->num_cp;
+	ds->rpc_s->num_peers = ds->rpc_s->num_peers + hdr->num_cp;
+	
 	/* COMMENTED:
 	   First check if app has registered all its compute nodes already ! 
 	 */
@@ -479,7 +484,7 @@ static int ds_disseminate2(struct dart_server *ds, struct node_id *peer)       /
         return err;
 }
 
-
+/*
 static int ds_disseminate(struct dart_server *ds)	//Done
 {
 	struct msg_buf *msg;
@@ -525,6 +530,7 @@ static int ds_disseminate(struct dart_server *ds)	//Done
 		if(err != 0)
 			goto err_out_free;
 	}
+*/
 	
 /*
 	//send to clients info of all the servers + clients in the same APP
@@ -606,12 +612,14 @@ static int ds_disseminate(struct dart_server *ds)	//Done
 
 */
 
-
+/*
 	return 0;
       err_out_free:free(msg);
       err_out:printf("'%s()' failed with %d.\n", __func__, err);
 	return err;
 }
+
+*/
 /*
 static int ds_disseminate_all(struct dart_server *ds)	//Done
 {
@@ -698,6 +706,11 @@ static int announce_app_completion(struct rpc_server *rpc_s, struct msg_buf *msg
                 goto err_out;
         }
 
+
+        ds->peer_size = ds->peer_size + app->app_num_peers;
+        ds->num_cp = ds->num_cp + app->app_num_peers;
+        ds->size_cp = ds->size_cp + app->app_num_peers;
+	ds->rpc_s->num_peers = ds->rpc_s->num_peers + app->app_num_peers;
  
 //printf("In '%s()'.\n", __func__);
         for(i = 0; i < app->app_num_peers; i++) {
