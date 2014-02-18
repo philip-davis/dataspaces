@@ -163,6 +163,24 @@ static int couple_read_3d(unsigned int ts, int num_vars, enum transport_type typ
         data_tab[i] = NULL;
     }
 
+
+int current_ts=0;
+
+while(current_ts<ts){
+
+common_lock_on_read("meta_timestep", &gcomm_);
+
+        sprintf(var_name, "current_timestep", i);
+        common_get(var_name, 0, sizeof(int),
+           0,0,0,0,0,0, &current_ts, type);
+
+//if(rank_ == 0)
+//	printf("current time step is %d\n", current_ts);
+sleep(1);
+common_unlock_on_read("meta_timestep", &gcomm_);
+}
+
+
 	common_lock_on_read("m3d_lock", &gcomm_);
 
 	//get data from space
@@ -220,7 +238,7 @@ static int couple_read_3d(unsigned int ts, int num_vars, enum transport_type typ
 }
 
 int test_get_run(enum transport_type type, int npapp, int npx, int npy, int npz,
-        int spx, int spy, int spz, int timestep, int dims, size_t elem_size,
+        int spx, int spy, int spz, int timestep, int appid,  int dims, size_t elem_size,
         int num_vars, MPI_Comm gcomm)
 {
 	gcomm_ = gcomm;
@@ -240,8 +258,8 @@ int test_get_run(enum transport_type type, int npapp, int npx, int npy, int npz,
 	timer_init(&timer_, 1);
 	timer_start(&timer_);
  
-	int app_id = 2;
-	common_init(npapp_, app_id);
+//	int app_id = 4;
+	common_init(npapp_, appid);
     common_set_storage_type(row_major, type);
     common_get_transport_type_str(type, transport_type_str_);
 
@@ -255,6 +273,7 @@ int test_get_run(enum transport_type type, int npapp, int npx, int npy, int npz,
         }
 	} else if (dims == 3) {
         for (ts = 1; ts <= timestep_; ts++) {
+	sleep(4);
             couple_read_3d(ts, num_vars, type);
         }
 	} else {
