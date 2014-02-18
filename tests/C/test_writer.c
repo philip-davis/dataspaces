@@ -36,7 +36,7 @@
 #include "mpi.h"
 
 extern int test_put_run(enum transport_type, int npapp, int npx,int npy,int npz,
-    int spx, int spy, int spz, int timestep, int dims, size_t elem_size,
+    int spx, int spy, int spz, int timestep, int dims, int appid, size_t elem_size,
     int num_vars, MPI_Comm gcomm);
 
 int main(int argc, char **argv)
@@ -52,12 +52,13 @@ int main(int argc, char **argv)
     int npx, npy, npz; // number of processes in x,y,z direction
     int spx, spy, spz; // block size per process in x,y,z direction
     int timestep; // number of iterations
-    int dims; // Optional: 2 or 3. Default value is 3.
+    int dims; // Optional: 2 or 3. Default value is 3. 
+    int appid;
     size_t elem_size; // Optional: size of one element in the global array. Default value is 8 (bytes).
     int num_vars; // Optional: number of variables to be shared in the testing. Default value is 1.
 
 	if (parse_args(argc, argv, &type, &npapp, &npx, &npy, &npz,
-		&spx, &spy, &spz, &timestep, &dims, &elem_size, &num_vars) != 0) {
+		&spx, &spy, &spz, &timestep, &appid, &dims, &elem_size, &num_vars) != 0) {
 		goto err_out;
 	}
 
@@ -73,7 +74,7 @@ int main(int argc, char **argv)
 
 	// Run as data writer
 	test_put_run(type, npapp, npx, npy, npz,
-		spx, spy, spz, timestep, dims, elem_size, num_vars, gcomm);
+		spx, spy, spz, timestep, appid, dims, elem_size, num_vars, gcomm);
 
 	MPI_Barrier(gcomm);
 	MPI_Finalize();

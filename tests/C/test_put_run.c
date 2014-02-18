@@ -200,6 +200,9 @@ static int couple_write_3d(unsigned int ts, int num_vars, enum transport_type ty
         data_tab[i] = NULL;
     }
 
+
+
+
     common_lock_on_write("m3d_lock", &gcomm_);
     if (type == USE_DIMES) {
         common_put_sync(type);
@@ -247,6 +250,22 @@ static int couple_write_3d(unsigned int ts, int num_vars, enum transport_type ty
     tm_end = timer_read(&timer_);
     common_unlock_on_write("m3d_lock", &gcomm_);
 
+
+common_lock_on_write("meta_timestep", &gcomm_);
+
+if(rank_ == 0){
+	sprintf(var_name, "current_timestep", i);
+        common_put(var_name, 0, sizeof(int),
+           0,0,0,0,0,0, &ts, type);
+        if (type == USE_DSPACES) {
+            common_put_sync(type);
+        }
+}
+
+common_unlock_on_write("meta_timestep", &gcomm_);
+
+
+
 	tm_diff = tm_end-tm_st;
 	MPI_Reduce(&tm_diff, &tm_max, 1, MPI_DOUBLE, MPI_MAX, root, gcomm_);
 
@@ -266,7 +285,7 @@ static int couple_write_3d(unsigned int ts, int num_vars, enum transport_type ty
 }
 
 int test_put_run(enum transport_type type, int npapp, int npx, int npy, int npz,
-    int spx, int spy, int spz, int timestep, int dims, size_t elem_size,
+    int spx, int spy, int spz, int timestep, int appid, int dims, size_t elem_size,
     int num_vars, MPI_Comm gcomm)
 {
 	gcomm_ = gcomm;
@@ -286,8 +305,7 @@ int test_put_run(enum transport_type type, int npapp, int npx, int npy, int npz,
 	timer_init(&timer_, 1);
 	timer_start(&timer_);
 
-	int app_id = 1;
-    common_init(npapp_, app_id);
+    common_init(npapp_, appid);
     common_set_storage_type(row_major, type);
     common_get_transport_type_str(type, transport_type_str_);
 
@@ -308,6 +326,8 @@ int test_put_run(enum transport_type type, int npapp, int npx, int npy, int npz,
         }
 	} else if (dims == 3) {
         for (ts = 1; ts <= timestep_; ts++) {
+
+	sleep(3);
             couple_write_3d(ts, num_vars, type);
         }
 
