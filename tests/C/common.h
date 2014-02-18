@@ -47,32 +47,24 @@ enum transport_type {
 
 // wrapper functions of DataSpaces/DIMES APIs
 int common_init(int num_peers, int appid);
-void common_set_storage_type(int fst, enum transport_type type); 
-int common_rank(); 
+void common_set_storage_type(int fst, enum transport_type type);
+int common_rank();
 int common_peers();
 void common_barrier();
-void common_finalize(); 
+void common_finalize();
 void common_lock_on_read(const char *lock_name, void *gcomm);
 void common_unlock_on_read(const char *lock_name, void *gcomm);
-void common_lock_on_write(const char *lock_name, void *gcomm); 
-void common_unlock_on_write(const char *lock_name, void *gcomm); 
-int common_put (const char *var_name,
-        unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
-        void *data, enum transport_type type);
-int common_get (const char *var_name,
-        unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
-        void *data, enum transport_type type); 
-int common_put_sync(enum transport_type type); 
+void common_lock_on_write(const char *lock_name, void *gcomm);
+void common_unlock_on_write(const char *lock_name, void *gcomm);
+int common_put(const char *var_name, unsigned int ver, int size, int xl, int yl, int zl, int xu, int yu, int zu, void *data, enum transport_type type);
+int common_get(const char *var_name, unsigned int ver, int size, int xl, int yl, int zl, int xu, int yu, int zu, void *data, enum transport_type type);
+int common_put_sync(enum transport_type type);
 int common_run_server(int num_sp, int num_cp, enum transport_type type);
 
 void check_data(const char *var_name, double *buf, int num_elem, int rank, int ts);
 
-int write_data_file(const char* fname, void *data, size_t size);
-int read_data_file(const char* fname);
+int write_data_file(const char *fname, void *data, size_t size);
+int read_data_file(const char *fname);
 
-int commom_get_transport_type_str(enum transport_type type, char* str);
+int commom_get_transport_type_str(enum transport_type type, char *str);
 #endif //end of __TEST_COMMON_H_
