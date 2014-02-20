@@ -301,6 +301,7 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 }
 
+/*
 static int dsrpc_cn_unregister2(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
 	struct dart_server *ds = ds_ref_from_rpc(rpc_s);
@@ -402,7 +403,7 @@ static int dsrpc_cn_unregister2(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
       err_out:printf("(%s): failed. (%d)\n", __func__, err);
 	return err;
 }
-
+*/
 
 /*
 static int file_lock(int fd, int op)
@@ -1538,7 +1539,7 @@ int ds_boot_master(struct dart_server *ds)	//Done
 	ds->rpc_s->ptlmap.id = 0;
 
 	printf("'%s()': all the server are registered.%d %d\n", __func__, ds->peer_size, ds->size_cp);
-	ds->rpc_s->cur_num_peer = ds->rpc_s->num_rpc_per_buff;	//diff    
+//	ds->rpc_s->cur_num_peer = ds->rpc_s->num_rpc_per_buff;	//diff    
 	struct node_id *temp_peer;
 
 	list_for_each_entry(temp_peer, &ds->rpc_s->peer_list, struct node_id, peer_entry) {
@@ -2030,7 +2031,7 @@ static int ds_boot(struct dart_server *ds)	//Done
 		goto err_out;
 	}
 */
-	ds->rpc_s->cur_num_peer = ds->rpc_s->num_rpc_per_buff;
+//	ds->rpc_s->cur_num_peer = ds->rpc_s->num_rpc_per_buff;
 
 //      ds->rpc_s->num_peers = ds->num_cp + ds->num_sp; 
 
@@ -2089,7 +2090,7 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref)
 //      rpc_server_set_peer_ref(ds->rpc_s, ds->peer_tab, ds->peer_size);
 	rpc_server_set_rpc_per_buff(ds->rpc_s, ds->peer_size);
 	ds->rpc_s->app_num_peers = num_sp;
-	ds->rpc_s->cur_num_peer = 2;
+//	ds->rpc_s->cur_num_peer = 2;
 /*	peer = ds->peer_tab;
 	for(i = 0; i < ds->peer_size; i++) {
 		INIT_LIST_HEAD(&peer->req_list);

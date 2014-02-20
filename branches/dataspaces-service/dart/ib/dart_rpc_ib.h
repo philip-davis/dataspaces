@@ -293,15 +293,15 @@ struct rpc_server {
 	struct list_head peer_list;	//list of peers(servers and clients)
 
 	//count number of sys connection
-	int sys_conn_count;
+//	int sys_conn_count;
 
 	//Fields for barrier implementation.
 	int bar_num;
 	int *bar_tab;
-	int app_minid, app_num_peers, num_sp;
+	int app_minid, app_num_peers, num_sp; //app min id, number of peer in app (fixed during execution) and numer of server
 
 	//Added in IB version. Just used at the beginning of registration.
-	int num_reg;
+//	int num_reg;
 	//struct node_id                *tmp_peer_tab;
 
 	/* List of buffers for incoming RPC calls. */
@@ -312,15 +312,15 @@ struct rpc_server {
 
 	void *dart_ref;
 	enum rpc_component com_type;
-	int cur_num_peer;
+//	int cur_num_peer;
 
 	int num_qp;
 
 	pthread_t comm_thread;
 	int thread_alive;
 	char *localip;
-	int no_more;
-	int p_count;
+//	int no_more;
+//	int p_count;
 
 	int alloc_pd_flag;
 	struct ibv_pd *global_pd;
