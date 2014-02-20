@@ -222,6 +222,105 @@ static int sys_dispatch_event(struct rpc_server *rpc_s, struct hdr_sys *hs)	//Do
 }
 
 //sys process use poll
+//
+//
+
+
+static int sys_process(struct rpc_server *rpc_s, struct node_id *peer)
+{
+
+	int ret, err;
+	struct ibv_cq *ev_cq;
+	void *ev_ctx;
+	struct ibv_wc wc;
+	struct sys_msg *sm;
+	err = ibv_get_cq_event(peer->sys_conn.comp_channel, &ev_cq, &ev_ctx);
+	if(err == -1 && errno == EAGAIN) {
+		return 0;
+	}
+	if(err == -1 && errno != EAGAIN) {
+		printf("Failed to get cq_event with (%s).\n", strerror(errno));
+		err = errno;
+		goto err_out;
+	}
+	ibv_ack_cq_events(ev_cq, 1);
+	err = ibv_req_notify_cq(ev_cq, 0);
+	if(err != 0) {
+		fprintf(stderr, "Failed to ibv_req_notify_cq.\n");
+		printf("Failed to ibv_req_notify_cq.\n");
+		goto err_out;
+	}
+
+	do {
+		ret = ibv_poll_cq(ev_cq, 1, &wc);
+		if(ret < 0) {
+			printf("Failed to ibv_poll_cq.\n");
+			fprintf(stderr, "Failed to ibv_poll_cq.\n");
+			goto err_out;
+		}
+		if(ret == 0) {
+			continue;
+		}
+
+		if(wc.status != IBV_WC_SUCCESS) {
+			printf("Status (%d) is not IBV_WC_SUCCESS.\n", wc.status);
+			err = wc.status;
+			goto err_out;
+		}
+		if(wc.opcode & IBV_WC_RECV) {
+			struct hdr_sys *hs = (struct hdr_sys *) (uintptr_t) wc.wr_id;
+			err = sys_dispatch_event(rpc_s, hs);
+
+			if(err != 0) {
+				goto err_out;
+			}
+
+
+
+			struct ibv_recv_wr wr, *bad_wr = NULL;
+			struct ibv_sge sge;
+			int err = 0;
+
+
+			wr.wr_id = (uintptr_t) wc.wr_id;
+			wr.next = NULL;
+			wr.sg_list = &sge;
+			wr.num_sge = 1;
+
+			sge.addr = (uintptr_t) wc.wr_id;
+			sge.length = sizeof(struct hdr_sys);
+			sge.lkey = peer->sm->sys_mr->lkey;
+
+			err = ibv_post_recv(peer->sys_conn.qp, &wr, &bad_wr);
+			if(err != 0) {
+				printf("ibv_post_recv fails with %d in %s.\n", err, __func__);
+			}
+
+
+
+		} else if(wc.opcode == IBV_WC_SEND) {
+			sm = (struct sys_msg *) (uintptr_t) wc.wr_id;
+			if(sm->sys_mr != 0) {
+				err = ibv_dereg_mr(sm->sys_mr);
+				if(err != 0) {
+					goto err_out;
+				}
+			}
+			free(sm);
+		} else {
+			printf("Weird wc.opcode %d.\n", wc.opcode);	//debug
+			err = wc.opcode;
+			goto err_out;
+		}
+	} while(ret);
+	return 0;
+      err_out:
+	printf("(%s): err (%d).\n", __func__, err);
+	return err;
+
+
+}
+
 static int sys_process_event(struct rpc_server *rpc_s)
 {
 	struct node_id *peer;
@@ -229,40 +328,22 @@ static int sys_process_event(struct rpc_server *rpc_s)
 	int which_peer[rpc_s->app_num_peers - 1];
 	int timeout = 30;
 
-	struct ibv_cq *ev_cq;
-	void *ev_ctx;
-	struct ibv_wc wc;
-	struct sys_msg *sm;
-
-	int ret, i, j, seq, err = 0;
-	int num_ds = rpc_s->cur_num_peer - rpc_s->num_rpc_per_buff;
+	int i, j, err = 0;
 
 	j = 0;
-//	for(i = rpc_s->num_sp; i < rpc_s->num_sp + rpc_s->app_num_peers; i++) {
-	for(i = rpc_s->app_minid; i< rpc_s->app_minid + rpc_s->app_num_peers; i++) {
-
-
-		peer = rpc_get_peer(rpc_s,i);
-		if(peer==NULL)
-			continue;
-
-//		if(rpc_s->peer_tab[i].ptlmap.id == rpc_s->ptlmap.id) {
-		if(peer->ptlmap.id == rpc_s->ptlmap.id) {
-			seq = i - num_ds;
-			continue;
-		}
-	//	peer = rpc_s->peer_tab + i;
+	list_for_each_entry(peer, &rpc_s->peer_list, struct node_id, peer_entry) {
 		if(peer->sys_conn.f_connected == 0)
 			continue;
-
 
 		my_pollfd[j].fd = peer->sys_conn.comp_channel->fd;
 		my_pollfd[j].events = POLLIN;
 		my_pollfd[j].revents = 0;
-		which_peer[j] = i;
-
+		which_peer[j] = peer->ptlmap.id;
 		j++;
 	}
+
+	if(j == 0)
+		return 0;
 
 	err = poll(my_pollfd, j, timeout);
 
@@ -272,92 +353,16 @@ static int sys_process_event(struct rpc_server *rpc_s)
 		return 0;
 	else if(err > 0) {
 		for(i = 0; i < j; i++) {
-			//Check SYS channel
 			if(my_pollfd[i].revents != 0) {
 				peer = rpc_get_peer(rpc_s, which_peer[i]);
-//				peer = rpc_s->peer_tab + which_peer[i];
-
-				err = ibv_get_cq_event(peer->sys_conn.comp_channel, &ev_cq, &ev_ctx);
-				if(err == -1 && errno == EAGAIN) {
-					//printf("comp_events_completed is %d.\n", peer->sys_conn.cq->comp_events_completed);//debug
-					break;
-				}
-				if(err == -1 && errno != EAGAIN) {
-					printf("Failed to get cq_event with (%s).\n", strerror(errno));
-					err = errno;
+				err = sys_process(rpc_s, peer);
+				if(err < 0)
 					goto err_out;
-				}
-				ibv_ack_cq_events(ev_cq, 1);
-				err = ibv_req_notify_cq(ev_cq, 0);
-				if(err != 0) {
-					fprintf(stderr, "Failed to ibv_req_notify_cq.\n");
-					goto err_out;
-				}
-				do {
-					ret = ibv_poll_cq(ev_cq, 1, &wc);
-
-					if(ret < 0) {
-						fprintf(stderr, "Failed to ibv_poll_cq.\n");
-						goto err_out;
-					}
-					if(ret == 0)
-						continue;
-
-					if(wc.status != IBV_WC_SUCCESS) {
-						printf("Status (%d) is not IBV_WC_SUCCESS.\n", wc.status);
-						err = wc.status;
-						goto err_out;
-					}
-					if(wc.opcode & IBV_WC_RECV) {
-						struct hdr_sys *hs = (struct hdr_sys *) (uintptr_t) wc.wr_id;
-						err = sys_dispatch_event(rpc_s, hs);
-						if(err != 0)
-							goto err_out;
-						struct ibv_recv_wr wr, *bad_wr = NULL;
-						struct ibv_sge sge;
-						int err = 0;
-
-						wr.wr_id = (uintptr_t) wc.wr_id;
-						wr.next = NULL;
-						wr.sg_list = &sge;
-						wr.num_sge = 1;
-
-						sge.addr = (uintptr_t) wc.wr_id;
-						sge.length = sizeof(struct hdr_sys);
-						sge.lkey = peer->sm->sys_mr->lkey;
-
-						err = ibv_post_recv(peer->sys_conn.qp, &wr, &bad_wr);
-						if(err != 0) {
-							printf("ibv_post_recv fails with %d in %s.\n", err, __func__);
-						}
-					} else if(wc.opcode == IBV_WC_SEND) {
-						sm = (struct sys_msg *) (uintptr_t) wc.wr_id;
-						if(sm->sys_mr != 0) {
-							err = ibv_dereg_mr(sm->sys_mr);
-							if(err != 0)
-								goto err_out;
-						}
-						free(sm);
-					} else {
-						printf("Weird wc.opcode %d.\n", wc.opcode);	//debug
-						err = wc.opcode;
-						goto err_out;
-					}
-				} while(ret);
-/*				err = ibv_req_notify_cq(ev_cq, 0);
-				if(err != 0){
-					fprintf(stderr, "Failed to ibv_req_notify_cq.\n");
-					goto err_out;
-				}
-*/
 			}
 		}
 	}
-	//printf("barrier is ok with err %d.\n", err);//debug
 
 	return 0;
-	if(err == 0)
-		return 0;
       err_out:
 	printf("(%s): err (%d).\n", __func__, err);
 	return err;
@@ -368,9 +373,7 @@ static int sys_cleanup(struct rpc_server *rpc_s)
 {
 	int i, err = 0;
 	struct node_id *peer;
-	for(i = 0; i < rpc_s->cur_num_peer - 1; i++) {
-		peer = rpc_get_peer(rpc_s,i);
-//		peer = &rpc_s->peer_tab[i];
+        list_for_each_entry(peer, &rpc_s->peer_list, struct node_id, peer_entry) {
 		if(peer->sys_conn.f_connected == 0 || peer->ptlmap.id == rpc_s->ptlmap.id)
 			continue;
 		err = rdma_destroy_id(peer->sys_conn.id);
@@ -394,32 +397,12 @@ static int sys_cleanup(struct rpc_server *rpc_s)
 // this function can only be used after rpc_server is fully initiated
 static struct node_id *rpc_get_peer(struct rpc_server *rpc_s, int peer_id)
 {
-	return rpc_server_find(rpc_s,peer_id);
-/*
-//      printf("I am %d ask for %d %d %d\n",rpc_s->ptlmap.id, peer_id, rpc_s->app_minid, rpc_s->app_num_peers);
-	if(rpc_s->ptlmap.appid == 0 || peer_id >= rpc_s->app_minid + rpc_s->app_num_peers)
-		return rpc_s->peer_tab + peer_id;
-	else {
-		if(peer_id < rpc_s->app_minid)
-			return rpc_s->peer_tab + peer_id + rpc_s->app_num_peers + rpc_s->num_sp;
-		else
-			return (rpc_s->peer_tab + peer_id - rpc_s->app_minid + rpc_s->num_sp);
-	}
-*/
+	return rpc_server_find(rpc_s, peer_id);
 }
 
 //added in IB version, get remote notification of finished RDMA operation, clean up memory.
 static int rpc_cb_cleanup(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-//      struct rpc_request *rr = (struct rpc_request *) (uintptr_t) cmd->wr_id;
-
-//printf("Get %ld in %s.\n", cmd->wr_id, __func__);
-//
-//      if(rpc_s->no_more == 1){
-//              return 0;
-//      }
-
-
 	struct ibv_wc wc;
 	wc.wr_id = cmd->wr_id;
 
@@ -442,101 +425,11 @@ static int rpc_cb_cleanup(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
    to new incomming rpc request.
 */
 
-/*
-static int rpc_cb_decode(struct rpc_server *rpc_s, struct ibv_wc *wc)	//Done
-{
-	struct rpc_request *rr = (struct rpc_request *) (uintptr_t) wc->wr_id;
-	struct rpc_cmd *cmd;
-	int err, i;
-
-	cmd = (struct rpc_cmd *) (rr->msg->msg_data);
-	//Added in IB version: point rpc_s->tmp_peer to current working peer.
-	//cmd->qp_num = wc->qp_num;
-
-//printf("Network command %d from %d!\n", cmd->cmd, cmd->id);//debug
-	for(i = 0; i < num_service; i++) {
-		if(cmd->cmd == rpc_commands[i].rpc_cmd) {
-			err = rpc_commands[i].rpc_func(rpc_s, cmd);
-			break;
-		}
-	}
-
-	if(i == num_service) {
-		printf("Network command unknown %d!\n", cmd->cmd);
-		err = -EINVAL;
-	}
-
-	if(err < 0)
-		printf("(%s): err.\n", __func__);
-
-	return err;
-}
-*/
-
 static int rpc_cb_decode(struct rpc_server *rpc_s, struct ibv_wc *wc)	//Done
 {
 	struct rpc_cmd *cmd = (struct rpc_cmd *) (uintptr_t) wc->wr_id;
 	int err, i;
 
-
-
-
-	struct timeval tv;
-
-	gettimeofday(&tv, NULL);
-
-
-	//Added in IB version: point rpc_s->tmp_peer to current working peer.
-	//cmd->qp_num = wc->qp_num;
-
-//      if(cmd->cmd == 7 || cmd->cmd == 320){
-//      if(1){
-
-//              printf("unreg from %d to %d\n", cmd->id, rpc_s->ptlmap.id);
-
-
-//      if(0 && (rpc_s->ptlmap.id == 3 || rpc_s->ptlmap.id == 0 || rpc_s->ptlmap.appid == 0)) {
-/*
-		if(cmd->cmd == 16)
-			printf("lock from %d to %d\n", cmd->id, rpc_s->ptlmap.id);
-
-		if(cmd->cmd == 17)
-			printf("%ld %ld put from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
-		if(cmd->cmd == 18)
-			printf("%ld %ld update from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
-		if(cmd->cmd == 19)
-			printf("%ld %ld getdht from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
-
-
-
-		if(cmd->cmd == 20)
-			printf("%ld %ld getdesc from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
-
-		if(cmd->cmd == 21)
-			printf("%ld %ld query from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
-
-		if(cmd->cmd == 22)
-			printf("%ld %ld cq_reg from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
-		if(cmd->cmd == 23)
-			printf("%ld %ld cq_not from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
-		if(cmd->cmd == 25)
-			printf("%ld %ld filter from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
-		if(cmd->cmd == 26)
-			printf("%ld %ld info from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
-
-
-
-		if(cmd->cmd == 15)
-			printf("barrier from %d to %d\n", cmd->id, rpc_s->ptlmap.id);
-
-		if(cmd->cmd == 24)
-			printf("%ld %ld get from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
-		else
-
-	                      printf("Rank %d: Network command %d from %d: address %ld!\n", rpc_s->ptlmap.id, cmd->cmd, cmd->id,cmd->wr_id);
-*/
-
-//      }
 	for(i = 0; i < num_service; i++) {
 		if(cmd->cmd == rpc_commands[i].rpc_cmd) {
 			err = rpc_commands[i].rpc_func(rpc_s, cmd);
@@ -738,9 +631,6 @@ static int rpc_post_request(struct rpc_server *rpc_s, const struct node_id *peer
 
 	err = ibv_post_send(peer->rpc_conn.qp, &wr, &bad_wr);
 
-//      if(rr->type == 0)
-//d             printf("posted request to peer %d: %ld\n",peer->ptlmap.id,wr.wr_id);
-
 	if(err < 0) {
 		printf("Fail: ibv_post_send returned error in %s. (%d)\n", __func__, err);
 		printf("Node %d has %d send_event on the queue (max %d) to peer %d.\n", rpc_s->ptlmap.id, peer->req_posted, peer->rpc_conn.qp_attr.cap.max_send_wr, peer->ptlmap.id);
@@ -751,10 +641,6 @@ static int rpc_post_request(struct rpc_server *rpc_s, const struct node_id *peer
 	if(rr) {
 		if(rr->msg) {
 			rr->msg->refcont++;
-//                      if(rr->type == 0){
-//                              if(rr->msg->msg_rpc->cmd == 7)
-//                                      sleep(5);
-//                      }
 		}
 	}
 
@@ -959,7 +845,7 @@ int port_check(int port)
 
 
 //Register memory for one rpc_cmd that will store the coming rpc_cmd from peer. It is only used for ibv_post_recv.
-int register_memory2(struct rpc_request *rr, struct node_id *peer)
+int register_memory(struct rpc_request *rr, struct node_id *peer)
 {
 	rr->rpc_mr = ibv_reg_mr(peer->rpc_conn.pd, rr->msg->msg_data, rr->msg->size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
 	if(rr->rpc_mr == NULL) {
@@ -968,85 +854,6 @@ int register_memory2(struct rpc_request *rr, struct node_id *peer)
 	}
 
 	return 0;
-}
-
-struct rpc_request *register_memory(struct node_id *peer)
-{
-
-	struct rpc_request *rr;
-
-
-	peer->rr = rr_comm_alloc(10);
-	peer->f_rr = 1;
-
-	rr = peer->rr;
-
-	rr->rpc_mr = ibv_reg_mr(peer->rpc_conn.pd, rr->msg->msg_data, rr->msg->size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
-	if(rr->rpc_mr == NULL) {
-		printf("ibv_reg_mr return NULL.\n");
-		return NULL;
-	}
-	rr->current_rpc_count++;
-
-
-//                printf("%d\n",rr->current_rpc_count);
-	return rr;
-
-
-/*
-	struct rpc_request *rr;
-
-	if(peer->rr == NULL){
-                peer->rr = rr_comm_alloc(10);
-                peer->f_rr = 1;
-
-                rr = peer->rr;
-
-                rr->rpc_mr = ibv_reg_mr(
-                    peer->rpc_conn.pd,
-                    rr->msg->msg_data,
-                    rr->msg->size,
-                    IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
-                 if(rr->rpc_mr == NULL){
-                         printf("ibv_reg_mr return NULL.\n");
-                        return NULL;
-                 }
-                rr->current_rpc_count++;
-                printf("I am %d\n",rr->current_rpc_count);
-                return rr;
-        }
-
-        struct rpc_request *temp_rr = peer->rr;
-
-        while(temp_rr->next!=NULL){
-                temp_rr = temp_rr->next;
-        }
-
-        if(temp_rr->current_rpc_count==10){
-                printf("I am full\n");
-                temp_rr->next = rr_comm_alloc(10);
-                rr = temp_rr->next;
-                rr->rpc_mr = ibv_reg_mr(
-                    peer->rpc_conn.pd,
-                    rr->msg->msg_data,
-                    rr->msg->size,
-                    IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
-                 if(rr->rpc_mr == NULL){
-                         printf("ibv_reg_mr return NULL.\n");
-                        return NULL;
-                 }
-                rr->current_rpc_count++;
-                return rr;
-        }
-        else{
-                rr = temp_rr;
-                rr->current_rpc_count++;
-                printf("I am %d\n",rr->current_rpc_count);
-
-                return rr;
-        }
-
-*/
 }
 
 
@@ -1073,15 +880,6 @@ int post_receives(struct rpc_request *rr, struct node_id *peer, int i)
 	if(err != 0) {
 		return err;
 	}
-
-/*
-  err = ibv_post_recv(peer->rpc_conn.qp, &wr, &bad_wr);
-  if(err!=0){
-	printf("%d ibv_post_recv fails with %d in %s: %s\n", peer->ptlmap.id, err, __func__,strerror(errno));
-	err = ibv_post_recv(peer->rpc_conn.qp, &wr, &bad_wr);
-	//return err;
-  }
-*/
 	return 0;
 }
 
@@ -1138,7 +936,7 @@ int rpc_barrier(struct rpc_server *rpc_s)	//Donesys_bar_send
 */
 void rpc_add_service(enum cmd_type rpc_cmd, rpc_service rpc_func);
 
-struct rpc_server *rpc_server_init(int option, char *ip, int port, int num_buff, int num_rpc_per_buff, void *dart_ref, enum rpc_component cmp_type)
+struct rpc_server *rpc_server_init(int option, char *ip, int port, int num_buff, int num_peers, void *dart_ref, enum rpc_component cmp_type)
 {
 	struct rpc_server *rpc_s = 0;
 	int err = -ENOMEM;
@@ -1151,14 +949,15 @@ struct rpc_server *rpc_server_init(int option, char *ip, int port, int num_buff,
 	if(!rpc_s)
 		goto err_out;
 
-	rpc_s->sys_conn_count = 0;
+//	rpc_s->sys_conn_count = 0;
 
 	rpc_s->dart_ref = dart_ref;
 	rpc_s->num_buf = num_buff;
-	rpc_s->num_rpc_per_buff = num_rpc_per_buff;
+	rpc_s->app_num_peers = num_peers;
+	rpc_s->num_rpc_per_buff = num_peers;
 	rpc_s->max_num_msg = num_buff;
 	rpc_s->com_type = cmp_type;
-	rpc_s->cur_num_peer = 0;
+//	rpc_s->cur_num_peer = 0;
 
 	rpc_s->listen_id = NULL;
 	rpc_s->rpc_ec = NULL;
@@ -1224,12 +1023,12 @@ struct rpc_server *rpc_server_init(int option, char *ip, int port, int num_buff,
 
 
 	//TODO: for server and client, num_rpc_per_buff should be different: S, s+c; C c; NEED CHECK
-	rpc_s->bar_tab = malloc(sizeof(*rpc_s->bar_tab) * num_rpc_per_buff);
+	rpc_s->bar_tab = malloc(sizeof(*rpc_s->bar_tab) * rpc_s->app_num_peers);
 	if(!rpc_s->bar_tab) {
 		err = -ENOMEM;
 		goto err_free;
 	}
-	memset(rpc_s->bar_tab, 0, sizeof(*rpc_s->bar_tab) * num_rpc_per_buff);
+	memset(rpc_s->bar_tab, 0, sizeof(*rpc_s->bar_tab) * rpc_s->app_num_peers);
 
 	rpc_add_service(peer_rdma_done, rpc_cb_cleanup);
 
@@ -1259,10 +1058,9 @@ int rpc_post_recv(struct rpc_server *rpc_s, struct node_id *peer)
 
 	peer->rr = rr;
 
-	//rr = register_memory(peer);
 	rr->peerid = peer->ptlmap.id;
 
-	err = register_memory2(rr, peer);
+	err = register_memory(rr, peer);
 	if(err != 0)
 		goto err_out;
 
@@ -1361,22 +1159,6 @@ static int rpc_server_finish(struct rpc_server *rpc_s)
                         }
                 }
 	}
-
-/*
-	peer = rpc_s->peer_tab;
-	for(i = 0; i < rpc_s->num_peers; i++, peer++) {
-		if(peer->rpc_conn.f_connected == 1) {
-			while(peer->num_req) {
-				err = peer_process_send_list(rpc_s, peer);
-				if(err < 0) {
-					printf("'%s()': encountered an error %d, skipping.\n", __func__, err);
-					sleep(10);
-				}
-			}
-		}
-	}
-*/
-
 	return 0;
 }
 
@@ -1386,15 +1168,9 @@ int rpc_server_free(struct rpc_server *rpc_s)
 	int err, i;
 	struct rpc_request *rr, *tmp;
 
-
 	rpc_server_finish(rpc_s);
 
-
 	// Process any remaining events.
-
-
-
-
 /*        err = rpc_process_event_with_timeout(rpc_s, 100);
 	while (err == 0 || err == -EINVAL){
 	        printf("%d  process what?\n",rpc_s->ptlmap.id);
@@ -1635,13 +1411,9 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 			peer->rpc_conn.id = event_copy.id;
 			peer->rpc_conn.qp = event_copy.id->qp;
 
-			//for(i=0;i<RPC_NUM;i++){
-//printf("RPC_NUM is %d, i is %d.\n", RPC_NUM, i);
 			err = rpc_post_recv(rpc_s, peer);
 			if(err != 0)
 				goto err_out;
-			//}
-
 
 			err = rdma_resolve_route(event_copy.id, INFINIBAND_TIMEOUT);
 			if(err != 0) {
@@ -1649,9 +1421,6 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 				goto err_out;
 			}
 		} else if(event_copy.event == RDMA_CM_EVENT_ROUTE_RESOLVED) {
-//			printf("route resolved.\n");
-//
-
 			memset(&cm_params, 0, sizeof(struct rdma_conn_param));
 
 			conpara.pm_cp = rpc_s->ptlmap;
@@ -1671,23 +1440,16 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 				goto err_out;
 			}
 		} else if(event_copy.event == RDMA_CM_EVENT_ESTABLISHED) {
-
-//			printf("Connection Established.\n");
 			if(peer->ptlmap.id == 0) {
 				if(rpc_s->ptlmap.appid != 0) {
-
-//					printf("I was %d now I am %d minid %d %d\n", rpc_s->ptlmap.id, ((struct con_param *) event_copy.param.conn.private_data)->pm_sp.id, rpc_s->app_minid, ((struct con_param *) event_copy.param.conn.private_data)->type);
+					//Here is a tricky design. Master Server puts app_minid into this 'type' field and return.
 					rpc_s->app_minid = ((struct con_param *) event_copy.param.conn.private_data)->type;
 					rpc_s->ptlmap.id = ((struct con_param *) event_copy.param.conn.private_data)->pm_sp.id;
-					//rpc_s->peer_tab = calloc(1, sizeof(struct node_id) * (rpc_s->num_rpc_per_buff + ((struct con_param *) event_copy.param.conn.private_data)->num_cp));
-
 					peer->ptlmap = ((struct con_param *) event_copy.param.conn.private_data)->pm_cp;
-
-//                                       printf("Client %d will get %d total peers\n",rpc_s->ptlmap.id,((struct con_param *) event_copy.param.conn.private_data)->num_cp);
-				        rpc_s->num_peers = rpc_s->num_rpc_per_buff + ((struct con_param *) event_copy.param.conn.private_data)->num_cp;
-
-//                                      rpc_s->app_minid = ((struct con_param *) event_copy.param.conn.private_data)->type;     //Here is a tricky design. Master Server puts app_minid into this 'type' field and return.
-//printf("id is %d, appminid is%d.\n", rpc_s->ptlmap.id, rpc_s->app_minid);
+					//only the master client will get the total number of peers from the master server
+					if(rpc_s->ptlmap.id == rpc_s->app_minid || rpc_s->app_minid ==0){
+						rpc_s->num_peers = rpc_s->app_num_peers + ((struct con_param *) event_copy.param.conn.private_data)->num_cp;
+					}
 				} else
 					rpc_s->ptlmap.id = *((int *) event_copy.param.conn.private_data);
 			}
@@ -1860,6 +1622,99 @@ void rpc_add_service(enum cmd_type rpc_cmd, rpc_service rpc_func)	//Done
 	num_service++;
 }
 
+
+static int rpc_process(struct rpc_server *rpc_s, struct node_id *peer)
+{
+	int ret, err;
+	struct ibv_cq *ev_cq;
+	void *ev_ctx;
+	struct ibv_wc wc;
+	struct rpc_request *rr;
+
+
+	err = ibv_get_cq_event(peer->rpc_conn.comp_channel, &ev_cq, &ev_ctx);
+	if(err == -1 && errno == EAGAIN) {
+//                                      printf("comp_events_completed is %d.\n", peer->rpc_conn.cq->comp_events_completed);     //debug
+		return 0;
+	}
+	if(err == -1 && errno != EAGAIN) {
+		printf("Failed to get cq_event: %s\n", strerror(errno));
+		err = errno;
+		goto err_out;
+	}
+	ibv_ack_cq_events(ev_cq, 1);
+	err = ibv_req_notify_cq(ev_cq, 0);
+	if(err != 0) {
+		printf("Failed to ibv_req_notify_cq.\n");
+		fprintf(stderr, "Failed to ibv_req_notify_cq.\n");
+		goto err_out;
+	}
+
+	do {
+		ret = ibv_poll_cq(ev_cq, 1, &wc);
+		if(ret < 0) {
+			printf("Failed to ibv_poll_cq.\n");
+			fprintf(stderr, "Failed to ibv_poll_cq.\n");
+			goto err_out;
+		}
+		if(ret == 0) {
+			continue;
+		}
+		if(wc.status != IBV_WC_SUCCESS) {
+			printf("Status (%d) is not IBV_WC_SUCCESS.\n", wc.status);
+			err = -wc.status;
+			goto err_out;
+		}
+		if(wc.opcode & IBV_WC_RECV) {
+			rpc_cb_decode(rpc_s, &wc);
+
+			peer->num_recv_buf--;
+
+			struct ibv_recv_wr wr, *bad_wr = NULL;
+			struct ibv_sge sge;
+			int err = 0;
+
+
+			wr.wr_id = (uintptr_t) wc.wr_id;
+			wr.next = NULL;
+			wr.sg_list = &sge;
+			wr.num_sge = 1;
+
+			sge.addr = (uintptr_t) wc.wr_id;
+			sge.length = sizeof(struct rpc_cmd);
+			sge.lkey = peer->rr->rpc_mr->lkey;
+
+			err = ibv_post_recv(peer->rpc_conn.qp, &wr, &bad_wr);
+
+			peer->num_recv_buf++;
+
+
+		} else if(wc.opcode == IBV_WC_SEND || wc.opcode == IBV_WC_RDMA_WRITE || wc.opcode == IBV_WC_RDMA_READ) {
+			peer->req_posted--;	//debug
+			rr = (struct rpc_request *) (uintptr_t) wc.wr_id;
+
+			err = (*rr->cb) (rpc_s, &wc);
+			if(err != 0) {
+				goto err_out;
+			}
+		} else {
+			printf("Weird wc.opcode %d.\n", wc.opcode);	//debug
+			err = wc.opcode;
+			goto err_out;
+		}
+
+	} while(ret);
+
+	return 0;
+
+      err_out:
+	printf("(%s): err (%d).\n", __func__, err);
+	return err;
+
+
+}
+
+
 //Use poll 2
 static int __process_event(struct rpc_server *rpc_s, int timeout)	//Done
 {
@@ -1868,46 +1723,25 @@ static int __process_event(struct rpc_server *rpc_s, int timeout)	//Done
 	int which_peer[2 * rpc_s->num_peers - 2];
 	int sys_peer[2 * rpc_s->num_peers - 2];
 	// initialize file descriptor set
-	int i, j, seq, ret, err = 0;
-	struct ibv_cq *ev_cq;
-	void *ev_ctx;
-	struct ibv_wc wc;
-	struct sys_msg *sm;
-	struct rpc_request *rr;
-
+	int i, j, err = 0;
 
 	j = 0;
-	for(i = 0; i < rpc_s->num_peers; i++) {
+	list_for_each_entry(peer, &rpc_s->peer_list, struct node_id, peer_entry) {
 
-                peer = rpc_get_peer(rpc_s,i);
-                if(peer==NULL)
-                        continue;
-	               //printf("processing peer# %d (%s:%d)\n",peer->ptlmap.id, inet_ntoa(peer->ptlmap.address.sin_addr),ntohs(peer->ptlmap.address.sin_port));
-
-
-//		if(rpc_s->peer_tab[i].ptlmap.id == rpc_s->ptlmap.id) {
-		if(peer->ptlmap.id == rpc_s->ptlmap.id) {
-			seq = i;
-			continue;
-		}
-//		peer = rpc_s->peer_tab + i;
-
-		if(peer->sys_conn.f_connected == 0) {
-		} else {
+		if(peer->sys_conn.f_connected == 1) {
 			my_pollfd[j].fd = peer->sys_conn.comp_channel->fd;
 			my_pollfd[j].events = POLLIN;
 			my_pollfd[j].revents = 0;
-			which_peer[j] = i;
+			which_peer[j] = peer->ptlmap.id;
 			sys_peer[j] = 1;
 			j++;
 		}
 
-		if(peer->rpc_conn.f_connected == 0) {
-		} else {
+		if(peer->rpc_conn.f_connected == 1) {
 			my_pollfd[j].fd = peer->rpc_conn.comp_channel->fd;
 			my_pollfd[j].events = POLLIN;
 			my_pollfd[j].revents = 0;
-			which_peer[j] = i;
+			which_peer[j] = peer->ptlmap.id;
 			sys_peer[j] = 0;
 			j++;
 		}
@@ -1919,7 +1753,6 @@ static int __process_event(struct rpc_server *rpc_s, int timeout)	//Done
 	err = poll(my_pollfd, j, timeout);
 
 
-
 	if(err < 0) {
 		printf("Poll Errer.\n");
 		goto err_out;
@@ -1928,190 +1761,21 @@ static int __process_event(struct rpc_server *rpc_s, int timeout)	//Done
 	} else if(err > 0) {
 		for(i = 0; i < j; i++) {
 			if(sys_peer[i] == 1 && my_pollfd[i].revents != 0) {
-		                peer = rpc_get_peer(rpc_s,which_peer[i]);
-
-//				peer = rpc_s->peer_tab + which_peer[i];
-				err = ibv_get_cq_event(peer->sys_conn.comp_channel, &ev_cq, &ev_ctx);
-				if(err == -1 && errno == EAGAIN) {
-//                                      printf("comp_events_completed is %d.\n", peer->sys_conn.cq->comp_events_completed);     //debug
-					break;
-				}
-				if(err == -1 && errno != EAGAIN) {
-					printf("Failed to get cq_event with (%s).\n", strerror(errno));
-					err = errno;
+				peer = rpc_get_peer(rpc_s, which_peer[i]);
+				err = sys_process(rpc_s, peer);
+				if(err < 0)
 					goto err_out;
-				}
-				ibv_ack_cq_events(ev_cq, 1);
-				err = ibv_req_notify_cq(ev_cq, 0);
-				if(err != 0) {
-					fprintf(stderr, "Failed to ibv_req_notify_cq.\n");
-					printf("Failed to ibv_req_notify_cq.\n");
-					goto err_out;
-				}
-
-				do {
-					ret = ibv_poll_cq(ev_cq, 1, &wc);
-					if(ret < 0) {
-						printf("Failed to ibv_poll_cq.\n");
-						fprintf(stderr, "Failed to ibv_poll_cq.\n");
-						goto err_out;
-					}
-					if(ret == 0) {
-						continue;
-					}
-
-					if(wc.status != IBV_WC_SUCCESS) {
-						printf("Status (%d) is not IBV_WC_SUCCESS.\n", wc.status);
-						err = wc.status;
-						goto err_out;
-					}
-					if(wc.opcode & IBV_WC_RECV) {
-						struct hdr_sys *hs = (struct hdr_sys *) (uintptr_t) wc.wr_id;
-						err = sys_dispatch_event(rpc_s, hs);
-
-						if(err != 0) {
-							goto err_out;
-						}
-
-
-
-						struct ibv_recv_wr wr, *bad_wr = NULL;
-						struct ibv_sge sge;
-						int err = 0;
-
-
-						wr.wr_id = (uintptr_t) wc.wr_id;
-						wr.next = NULL;
-						wr.sg_list = &sge;
-						wr.num_sge = 1;
-
-						sge.addr = (uintptr_t) wc.wr_id;
-						sge.length = sizeof(struct hdr_sys);
-						sge.lkey = peer->sm->sys_mr->lkey;
-
-						err = ibv_post_recv(peer->sys_conn.qp, &wr, &bad_wr);
-						if(err != 0) {
-							printf("ibv_post_recv fails with %d in %s.\n", err, __func__);
-						}
-
-
-
-					} else if(wc.opcode == IBV_WC_SEND) {
-						sm = (struct sys_msg *) (uintptr_t) wc.wr_id;
-						if(sm->sys_mr != 0) {
-							err = ibv_dereg_mr(sm->sys_mr);
-							if(err != 0) {
-								goto err_out;
-							}
-						}
-						free(sm);
-					} else {
-						printf("Weird wc.opcode %d.\n", wc.opcode);	//debug
-						err = wc.opcode;
-						goto err_out;
-					}
-				} while(ret);
-/*			
-				err = ibv_req_notify_cq(ev_cq, 0);
-				if(err != 0){
-					fprintf(stderr, "Failed to ibv_req_notify_cq.\n");
-					goto err_out;
-				}
-*/
 			}
 			if(sys_peer[i] == 0 && my_pollfd[i].revents != 0) {
-
-                                peer = rpc_get_peer(rpc_s,which_peer[i]);
-
-//				peer = rpc_s->peer_tab + which_peer[i];
-				err = ibv_get_cq_event(peer->rpc_conn.comp_channel, &ev_cq, &ev_ctx);
-				if(err == -1 && errno == EAGAIN) {
-//                                      printf("comp_events_completed is %d.\n", peer->rpc_conn.cq->comp_events_completed);     //debug
-					break;
-				}
-				if(err == -1 && errno != EAGAIN) {
-					printf("Failed to get cq_event: %s\n", strerror(errno));
-					err = errno;
+				peer = rpc_get_peer(rpc_s, which_peer[i]);
+				err = rpc_process(rpc_s, peer);
+				if(err < 0)
 					goto err_out;
-				}
-				ibv_ack_cq_events(ev_cq, 1);
-				err = ibv_req_notify_cq(ev_cq, 0);
-				if(err != 0) {
-					printf("Failed to ibv_req_notify_cq.\n");
-					fprintf(stderr, "Failed to ibv_req_notify_cq.\n");
-					goto err_out;
-				}
-
-				do {
-					ret = ibv_poll_cq(ev_cq, 1, &wc);
-					if(ret < 0) {
-						printf("Failed to ibv_poll_cq.\n");
-						fprintf(stderr, "Failed to ibv_poll_cq.\n");
-						goto err_out;
-					}
-					if(ret == 0) {
-						continue;
-					}
-					if(wc.status != IBV_WC_SUCCESS) {
-						printf("Status (%d) is not IBV_WC_SUCCESS.\n", wc.status);
-						err = -wc.status;
-						goto err_out;
-					}
-					if(wc.opcode & IBV_WC_RECV) {
-						rpc_cb_decode(rpc_s, &wc);
-
-						peer->num_recv_buf--;
-
-						struct ibv_recv_wr wr, *bad_wr = NULL;
-						struct ibv_sge sge;
-						int err = 0;
-
-
-						wr.wr_id = (uintptr_t) wc.wr_id;
-						wr.next = NULL;
-						wr.sg_list = &sge;
-						wr.num_sge = 1;
-
-						sge.addr = (uintptr_t) wc.wr_id;
-						sge.length = sizeof(struct rpc_cmd);
-						sge.lkey = peer->rr->rpc_mr->lkey;
-
-						err = ibv_post_recv(peer->rpc_conn.qp, &wr, &bad_wr);
-
-						peer->num_recv_buf++;
-
-
-					} else if(wc.opcode == IBV_WC_SEND || wc.opcode == IBV_WC_RDMA_WRITE || wc.opcode == IBV_WC_RDMA_READ) {
-						peer->req_posted--;	//debug
-						rr = (struct rpc_request *) (uintptr_t) wc.wr_id;
-
-						err = (*rr->cb) (rpc_s, &wc);
-						if(err != 0) {
-							goto err_out;
-						}
-					} else {
-						printf("Weird wc.opcode %d.\n", wc.opcode);	//debug
-						err = wc.opcode;
-						goto err_out;
-					}
-
-				} while(ret);
-
-/*				//rearm here
-				err = ibv_req_notify_cq(ev_cq, 0);
-				if(err != 0){
-					fprintf(stderr, "Failed to ibv_req_notify_cq.\n");
-					goto err_out;
-				}
-*/
 			}
 		}
 	}
 
 	return 0;
-
-	if(err == 0)
-		return 0;
 
       err_out:
 	printf("(%s): err (%d).\n", __func__, err);
@@ -2191,9 +1855,7 @@ int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg
 	peer->num_req++;
 	peer->req_posted++;
 
-
 	err = peer_process_send_list(rpc_s, peer);
-
 	if(err == 0)
 		return 0;
 
