@@ -233,13 +233,20 @@ static int dsrpc_cn_unregister_app(struct rpc_server *rpc_s, struct rpc_cmd *cmd
 			ds->peer_size--;
 			ds->num_cp--;
 			ds->size_cp--;
+			ds->current_client_size--;
 
 
 		}
 	}
 
-	if(ds->num_cp == 0)
-		ds->f_stop = 1;
+        struct app_info *app = app_find(ds, appid);
+        if(app){
+                list_del(&app->app_entry);
+	}
+
+
+//	if(ds->num_cp == 0)
+//		ds->f_stop = 1;
 //        printf("I am peer %d after removing app %d  I have %d cp\n", rpc_s->ptlmap.id, appid,ds->num_cp);
 
 	return 0;
@@ -258,6 +265,8 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 	hreg->num_cp = 0;
 	peer = ds_get_peer(ds, cmd->id);
+
+	int appid = peer->ptlmap.appid;
 	msg = msg_buf_alloc(rpc_s, peer, 1);
 	if(!msg)
 		goto err_out;
@@ -283,6 +292,7 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 			ds->peer_size--;
 			ds->num_cp--;
 			ds->size_cp--;
+			ds->current_client_size--;
 
 
 		}
@@ -291,11 +301,16 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 			ds_remove_app(ds, temp_peer, peer->ptlmap.appid);
 	}
 
-	if(ds->num_cp == 0)
-		ds->f_stop = 1;
+	struct app_info *app = app_find(ds, appid);
+	if(app){
+		list_del(&app->app_entry);
+	}
+
+//	if(ds->num_cp == 0)
+//		ds->f_stop = 1;
 
 	return 0;
-      err_out:printf("(%s): failed. (%d)\n", __func__, err);
+      err_out:printf("(%s): failed. (%d) %d\n", __func__, err, appid);
 	return err;
 
 
