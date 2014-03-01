@@ -846,25 +846,23 @@ static int dc_disseminate_dc(struct dart_client *dc)       //Done
         struct ptlid_map *pptlmap;
         struct app_info *app;
         int i, k, err;
-//      cpeer = ds->peer_tab;
 
-//	printf("Current %d %d min rank %d, peer size %d\n",dc->num_sp, dc->num_cp, dc->cp_min_rank, dc->peer_size);
-        //send to slave servers all the peers' info
-        for(i = 1; i < dc->peer_size; i++) {
-                peer = dc_get_peer(dc, i+ dc->cp_min_rank);
-                err = -ENOMEM;
-                msg = msg_buf_alloc(dc->rpc_s, peer, 1);
-                if(!msg)
-                        goto err_out;
-                msg->cb = default_completion_with_data_callback;
-                msg->size = sizeof(struct ptlid_map) * (dc->num_sp + dc->num_cp);
-                pptlmap = msg->msg_data = malloc(msg->size);
-                if(!msg->msg_data)
-                        goto err_out_free;
-                struct node_id *temp_peer;
+	for(i = 1; i < dc->peer_size; i++) {
+		peer = dc_get_peer(dc, i + dc->cp_min_rank);
+		if(peer==NULL)
+			continue;
+		err = -ENOMEM;
+		msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+		if(!msg)
+			goto err_out;
+		msg->cb = default_completion_with_data_callback;
+		msg->size = sizeof(struct ptlid_map) * (dc->num_sp + dc->num_cp);
+		pptlmap = msg->msg_data = malloc(msg->size);
+		if(!msg->msg_data)
+			goto err_out_free;
+		struct node_id *temp_peer;
 		k = 0;
                 list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
-			//memcpy(&pptlmap[k],&temp_peer->ptlmap,sizeof(struct ptlid_map));
                         *pptlmap++ = temp_peer->ptlmap;
                 }
 
@@ -876,7 +874,6 @@ static int dc_disseminate_dc(struct dart_client *dc)       //Done
                 hreg->num_cp = dc->num_cp;
                 hreg->num_sp = dc->num_sp;
 
-//                printf("sending to peer %d\n",peer->ptlmap.id);
 
                 err = rpc_send(dc->rpc_s, peer, msg);
                 if(err < 0) {
@@ -939,20 +936,8 @@ int dc_boot_master(struct dart_client *dc)
        
 	dc->cp_min_rank = dc->rpc_s->app_minid; 
 
-         list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
-		temp_peer->ptlmap.id = temp_peer->ptlmap.id + dc->cp_min_rank;
-//                printf("Clientpeer# %d (%s:%d)\n",temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
-         }
 
-
-
-
-        list_add(&master_peer->peer_entry, &dc->rpc_s->peer_list);
-
-//         list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
-//                printf("Clientpeer# %d (%s:%d)\n",temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
-//         }
-
+	list_add(&master_peer->peer_entry, &dc->rpc_s->peer_list);
 
 	dc_disseminate(dc);
 
@@ -960,16 +945,7 @@ int dc_boot_master(struct dart_client *dc)
 		err = rpc_process_event_with_timeout(dc->rpc_s, 1);
 	}	
 
-	//
-
-//	printf("here is the list of my peers\n");
-//         list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
-//                printf("Clientpeer# %d (%s:%d)\n",temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
-//         }
-
 	//send peers info in my app to master server
-
-
 	dc_disseminate_dc(dc);
 
 
