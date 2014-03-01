@@ -171,6 +171,85 @@ static int dsrpc_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Don
 	return 0;
 }
 
+static int ds_remove_app(struct dart_server *ds, struct node_id *peer, int appid)
+{
+	struct msg_buf *msg;
+	struct hdr_register *hreg;
+	struct ptlid_map *pptlmap;
+	struct app_info *app;
+	int i, k, err;
+
+	app = app_find(ds, appid);
+	if(!app) {
+		goto err_out;
+	}
+	err = -ENOMEM;
+	msg = msg_buf_alloc(ds->rpc_s, peer, 1);
+	if(!msg)
+		goto err_out;
+	msg->msg_rpc->id = appid;
+	msg->msg_rpc->cmd = cn_unregister_app;
+	peer->f_unreg = 1;
+
+	err = rpc_send(ds->rpc_s, peer, msg);
+	if(err < 0) {
+		free(msg);
+		goto err_out;
+	}
+
+
+
+
+	err = rpc_send(ds->rpc_s, peer, msg);
+	if(err < 0) {
+		free(msg->msg_data);
+		goto err_out_free;
+	}
+
+	return 0;
+      err_out_free:free(msg);
+      err_out:printf("'%s()' failed with %d.\n", __func__, err);
+	return err;
+
+
+}
+
+
+static int dsrpc_cn_unregister_app(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+	struct dart_server *ds = ds_ref_from_rpc(rpc_s);
+
+	int appid = cmd->id;
+
+//      printf("I am peer %d removing app %d before I have %d cp\n", rpc_s->ptlmap.id, appid,ds->num_cp);
+
+	struct node_id *temp_peer, *t;
+	list_for_each_entry_safe(temp_peer, t, &ds->rpc_s->peer_list, struct node_id, peer_entry) {
+		if(temp_peer->ptlmap.appid == appid) {
+			list_del(&temp_peer->peer_entry);
+			ds->peer_size--;
+			ds->num_cp--;
+			ds->size_cp--;
+			ds->current_client_size--;
+
+
+		}
+	}
+
+        struct app_info *app = app_find(ds, appid);
+        if(app){
+                list_del(&app->app_entry);
+	}
+
+
+//	if(ds->num_cp == 0)
+//		ds->f_stop = 1;
+//        printf("I am peer %d after removing app %d  I have %d cp\n", rpc_s->ptlmap.id, appid,ds->num_cp);
+
+	return 0;
+
+}
+
 static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
 	struct dart_server *ds = ds_ref_from_rpc(rpc_s);
@@ -183,6 +262,8 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 	hreg->num_cp = 0;
 	peer = ds_get_peer(ds, cmd->id);
+
+	int appid = peer->ptlmap.appid;
 	msg = msg_buf_alloc(rpc_s, peer, 1);
 	if(!msg)
 		goto err_out;
@@ -206,6 +287,7 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 			ds->peer_size--;
 			ds->num_cp--;
 			ds->size_cp--;
+			ds->current_client_size--;
 
 
 		}
@@ -214,11 +296,16 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 			ds_remove_app(ds, temp_peer, peer->ptlmap.appid);
 	}
 
-	if(ds->num_cp == 0)
-		ds->f_stop = 1;
+	struct app_info *app = app_find(ds, appid);
+	if(app){
+		list_del(&app->app_entry);
+	}
+
+//	if(ds->num_cp == 0)
+//		ds->f_stop = 1;
 
 	return 0;
-      err_out:printf("(%s): failed. (%d)\n", __func__, err);
+      err_out:printf("(%s): failed. (%d) %d\n", __func__, err, appid);
 	return err;
 
 
