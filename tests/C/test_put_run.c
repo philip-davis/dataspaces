@@ -314,7 +314,7 @@ int test_put_run(enum transport_type type, int npapp, int npx, int npy, int npz,
 			common_unlock_on_write("m2d_lock", &gcomm_);
 		}
 	} else if(dims == 3) {
-		for(ts = 1; ts <= timestep_; ts++) {
+		for(ts = timestep_; ts <= timestep_; ts++) {
 
 			sleep(3);
 			couple_write_3d(ts, num_vars, type);

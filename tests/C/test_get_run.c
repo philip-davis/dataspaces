@@ -261,7 +261,7 @@ int test_get_run(enum transport_type type, int npapp, int npx, int npy, int npz,
 			couple_read_2d(ts, num_vars, type);
 		}
 	} else if(dims == 3) {
-		for(ts = 1; ts <= timestep_; ts++) {
+		for(ts = timestep_; ts <= timestep_; ts++) {
 			sleep(4);
 			couple_read_3d(ts, num_vars, type);
 		}
