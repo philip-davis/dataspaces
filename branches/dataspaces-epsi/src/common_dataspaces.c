@@ -221,6 +221,7 @@ int common_dspaces_get(const char *var_name,
 	int ndim,
 	uint64_t *lb,
 	uint64_t *ub,
+    uint64_t *gdim,
 	void *data)
 {
         struct obj_descriptor odsc = {
@@ -255,6 +256,13 @@ int common_dspaces_get(const char *var_name,
                     return -ENOMEM;
         }
 
+        // set global dimension
+        int i;
+        memset(&od->global_dim, 0, sizeof(struct coord));
+        for (i = 0; i < ndim; i++) {
+            od->global_dim.c[i] = gdim[i];
+        }
+
         err = dcg_obj_get(od);
         obj_data_free(od);
         if (err < 0 && err != -EAGAIN) 
@@ -274,6 +282,7 @@ int common_dspaces_put(const char *var_name,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
+        uint64_t *gdim,
         void *data)
 {
         struct obj_descriptor odsc = {
@@ -310,13 +319,19 @@ int common_dspaces_put(const char *var_name,
                 return -ENOMEM;
         }
 
+        // set global dimension
+        int i;
+        memset(&od->global_dim, 0, sizeof(struct coord));
+        for (i = 0; i < ndim; i++) {
+            od->global_dim.c[i] = gdim[i];
+        }
+
         err = dcg_obj_put(od);
         if (err < 0) {
-                obj_data_free(od);
-
-		uloga("'%s()': failed with %d, can not put data object.\n", 
-			__func__, err);
-		return err;
+            obj_data_free(od);
+            uloga("'%s()': failed with %d, can not put data object.\n", 
+                __func__, err);
+            return err;
         }
         sync_op_id = err;
 

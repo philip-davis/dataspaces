@@ -103,13 +103,14 @@ struct query_tran_entry {
 
         struct query_dht        *qh;
 
-	/* Allocate/setup data for the objects in the 'od_list' that
-	   are retrieved from the space */
-	unsigned int		f_alloc_data:1,
-				f_peer_received:1,
-				f_odsc_recv:1,
-				f_complete:1,
-				f_err:1;
+        struct coord            global_dim;
+        /* Allocate/setup data for the objects in the 'od_list' that
+           are retrieved from the space */
+        unsigned int		f_alloc_data:1,
+                    f_peer_received:1,
+                    f_odsc_recv:1,
+                    f_complete:1,
+                    f_err:1;
 };
 
 /*
@@ -195,6 +196,7 @@ static struct query_tran_entry * qte_alloc(struct obj_data *od, int alloc_data)
 	qte->q_obj = od->obj_desc;
 	qte->data_ref = od->data;
 	qte->f_alloc_data = !!(alloc_data);
+    memcpy(&qte->global_dim, &od->global_dim, sizeof(struct coord));
 
 	qte->qh = qh_alloc(dcg->dc->num_sp);
 	if (!qte->qh) {
@@ -962,6 +964,7 @@ static int get_dht_peers(struct query_tran_entry *qte)
         oh->qid = qte->q_id;
         oh->u.o.odsc = qte->q_obj;
         oh->rank = DCG_ID;
+        memcpy(&oh->global_dim, &qte->global_dim, sizeof(struct coord));
 
         err = rpc_receive(dcg->dc->rpc_s, peer, msg);
         if (err == 0)
@@ -1001,6 +1004,8 @@ static int get_obj_descriptors(struct query_tran_entry *qte)
                 oh->qid = qte->q_id;
                 oh->u.o.odsc = qte->q_obj;
                 oh->rank = DCG_ID; 
+                memcpy(&oh->global_dim, &qte->global_dim,
+                    sizeof(struct coord)); 
 
                 qte->qh->qh_num_req_posted++;
                 err = rpc_send(dcg->dc->rpc_s, peer, msg);
@@ -1159,7 +1164,6 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
 
                 msg->msg_data = od->data;
                 msg->size = obj_data_size(&od->obj_desc);
-		// msg->size = obj_data_sizev(&od->obj_desc) / sizeof(iovec_t);
                 msg->cb = obj_data_get_completion;
                 msg->private = qte;
 
@@ -1170,16 +1174,17 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                 oh->qid = qte->q_id;
                 oh->u.o.odsc = od->obj_desc;
                 oh->u.o.odsc.version = qte->q_obj.version;
+                memcpy(&oh->global_dim, &qte->global_dim,
+                    sizeof(struct coord));
 
                 err = rpc_receive(dcg->dc->rpc_s, peer, msg);
-		// err = rpc_receivev(dcg->dc->rpc_s, peer, msg);
                 if (err < 0) {
                         free(msg);
                         free(od->data);
                         od->data = NULL;
                         goto err_out;
                 }
-		// TODO: uncomment next line ?!
+                // TODO: uncomment next line ?!
                 // qte->num_req++;
         }
 
@@ -1585,6 +1590,7 @@ int dcg_obj_put(struct obj_data *od)
 {
         struct msg_buf *msg;
         struct node_id *peer;
+        struct hdr_obj_put *hdr; 
         int sync_op_id;
         int err = -ENOMEM;
 
@@ -1596,10 +1602,6 @@ int dcg_obj_put(struct obj_data *od)
         }
 
         sync_op_id = syncop_next();
-        // od->obj_desc.bb_loc_dsc = od->obj_desc.bb_glb_dsc;
-        // bbox_to_origin(&od->obj_desc.bb_loc_dsc, &od->obj_desc.bb_glb_dsc);
-
-        // od->obj_desc.bb_loc_dsc.num_dims = od->obj_desc.bb_glb_dsc.num_dims;
 
         msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
         if (!msg)
@@ -1615,7 +1617,9 @@ int dcg_obj_put(struct obj_data *od)
         msg->msg_rpc->cmd = ss_obj_put;
         msg->msg_rpc->id = DCG_ID; // dcg->dc->self->id;
 
-        memcpy(msg->msg_rpc->pad, &od->obj_desc, sizeof(od->obj_desc));
+        hdr = msg->msg_rpc->pad;
+        hdr->odsc = od->obj_desc;
+        memcpy(&hdr->global_dim, &od->global_dim, sizeof(struct coord));
 
         err = rpc_send(dcg->dc->rpc_s, peer, msg);
         if (err < 0) {
@@ -1646,7 +1650,6 @@ int dcg_obj_cq_register(struct obj_data *od)
         qte = qte_alloc(od, 1);
         if (!qte)
                 goto err_out;
-	// DELETE:        qt_set(qte, od);
 
         peer = dcg_which_peer();
 
@@ -1743,7 +1746,6 @@ int dcg_obj_get(struct obj_data *od)
 {
         struct query_tran_entry *qte;
         const struct query_cache_entry *qce;
-        //        struct hdr_obj_get *oh;
         int err = -ENOMEM;
 #ifdef TIMING_PERF
         double tm_st, tm_end;
