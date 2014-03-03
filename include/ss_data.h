@@ -46,7 +46,6 @@ typedef struct {
 enum storage_type {row_major, column_major};
 
 struct obj_descriptor {
-        // char                    name[16];
         char                    name[154]; // 170
 
         enum storage_type       st;
@@ -67,6 +66,7 @@ struct obj_data {
         struct list_head        obj_entry;
 
         struct obj_descriptor   obj_desc;
+        struct coord            global_dim;
 
         void			*_data;		/* Unaligned pointer */
         void                    *data;		/* Aligned pointer */
@@ -147,21 +147,30 @@ struct sspace {
 
 /* Header structure for obj_get requests. */
 struct hdr_obj_get {
-        int                     qid;
-        int                     rank;
-        int                     rc;
-	union {
-		struct {
-			/* Number of directory entries. */
-			int                     num_de;
-			struct obj_descriptor   odsc;
-		} o;
-		struct {
-			/* Number of versions available. */
-			int			num_vers;
-			int			versions[1];
-		} v;
+    int                     qid;
+    int                     rank;
+    int                     rc;
+    union {
+        struct {
+            /* Number of directory entries. */
+            int                     num_de;
+            struct obj_descriptor   odsc;
+        } o;
+        struct {
+            /* Number of versions available. */
+            int			num_vers;
+            int			versions[1];
+        } v;
 	} u;
+    //int ndim;
+    struct coord global_dim;
+} __attribute__((__packed__));
+
+/* Header structure for obj_put requests. */
+struct hdr_obj_put {
+    struct obj_descriptor odsc;
+    //int ndim;
+    struct coord global_dim;
 } __attribute__((__packed__));
 
 /* Header structure for obj_filter requests. */

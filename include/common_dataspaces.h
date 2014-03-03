@@ -55,6 +55,7 @@ int common_dspaces_get (const char *var_name,
         int ndim,
         uint64_t *lb, //int xl, int yl, int zl, 
         uint64_t *ub, //int xu, int yu, int zu, 
+        uint64_t *gdim,
         void *data);
 int common_dspaces_get_versions(int **);
 int common_dspaces_put (const char *var_name, 
@@ -62,12 +63,14 @@ int common_dspaces_put (const char *var_name,
         int ndim,
         uint64_t *lb, //int xl, int yl, int zl,
         uint64_t *ub, //int xu, int yu, int zu, 
+        uint64_t *gdim,
         void *data);
 
 int common_dspaces_select(char *var_name, unsigned int ver,
         int ndim,
         uint64_t *lb, //int xl, int yl, int zl,
         uint64_t *ub, //int xu, int yu, int zu, 
+        uint64_t *gdim,
         void *data);
 int common_dspaces_cq_register(char *var_name,
         int ndim,

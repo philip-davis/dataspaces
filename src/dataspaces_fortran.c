@@ -175,7 +175,8 @@ void FC_FUNC(dspaces_get, DSPACES_GET) (const char *var_name,
     int ndim = 3;
     uint64_t lb[3] = {*xl, *yl, *zl};
     uint64_t ub[3] = {*xu, *yu, *zu};
-	*err = common_dspaces_get(vname, *ver, *size, ndim, lb, ub, data);
+    uint64_t gdim[3] = {0, 0, 0};
+	*err = common_dspaces_get(vname, *ver, *size, ndim, lb, ub, gdim, data);
 }
 
 /*
@@ -206,7 +207,8 @@ void FC_FUNC(dspaces_put, DSPACES_PUT) (const char *var_name,
 	int ndim = 3;
     uint64_t lb[3] = {*xl, *yl, *zl};
     uint64_t ub[3] = {*xu, *yu, *zu};
-	*err =  common_dspaces_put(vname, *ver, *size, ndim, lb, ub, data);
+    uint64_t gdim[3] = {0, 0, 0};
+	*err =  common_dspaces_put(vname, *ver, *size, ndim, lb, ub, gdim, data);
 }
 
 /*
