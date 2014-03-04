@@ -115,23 +115,16 @@ static int generate_3d(double *m3d, unsigned int ts, int spx, int spy, int spz)
 }
 
 //organize mutiple variables as one element for input
-static void* allocate_multi_vars(int num_vars, int x, int y)
-{
-        int nelem = x*y;
-        //int elem_size = sizeof(double) * 2; //try 2-double/elem
-	void *tmp = NULL;
-	tmp = malloc(elem_size_ * nelem);
-        return tmp;
-}
-static int generate_multi_vars(void *mltvars, unsigned int ts, int spx, int spy)
+static int generate_multi_vars_2d(void *mltvars, unsigned int ts, int spx, int spy)
 {
         int nelem = spx * spy;
         //int elem_size = sizeof(double) * 2; //try 2-double/elem
 
-        int i;
+        int i, j;
+	int nvar = elem_size_ / sizeof(double);
         for(i = 0; i < nelem; i++){
-                *(double*)(mltvars + i*elem_size_) = ts;
-                *(double*)(mltvars + i*elem_size_ + 8) = ts + 1;
+		for(j = 0; j < nvar; j++)
+                	*(double*)(mltvars + i*elem_size_ + 8*j) = ts + j;
         }
         return 0;
 }
@@ -172,14 +165,14 @@ static int couple_write_2d(unsigned int ts, int num_vars, enum transport_type ty
     //double *data = NULL;
     void *data = NULL;
     for (i = 0; i < num_vars; i++) {
-        //data = allocate_2d(spx_, spy_); 
-        data = allocate_multi_vars(2, spx_, spy_); //2 --number of vars
+        data = allocate_2d(spx_, spy_); 
+        //data = allocate_multi_vars(2, spx_, spy_); //2 --number of vars
         if (data == NULL) {
             uloga("%s(): allocate_2d() failed.\n", __func__);
             return -1; // TODO: free buffers
         }
         //generate_2d(data, ts, spx_, spy_);
-        generate_multi_vars(data, ts, spx_, spy_);
+        generate_multi_vars_2d(data, ts, spx_, spy_);
         data_tab[i] = data;
     }
 

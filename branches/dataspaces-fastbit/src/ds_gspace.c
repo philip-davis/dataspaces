@@ -2012,7 +2012,7 @@ static int local_value_query(struct hdr_value_query *hq, void* qcond, int* size_
 	INIT_LIST_HEAD(&qr_list);
 	int count_qr_list = 0;
 
-	int ret_count = 0;
+	int ret_size = 0;
 	struct timeval  tv1, tv2;
       	gettimeofday(&tv1, NULL);
 
@@ -2050,9 +2050,9 @@ static int local_value_query(struct hdr_value_query *hq, void* qcond, int* size_
 	//list_for_each_entry(qr, &qr_list, qr_entry){  //====Hopper====//
 		//printf("qr->size=%d\n", qr->size);
 		fb_query_return_result(&hq->odsc, peer, hq_qid, qr->qret, &qr->size);
-		ret_count += qr->size;
+		ret_size += qr->size;
 	}
-	printf("client%d, ret_count=%d\n", peer->ptlmap.id, ret_count);
+	//printf("client%d, ret_count=%d\n", peer->ptlmap.id, ret_count);
 err_free_query:
 	free(select);
 	free(from);
