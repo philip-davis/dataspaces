@@ -101,6 +101,9 @@ void* fb_build_index(int numVars, void **vals, void *dataType, size_t varSize, c
 			arr = new ibis::array_t<double>((double*)vals[i], varSize);
 			raw[i] = arr;
 			type[i] = ibis::DOUBLE;
+		}else if(*((char*)dataType+i) == 's'){
+			std::vector<std::string> *arr;
+			//arr = new std::vector<std::string>();
 		}
 	}
 
@@ -159,9 +162,9 @@ void* fb_build_index_double(int numvars, double **vals, size_t nvals, const char
 
 int fb_build_result_set(void *ca, const char *select, const char *from, const char *where, int *size, void *qret)
 {
-        ibis::gVerbose = 0; //SET gVerbose!!!!
+        //ibis::gVerbose = 0; //SET gVerbose!!!!
         const cas_array *CA = static_cast<const cas_array*>(ca);
-        const ibis::column *col = CA->getColumn(static_cast<uint32_t>(0));
+        //const ibis::column *col = CA->getColumn(static_cast<uint32_t>(0));
 
         struct timeval tv1, tv2;
         gettimeofday(&tv1, NULL);
@@ -189,24 +192,34 @@ int fb_build_result_set(void *ca, const char *select, const char *from, const ch
              (double) (tv2.tv_sec - tv1.tv_sec));
 
 	//=========explore acquire query result==============
-	/*ibis::colValues *col;
-	ibis::selectClause::AGREGADO aggr;
-	ibis::selectClause& comps;
-	aggr = comps.getAggregator(0);
-	const ibis::bitvector *hits = aquery.getHitVector();
-	if(hits != 0){
-		if(aggr == ibis::selectClause::NIL_AGGR){
-			col = ibis::colValues::create(c, *hits);
-		}
-	}else{
-		switch(aggr){
-		case ibis::selectClause::AVG:
-		case ibis::selectClause::SUM:
-			col = new ibis::colDoubles(c, *hits);
-		break;
-		}
+        ibis::colValues *col = 0;
+        ibis::selectClause comps(select);
+        ibis::selectClause::AGREGADO aggr;
+        aggr = comps.getAggregator(0);
+        ibis::column *c = CA->getColumn(comps.aggName(0));
+
+        const ibis::bitvector *hits = aquery.getHitVector();
+        if(hits != 0){
+                if(aggr == ibis::selectClause::NIL_AGGR){
+                        col = ibis::colValues::create(c, *hits);
+                }
+                else{
+                        switch(aggr){
+                        case ibis::selectClause::AVG:
+                        case ibis::selectClause::SUM:
+                        case ibis::selectClause::VARPOP:
+                        case ibis::selectClause::VARSAMP:
+                                col = new ibis::colDoubles(c, *hits);
+                                break;
+                        default:
+                                col = ibis::colValues::create(c, *hits);
+                                break;
+                        }
+                }
+                *size = col->size() * sizeof(double);	//total data size
+                for(int i = 0; i < col->size(); i++){
+                        *((double*)qret+i) = col->getDouble(i);
+                }
 	}
-	col.getArray();
-	*/
 	return 0;
 }

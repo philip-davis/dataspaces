@@ -305,11 +305,10 @@ int test_get_run(enum transport_type type, int npapp, int npx, int npy, int npz,
                 unsigned int ts;
                 for (ts = 1; ts <= timestep_; ts++){
                 //for (ts = 1; ts <= 2; ts++){
-                        memset(m2d, 0, sizeof(double)*spx_*spy_);
                         if (rank_ == 0)
                                 uloga("%s: At timestep %u\n", __func__, ts);
                         //char* qcond = "select name where name>0 and name<200";
-			char* qcond = "select count(var1) where var2>3 and var2<8 and var1>5";
+			char* qcond = "select var1 where var2>3 and var2<8 and var1>4 and var3>5";
                         couple_value_query_2d(m2d, ts, USE_DSPACES, (void*)qcond);
 		}
 	}	

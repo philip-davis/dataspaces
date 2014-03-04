@@ -13,7 +13,7 @@ struct metaData{
         char 		*attr[MAX];
         //enum DATATYPE 	type[MAX];
 	char 		type[MAX];
-	void		*pointer[MAX];
+	void 		*pointer[MAX];
 };
 
 int parse_meta(char* meta_conf, struct metaData* mtdata);

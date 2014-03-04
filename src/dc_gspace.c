@@ -1584,7 +1584,7 @@ static int dcgrpc_vq_reply(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		printf("num_vq_reply = %d\n", hvr->size);
 		update_num_vq_reply(hvr);				
 	}else{
-	printf("received result in client=%d\n", hvr->size/sizeof(double));
+	printf("received ret_count in client=%d\n", hvr->size/sizeof(double));
 	//if(hvr->size > 0){
 	msg = msg_buf_alloc(rpc_s, peer, 1);
 	if(!msg)
