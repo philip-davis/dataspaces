@@ -82,7 +82,7 @@ static void cb_done (void *ctxt, void * clientdata, pami_result_t err)
 
 static void rpc_cb_req_completion(void *ctxt, void *clientdata, pami_result_t err)
 {
-	uloga("get into rpc_cb_req_completion\n");
+	//uloga("get into rpc_cb_req_completion\n");
 	struct client_data_rpc_send *ptr = (struct client_data_rpc_send *)clientdata;
 	if(!ptr)
 		return;
@@ -105,13 +105,13 @@ static void rpc_cb_req_completion(void *ctxt, void *clientdata, pami_result_t er
 	//TODO free memory resource? ptr->pami_req
 	if(ptr)
 		free(ptr);
-		
+
 	//rpc_server_dec_reply(rpc_s);
 }
 
 static void rpc_cb_req_hasdata_completion(void *ctxt, void *clientdata, pami_result_t err)
 {
-	uloga("get into rpc_cb_req_hasdata_completion\n");
+	//uloga("get into rpc_cb_req_hasdata_completion\n");
 	struct client_data_rpc_send *ptr = (struct client_data_rpc_send *)clientdata;
 
 	struct rpc_server *rpc_s = ptr->rpc_s;
@@ -148,7 +148,7 @@ static int test_equal_memregion(pami_memregion_t *left, pami_memregion_t *right)
  */
 static int rpc_service_put_finish(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	uloga("get into rpc_service_put_finish\n");
+	//uloga("get into rpc_service_put_finish\n");
 	struct rpc_request *rr = NULL;
 	int flag = 0;
 	
@@ -174,7 +174,7 @@ static int rpc_service_put_finish(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		rpc_server_dec_reply(rpc_s);
 	}
 		//rpc_server_dec_reply(rpc_s);
-	uloga("%s() is done\n", __func__);
+	//uloga("%s() is done\n", __func__);
 	return 0;
 }
 	
@@ -212,7 +212,7 @@ static int rpc_service_get_finish(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 static void rpc_cb_put_completion(void *ctxt, void *clientdata, pami_result_t err)
 {
-	uloga("get into rpc_cb_put_completion\n");
+	//uloga("get into rpc_cb_put_completion\n");
 	struct client_data_rpc_put *ptr = (struct client_data_rpc_put *)clientdata;
 	if(!ptr)
 		return;
@@ -238,6 +238,7 @@ static void rpc_cb_put_completion(void *ctxt, void *clientdata, pami_result_t er
 			"rpc_get_finish finish failed\n", __func__, rpc_s->ptlmap.rank_pami);
 		}
 	}
+	//free(msg);
 
 	//destroy PAMI_Memregion_destroy
 	err = PAMI_Memregion_destroy(rpc_s->contexts[0], local_memregion);
@@ -257,7 +258,7 @@ static void rpc_cb_put_completion(void *ctxt, void *clientdata, pami_result_t er
 		free(local_memregion);
 	if(ptr)
 		free(ptr);
-	uloga("%s() is done\n", __func__);
+	//uloga("%s() is done\n", __func__);
 }
 
 static void rpc_cb_get_completion(void *ctxt, void *clientdata, pami_result_t err)
@@ -278,7 +279,8 @@ static void rpc_cb_get_completion(void *ctxt, void *clientdata, pami_result_t er
 		memcpy(&msg->msg_rpc->mem_region, remote_memregion, sizeof(pami_memregion_t));
 		err = rpc_send(rpc_s, peer, msg);
 	}
-
+	//free(msg);
+	
         PAMI_Memregion_destroy(rpc_s->contexts[0], local_memregion);	
 	(*rr->msg->cb)(rpc_s, rr->msg);
 	if(rr)
@@ -325,6 +327,7 @@ static void rpc_cb_recv_done(pami_context_t context, void *cookie, pami_result_t
 
 	//list
 	list_add_tail(&rr->req_entry, &rpc_s->rpc_list);
+
 	if(ptr)
 		free(ptr);
 }
@@ -354,6 +357,8 @@ static void rpc_cb_recv(pami_context_t context, void *cookie,
 	struct rpc_server *rpc_s = (struct rpc_server*)cookie;
 	struct msg_buf *msg = msg_buf_alloc(rpc_s, NULL, 1);
 	struct rpc_request *rr = (struct rpc_request*)calloc(1, sizeof(struct rpc_request));
+	if(!msg || !rr || !rpc_s)
+		goto err_out;
 	
 	rr->msg = msg;
 	rr->iodir = io_receive;
@@ -376,6 +381,14 @@ static void rpc_cb_recv(pami_context_t context, void *cookie,
     	recv->data_fn     = NULL; //cb_done; //msg_data_cb;//PAMI_DATA_COPY;
     	recv->data_cookie = NULL;
     	//printf("task = %ld \n", (uint32_t)recv->cookie);
+	return;
+
+err_out:
+	if(msg) 
+		free(msg);
+	if(rr)
+		free(rr);
+	uloga("'%s()': failed with memory allocation\n", __func__);
 
 }
 
@@ -451,14 +464,16 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff,
 	//Init the list for outgoing RPC msgs which have data
 	INIT_LIST_HEAD(&rpc_s->out_rpc_list);	
 
+	pami_dispatch_hint_t hints;
+	memset(&hints, 0, sizeof(hints));
 
 	pami_dispatch_callback_function dispatch_cb;
 	size_t dispatch_id			= 37;	//TODO
 	dispatch_cb.p2p				= rpc_cb_recv;
-	pami_dispatch_hint_t dispatch_hint	= {0};
-	int* dispatch_cookie			= (void*)rpc_s;
-	dispatch_hint.recv_immediate		= PAMI_HINT_DISABLE;
-	err = PAMI_Dispatch_set(contexts[0], dispatch_id, dispatch_cb, dispatch_cookie, dispatch_hint);
+	//pami_dispatch_hint_t dispatch_hint	= {0};
+	void* dispatch_cookie			= (void*)rpc_s;
+	hints.recv_immediate			= PAMI_HINT_DISABLE;
+	err = PAMI_Dispatch_set(contexts[0], dispatch_id, dispatch_cb, dispatch_cookie, hints);
 	if(err != PAMI_SUCCESS)
 		printf("fail-1\n");
 //	err = PAMI_Dispatch_set(contexts[1], dispatch_id, dispatch_cb, &dispatch_cookie, dispatch_hint);
@@ -564,15 +579,16 @@ static int rpc_post_request(struct rpc_server *rpc_s, struct node_id *peer,
 	printf("check before send cmd=%d\n", rcmd->cmd);
 	printf("check before send msg_size=%d\n", rr->size);
 */
+	pami_send_hint_t dart_null_send_hint;
+	memset(&dart_null_send_hint, 0, sizeof(dart_null_send_hint));
+
 	pami_send_t parameters;
-	//double value = 300;
 	parameters.send.header.iov_base = rr->data; //&value; //rr->data;
 	parameters.send.header.iov_len 	= 0; //sizeof(double*); //rr->size;
 	parameters.send.data.iov_base	= rr->data;//NULL;	//TODO:if no data
 	parameters.send.data.iov_len	= rr->size;//0;
-	
 	parameters.send.dispatch	= 37; //dispatch_id;
-
+	parameters.send.hints		= dart_null_send_hint;	
 	parameters.send.dest 		= target_ep;
 	parameters.events.cookie	= (void*)ptr_clientdata; //TODO argument for local_fn
 	parameters.events.local_fn 	= rpc_cb_req_completion; //cb_done; 
@@ -697,7 +713,7 @@ int rpc_receive(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *
 int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)
 //int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg, pami_memregion_t *remote_memregion)
 {
-	uloga("get into rpc_send_direct\n");
+	//uloga("get into rpc_send_direct\n");
 	struct rpc_request *rr;
 	int err;
 
@@ -739,9 +755,14 @@ int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_b
 	//	printf("some error!!!!!!!!!!!!!!!!!!!\n");
 	//memcpy(ptr_clientdata->remote_memregion, remote_memregion, sizeof(pami_memregion_t));
 	
+	pami_send_hint_t dart_rdma_send_hint;
+	memset(&dart_rdma_send_hint, 0, sizeof(dart_rdma_send_hint));
+	dart_rdma_send_hint.buffer_registered = PAMI_HINT_ENABLE;
+	dart_rdma_send_hint.use_rdma = PAMI_HINT_ENABLE;
+
 	pami_rput_simple_t parameters;
 	parameters.rma.dest 		= target_ep;
-	//parameters.rma.hints = ;
+	parameters.rma.hints 		= dart_rdma_send_hint;
 	parameters.rma.bytes 		= rr->size;
 	parameters.rma.cookie 		= (void*)ptr_clientdata;
 	parameters.rma.done_fn 		= rpc_cb_put_completion;
@@ -795,8 +816,14 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 	ptr_clientdata->remote_memregion = (pami_memregion_t*)calloc(1, sizeof(pami_memregion_t));
 	memcpy(ptr_clientdata->remote_memregion, peer->cached_remote_memregion, sizeof(pami_memregion_t));
 	
+	pami_send_hint_t dart_rdma_send_hint;
+	memset(&dart_rdma_send_hint, 0, sizeof(dart_rdma_send_hint));
+	dart_rdma_send_hint.buffer_registered = PAMI_HINT_ENABLE;
+	dart_rdma_send_hint.use_rdma = PAMI_HINT_ENABLE;
+
 	pami_rget_simple_t parameters;
 	parameters.rma.dest 		= target_ep;
+	parameters.rma.hints 		= dart_rdma_send_hint;
 	parameters.rma.bytes		= rr->size;
 	parameters.rma.cookie 		= (void*)ptr_clientdata;//TODO 
 	parameters.rma.done_fn 		= rpc_cb_get_completion;
@@ -916,8 +943,7 @@ void rpc_server_free(struct rpc_server *rpc_s)
 	if(result != PAMI_SUCCESS){
 		printf("PAMI_Context_destroyv fails\n");
 	}
-
-//	free(rpc_s->contexts);
+	free(rpc_s->contexts);
 
 	PAMI_Client_destroy(&rpc_s->client);
 	
