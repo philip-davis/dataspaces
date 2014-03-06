@@ -29,7 +29,7 @@ static int check_data(struct rpc_server *rpc_s, struct msg_buf *msg)
 
 static int data_read_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-	printf("get into data_read_completion\n");
+	//printf("get into data_read_completion\n");
         struct dart_client *dc = dc_ref_from_rpc(rpc_s);
         dc->num_posted--;
         //dc->read_complete = 1;

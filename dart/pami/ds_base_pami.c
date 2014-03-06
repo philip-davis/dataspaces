@@ -29,7 +29,7 @@ static int cn_read_transfer_completion(struct rpc_server *rpc_s, struct msg_buf 
                 free(msg);
         }
 
-	uloga("all the data has been send to the remote node\n");
+	//uloga("all the data has been send to the remote node\n");
         return 0;
 }
 
@@ -203,7 +203,7 @@ err_out:
 
 static int ds_register_cp(struct dart_server *ds, struct app_info *app)
 {
-	uloga("get into ds_register_cp\n");
+	//uloga("get into ds_register_cp\n");
         struct hdr_register *hreg;
         struct msg_buf *msg;
         struct node_id *peer;
@@ -282,7 +282,7 @@ err_out:
  */
 static int dsrpc_cn_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	uloga("get into dsrpc_cn_register\n");
+	//uloga("get into dsrpc_cn_register\n");
         struct dart_server *ds = ds_ref_from_rpc(rpc_s);
         struct node_id *cn_peer;
         struct hdr_register *hreg = (struct hdr_register *) cmd->pad;
@@ -354,7 +354,7 @@ err_out:
 */
 static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-        uloga("get into dsrpc_cn_unregister\n");
+        //uloga("get into dsrpc_cn_unregister\n");
         struct dart_server *ds = ds_ref_from_rpc(rpc_s);
         struct hdr_register *hreg = (struct hdr_register *) cmd->pad;
         struct msg_buf *msg;
@@ -366,7 +366,7 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 	if(ds->f_stop != 1){
 		num_unreg += hreg->num_cp;
-		uloga("rank%d num_unreg=%d\n", ds->rpc_s->ptlmap.id, num_unreg);
+		//uloga("rank%d num_unreg=%d\n", ds->rpc_s->ptlmap.id, num_unreg);
 		if(num_unreg == ds->num_cp){
 			ds->f_stop = 1;
 		}
@@ -394,7 +394,7 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 			ds->num_charge--;
 		}
-		uloga("rank%d, num_charge=%d\n", ds->self->ptlmap.id, ds->num_charge);
+		//uloga("rank%d, num_charge=%d\n", ds->self->ptlmap.id, ds->num_charge);
 		//only send to other server at the time received last msg from client
 		if(ds->num_charge == 0 && cmd->id >= ds->num_sp){
 			
@@ -447,13 +447,13 @@ static int dsrpc_cn_unregister_old(struct rpc_server *rpc_s, struct rpc_cmd *cmd
 
         if((++num_unreg) == ds->num_cp){
                 ds->f_stop = 1;
-                printf("%s(): #%u ds->f_stop flag is set as %d\n", __func__, ds->self->ptlmap.rank_pami, ds->f_stop);
+                //printf("%s(): #%u ds->f_stop flag is set as %d\n", __func__, ds->self->ptlmap.rank_pami, ds->f_stop);
 #ifdef DEBUG
                 uloga("%s(): #%u ds->f_stop flag is set as %d\n", __func__, ds->self->ptlmap.rank_pami, ds->f_stop);
 #endif
         }
 
-	printf("rank%d ds->num_sp=%d ds->num_cp=%d, num_unreg=%d\n", rpc_s->ptlmap.rank_pami, ds->num_sp, ds->num_cp, num_unreg);
+	//printf("rank%d ds->num_sp=%d ds->num_cp=%d, num_unreg=%d\n", rpc_s->ptlmap.rank_pami, ds->num_sp, ds->num_cp, num_unreg);
         /* 
  *            After  the first  compute peer  'unregister'  request, stop
  *                       accepting new requests and terminate pending ones.
@@ -887,7 +887,7 @@ int dsrpc_cn_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 int dsrpc_cn_read(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	uloga("get into dsrpc_cn_read\n");
+	//uloga("get into dsrpc_cn_read\n");
         struct dart_server *ds = ds_ref_from_rpc(rpc_s);
         struct node_id *peer;
         struct msg_buf *msg;
@@ -911,7 +911,7 @@ int dsrpc_cn_read(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         for(i=0; i < num_elem; i++){
                 //*((char*)msg->msg_data + i) = 'A' + (i%len);
                 *((double*)msg->msg_data + i) = 1;
-		uloga("%f\n", *((double*)msg->msg_data+i));
+		//uloga("%f\n", *((double*)msg->msg_data+i));
         }
 
 #ifdef DEBUG
@@ -919,22 +919,19 @@ int dsrpc_cn_read(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
                 __func__,rpc_s->ptlmap.rank_pami,rpc_s->ptlmap.id,msg->size,peer->ptlmap.rank_pami,peer->ptlmap.id);
 #endif
 
-	uloga("-------0----------\n");	
 	rpc_mem_info_cache(peer, msg, cmd);
 
-	uloga("-------1----------\n");	
 	//rpc_send_direct(rpc_s, &peer, msg);
 	//peer->cached_remote_memregion = &cmd->mem_region;
 	//rpc_send_direct(rpc_s, peer, msg, &cmd->mem_region);
 	rpc_send_direct(rpc_s, peer, msg);
-	uloga("-------2----------\n");	
 
 	return 0;
 }
 
 void ds_free(struct dart_server *ds)
 {
-	uloga("get into ds_free\n");
+	//uloga("get into ds_free\n");
 	struct app_info *app, *t;
 	rpc_server_free(ds->rpc_s);
 
