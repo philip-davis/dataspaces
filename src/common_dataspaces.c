@@ -258,9 +258,10 @@ int common_dspaces_get(const char *var_name,
 
         // set global dimension
         int i;
-        memset(&od->global_dim, 0, sizeof(struct coord));
+        od->gdim.ndim = ndim;
+        memset(&od->gdim.sizes, 0, sizeof(struct coord));
         for (i = 0; i < ndim; i++) {
-            od->global_dim.c[i] = gdim[i];
+            od->gdim.sizes.c[i] = gdim[i];
         }
 
         err = dcg_obj_get(od);
@@ -293,6 +294,7 @@ int common_dspaces_put(const char *var_name,
 		}
         };
 
+        // TODO: why use 'num_dims'?
         memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*num_dims);
         memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*num_dims);
 
@@ -321,9 +323,10 @@ int common_dspaces_put(const char *var_name,
 
         // set global dimension
         int i;
-        memset(&od->global_dim, 0, sizeof(struct coord));
+        od->gdim.ndim = ndim;
+        memset(&od->gdim.sizes, 0, sizeof(struct coord));
         for (i = 0; i < ndim; i++) {
-            od->global_dim.c[i] = gdim[i];
+            od->gdim.sizes.c[i] = gdim[i];
         }
 
         err = dcg_obj_put(od);

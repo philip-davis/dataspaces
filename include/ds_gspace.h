@@ -37,15 +37,6 @@
 #include "dart.h"
 #include "ss_data.h"
 
-#define MAX_NUM_SSD 5 
-
-struct sspace_list_entry {
-        struct list_head    entry;
-        int ndim;
-        struct coord    global_dim;
-        struct sspace   *ssd;
-};
-
 struct ds_gspace {
         struct dart_server      *ds;
 
