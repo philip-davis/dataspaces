@@ -1131,9 +1131,9 @@ int dc_boot_slave(struct dart_client *dc)	//Done
 static int dc_boot(struct dart_client *dc, int appid)
 {
 	struct stat st_buff;
-	char fil_lock[10];
+	char fil_lock[20];
 	sprintf(fil_lock, "srv.lock.%d", appid);
-	char fil_conf[10];
+	char fil_conf[20];
 	sprintf(fil_conf, "conf.%d", appid);
 
 	int fd, err;
