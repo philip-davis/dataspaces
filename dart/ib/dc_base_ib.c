@@ -1079,16 +1079,16 @@ int dc_boot_slave(struct dart_client *dc)       //Done
 static int dc_boot(struct dart_client *dc, int appid)
 {
 	struct stat st_buff;
-        char fil_lock[10];
-	sprintf(fil_lock, "srv.lock.%d" ,appid);
-        char fil_conf[10];
-        sprintf(fil_conf,"conf.%d",appid);
+	char fil_lock[20];
+	sprintf(fil_lock, "srv.lock.%d", appid);
+	char fil_conf[20];
+	sprintf(fil_conf, "conf.%d", appid);
 
-        int fd, err;
-        memset(&st_buff, 0, sizeof(st_buff));
-        err = fd = open(fil_lock, O_WRONLY | O_CREAT, 0644);
-        if(err < 0) 
-                goto err_out;
+	int fd, err;
+	memset(&st_buff, 0, sizeof(st_buff));
+	err = fd = open(fil_lock, O_WRONLY | O_CREAT, 0644);
+	if(err < 0)
+		goto err_out;
 
         /* File locking does not work on the login nodes :-( *///?test
         err = file_lock(fd, 1);
