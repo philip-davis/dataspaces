@@ -181,45 +181,37 @@ int dspaces_put(const char *var_name,
 
 int dspaces_get_with_gdim(const char *var_name,
     unsigned int ver, int size,
-    uint64_t xl, uint64_t yl, uint64_t zl,
-    uint64_t xu, uint64_t yu, uint64_t zu,
-    uint64_t gdim_x, uint64_t gdim_y, uint64_t gdim_z,
+    int ndim, uint64_t *lb, uint64_t *ub, uint64_t *gdim,
     void *data)
 {
-    uint64_t lb[3] = {xl, yl, zl};
-    uint64_t ub[3] = {xu, yu, zu};
-    uint64_t gdim[3] = {gdim_x, gdim_y, gdim_z};
 #if defined(TIMING_PERF) && defined(HAVE_UGNI)
     int nid, pmi_rank;
     rca_mesh_coord_t xyz;
     get_topology_info(&pmi_rank, &nid, &xyz);
     uloga("%s(): pmi_rank %d mpi_rank %d nid %d coord %u %u %u var %s ver %d elem_size %d lb= %llu %llu %llu ub= %llu %llu %llu gdim= %llu %llu %llu\n",
         __func__, pmi_rank, mpi_rank, nid, xyz.mesh_x, xyz.mesh_y, xyz.mesh_z,
-        var_name, ver, size, xl, yl, zl, xu, yu, zu, gdim_x, gdim_y, gdim_z);
+        var_name, ver, size, lb[0], lb[1], lb[2], ub[0], ub[1], ub[2],
+        gdim[0], gdim[1], gdim[2]);
 #endif
-    return common_dspaces_get(var_name, ver, size, 3,
+    return common_dspaces_get(var_name, ver, size, ndim,
         lb, ub, gdim, data);
 }
 
 int dspaces_put_with_gdim(const char *var_name,
     unsigned int ver, int size,
-    uint64_t xl, uint64_t yl, uint64_t zl,
-    uint64_t xu, uint64_t yu, uint64_t zu,
-    uint64_t gdim_x, uint64_t gdim_y, uint64_t gdim_z,
+    int ndim, uint64_t *lb, uint64_t *ub, uint64_t *gdim,
     void *data)
 {
-    uint64_t lb[3] = {xl, yl, zl};
-    uint64_t ub[3] = {xu, yu, zu};
-    uint64_t gdim[3] = {gdim_x, gdim_y, gdim_z};
 #if defined(TIMING_PERF) && defined(HAVE_UGNI)
     int nid, pmi_rank;
     rca_mesh_coord_t xyz;
     get_topology_info(&pmi_rank, &nid, &xyz);
     uloga("%s(): pmi_rank %d mpi_rank %d nid %d coord %u %u %u var %s ver %d elem_size %d lb= %llu %llu %llu ub= %llu %llu %llu gdim= %llu %llu %llu\n",
         __func__, pmi_rank, mpi_rank, nid, xyz.mesh_x, xyz.mesh_y, xyz.mesh_z,
-        var_name, ver, size, xl, yl, zl, xu, yu, zu, gdim_x, gdim_y, gdim_z);
+        var_name, ver, size, lb[0], lb[1], lb[2], ub[0], ub[1], ub[2],
+        gdim[0], gdim[1], gdim[2]);
 #endif
-    return common_dspaces_put(var_name, ver, size, 3,
+    return common_dspaces_put(var_name, ver, size, ndim,
         lb, ub, gdim, data);
 }
 

@@ -62,11 +62,16 @@ struct obj_descriptor {
         char pad[2];//added by Tong Jin for 4 byte aligned in GEMINI
 } __attribute__((__packed__));
 
+struct global_dimension {
+        int ndim;
+        struct coord sizes;
+} __attribute__((__packed__));
+
 struct obj_data {
         struct list_head        obj_entry;
 
         struct obj_descriptor   obj_desc;
-        struct coord            global_dim;
+        struct global_dimension gdim;
 
         void			*_data;		/* Unaligned pointer */
         void                    *data;		/* Aligned pointer */
@@ -145,6 +150,12 @@ struct sspace {
         int total_num_bbox;
 };
 
+struct sspace_list_entry {
+        struct list_head    entry;
+        struct global_dimension gdim;
+        struct sspace   *ssd;
+};
+
 /* Header structure for obj_get requests. */
 struct hdr_obj_get {
     int                     qid;
@@ -162,15 +173,13 @@ struct hdr_obj_get {
             int			versions[1];
         } v;
 	} u;
-    //int ndim;
-    struct coord global_dim;
+    struct global_dimension gdim;
 } __attribute__((__packed__));
 
 /* Header structure for obj_put requests. */
 struct hdr_obj_put {
     struct obj_descriptor odsc;
-    //int ndim;
-    struct coord global_dim;
+    struct global_dimension gdim;
 } __attribute__((__packed__));
 
 /* Header structure for obj_filter requests. */

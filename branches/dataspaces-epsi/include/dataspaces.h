@@ -242,18 +242,13 @@ int dspaces_get (const char *var_name,
  */
 int dspaces_put_sync(void);
 
-// TODO: add number of dimension information
 int dspaces_put_with_gdim (const char *var_name,
         unsigned int ver, int size,
-        uint64_t xl, uint64_t yl, uint64_t zl,
-        uint64_t xu, uint64_t yu, uint64_t zu,
-        uint64_t gdim_x, uint64_t gdim_y, uint64_t gdim_z,
+        int ndim, uint64_t *lb, uint64_t *ub, uint64_t *gdim,
         void *data);
 int dspaces_get_with_gdim (const char *var_name,
         unsigned int ver, int size,
-        uint64_t xl, uint64_t yl, uint64_t zl,
-        uint64_t xu, uint64_t yu, uint64_t zu,
-        uint64_t gdim_x, uint64_t gdim_y, uint64_t gdim_z,
+        int ndim, uint64_t *lb, uint64_t *ub, uint64_t *gdim,
         void *data);
 
 void dspaces_set_mpi_rank(int rank);

@@ -255,39 +255,38 @@ static int free_sspace(struct ds_gspace *dsg_l)
     return 0;
 }
 
-static int global_dim_equal(int ndim, const struct coord* gdim1, const struct coord* gdim2)
+static int global_dim_equal(const struct global_dimension* gdim1,
+    const struct global_dimension* gdim2)
 {
     int i;
-    for (i = 0; i < ndim; i++) {
-        if (gdim1->c[i] != gdim2->c[i])
+    for (i = 0; i < gdim1->ndim; i++) {
+        if (gdim1->sizes.c[i] != gdim2->sizes.c[i])
             return 0;
     }
 
     return 1;
 }
 
-static int global_dim_all_zero(int ndim, const struct coord* gdim)
+static int global_dim_all_zero(const struct global_dimension* gdim)
 {
     int i;
-    for (i = 0; i < ndim; i++) {
-        if (gdim->c[i] != 0)
+    for (i = 0; i < gdim->ndim; i++) {
+        if (gdim->sizes.c[i] != 0)
             return 0;
     }
 
     return 1;
 }
 
-static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_name,
-    const struct coord* gdim)
+static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_name, const struct global_dimension* gd)
 {
     double tm_st, tm_end;
     //uloga("%s(): var %s global_dim= %llu %llu %llu\n",
-    //    __func__, var_name, gdim->c[0], gdim->c[1], gdim->c[2]);
+    //    __func__, var_name, gdim->sizes.c[0], gdim->sizes.c[1], gdim->sizes.c[2]);
 
 #ifdef DS_SSD_HASH_V2
-    struct coord global_dim;
-    int ndim = 2; // TODO: hard coded as 2D for now
-    memcpy(&global_dim, gdim, sizeof(struct coord));
+    struct global_dimension gdim;
+    memcpy(&gdim, gd, sizeof(struct global_dimension));
 
     tm_st = timer_read(&timer);
     // check if the variable is 'dpot', and modify the
@@ -297,17 +296,12 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
     if (len >= strlen("dpot")) {
         pos = len - strlen("dpot");
         if (0 == strcmp(var_name+pos, "dpot")) {
-            global_dim.c[1] = 1;
+            gdim.sizes.c[1] = 1;
         }
     }
 
-    // check if 2nd dimension is 0
-    if (global_dim.c[0] && global_dim.c[1] == 0) {
-        global_dim.c[1] = 1;
-    }
-
     // check if the global dimension is 0
-    if (global_dim_all_zero(ndim, &global_dim)) {
+    if (global_dim_all_zero(&gdim)) {
         return dsg_l->ssd;
     }    
 
@@ -316,10 +310,10 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
         struct sspace_list_entry, entry)
     {
         // compare global dimension
-        if (ndim != ssd_entry->ndim)
+        if (gdim.ndim != ssd_entry->gdim.ndim)
             continue;
 
-        if (global_dim_equal(ndim, &global_dim, &ssd_entry->global_dim))
+        if (global_dim_equal(&gdim, &ssd_entry->gdim))
             return ssd_entry->ssd;
     }
 
@@ -327,15 +321,14 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
     int i, err;
     struct bbox domain;
     memset(&domain, 0, sizeof(struct bbox));
-    domain.num_dims = ndim;
-    for (i = 0; i < ndim; i++) {
+    domain.num_dims = gdim.ndim;
+    for (i = 0; i < gdim.ndim; i++) {
         domain.lb.c[i] = 0;
-        domain.ub.c[i] = global_dim.c[i] - 1;
+        domain.ub.c[i] = gdim.sizes.c[i] - 1;
     } 
 
     ssd_entry = malloc(sizeof(struct sspace_list_entry));
-    ssd_entry->ndim = ndim;
-    memcpy(&ssd_entry->global_dim, &global_dim, sizeof(struct coord));
+    memcpy(&ssd_entry->gdim, &gdim, sizeof(struct global_dimension));
     ssd_entry->ssd = ssd_alloc_v2(&domain, dsg_l->ds->num_sp, ds_conf.max_versions);     
     if (!ssd_entry->ssd) {
         uloga("%s(): ssd_alloc failed\n", __func__);
@@ -349,8 +342,9 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
     }
 
     tm_end = timer_read(&timer);
-    uloga("%s(): add new shared space, global dimension= %llu %llu %llu time= %lf\n",
-        __func__, global_dim.c[0], global_dim.c[1], global_dim.c[2], tm_end-tm_st);
+    uloga("%s(): add new shared space ndim= %d global dimension= %llu %llu %llu time= %lf\n",
+        __func__, gdim.ndim, gdim.sizes.c[0], gdim.sizes.c[1], gdim.sizes.c[2],
+        tm_end-tm_st);
 
     list_add(&ssd_entry->entry, &dsg_l->sspace_list);
     return ssd_entry->ssd;
@@ -1113,7 +1107,7 @@ static char * obj_desc_sprint(const struct obj_descriptor *odsc)
 static int dsgrpc_obj_update(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
         struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
-        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name, &oh->global_dim); 
+        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name, &oh->gdim); 
         struct dht_entry *de = ssd->ent_self;
         int err;
 
@@ -1150,7 +1144,7 @@ static int dsgrpc_obj_update(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 {
     struct obj_descriptor *odsc = &od->obj_desc;
-    struct sspace* ssd = lookup_sspace(dsg, odsc->name, &od->global_dim);
+    struct sspace* ssd = lookup_sspace(dsg, odsc->name, &od->gdim);
 	struct dht_entry *dht_tab[ssd->dht->num_entries];
 	/* TODO: create a separate header structure for object
 	   updates; for now just abuse the hdr_obj_get. */
@@ -1221,7 +1215,7 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 		oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
 		oh->u.o.odsc = *odsc;
 		oh->rank = min_rank;
-        memcpy(&oh->global_dim, &od->global_dim, sizeof(struct coord));
+        memcpy(&oh->gdim, &od->gdim, sizeof(struct global_dimension));
 
 		err = rpc_send(dsg->ds->rpc_s, peer, msg);
 		if (err < 0) {
@@ -1241,7 +1235,7 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
     struct obj_data *od = msg->private;
 
-    struct sspace* ssd = lookup_sspace(dsg, od->obj_desc.name, &od->global_dim);
+    struct sspace* ssd = lookup_sspace(dsg, od->obj_desc.name, &od->gdim);
     ssd_add_obj(ssd, od);
 
     free(msg);
@@ -1273,7 +1267,7 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
                 goto err_out;
 
         od->obj_desc.owner = DSG_ID;
-        memcpy(&od->global_dim, &hdr->global_dim, sizeof(struct coord));
+        memcpy(&od->gdim, &hdr->gdim, sizeof(struct global_dimension));
 
         msg = msg_buf_alloc(rpc_s, peer, 0);
         if (!msg)
@@ -1429,7 +1423,7 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
 {
         struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
         struct node_id *peer;
-        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name, &oh->global_dim);
+        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name, &oh->gdim);
         struct dht_entry *de_tab[ssd->dht->num_entries];
         struct msg_buf *msg;
         int *peer_id_tab, peer_num, i;
@@ -1681,7 +1675,7 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
         struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
         struct obj_descriptor odsc, *odsc_tab;
-        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name, &oh->global_dim);
+        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name, &oh->gdim);
         const struct obj_descriptor *podsc[ssd->ent_self->odsc_num];
         int obj_versions[ssd->ent_self->odsc_size];
         int num_odsc, i;
@@ -1867,7 +1861,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
  }
 #endif
 
-        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name, &oh->global_dim);
+        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name, &oh->gdim);
         // CRITICAL: use version here !!!
         from_obj = ls_find(ssd->storage, &oh->u.o.odsc);
         if (!from_obj) {

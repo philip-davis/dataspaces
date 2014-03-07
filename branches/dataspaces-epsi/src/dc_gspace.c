@@ -103,7 +103,7 @@ struct query_tran_entry {
 
         struct query_dht        *qh;
 
-        struct coord            global_dim;
+        struct global_dimension gdim;
         /* Allocate/setup data for the objects in the 'od_list' that
            are retrieved from the space */
         unsigned int		f_alloc_data:1,
@@ -196,7 +196,7 @@ static struct query_tran_entry * qte_alloc(struct obj_data *od, int alloc_data)
 	qte->q_obj = od->obj_desc;
 	qte->data_ref = od->data;
 	qte->f_alloc_data = !!(alloc_data);
-    memcpy(&qte->global_dim, &od->global_dim, sizeof(struct coord));
+    memcpy(&qte->gdim, &od->gdim, sizeof(struct global_dimension));
 
 	qte->qh = qh_alloc(dcg->dc->num_sp);
 	if (!qte->qh) {
@@ -964,7 +964,7 @@ static int get_dht_peers(struct query_tran_entry *qte)
         oh->qid = qte->q_id;
         oh->u.o.odsc = qte->q_obj;
         oh->rank = DCG_ID;
-        memcpy(&oh->global_dim, &qte->global_dim, sizeof(struct coord));
+        memcpy(&oh->gdim, &qte->gdim, sizeof(struct global_dimension));
 
         err = rpc_receive(dcg->dc->rpc_s, peer, msg);
         if (err == 0)
@@ -1004,8 +1004,8 @@ static int get_obj_descriptors(struct query_tran_entry *qte)
                 oh->qid = qte->q_id;
                 oh->u.o.odsc = qte->q_obj;
                 oh->rank = DCG_ID; 
-                memcpy(&oh->global_dim, &qte->global_dim,
-                    sizeof(struct coord)); 
+                memcpy(&oh->gdim, &qte->gdim,
+                    sizeof(struct global_dimension)); 
 
                 qte->qh->qh_num_req_posted++;
                 err = rpc_send(dcg->dc->rpc_s, peer, msg);
@@ -1174,8 +1174,8 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                 oh->qid = qte->q_id;
                 oh->u.o.odsc = od->obj_desc;
                 oh->u.o.odsc.version = qte->q_obj.version;
-                memcpy(&oh->global_dim, &qte->global_dim,
-                    sizeof(struct coord));
+                memcpy(&oh->gdim, &qte->gdim,
+                    sizeof(struct global_dimension));
 
                 err = rpc_receive(dcg->dc->rpc_s, peer, msg);
                 if (err < 0) {
@@ -1619,7 +1619,7 @@ int dcg_obj_put(struct obj_data *od)
 
         hdr = msg->msg_rpc->pad;
         hdr->odsc = od->obj_desc;
-        memcpy(&hdr->global_dim, &od->global_dim, sizeof(struct coord));
+        memcpy(&hdr->gdim, &od->gdim, sizeof(struct global_dimension));
 
         err = rpc_send(dcg->dc->rpc_s, peer, msg);
         if (err < 0) {
