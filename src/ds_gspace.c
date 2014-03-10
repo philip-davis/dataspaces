@@ -116,24 +116,22 @@ static struct timer timer;
 
 /* Server configuration parameters */
 static struct {
-        int ndims;
-        int dimx, dimy, dimz;
+        int ndim;
+        struct coord dims;
         int max_versions;
         int max_readers;
-	int lock_type;		/* 1 - generic, 2 - custom */
+        int lock_type;		/* 1 - generic, 2 - custom */
 } ds_conf;
 
 static struct {
         const char      *opt;
         int             *pval;
 } options[] = {
-        {"ndim",                &ds_conf.ndims},
-        {"dimx",                &ds_conf.dimx},
-        {"dimy",                &ds_conf.dimy},
-        {"dimz",                &ds_conf.dimz},
+        {"ndim",                &ds_conf.ndim},
+        {"dims",		&ds_conf.dims},
         {"max_versions",        &ds_conf.max_versions},
         {"max_readers",         &ds_conf.max_readers},
-	{"lock_type",		&ds_conf.lock_type}
+        {"lock_type",		&ds_conf.lock_type}
 };
 
 static void eat_spaces(char *line)
@@ -169,12 +167,30 @@ static int parse_line(int lineno, char *line)
         t[0] = '\0';
         eat_spaces(line);
         t++;
-        eat_spaces(t);
 
         n = sizeof(options) / sizeof(options[0]);
+
         for (i = 0; i < n; i++) {
+                if (strcmp(line, options[1].opt) == 0){ /**< when "dims" */
+                    //get coordinates
+                    int idx = 0;
+                    char* crd;
+                    crd = strtok(t, ",");
+                    while(crd != NULL){
+                        ((struct coord*)options[1].pval)->c[idx] = atoll(crd);
+                        crd = strtok(NULL, ",");
+                        idx++;
+                    }
+                    if(idx != *(int*)options[0].pval){
+                        uloga("index=%d, ndims=%d\n",idx, *(int*)options[0].pval);
+                        uloga("The number of coordination should the same with number of dimension!\n");
+                        return -EINVAL;
+                    }
+                    break;
+                }
                 if (strcmp(line, options[i].opt) == 0) {
-                        *options[i].pval = atoi(t);
+                        eat_spaces(line);
+                        *(int*)options[i].pval = atoi(t);
                         break;
                 }
         }
@@ -212,6 +228,129 @@ static inline struct ds_gspace * dsg_ref_from_rpc(struct rpc_server *rpc_s)
         struct dart_server * ds = ds_ref_from_rpc(rpc_s);
 
         return ds->dart_ref;
+}
+
+struct sspace_conf {
+    int ndims;
+    uint64_t dimx, dimy, dimz;
+};
+
+// TODO: it is all hard coded for now
+static int init_sspace(struct ds_gspace *dsg_l)
+{
+    INIT_LIST_HEAD(&dsg_l->sspace_list);
+}
+
+static int free_sspace(struct ds_gspace *dsg_l)
+{
+    struct sspace_list_entry *ssd_entry, *temp;
+    list_for_each_entry_safe(ssd_entry, temp, &dsg_l->sspace_list,
+            struct sspace_list_entry, entry)
+    {
+        ssd_free_v2(ssd_entry->ssd);
+        list_del(&ssd_entry->entry);
+        free(ssd_entry);
+    }
+
+    return 0;
+}
+
+static int global_dim_equal(const struct global_dimension* gdim1,
+    const struct global_dimension* gdim2)
+{
+    int i;
+    for (i = 0; i < gdim1->ndim; i++) {
+        if (gdim1->sizes.c[i] != gdim2->sizes.c[i])
+            return 0;
+    }
+
+    return 1;
+}
+
+static int global_dim_all_zero(const struct global_dimension* gdim)
+{
+    int i;
+    for (i = 0; i < gdim->ndim; i++) {
+        if (gdim->sizes.c[i] != 0)
+            return 0;
+    }
+
+    return 1;
+}
+
+static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_name, const struct global_dimension* gd)
+{
+    double tm_st, tm_end;
+    //uloga("%s(): var %s global_dim= %llu %llu %llu\n",
+    //    __func__, var_name, gdim->sizes.c[0], gdim->sizes.c[1], gdim->sizes.c[2]);
+
+#ifdef DS_SSD_HASH_V2
+    struct global_dimension gdim;
+    memcpy(&gdim, gd, sizeof(struct global_dimension));
+
+    tm_st = timer_read(&timer);
+    // check if the variable is 'dpot', and modify the
+    // global dimension if so.
+    int pos;
+    size_t len = strlen(var_name);
+    if (len >= strlen("dpot")) {
+        pos = len - strlen("dpot");
+        if (0 == strcmp(var_name+pos, "dpot")) {
+            gdim.sizes.c[1] = 1;
+        }
+    }
+
+    // check if the global dimension is 0
+    if (global_dim_all_zero(&gdim)) {
+        return dsg_l->ssd;
+    }    
+
+    struct sspace_list_entry *ssd_entry = NULL;
+    list_for_each_entry(ssd_entry, &dsg_l->sspace_list,
+        struct sspace_list_entry, entry)
+    {
+        // compare global dimension
+        if (gdim.ndim != ssd_entry->gdim.ndim)
+            continue;
+
+        if (global_dim_equal(&gdim, &ssd_entry->gdim))
+            return ssd_entry->ssd;
+    }
+
+    // add new shared space
+    int i, err;
+    struct bbox domain;
+    memset(&domain, 0, sizeof(struct bbox));
+    domain.num_dims = gdim.ndim;
+    for (i = 0; i < gdim.ndim; i++) {
+        domain.lb.c[i] = 0;
+        domain.ub.c[i] = gdim.sizes.c[i] - 1;
+    } 
+
+    ssd_entry = malloc(sizeof(struct sspace_list_entry));
+    memcpy(&ssd_entry->gdim, &gdim, sizeof(struct global_dimension));
+    ssd_entry->ssd = ssd_alloc_v2(&domain, dsg_l->ds->num_sp, ds_conf.max_versions);     
+    if (!ssd_entry->ssd) {
+        uloga("%s(): ssd_alloc failed\n", __func__);
+        return dsg_l->ssd;
+    }
+
+    err = ssd_init(ssd_entry->ssd, ds_get_rank(dsg_l->ds));
+    if (err < 0) {
+        uloga("%s(): ssd_init failed\n", __func__); 
+        return dsg_l->ssd;
+    }
+
+    tm_end = timer_read(&timer);
+    uloga("%s(): add new shared space ndim= %d global dimension= %llu %llu %llu time= %lf\n",
+        __func__, gdim.ndim, gdim.sizes.c[0], gdim.sizes.c[1], gdim.sizes.c[2],
+        tm_end-tm_st);
+
+    list_add(&ssd_entry->entry, &dsg_l->sspace_list);
+    return ssd_entry->ssd;
+#else
+    return dsg_l->ssd;
+#endif
 }
 
 #ifdef DS_HAVE_ACTIVESPACE
@@ -967,8 +1106,9 @@ static char * obj_desc_sprint(const struct obj_descriptor *odsc)
 */
 static int dsgrpc_obj_update(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-        struct dht_entry *de = dsg->ssd->ent_self;
         struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
+        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name, &oh->gdim); 
+        struct dht_entry *de = ssd->ent_self;
         int err;
 
 #ifdef DEBUG
@@ -1001,9 +1141,11 @@ static int dsgrpc_obj_update(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 /* 
    Update the DHT metadata with the new obj_descriptor information.
 */
-static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_descriptor *odsc)
+static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 {
-	struct dht_entry *dht_tab[dsg->ssd->dht->num_entries];
+    struct obj_descriptor *odsc = &od->obj_desc;
+    struct sspace* ssd = lookup_sspace(dsg, odsc->name, &od->gdim);
+	struct dht_entry *dht_tab[ssd->dht->num_entries];
 	/* TODO: create a separate header structure for object
 	   updates; for now just abuse the hdr_obj_get. */
 	struct hdr_obj_get *oh;
@@ -1012,7 +1154,11 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_descriptor *odsc
 	int num_de, i, min_rank, err;
 
 	/* Compute object distribution to nodes in the space. */
-	num_de = ssd_hash(dsg->ssd, &odsc->bb, dht_tab);
+#ifdef DS_SSD_HASH_V2
+	num_de = ssd_hash_v2(ssd, &odsc->bb, dht_tab);
+#else
+	num_de = ssd_hash(ssd, &odsc->bb, dht_tab);
+#endif
 	if (num_de == 0) {
 		uloga("'%s()': this should not happen, num_de == 0 ?!\n",
 			__func__);
@@ -1038,7 +1184,7 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_descriptor *odsc
 			uloga("'%s()': %s\n", __func__, str);
 			free(str);
 #endif
-			dht_add_entry(dsg->ssd->ent_self, odsc);
+			dht_add_entry(ssd->ent_self, odsc);
 			if (peer->ptlmap.id == min_rank) {
 				err = cq_check_match(odsc);
 				if (err < 0)
@@ -1069,6 +1215,7 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_descriptor *odsc
 		oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
 		oh->u.o.odsc = *odsc;
 		oh->rank = min_rank;
+        memcpy(&oh->gdim, &od->gdim, sizeof(struct global_dimension));
 
 		err = rpc_send(dsg->ds->rpc_s, peer, msg);
 		if (err < 0) {
@@ -1086,45 +1233,41 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_descriptor *odsc
 */
 static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-        struct obj_data *od = msg->private;
-	// int err = -ENOMEM;
+    struct obj_data *od = msg->private;
 
-        ssd_add_obj(dsg->ssd, od);
+    struct sspace* ssd = lookup_sspace(dsg, od->obj_desc.name, &od->gdim);
+    ssd_add_obj(ssd, od);
 
-        free(msg);
+    free(msg);
 #ifdef DEBUG
-	uloga("'%s()': finished receiving  %s, version %d.\n",
-		__func__, od->obj_desc.name, od->obj_desc.version);
+    uloga("'%s()': server %d finished receiving  %s, version %d.\n",
+        __func__, DSG_ID, od->obj_desc.name, od->obj_desc.version);
 #endif
-	// obj_put_update_dht(...);
 
-        return 0;
-	/*
- err_out:
-        uloga("'%s()': failed with %d.\n", __func__, err);
-        return err;
-	*/
+    return 0;
 }
 
 /*
 */
 static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-        struct obj_descriptor *odsc = (struct obj_descriptor *) cmd->pad;
+        struct hdr_obj_put *hdr = (struct hdr_obj_put *)cmd->pad;
+        struct obj_descriptor *odsc = &(hdr->odsc);
         struct obj_data *od;
         struct node_id *peer;
         struct msg_buf *msg;
         int err;
 
-	odsc->owner = DSG_ID;
+        odsc->owner = DSG_ID;
 
-	err = -ENOMEM;
+        err = -ENOMEM;
         peer = ds_get_peer(dsg->ds, cmd->id);
         od = obj_data_alloc(odsc);
         if (!od)
                 goto err_out;
 
-        od->obj_desc.owner = DSG_ID; // dsg->ds->self->id;
+        od->obj_desc.owner = DSG_ID;
+        memcpy(&od->gdim, &hdr->gdim, sizeof(struct global_dimension));
 
         msg = msg_buf_alloc(rpc_s, peer, 0);
         if (!msg)
@@ -1136,12 +1279,12 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         msg->cb = obj_put_completion;
 
 #ifdef DEBUG
-	uloga("'%s()': start receiving %s, version %d.\n", 
-		__func__, odsc->name, odsc->version);
+        uloga("'%s()': server %d start receiving %s, version %d.\n", 
+            __func__, DSG_ID, odsc->name, odsc->version);
 #endif
-	rpc_mem_info_cache(peer, msg, cmd); 
+        rpc_mem_info_cache(peer, msg, cmd); 
         err = rpc_receive_direct(rpc_s, peer, msg);
-	rpc_mem_info_reset(peer, msg, cmd);
+        rpc_mem_info_reset(peer, msg, cmd);
 
         if (err < 0)
                 goto err_free_msg;
@@ -1149,10 +1292,9 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	/* NOTE: This  early update, has  to be protected  by external
 	   locks in the client code. */
 
-	err = obj_put_update_dht(dsg, odsc);
-	if (err == 0)
+        err = obj_put_update_dht(dsg, od);
+        if (err == 0)
 	        return 0;
-
  err_free_msg:
         free(msg);
  err_free_data:
@@ -1281,21 +1423,18 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
 {
         struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
         struct node_id *peer;
-        struct dht_entry *de_tab[dsg->ssd->dht->num_entries];
+        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name, &oh->gdim);
+        struct dht_entry *de_tab[ssd->dht->num_entries];
         struct msg_buf *msg;
         int *peer_id_tab, peer_num, i;
         int err = -ENOMEM;
 
-        double tm_start, tm_end;
-        static int num = 1;
-
         peer = ds_get_peer(dsg->ds, cmd->id);
 
-        tm_start = timer_read(&timer);
-        peer_num = ssd_hash(dsg->ssd, &oh->u.o.odsc.bb, de_tab);
-        tm_end = timer_read(&timer);
-#ifdef DEBUG
-        printf("SRV %d %d %lf\n", DSG_ID, num++, tm_end-tm_start);
+#ifdef DS_SSD_HASH_V2
+        peer_num = ssd_hash_v2(ssd, &oh->u.o.odsc.bb, de_tab);
+#else 
+        peer_num = ssd_hash(ssd, &oh->u.o.odsc.bb, de_tab);
 #endif
         peer_id_tab = malloc(sizeof(int) * (peer_num+1));
         if (!peer_id_tab)
@@ -1315,9 +1454,9 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
         msg->size = sizeof(int) * (peer_num+1);
         msg->cb = obj_send_dht_peers_completion;
 
-	rpc_mem_info_cache(peer, msg, cmd);
+        rpc_mem_info_cache(peer, msg, cmd);
         err = rpc_send_direct(rpc_s, peer, msg);
-	rpc_mem_info_reset(peer, msg, cmd);
+        rpc_mem_info_reset(peer, msg, cmd);
         if (err == 0)
                 return 0;
 
@@ -1332,6 +1471,7 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
   RPC routine to return the peer ids for the DHT entries that have
   descriptors for data objects.
 */
+/*
 static int __dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
         struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
@@ -1386,6 +1526,7 @@ static int __dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd 
         uloga("'%s()': failed with %d.\n", __func__, err);
         return err;
 }
+*/
 
 /*
   Rpc routine to  locate the servers that may  have object descriptors
@@ -1534,15 +1675,14 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
         struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
         struct obj_descriptor odsc, *odsc_tab;
-        const struct obj_descriptor *podsc[dsg->ssd->ent_self->odsc_num];
-	int obj_versions[dsg->ssd->ent_self->odsc_size];
+        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name, &oh->gdim);
+        const struct obj_descriptor *podsc[ssd->ent_self->odsc_num];
+        int obj_versions[ssd->ent_self->odsc_size];
         int num_odsc, i;
         struct msg_buf *msg;
         int err = -ENOENT;
 
-        num_odsc = dht_find_entry_all(dsg->ssd->ent_self, &oh->u.o.odsc, podsc);
-        // TODO: mark dht_find_entry as unused. 
-        // podsc = dht_find_entry(dsg->ssd->ent_self, &oh->odsc);
+        num_odsc = dht_find_entry_all(ssd->ent_self, &oh->u.o.odsc, podsc);
         if (!num_odsc) {
 #ifdef DEBUG
 		char *str = 0;
@@ -1553,19 +1693,12 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		uloga("'%s()': %s\n", __func__, str);
 		free(str);
 #endif
-		i = dht_find_versions(dsg->ssd->ent_self, &oh->u.o.odsc, obj_versions);
+		i = dht_find_versions(ssd->ent_self, &oh->u.o.odsc, obj_versions);
                 err = obj_desc_not_found(peer, oh->qid, i, obj_versions);
                 if (err < 0)
                         goto err_out;
 
                 return 0;
-                /* TODO: a pending list on the descriptors may not be
-                   such a good idea. -yeah .. why ?
-                err = obj_desc_req_add_pending(cmd);
-                if (err < 0)
-                        goto err_out;
-                return 0;
-                */
         }
 
         err = -ENOMEM;
@@ -1573,12 +1706,12 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         if (!odsc_tab)
                 goto err_out;
 
-	for (i = 0; i < num_odsc; i++) {
-		odsc = *podsc[i];
-		/* Preserve storage type at the destination. */
-		odsc.st = oh->u.o.odsc.st;
-		bbox_intersect(&oh->u.o.odsc.bb, &odsc.bb, &odsc.bb);
-		odsc_tab[i] = odsc;
+        for (i = 0; i < num_odsc; i++) {
+            odsc = *podsc[i];
+            /* Preserve storage type at the destination. */
+            odsc.st = oh->u.o.odsc.st;
+            bbox_intersect(&oh->u.o.odsc.bb, &odsc.bb, &odsc.bb);
+            odsc_tab[i] = odsc;
         }
 
         msg = msg_buf_alloc(rpc_s, peer, 1);
@@ -1710,7 +1843,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         struct node_id *peer;
         struct msg_buf *msg;
         struct obj_data *od, *from_obj;
-	int fast_v;
+        int fast_v;
         int err = -ENOENT; 
 
         peer = ds_get_peer(dsg->ds, cmd->id);
@@ -1728,16 +1861,15 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
  }
 #endif
 
+        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name, &oh->gdim);
         // CRITICAL: use version here !!!
-        from_obj = ls_find(dsg->ssd->storage, &oh->u.o.odsc);
-        // from_obj = ls_find_no_version(&dsg->ssd->storage, &oh->odsc);
+        from_obj = ls_find(ssd->storage, &oh->u.o.odsc);
         if (!from_obj) {
-		char *str;
-                str = obj_desc_sprint(&oh->u.o.odsc);
-		uloga("'%s()': %s\n", __func__, str);
-		free(str);
-
-                goto err_out;
+            char *str;
+            str = obj_desc_sprint(&oh->u.o.odsc);
+            uloga("'%s()': %s\n", __func__, str);
+            free(str);
+            goto err_out;
         }
         //TODO:  if required  object is  not  found, I  should send  a
         //proper error message back, and the remote node should handle
@@ -1749,19 +1881,18 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
           RPC in response to a transfer.
         */
 
-	fast_v = 0; // ERROR: iovec operation fails after Cray Portals
-		    // Update (oh->odsc.st == from_obj->obj_desc.st);
+        fast_v = 0; // ERROR: iovec operation fails after Cray Portals
+        // Update (oh->odsc.st == from_obj->obj_desc.st);
 
         err = -ENOMEM;
-	// CRITICAL:     experimental    stuff,     assumption    data
-	// representation is the same on both ends.
+        // CRITICAL:     experimental    stuff,     assumption    data
+        // representation is the same on both ends.
         // od = obj_data_alloc(&oh->odsc);
-	od = (fast_v)? obj_data_allocv(&oh->u.o.odsc) : obj_data_alloc(&oh->u.o.odsc);
+        od = (fast_v)? obj_data_allocv(&oh->u.o.odsc) : obj_data_alloc(&oh->u.o.odsc);
         if (!od)
                 goto err_out;
 
-        // ssd_copy(od, from_obj);
-	(fast_v)? ssd_copyv(od, from_obj) : ssd_copy(od, from_obj);
+        (fast_v)? ssd_copyv(od, from_obj) : ssd_copy(od, from_obj);
         od->obj_ref = from_obj;
 
         msg = msg_buf_alloc(rpc_s, peer, 0);
@@ -1771,15 +1902,15 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         }
 
         msg->msg_data = od->data;
-	msg->size = (fast_v)? obj_data_sizev(&od->obj_desc) / sizeof(iovec_t) : obj_data_size(&od->obj_desc);
+        msg->size = (fast_v)? obj_data_sizev(&od->obj_desc) / sizeof(iovec_t) : obj_data_size(&od->obj_desc);
         msg->cb = obj_get_completion;
         msg->private = od;
 
 
-	rpc_mem_info_cache(peer, msg, cmd); 
+        rpc_mem_info_cache(peer, msg, cmd); 
         // err = rpc_send_direct(rpc_s, peer, msg);
-	err = (fast_v)? rpc_send_directv(rpc_s, peer, msg) : rpc_send_direct(rpc_s, peer, msg);
-	rpc_mem_info_reset(peer, msg, cmd);
+        err = (fast_v)? rpc_send_directv(rpc_s, peer, msg) : rpc_send_direct(rpc_s, peer, msg);
+        rpc_mem_info_reset(peer, msg, cmd);
         if (err == 0)
                 return 0;
 
@@ -1858,10 +1989,15 @@ static int dsgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	msg->msg_rpc->id = DSG_ID;
 
 	hsi = (struct hdr_ss_info *) msg->msg_rpc->pad;
-	hsi->num_dims = ds_conf.ndims;
-	hsi->val_dims[bb_x] = ds_conf.dimx;
-	hsi->val_dims[bb_y] = ds_conf.dimy;
-	hsi->val_dims[bb_z] = ds_conf.dimz;
+	hsi->num_dims = ds_conf.ndim;
+//	hsi->val_dims[bb_x] = ds_conf.dimx;
+//	hsi->val_dims[bb_y] = ds_conf.dimy;
+//	hsi->val_dims[bb_z] = ds_conf.dimz;
+        int i; 
+        for(i = 0; i < hsi->num_dims; i++){
+                hsi->dims.c[i] = ds_conf.dims.c[i]; 
+        }
+
 	hsi->num_space_srv = dsg->ds->size_sp;
 
 	err = rpc_send(rpc_s, peer, msg);
@@ -1880,43 +2016,36 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         struct ds_gspace *dsg_l;
         int err = -ENOMEM;
 
-	/* Alloc routine should be called only once. */
+        /* Alloc routine should be called only once. */
         if (dsg)
                 return dsg;
 
         /* Default values */
         ds_conf.max_versions = 1;
         ds_conf.max_readers = 1;
-	ds_conf.lock_type = 1;
+        ds_conf.lock_type = 1;
 
         err = parse_conf(conf_name);
         if (err < 0) {
-                ds_conf.ndims = 3;
-                ds_conf.dimx = 4096;
-                ds_conf.dimy = 4096;
-                ds_conf.dimz = 4096;
-
 		uloga("'%s()' error loading config file, starting "
 			"with defaults.\n", __func__);
         }
         else
-                uloga("'%s()' config file loaded.\n", __func__);
+            uloga("'%s()' config file loaded.\n", __func__);
 
-	if (ds_conf.ndims == 2)
-		ds_conf.dimz = 1;
+        struct bbox domain;
+        memset(&domain, 0, sizeof(struct bbox));
+        domain.num_dims = ds_conf.ndim;
+        int i;
+        for(i = 0; i < domain.num_dims; i++){
+            domain.lb.c[i] = 0;
+            domain.ub.c[i] = ds_conf.dims.c[i] - 1;
+        }
 
-        struct bbox domain = {.num_dims = ds_conf.ndims, 
-                .lb.c = {0, 0, 0}, 
-                .ub.c = {ds_conf.dimx-1, ds_conf.dimy-1, ds_conf.dimz-1}};
         double tm_start, tm_end;
-
         timer_init(&timer, 1);
         timer_start(&timer);
 
-	/*
-	dsg_lock_init((ds_conf.lock_type == 1) ? lock_generic : lock_custom, 
-			ds_conf.max_readers);
-	*/
         dsg = dsg_l = malloc(sizeof(*dsg_l));
         if (!dsg_l)
                 goto err_out;
@@ -1929,21 +2058,27 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         rpc_add_service(ss_obj_filter, dsgrpc_obj_filter);
         rpc_add_service(ss_obj_cq_register, dsgrpc_obj_cq_register);
         rpc_add_service(cp_lock, dsgrpc_lock_service);
-	rpc_add_service(ss_info, dsgrpc_ss_info);
+        rpc_add_service(ss_info, dsgrpc_ss_info);
 #ifdef DS_HAVE_ACTIVESPACE
-	rpc_add_service(ss_code_put, dsgrpc_bin_code_put);
+        rpc_add_service(ss_code_put, dsgrpc_bin_code_put);
 #endif
         INIT_LIST_HEAD(&dsg_l->cq_list);
         INIT_LIST_HEAD(&dsg_l->obj_desc_req_list);
         INIT_LIST_HEAD(&dsg_l->obj_data_req_list);
-	INIT_LIST_HEAD(&dsg_l->locks_list);
+        INIT_LIST_HEAD(&dsg_l->locks_list);
 
         dsg_l->ds = ds_alloc(num_sp, num_cp, dsg_l);
         if (!dsg_l->ds)
                 goto err_free;
 
         tm_start = timer_read(&timer);
+
+#ifdef DS_SSD_HASH_V2
+        dsg_l->ssd = ssd_alloc_v2(&domain, num_sp, ds_conf.max_versions);
+        init_sspace(dsg_l);
+#else
         dsg_l->ssd = ssd_alloc(&domain, num_sp, ds_conf.max_versions);
+#endif
         if (!dsg_l->ssd)
                 /* Yes, I don't free resources here, but we should
                    fail anyway. */
@@ -1951,7 +2086,7 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         tm_end = timer_read(&timer);
 
 #ifdef DEBUG
-        printf("SRV %d %d %lf\n", DSG_ID, -1, tm_end-tm_start);
+        printf("SRV %d %lf\n", DSG_ID, tm_end-tm_start);
 #endif
 
         err = ssd_init(dsg_l->ssd, ds_get_rank(dsg_l->ds));
@@ -1996,16 +2131,21 @@ struct ss_storage *dsg_dht_get_storage(void)
 void dsg_free(struct ds_gspace *dsg)
 {
         ds_free(dsg->ds);
-	ssd_free(dsg->ssd);
+#ifdef DS_SSD_HASH_V2
+        ssd_free_v2(dsg->ssd);
+        free_sspace(dsg);
+#else
+        ssd_free(dsg->ssd);
+#endif
         free(dsg);
 }
 
 
 int dsg_process(struct ds_gspace *dsg)
 {
-	//        return rpc_process_event(dsg->ds->rpc_s);
 	int err;
-	err = rpc_process_event(dsg->ds->rpc_s);
+	//err = rpc_process_event(dsg->ds->rpc_s);
+    err = ds_process(dsg->ds);
 	if (err < 0)
 		rpc_report_md_usage(dsg->ds->rpc_s);
 
