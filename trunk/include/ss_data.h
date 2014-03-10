@@ -46,7 +46,6 @@ typedef struct {
 enum storage_type {row_major, column_major};
 
 struct obj_descriptor {
-        // char                    name[16];
         char                    name[154]; // 170
 
         enum storage_type       st;
@@ -63,10 +62,16 @@ struct obj_descriptor {
         char pad[2];//added by Tong Jin for 4 byte aligned in GEMINI
 } __attribute__((__packed__));
 
+struct global_dimension {
+        int ndim;
+        struct coord sizes;
+} __attribute__((__packed__));
+
 struct obj_data {
         struct list_head        obj_entry;
 
         struct obj_descriptor   obj_desc;
+        struct global_dimension gdim;
 
         void			*_data;		/* Unaligned pointer */
         void                    *data;		/* Aligned pointer */
@@ -109,10 +114,15 @@ struct dht_entry {
            entry.
         int                     size_objs, num_objs;
         struct obj_descriptor   *od_tab;
-	*/
+        */
 
-	int			odsc_size, odsc_num;
-	struct list_head	odsc_hash[1];
+        // for v2 
+        int num_bbox;
+        int size_bb_tab;
+        struct bbox             *bb_tab;
+
+        int			odsc_size, odsc_num;
+        struct list_head	odsc_hash[1];
 };
 
 struct dht {
@@ -126,7 +136,7 @@ struct dht {
   Shared space structure.
 */
 struct sspace {
-        int                     max_dim;
+        __u64                   max_dim;
         unsigned int            bpd;
 
         struct dht              *dht;
@@ -135,25 +145,41 @@ struct sspace {
         int                     rank;
         /* Pointer into "dht.ent_tab" corresponding to this node. */
         struct dht_entry        *ent_self;
+
+        // for v2 
+        int total_num_bbox;
+};
+
+struct sspace_list_entry {
+        struct list_head    entry;
+        struct global_dimension gdim;
+        struct sspace   *ssd;
 };
 
 /* Header structure for obj_get requests. */
 struct hdr_obj_get {
-        int                     qid;
-        int                     rank;
-        int                     rc;
-	union {
-		struct {
-			/* Number of directory entries. */
-			int                     num_de;
-			struct obj_descriptor   odsc;
-		} o;
-		struct {
-			/* Number of versions available. */
-			int			num_vers;
-			int			versions[1];
-		} v;
+    int                     qid;
+    int                     rank;
+    int                     rc;
+    union {
+        struct {
+            /* Number of directory entries. */
+            int                     num_de;
+            struct obj_descriptor   odsc;
+        } o;
+        struct {
+            /* Number of versions available. */
+            int			num_vers;
+            int			versions[1];
+        } v;
 	} u;
+    struct global_dimension gdim;
+} __attribute__((__packed__));
+
+/* Header structure for obj_put requests. */
+struct hdr_obj_put {
+    struct obj_descriptor odsc;
+    struct global_dimension gdim;
 } __attribute__((__packed__));
 
 /* Header structure for obj_filter requests. */
@@ -203,6 +229,9 @@ struct obj_data *ssd_lookup(struct sspace *, char *);
 void ssd_remove(struct sspace *, struct obj_data *);
 void ssd_try_remove_free(struct sspace *, struct obj_data *);
 
+struct sspace * ssd_alloc_v2(const struct bbox *, int, int);
+void ssd_free_v2(struct sspace *);
+int ssd_hash_v2(struct sspace *, const struct bbox *, struct dht_entry *[]);
 
 int dht_add_entry(struct dht_entry *, const struct obj_descriptor *);
 const struct obj_descriptor * dht_find_entry(struct dht_entry *, const struct obj_descriptor *);
@@ -229,9 +258,8 @@ static inline void obj_data_free(struct obj_data *od)
 */
 
 void obj_data_free_with_data(struct obj_data *);
-// size_t obj_data_size(struct obj_data *);
-size_t obj_data_size(struct obj_descriptor *);
-size_t obj_data_sizev(struct obj_descriptor *);
+__u64 obj_data_size(struct obj_descriptor *);
+__u64 obj_data_sizev(struct obj_descriptor *);
 
 int obj_desc_equals(const struct obj_descriptor *, const struct obj_descriptor *);
 int obj_desc_equals_no_owner(const struct obj_descriptor *, const struct obj_descriptor *);

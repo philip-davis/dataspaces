@@ -518,14 +518,17 @@ size_t dimes_buffer_total_size()
 void dimes_buffer_alloc(size_t size, uint64_t *ptr)
 {
     //If requested buffer size exceeds the total available
-    if (size > dimes_buffer_size)
+    if (size > dimes_buffer_size) {
+        fprintf(stderr, "%s(): requested size %u exceeds buffer size %u\n",
+            __func__, size, dimes_buffer_size); 
         goto err_out;
+    }
 
     //Search for usable free block with the smallest data size
     struct dimes_buf_block * mb, *tmp;
     int found = 0;
-    list_for_each_entry_safe(mb, tmp, &free_blocks_list, struct dimes_buf_block, 
-mem_block_entry){
+    list_for_each_entry_safe(mb, tmp, &free_blocks_list,
+        struct dimes_buf_block, mem_block_entry){
         if(mb->block_size >= size) {
             //Usable free block found
             found = 1;

@@ -43,6 +43,9 @@ struct ds_gspace {
         /* Shared space data structure. */
         struct sspace           *ssd;
 
+        /* List of dynamically added shared space. */ 
+        struct list_head        sspace_list;
+
         /* Continuous query list. */
         struct list_head        cq_list;
         int                     cq_num;

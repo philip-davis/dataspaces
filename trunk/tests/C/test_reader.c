@@ -29,6 +29,7 @@
 *  zhangfan@cac.rutgers.edu
 */
 #include <stdio.h>
+#include <stdint.h>
 
 #include "debug.h"
 #include "common.h"
@@ -36,7 +37,7 @@
 #include "mpi.h"
 
 extern int test_get_run(enum transport_type, int npapp, int npx,int npy,int npz,
-        int spx, int spy, int spz, int timestep, int dims, size_t elem_size,
+        uint64_t spx, uint64_t spy, uint64_t spz, int timestep, int dims, size_t elem_size,
         int num_vars, MPI_Comm gcomm);
 
 int main(int argc, char **argv)
@@ -50,7 +51,7 @@ int main(int argc, char **argv)
     enum transport_type type; // DATASPACES or DIMES
 	int npapp; // number of application processes
     int npx, npy, npz; // number of processes in x,y,z direction
-	int spx, spy, spz; // block size per process in x,y,z direction
+	uint64_t spx, spy, spz; // block size per process in x,y,z direction
     int timestep; // number of iterations
 	int dims; // Optional: 2 or 3. Default value is 3.
     size_t elem_size; // Optional: size of one element in the global array. Default value is 8 (bytes).
