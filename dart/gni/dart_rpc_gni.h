@@ -70,7 +70,7 @@ struct node_id;
 typedef unsigned char	__u8;
 typedef unsigned int	__u32;
 typedef int		__s32;
-typedef unsigned long	__u64;
+typedef uint64_t __u64;
 
 
 // Rpc prototype function, should be called in response to a remote rpc request. 
@@ -81,6 +81,10 @@ typedef int (*async_callback)(struct rpc_server *rpc_s, struct rpc_request *rr);
 
 // Asynchronous callback function to be used when a transfer completes.
 typedef int (*completion_callback)(struct rpc_server *rpc_s, struct msg_buf *msg);
+
+struct coord2{
+	__u64 c[3];	//TODO-Q
+};
 
 typedef enum {
 	unset = 0,
@@ -169,7 +173,7 @@ struct lockhdr {
 // Header for space info.
 struct hdr_ss_info {
 	int		num_dims;
-	int		val_dims[3];
+	struct  coord2	dims;
 	int		num_space_srv;
 };
 
@@ -224,7 +228,7 @@ struct rpc_cmd {
 	struct mdh_addr_t	mdh_addr;
 	__u32			id;
 	// payload of the command
-	__u8			pad[218];
+	__u8			pad[280];
 };
 
 struct node_id {
@@ -271,6 +275,7 @@ struct msg_buf {
 
 	struct rpc_cmd		*msg_rpc;
 
+    void            *original_msg_data;
 	void			*msg_data;
 	size_t			size;
 
@@ -286,14 +291,21 @@ struct msg_buf {
 	const struct node_id	*peer;
 };
 
+enum rpc_request_type {
+    DART_RPC_SEND = 0,
+    DART_RPC_RECEIVE,
+    DART_RPC_SEND_DIRECT,
+    DART_RPC_RECEIVE_DIRECT
+};
+
 struct rpc_request {
 	struct list_head	req_entry;
 	uint32_t       		index;	
-        int                     type; //0 for cmd, 1 for data
-  int f_data; //1: rr->mdh_data is using.
+    int                     type; //0 for cmd, 1 for data
+    int f_data; //1: rr->mdh_data is using.
 
 	async_callback		cb;
-  int                     refcont;
+    int                     refcont;
 
 	struct msg_buf		*msg;
 	void			*private;
@@ -310,6 +322,8 @@ struct rpc_request {
 	gni_mem_handle_t	mdh_data;
 
 	//?gni_post_descriptor_t	rdma_data_desc;
+    int f_use_prealloc_rdma_mem;
+    enum rpc_request_type rr_type;
 };
 
 enum rpc_component {
@@ -333,6 +347,7 @@ struct rpc_server{
 	gni_cq_handle_t		sys_cq_hndl;		// completion queue for system message
 	gni_smsg_attr_t		sys_local_smsg_attr;	// local system message attributes
 
+    gni_mem_handle_t    dart_mem_mdh;
 
 	unsigned int		*all_nic_addresses;
 

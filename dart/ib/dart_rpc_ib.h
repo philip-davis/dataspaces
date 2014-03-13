@@ -13,6 +13,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -45,7 +46,11 @@
 typedef unsigned char __u8;
 typedef unsigned int __u32;
 typedef int __s32;
-typedef unsigned long __u64;
+typedef uint64_t __u64;
+
+struct coord2{
+  __u64 c[3]; //extend to 10d
+};
 
 struct msg_buf;
 struct rpc_server;
@@ -132,7 +137,7 @@ struct lockhdr {
 /* Header for space info. */
 struct hdr_ss_info {
 	int num_dims;
-	int val_dims[3];
+    struct coord2 dims;
 	int num_space_srv;
 } __attribute__ ((__packed__));
 
@@ -152,7 +157,7 @@ struct rpc_cmd {
 	__u32 id;
 	struct ibv_mr mr;
 	int qp_num;
-	__u8 pad[218];		// payload of the command
+	__u8 pad[280];		// payload of the command
 	uint64_t wr_id;
 };
 

@@ -35,6 +35,8 @@
 extern "C" {
 #endif
 
+#include <stdint.h>
+
 #include "debug.h"
 #include "dart.h"
 #include "dc_gspace.h"
@@ -46,9 +48,11 @@ struct query_tran_d {
 	int                     num_ent;
 };
 
+#define MAX_NUM_SSD 3
 struct dimes_client {
 	struct dcg_space *dcg;
 	struct sspace *ssd; //only used for hashing
+    struct sspace *spaces[MAX_NUM_SSD];
 	struct bbox domain;
 	struct query_tran_d qt;
 	int    f_ss_info;
@@ -59,13 +63,15 @@ void dimes_client_free(void);
 void dimes_client_set_storage_type (int fst);
 int dimes_client_get (const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+        int ndim,
+        uint64_t *lb, 
+        uint64_t *ub,
         void *data);
 int dimes_client_put (const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
         void *data);
 int dimes_client_put_sync_all(void);
 int dimes_client_put_set_group(const char *group_name, int step);
