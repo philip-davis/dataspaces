@@ -141,8 +141,8 @@ static int couple_write_2d(unsigned int ts, int num_vars, enum transport_type ty
 	int root = 0;
 
 #ifdef DEBUG
-	uloga("Timestep=%u, %d write m2d:{(%llu,%llu,%llu),(%llu,%llu,%llu)} into space\n",
-		ts, rank_, xl,yl,zl,xu,yu,zu);
+	uloga("Timestep=%u, %d write m2d:{(%llu,%llu),(%llu,%llu)} into space\n",
+		ts, rank_, yl,xl,yu,xu);
 #endif
 
     // Allocate data
@@ -161,6 +161,7 @@ static int couple_write_2d(unsigned int ts, int num_vars, enum transport_type ty
 	tm_st = timer_read(&timer_);
     for (i = 0; i < num_vars; i++) {
         sprintf(var_name, "m2d_%d", i);
+        // Note: needs to change dimensions ordering to column-major: y,x
         common_put(var_name, ts, elem_size,
             yl, xl, zl, yu, xu, zu, data_tab[i], type);
         if (type == USE_DSPACES) {
@@ -223,7 +224,7 @@ static int couple_write_3d(unsigned int ts, int num_vars, enum transport_type ty
 
 #ifdef DEBUG
 	uloga("Timestep=%u, %d write m3d:{(%llu,%llu,%llu),(%llu,%llu,%llu)} into space\n",
-		ts, rank_, xl,yl,zl,xu,yu,zu);
+		ts, rank_, zl,yl,xl,zu,yu,xu);
 #endif
 
     // Allocate data
@@ -242,6 +243,7 @@ static int couple_write_3d(unsigned int ts, int num_vars, enum transport_type ty
 	tm_st = timer_read(&timer_);
     for (i = 0; i < num_vars; i++) {
         sprintf(var_name, "m3d_%d", i);
+        // Note: need to change dimensions ordering to column-major: z,y,x
         common_put(var_name, ts, elem_size,
             zl, yl, xl, zu, yu, xu, data_tab[i], type);
         if (type == USE_DSPACES) {
@@ -274,27 +276,36 @@ static int couple_write_3d(unsigned int ts, int num_vars, enum transport_type ty
 }
 
 int test_put_run(enum transport_type type, int npapp, int npx, int npy, int npz,
-    uint64_t spx, uint64_t spy, uint64_t spz, int timestep, int dims,
+    uint64_t spx, uint64_t spy, uint64_t spz, int timestep, int appid, int dims,
     size_t elem_size, int num_vars, MPI_Comm gcomm)
 {
 	gcomm_ = gcomm;
 	elem_size_ = elem_size;
 	timestep_ = timestep;
 	npapp_ = npapp;
-	npx_ = npx;
-	npy_ = npy;
-	npz_ = npz;
-	if (npx_)
-		spx_ = spx;
-	if (npy_)
-		spy_ = spy;
-	if (npz_)
-		spz_ = spz;
+    // Note: dimensions reodering
+    if (dims = 2) {
+        npx_ = npy;
+        npy_ = npx;
+        npz_ = npz;
+
+        spx_ = spy;
+        spy_ = spx;
+    }
+    if (dims = 3) {
+        npx_ = npz;
+        npy_ = npy;
+        npz_ = npx;
+
+        spx_ = spz;
+        spy_ = spy;
+        spz_ = spx;
+    }
 
 	timer_init(&timer_, 1);
 	timer_start(&timer_);
 
-	int app_id = 1;
+	int app_id = appid;
     double tm_st, tm_end;
     tm_st = timer_read(&timer_);
     common_init(npapp_, app_id);

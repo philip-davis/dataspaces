@@ -36,9 +36,7 @@
 
 #include "mpi.h"
 
-extern int test_get_run(enum transport_type, int npapp, int npx,int npy,int npz,
-        uint64_t spx, uint64_t spy, uint64_t spz, int timestep, int dims, size_t elem_size,
-        int num_vars, MPI_Comm gcomm);
+extern int test_get_run(enum transport_type, int npapp, int npx, int npy, int npz, uint64_t spx, uint64_t spy, uint64_t spz, int timestep, int appid, int dims, size_t elem_size, int num_vars, MPI_Comm gcomm);
 
 int main(int argc, char **argv)
 {
@@ -53,12 +51,13 @@ int main(int argc, char **argv)
     int npx, npy, npz; // number of processes in x,y,z direction
 	uint64_t spx, spy, spz; // block size per process in x,y,z direction
     int timestep; // number of iterations
-	int dims; // Optional: 2 or 3. Default value is 3.
+    int appid;
+	int dims; // number of dimensions: 2 or 3.
     size_t elem_size; // Optional: size of one element in the global array. Default value is 8 (bytes).
     int num_vars; // Optional: number of variables to be shared in the testing. Default value is 1.
 
 	if (parse_args(argc, argv, &type, &npapp, &npx, &npy, &npz,
-		&spx, &spy, &spz, &timestep, &dims, &elem_size, &num_vars) != 0) {
+    &spx, &spy, &spz, &timestep, &appid, &dims, &elem_size, &num_vars) != 0) {
 		goto err_out;
 	}
 
@@ -74,7 +73,7 @@ int main(int argc, char **argv)
 
 	// Run as data reader
 	test_get_run(type, npapp, npx, npy, npz,
-		spx, spy, spz, timestep, dims, elem_size, num_vars, gcomm);
+		spx, spy, spz, timestep, appid, dims, elem_size, num_vars, gcomm);
 	
 	MPI_Barrier(gcomm);
 	MPI_Finalize();
