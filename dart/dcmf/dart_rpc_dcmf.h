@@ -55,13 +55,6 @@ extern "C" {
         _a = (_a + 7) & ~7;                                     \
         (a) = (void *) _a;
 
-/*
-typedef unsigned char   __u8;
-typedef unsigned int    __u32;
-typedef int             __s32;
-typedef uint64_t __u64;
-*/
-
 struct msg_buf;
 struct rpc_server;
 struct rpc_cmd;
@@ -76,6 +69,10 @@ typedef int (*rpc_service)(struct rpc_server*, struct rpc_cmd*);
   Asynchronous callback function to be used when a transfer completes.
 */
 typedef int (*completion_callback)(struct rpc_server *, struct msg_buf *);
+
+struct coord2{
+    __u64 c[3];       //TODO-Q
+};
 
 struct ptlid_map {
 	size_t rank_dcmf; //ibm dcmf rank
@@ -118,6 +115,13 @@ struct rpc_cmd {
 
         // payload of the command
         unsigned char            pad[RPC_CMD_PAD_SIZE];
+} __attribute__((__packed__));
+
+/* Header for space info. */
+struct hdr_ss_info {
+    int         num_dims;
+    struct coord2       dims;
+    int         num_space_srv;
 } __attribute__((__packed__));
 
 /*
@@ -295,7 +299,6 @@ enum cmd_type {
         ss_obj_filter,
         ss_obj_info,
         ss_info,
-	cp_remove,
 #ifdef DS_HAVE_ACTIVESPACE
 	ss_code_put,
 	ss_code_reply,
@@ -304,9 +307,11 @@ enum cmd_type {
 	rpc_get_finish,
 	rpc_put_finish,
 #ifdef DS_HAVE_DIMES
-    dimes_ss_info_msg,
-    dimes_locate_data_msg,
-    dimes_put_msg,
+	dimes_ss_info_msg,
+	dimes_locate_data_msg,
+	dimes_put_msg,
+	dimes_get_ack_msg,
+	dimes_obj_get_ack_v2_msg,
 #endif
 	/* Added for CCGrid Demo. */
 	CN_TIMING_AVG,

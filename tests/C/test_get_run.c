@@ -44,6 +44,7 @@ static int np[10] = {0};
 static uint64_t sp[10] = {0};
 //# of interations
 static int timesteps_;
+static uint64_t spx_, spy_, spz_;
 //# of processors in the application
 static int npapp_;
 
@@ -92,7 +93,6 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
 	}	
 
 	common_lock_on_read("mnd_lock", &gcomm_);	//Test dspaces_barrier
-	//common_lock_on_read("mnd_lock", NULL);
 
 	set_offset_nd(rank_, dims);
 	uint64_t dims_size = 1;
@@ -137,7 +137,6 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
 	}
 	tm_end = timer_read(&timer_);
 	common_unlock_on_read("mnd_lock", &gcomm_);
-	//common_unlock_on_read("mnd_lock", NULL);	//Test dspaces_barrier
 		
 	tm_diff = tm_end-tm_st;
 	MPI_Reduce(&tm_diff, &tm_max, 1, MPI_DOUBLE, MPI_MAX, root, gcomm_);

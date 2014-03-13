@@ -270,14 +270,16 @@ void dspaces_define_gdim (const char *var_name,
  */
 int dspaces_put_sync(void);
 
-/**
- * @brief Get number of DataSpaces servers.
- * @return Number of space server.
- */
-int dspaces_get_num_space_server(void);
+int dspaces_put_with_gdim (const char *var_name,
+        unsigned int ver, int size,
+        int ndim, uint64_t *lb, uint64_t *ub, uint64_t *gdim,
+        void *data);
+int dspaces_get_with_gdim (const char *var_name,
+        unsigned int ver, int size,
+        int ndim, uint64_t *lb, uint64_t *ub, uint64_t *gdim,
+        void *data);
 
-#ifdef __cplusplus
-}
-#endif
+void dspaces_set_mpi_rank(int rank);
+
 #endif
 

@@ -77,13 +77,6 @@ struct rpc_server;
 struct rpc_cmd;
 struct node_id;
 
-/*
-typedef unsigned char	__u8;
-typedef unsigned int	__u32;
-typedef int		__s32;
-typedef uint64_t __u64;
-*/
-
 // Rpc prototype function, should be called in response to a remote rpc request. 
 typedef int (*rpc_service)(struct rpc_server *rpc_s, struct rpc_cmd *cmd);
 
@@ -92,6 +85,10 @@ typedef int (*async_callback)(struct rpc_server *rpc_s, struct rpc_request *rr);
 
 // Asynchronous callback function to be used when a transfer completes.
 typedef int (*completion_callback)(struct rpc_server *rpc_s, struct msg_buf *msg);
+
+struct coord2{
+	__u64 c[3];	//TODO-Q
+};
 
 typedef enum {
 	unset = 0,
@@ -175,6 +172,13 @@ struct lockhdr {
 	int		id;
 	int		lock_num;
     char	name[LOCK_NAME_SIZE];	// lock name
+};
+
+// Header for space info.
+struct hdr_ss_info {
+	int		num_dims;
+	struct  coord2	dims;
+	int		num_space_srv;
 };
 
 // Header for data kernel function remote deployment.
@@ -322,6 +326,8 @@ struct rpc_request {
 	gni_mem_handle_t	mdh_data;
 
 	//?gni_post_descriptor_t	rdma_data_desc;
+    int f_use_prealloc_rdma_mem;
+    enum rpc_request_type rr_type;
 };
 
 enum rpc_component {

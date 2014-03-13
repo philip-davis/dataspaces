@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -47,12 +48,11 @@
 }
 
 #define FPTR_DEF  void * _fptr[] = {&malloc, &free, &memset};
-/*
-typedef unsigned char __u8;
-typedef unsigned int __u32;
-typedef int __s32;
-typedef uint64_t __u64;
-*/
+
+struct coord2{
+  __u64 c[3]; //extend to 10d
+};
+
 struct msg_buf;
 struct rpc_server;
 struct rpc_cmd;
@@ -134,6 +134,13 @@ struct lockhdr {
 	int id;
 	int lock_num;
 	char name[LOCK_NAME_SIZE];	/* lock name */
+} __attribute__ ((__packed__));
+
+/* Header for space info. */
+struct hdr_ss_info {
+	int num_dims;
+    struct coord2 dims;
+	int num_space_srv;
 } __attribute__ ((__packed__));
 
 /* Header for data kernel function remote deployment. */

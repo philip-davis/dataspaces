@@ -36,18 +36,12 @@
 
 #include <stdio.h>
 #include <stdint.h>
-
 #include "config.h"
 #include "util.h"
+#include "strutil.h"
 
 #define max(a,b) (a) > (b) ? (a):(b)
 #define min(a,b) (a) < (b) ? (a):(b)
-/*
-typedef unsigned char 		__u8;
-typedef unsigned int 		__u32;
-typedef int			__s32;
-typedef uint64_t	__u64; //Commented since not all compiler support typedef
-*/
 
 enum bb_dim {
         bb_x = 0,
@@ -55,6 +49,7 @@ enum bb_dim {
         bb_z = 2
 };
 
+#define BBOX_MAX_NDIM 3
 struct coord {
         uint64_t c[BBOX_MAX_NDIM];
 };

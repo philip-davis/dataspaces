@@ -302,95 +302,6 @@ dim1:               numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
     }
 }
 
-/* a = destination, b = source. Destination uses iovec_t format. */
-static void matrix_copyv(struct matrix *a, struct matrix *b)
-{
-/*
-        typedef char matrix_elem_generic_t[a->size_elem];
-
-        int ai, aj, bi, bj, bk; // , ak;
-        int n;
-
-        if (a->mat_storage == column_major && b->mat_storage == column_major) {
-
-		// matrix_elem_generic_t (*A)[a->dimz][a->dimx][a->dimy] = a->pdata;
-                matrix_elem_generic_t (*B)[b->dimz][b->dimx][b->dimy] = b->pdata;
-		iovec_t *A = a->pdata;
-
-                // Column major data representation (Fortran style) 
-                n = a->mat_view.ub[bb_y] - a->mat_view.lb[bb_y] + 1;
-		// ak = a->mat_view.lb[bb_y];
-                bk = b->mat_view.lb[bb_y];
-                for (ai = a->mat_view.lb[bb_z], bi = b->mat_view.lb[bb_z]; 
-                     ai <= a->mat_view.ub[bb_z]; ai++, bi++) {
-                        for (aj = a->mat_view.lb[bb_x], bj = b->mat_view.lb[bb_x]; 
-                             aj <= a->mat_view.ub[bb_x]; aj++, bj++) {
-				A->iov_base = &(*B)[bi][bj][bk];
-				A->iov_len = a->size_elem * n;
-				A++;
-			}
-                }
-        }
-        else if (a->mat_storage == row_major && b->mat_storage == row_major) {
-
-                // matrix_elem_generic_t (*A)[a->dimz][a->dimy][a->dimx] = a->pdata;
-                matrix_elem_generic_t (*B)[b->dimz][b->dimy][b->dimx] = b->pdata;
-		iovec_t *A = a->pdata;
-
-                n = a->mat_view.ub[bb_x] - a->mat_view.lb[bb_x] + 1;
-		// ak = a->mat_view.lb[bb_x];
-                bk = b->mat_view.lb[bb_x];
-                for (ai = a->mat_view.lb[bb_z], bi = b->mat_view.lb[bb_z];
-                     ai <= a->mat_view.ub[bb_z]; ai++, bi++) {
-                        for (aj = a->mat_view.lb[bb_y], bj = b->mat_view.lb[bb_y];
-                             aj <= a->mat_view.ub[bb_y]; aj++, bj++) {
-				A->iov_base = &(*B)[bi][bj][bk];
-				A->iov_len = a->size_elem * n;
-				A++;
-			}
-                }
-        }
-*/
-	/*
-        else if (a->mat_storage == column_major && b->mat_storage == row_major) {
-
-                matrix_elem_generic_t (*A)[a->dimz][a->dimx][a->dimy] = a->pdata;
-                matrix_elem_generic_t (*B)[b->dimz][b->dimy][b->dimx] = b->pdata;
-
-                for (ai = a->mat_view.lb[bb_z], bi = b->mat_view.lb[bb_z];
-                     ai <= a->mat_view.ub[bb_z]; ai++, bi++) {
-                        for (aj = a->mat_view.lb[bb_x], bj = b->mat_view.lb[bb_y];
-                             aj <= a->mat_view.ub[bb_x]; aj++, bj++) {
-                                for (ak = a->mat_view.lb[bb_y], bk = b->mat_view.lb[bb_y];
-                                     ak <= a->mat_view.ub[bb_y]; ak++, bk++) 
-                                        memcpy(&(*A)[ai][aj][ak], 
-                                               &(*B)[bi][bk][bj],
-                                               a->size_elem);
-                                // (*A)[ai][aj][ak] = (*B)[bi][bk][bj];
-                        }
-                }
-        }
-        else if (a->mat_storage == row_major && b->mat_storage == column_major) {
-
-                matrix_elem_generic_t (*A)[a->dimz][a->dimy][a->dimx] = a->pdata;
-                matrix_elem_generic_t (*B)[b->dimz][b->dimx][b->dimy] = b->pdata;
-
-                for (ai = a->mat_view.lb[bb_z], bi = b->mat_view.lb[bb_z];
-                     ai <= a->mat_view.ub[bb_z]; ai++, bi++) {
-                        for (aj = a->mat_view.lb[bb_y], bj = b->mat_view.lb[bb_y];
-                             aj <= a->mat_view.ub[bb_y]; aj++, bj++) {
-                                for (ak = a->mat_view.lb[bb_x], bk = b->mat_view.lb[bb_x];
-                                     ak <= a->mat_view.ub[bb_x]; ak++, bk++)
-                                        memcpy(&(*A)[ai][aj][ak], 
-                                               &(*B)[bi][bk][bj],
-                                               a->size_elem);
-                                // (*A)[ai][aj][ak] = (*B)[bi][bk][bj];
-                        }
-                }
-        }
-	*/
-}
-
 static void get_bbox_max_dim(const struct bbox *bb, uint64_t *out_max_dim,
     int *out_dim)
 {
@@ -649,14 +560,6 @@ static struct sspace *ssd_alloc_v1(const struct bbox *bb_domain, int num_nodes, 
 static void ssd_free_v1(struct sspace *ssd)
 {
         dht_free(ssd->dht);
-        free(ssd);
-        sh_free();
-}
-
-static int ssd_hash_v1(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[])
-{
-        struct intv *i_tab;
-        int i, k, n, num_nodes;
 
         num_nodes = sh_find(bb, de_tab);
         if (num_nodes > 0)
@@ -665,10 +568,7 @@ static int ssd_hash_v1(struct sspace *ss, const struct bbox *bb, struct dht_entr
 
         num_nodes = 0;
 
-        // bbox_to_intv(bb, ss->max_dim, ss->bpd, &i_tab, &n);
         bbox_to_intv2(bb, ss->max_dim, ss->bpd, &i_tab, &n);
-        //  printf("After bbox_to_intv2 num_intv = %d\n", n);
-        //  printf("ss->dht->num_entries = %d\n", ss->dht->num_entries);
 
         for (k = 0; k < ss->dht->num_entries; k++){
                 for (i = 0; i < n; i++) {
@@ -678,8 +578,6 @@ static int ssd_hash_v1(struct sspace *ss, const struct bbox *bb, struct dht_entr
                         }
                 }
         }
-
-        //  printf("num_nodes = %d\n", num_nodes);
 
         /* Cache the results for later use. */
         sh_add(bb, de_tab, num_nodes);
@@ -699,8 +597,6 @@ struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max
         get_bbox_max_dim(bb_domain, &max_dim, &dim);
         max_dim = next_pow_2_v2(max_dim);
         nbits_max_dim = compute_bits_v2(max_dim);
-        //printf("%s(): max_dim= %llu nbits_max_dim= %d\n",
-        //    __func__, max_dim, nbits_max_dim);
 
         // decompose the global bbox       
         int num_divide_iteration = compute_bits_v2(next_pow_2_v2(num_nodes));
@@ -708,9 +604,6 @@ struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max
         struct queue q1, q2;
         queue_init(&q1);
         queue_init(&q2);
-
-        //printf("%s(): num_nodes= %d num_divide_iteration= %d\n", __func__,
-        //    num_nodes, num_divide_iteration);
 
         bb = malloc(sizeof(struct bbox));
         memcpy(bb, bb_domain, sizeof(struct bbox));
@@ -810,6 +703,137 @@ void ssd_free_v2(struct sspace *ssd)
         sh_free();
 }
 
+struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max_versions)
+{
+        struct sspace *ssd = NULL;
+        int err = -ENOMEM;
+        int i, j, k;
+        int dim;
+        int nbits_max_dim = 0;
+        uint64_t max_dim = 0;
+        get_bbox_max_dim(bb_domain, &max_dim, &dim);
+        max_dim = next_pow_2_v2(max_dim);
+        nbits_max_dim = compute_bits_v2(max_dim);
+        //printf("%s(): max_dim= %llu nbits_max_dim= %d\n",
+        //    __func__, max_dim, nbits_max_dim);
+
+        // decompose the global bbox       
+        int num_divide_iteration = compute_bits_v2(next_pow_2_v2(num_nodes));
+        struct bbox *bb, *b1, *b2;        
+        struct queue q1, q2;
+        queue_init(&q1);
+        queue_init(&q2);
+    
+        bb = malloc(sizeof(struct bbox));
+        memcpy(bb, bb_domain, sizeof(struct bbox));
+        queue_enqueue(&q1, bb);
+        for (i = 0; i < num_divide_iteration; i++) {
+            struct queue *src_q, *dst_q;
+            if (!queue_is_empty(&q1) && queue_is_empty(&q2)) {
+                src_q = &q1;
+                dst_q = &q2;
+            } else if (!queue_is_empty(&q2) && queue_is_empty(&q1)) {
+                src_q = &q2;
+                dst_q = &q1;
+            } else {
+                printf("%s(): error, both q1 and q2 is (non)empty.\n", __func__);
+            }
+
+            while (!queue_is_empty(src_q)) {
+                uint64_t max_dim_size;
+                struct bbox b_tab[2];
+
+                bb = queue_dequeue(src_q);
+                get_bbox_max_dim_size(bb, &max_dim_size, &dim);
+                bbox_divide_in2_ondim(bb, b_tab, dim);                    
+                free(bb); bb = NULL;
+                b1 = malloc(sizeof(struct bbox));
+                b2 = malloc(sizeof(struct bbox));
+                *b1 = b_tab[0];
+                *b2 = b_tab[1];
+                queue_enqueue(dst_q, b1);
+                queue_enqueue(dst_q, b2);
+            }
+        }
+
+        struct queue *q;
+        if (!queue_is_empty(&q1)) q = &q1;
+        else if (!queue_is_empty(&q2)) q = &q2;
+
+        ssd = malloc(sizeof(*ssd));
+        if (!ssd)
+                goto err_out;
+        memset(ssd, 0, sizeof(*ssd));
+
+        ssd->max_dim = max_dim;
+        ssd->bpd = nbits_max_dim;
+        ssd->storage = ls_alloc(max_versions);
+        if (!ssd->storage) {
+                free(ssd);
+                goto err_out;
+        }
+
+        ssd->total_num_bbox = queue_size(q);
+        ssd->dht = dht_alloc(ssd, bb_domain, num_nodes, max_versions);
+        if (!ssd->dht) {
+            // TODO: free storage 
+            free(ssd->storage);
+            free(ssd);
+            goto err_out;
+        } 
+        for (i = 0; i < num_nodes; i++) {
+            ssd->dht->ent_tab[i]->rank = i;
+        }
+
+        int n = ceil(ssd->total_num_bbox*1.0 / ssd->dht->num_entries);
+        for (i = 0; i < ssd->dht->num_entries; i++) {
+            ssd->dht->ent_tab[i]->size_bb_tab = n;
+            ssd->dht->ent_tab[i]->bb_tab = malloc(sizeof(struct bbox)*n);
+        }
+        //printf("%s(): ssd->total_num_bbox= %d ssd->dht->num_entries= %d"
+        //    " max_num_bbox_per_dht_entry= %d\n",
+        //    __func__, ssd->total_num_bbox, ssd->dht->num_entries, n);
+
+        // simple round-robing mapping of decomposed bbox to dht entries
+        i = 0;
+        while (! queue_is_empty(q)) {
+            bb = queue_dequeue(q);
+            j = i++ % ssd->dht->num_entries;
+            k = ssd->dht->ent_tab[j]->num_bbox++;
+            ssd->dht->ent_tab[j]->bb_tab[k] = *bb;
+            free(bb);  
+        }
+
+        /*
+        for (i = 0; i < ssd->dht->num_entries; i++) {
+            printf("dht entry %d size_bb_tab= %d num_bbox= %d\n", i,
+                ssd->dht->ent_tab[i]->size_bb_tab,
+                ssd->dht->ent_tab[i]->num_bbox);
+            for (j = 0; j < ssd->dht->ent_tab[i]->num_bbox; j++) {
+                bbox_print(&ssd->dht->ent_tab[i]->bb_tab[j]);
+            }        
+            printf("\n");
+        }
+        */
+
+        return ssd;
+ err_out:
+        uloga("'%s()': failed with %d\n", __func__, err);
+        return NULL;
+}
+
+void ssd_free_v2(struct sspace *ssd)
+{
+        dht_free_v2(ssd->dht);
+
+        //TODO: do I need a ls_free() routine ?
+        free(ssd->storage);
+        free(ssd);
+
+        sh_free();        
+}
+
+>>>>>>> 9da97de... merge main trunk revision r1556
 int ssd_hash_v2(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[])
 {
         int i, j, num_nodes;
@@ -831,7 +855,7 @@ int ssd_hash_v2(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_t
                 }
             }
         }
-
+        
         /* Cache the results for later use. */
         sh_add(bb, de_tab, num_nodes);
 
@@ -1138,6 +1162,45 @@ void ls_try_remove_free(struct ss_storage *ls, struct obj_data *od)
 }
 
 /*
+  Hash a bounding box 'bb' to the hash entries in dht; fill in the
+  entries in the de_tab and return the number of entries.
+*/
+int ssd_hash(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[])
+{
+        struct intv *i_tab;
+        int i, k, n, num_nodes;
+
+        num_nodes = sh_find(bb, de_tab);
+        if (num_nodes > 0)
+                /* This is great, I hit the cache. */
+                return num_nodes;
+
+        num_nodes = 0;
+
+        bbox_to_intv2(bb, ss->max_dim, ss->bpd, &i_tab, &n);
+
+        for (k = 0; k < ss->dht->num_entries; k++){
+                for (i = 0; i < n; i++) {
+                        if (dht_intersect(ss->dht->ent_tab[k], &i_tab[i])) {
+                                de_tab[num_nodes++] = ss->dht->ent_tab[k];
+                                break;
+                        }
+                }
+        }
+	
+        /* Cache the results for later use. */
+	sh_add(bb, de_tab, num_nodes);
+
+        free(i_tab);
+        return num_nodes;
+}
+
+static inline void ls_inc_num_objects(struct ss_storage *ls)
+{
+        ls->num_obj++;
+}
+
+/*
   Find  an object  in the  local storage  that has  the same  name and
   version with the object descriptor 'odsc'.
 */
@@ -1420,8 +1483,7 @@ int obj_desc_equals_no_owner(const struct obj_descriptor *odsc1,
 {
         /* Note: object distribution should not change with
            version. */
-        if (// odsc1->version == odsc2->version && 
-            strcmp(odsc1->name, odsc2->name) == 0 &&
+        if (strcmp(odsc1->name, odsc2->name) == 0 &&
             bbox_equals(&odsc1->bb, &odsc2->bb))
                 return 1;
         return 0;

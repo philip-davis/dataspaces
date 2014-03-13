@@ -178,8 +178,8 @@ int common_put(const char *var_name,
 		return dimes_put(var_name, ver, size, 
 			ndim, lb, ub, data);
 #else
-		uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
-		return -1;
+                uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
+                return -1;
 #endif
 	}
     return 0;
@@ -199,8 +199,8 @@ int common_get(const char *var_name,
 		return dimes_get(var_name, ver, size, 
 			ndim, lb, ub, data);
 #else
-		uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
-		return -1;
+                uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
+                return -1;
 #endif
 	}
     return 0;
@@ -301,7 +301,7 @@ void check_data(const char *var_name, double *buf, int num_elem, int rank, int t
                 "error elem cnt= %d, total elem= %d\n",
                         __func__, var_name, rank, ts, cnt, num_elem);
         }
-
+	
         return;
 }
 

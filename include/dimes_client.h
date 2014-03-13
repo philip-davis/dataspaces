@@ -104,11 +104,12 @@ struct dimes_client_option {
     int max_num_concurrent_rdma_read_op;
 };
 
+#define MAX_NUM_SSD 3
 struct dimes_client {
 	struct dcg_space *dcg;
-	struct sspace *default_ssd;
-    struct list_head sspace_list;
-    struct list_head gdim_list;
+	struct sspace *ssd; //only used for hashing
+    struct sspace *spaces[MAX_NUM_SSD];
+	struct bbox domain;
 	struct query_tran_d qt;
     struct list_head storage;
 };
