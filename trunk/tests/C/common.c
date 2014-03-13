@@ -96,15 +96,15 @@ int parse_args_dns_les(int argc, char **argv, int *npapp, int *npx, int *npy, in
 	return 0;
 }
 
-int parse_args(int argc, char **argv, enum transport_type *type, int *npapp, int *npx, int *npy, int *npz, uint64_t *spx, uint64_t *spy, uint64_t *spz, int *timestep, int *dims, size_t *elem_size, int *num_vars)
+int parse_args(int argc, char **argv, enum transport_type *type, int *npapp, int *npx, int *npy, int *npz, uint64_t *spx, uint64_t *spy, uint64_t *spz, int *timestep, int *appid, int *dims, size_t * elem_size, int *num_vars)
 {
-    if (argc < 10) {
+    if(argc < 12) {
         uloga("Wrong number of arguments!\n");
         return -1;
     }
 
     *type = USE_DSPACES;
-    if (0 == strcmp(argv[1], "DIMES")) {
+    if(0 == strcmp(argv[1], "DIMES")) {
         *type = USE_DIMES;
     }
     *npapp = atoi(argv[2]);
@@ -115,22 +115,19 @@ int parse_args(int argc, char **argv, enum transport_type *type, int *npapp, int
     *spy = atoll(argv[7]);
     *spz = atoll(argv[8]);
     *timestep = atoi(argv[9]);
+    *appid = atoi(argv[10]);
+    *dims = atoi(argv[11]);
 
-    if (argc >= 11) {
-        *dims = atoi(argv[10]);
-    } else *dims = 3;
+    if(argc >= 13) {
+        *elem_size = atoi(argv[12]);
+    } else
+        *elem_size = sizeof(double);
 
-    if (argc >= 12) {
-       *elem_size = atoi(argv[11]);
-    } else *elem_size = sizeof(double);
+    if(argc >= 14) {
+        *num_vars = atoi(argv[13]);
+    } else
+        *num_vars = 1;
 
-    if (argc >= 13) {
-        *num_vars = atoi(argv[12]);
-    } else *num_vars = 1;
-
-    //uloga("%s(): %d %d %d %d %d %d %d %d %d %d %u\n",
-    //    __func__, *type, *npapp, *npx, *npy, *npz, *spx, *spy, *spz,
-    //    *timestep, *dims, *elem_size);
     return 0;
 }
 
