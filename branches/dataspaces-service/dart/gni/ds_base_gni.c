@@ -1112,6 +1112,9 @@ void ds_free(struct dart_server *ds)//not done
 
 int ds_process(struct dart_server *ds)
 {
+    if (ds->f_reg) {
+        rpc_process_msg_resend(ds->rpc_s, ds->peer_tab, ds->num_sp);
+    }
 	return rpc_process_event(ds->rpc_s);
 }
 

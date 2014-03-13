@@ -10,11 +10,11 @@ cd $PBS_O_WORKDIR
 
 rm -f conf
 
-aprun -n 4 ./dataspaces_server -s  -c 48  &
+aprun -n 4 ./dataspaces_server -s 4 -c 48  &
 sleep 10
  
-aprun -n 16 ./test_writer DATASPACES 16 4 4 1 32 32 128 10 &
+aprun -n 16 ./test_writer DATASPACES 16 4 4 1 32 32 128 10 1 3 &
 
-aprun -n 32 ./test_reader DATASPACES 32 4 4 2 32 32 64 10 &
+aprun -n 32 ./test_reader DATASPACES 32 4 4 2 32 32 64 10 2 3 &
 
 wait

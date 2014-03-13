@@ -104,4 +104,5 @@ int dcg_code_send(const void *, /* int, int,*/ struct obj_data *);
 int dcg_collect_timing(double, double *);
 int dcg_get_num_space_srv(struct dcg_space *);
 
+void dcg_set_mpi_rank(int rank);
 #endif /* __DCG_SPACE_H_ */
