@@ -253,6 +253,7 @@ static int init_sspace(struct bbox *default_domain, struct ds_gspace *dsg_l)
  err_out:
     uloga("%s(): ERROR failed\n", __func__);
     return err;
+
 }
 
 static int free_sspace(struct ds_gspace *dsg_l)
@@ -319,13 +320,6 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
         uloga("%s(): ssd_init failed\n", __func__); 
         return dsg_l->ssd;
     }
-
-#ifdef DEBUG
-/*
-    uloga("%s(): add new shared space ndim= %d global dimension= %llu %llu %llu\n",
-        __func__, gdim.ndim, gdim.sizes.c[0], gdim.sizes.c[1], gdim.sizes.c[2]);
-*/
-#endif
 
     list_add(&ssd_entry->entry, &dsg_l->sspace_list);
     return ssd_entry->ssd;
@@ -1243,7 +1237,8 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
     struct obj_data *od = msg->private;
-    ls_add_obj(dsg->ls, od);
+    struct sspace* ssd = lookup_sspace(dsg, od->obj_desc.name, &od->gdim);
+    ssd_add_obj(ssd, od);
 
     free(msg);
 #ifdef DEBUG
@@ -1859,6 +1854,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
  }
 #endif
 
+        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name, &oh->gdim);
         // CRITICAL: use version here !!!
         from_obj = ls_find(dsg->ls, &oh->u.o.odsc);
         if (!from_obj) {

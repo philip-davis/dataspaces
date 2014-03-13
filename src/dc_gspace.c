@@ -1523,7 +1523,6 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
 #ifdef DS_HAVE_ACTIVESPACE
         rpc_add_service(ss_code_reply, dcgrpc_code_reply);
 #endif
-        /* Added for ccgrid demo. */
         rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);	
 	
         dcg_l->dc = dc_alloc(num_nodes, appid, dcg_l, comm);
@@ -2373,7 +2372,7 @@ int dcg_get_num_space_srv(struct dcg_space *dcg)
 	return dcg->ss_info.num_space_srv;
 }
 
-void dcg_set_mpi_rank_hint(int rank)
+void dcg_set_mpi_rank(int rank)
 {
     mpi_rank = rank;
     flag_set_mpi_rank = 1;

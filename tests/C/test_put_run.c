@@ -83,7 +83,6 @@ static void set_offset_nd(int rank, int dims)
 	}
 }
 
-
 static int generate_nd(double *mnd, unsigned int ts, int dims)
 {
     //double value = 1.0*(rank_) + 0.0001*ts;
@@ -159,7 +158,6 @@ static int couple_write_nd(unsigned int ts, int num_vars, enum transport_type ty
 
 	sleep(3);
 	common_unlock_on_write("mnd_lock", &gcomm_);
-	//common_unlock_on_write("mnd_lock", NULL);	//Test dspaces_barrier
 
 	tm_diff = tm_end-tm_st;
 	MPI_Reduce(&tm_diff, &tm_max, 1, MPI_DOUBLE, MPI_MAX, root, gcomm_);

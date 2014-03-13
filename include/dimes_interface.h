@@ -86,7 +86,6 @@ int dimes_put (const char *var_name,
         int ndim, uint64_t *lb, uint64_t *ub, 
         void *data); 
 
-
 /**
  * @brief Query the space to retrieve data specified by a geometric descriptor.
  *

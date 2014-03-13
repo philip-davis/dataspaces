@@ -115,7 +115,6 @@ struct dht_entry {
         int                     num_intv;
         struct intv             *i_tab;
 
-        // for v2 
         int num_bbox;
         int size_bb_tab;
         struct bbox             *bb_tab;
@@ -238,6 +237,13 @@ int ssd_copyv(struct obj_data *, struct obj_data *);
 int ssd_copy_list(struct obj_data *, struct list_head *);
 int ssd_filter(struct obj_data *, struct obj_descriptor *, double *);
 int ssd_hash(struct sspace *, const struct bbox *, struct dht_entry *[]);
+struct obj_data *ssd_lookup(struct sspace *, char *);
+void ssd_remove(struct sspace *, struct obj_data *);
+void ssd_try_remove_free(struct sspace *, struct obj_data *);
+
+struct sspace * ssd_alloc_v2(const struct bbox *, int, int);
+void ssd_free_v2(struct sspace *);
+int ssd_hash_v2(struct sspace *, const struct bbox *, struct dht_entry *[]);
 
 int dht_add_entry(struct dht_entry *, const struct obj_descriptor *);
 const struct obj_descriptor * dht_find_entry(struct dht_entry *, const struct obj_descriptor *);
