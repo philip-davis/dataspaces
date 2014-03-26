@@ -54,10 +54,10 @@ if HAVE_PAMI
 libdart_a_SOURCES = pami/dart_rpc_pami.c \
 					pami/ds_base_pami.c \
 					pami/dc_base_pami.c \
-				#	pami/dart_rdma_pami.c
+					pami/dart_rdma_pami.c
 noinst_HEADERS +=	pami/dart_rpc_pami.h \
 					pami/ds_base_pami.h \
 					pami/dc_base_pami.h \
-				#	pami/dart_rdma_pami.h
+					pami/dart_rdma_pami.h
 endif # HAVE_PAMI
 
