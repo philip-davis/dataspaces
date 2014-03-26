@@ -120,6 +120,24 @@ static int dart_rdma_process_ibv_cq(struct dart_rdma_tran *read_tran)
 	ERROR_TRACE();
 }
 
+static int dart_perform_local_copy(struct dart_rdma_tran *tran)
+{
+    struct dart_rdma_op *op, *t;
+    list_for_each_entry_safe(op, t, &tran->read_ops_list,
+                struct dart_rdma_op, entry) {
+        memcpy(tran->dst.base_addr + op->dst_offset,
+               tran->src.base_addr + op->src_offset,
+               op->bytes);
+        list_del(&op->entry);
+        free(op);
+    }
+
+#ifdef DEBUG
+    uloga("%s(): read tran %d complete.\n", __func__, tran->tran_id);
+#endif
+    return 0;
+}
+
 int dart_rdma_init(struct rpc_server *rpc_s)
 {
 	int err = -ENOMEM;
@@ -199,7 +217,8 @@ int dart_rdma_get_memregion_from_cmd(struct dart_rdma_mem_handle *mem_hndl, stru
 
 int dart_rdma_create_read_tran(struct node_id *remote_peer, struct dart_rdma_tran **pp)
 {
-	if(!remote_peer->rpc_conn.f_connected) {
+	if (!remote_peer->rpc_conn.f_connected &&
+        drh->rpc_s->ptlmap.id != remote_peer->ptlmap.id) {
 #ifdef DEBUG
 		uloga("%s(): #%d to connect peer #%d\n", __func__, drh->rpc_s->ptlmap.id, remote_peer->ptlmap.id);
 #endif
@@ -273,42 +292,23 @@ int dart_rdma_schedule_read(int tran_id, size_t src_offset, size_t dst_offset, s
 int dart_rdma_perform_reads(int tran_id)
 {
 	// Delayed reads in the check function.
+
+    if(!drh) {
+        uloga("%s(): dart rdma not init!\n", __func__);
+        return -1;
+    }
+
+    struct dart_rdma_tran *read_tran = dart_rdma_find_read_tran(tran_id, &drh->read_tran_list);
+    if(read_tran == NULL) {
+        uloga("%s(): read tran with id= %d not found!\n", __func__, tran_id);
+        return -1;
+    }
+
+    // if the data is on local process
+    if (drh->rpc_s->ptlmap.id == read_tran->remote_peer->ptlmap.id ) {
+        dart_perform_local_copy(read_tran);
+    }
 	return 0;
-
-/*
-	int err = -ENOMEM;
-	if (!drh) {
-		uloga("%s(): dart rdma not init!\n", __func__);
-		return -1;
-	}
-
-	struct dart_rdma_tran *read_tran =
-			dart_rdma_find_read_tran(tran_id, &drh->read_tran_list);
-	if (read_tran == NULL) {
-		uloga("%s(): read tran with id= %d not found!\n",
-				__func__, tran_id);
-		return -1;
-	}
-
-	int cnt = 0;
-	struct dart_rdma_op *read_op;
-	list_for_each_entry(read_op, &read_tran->read_ops_list,
-							struct dart_rdma_op, entry) {
-		err = dart_rdma_get(read_tran, read_op);
-		if (err < 0) {
-			goto err_out;
-		}
-		cnt++;
-	}
-
-#ifdef DEBUG
-	uloga("%s(): tran_id=%d num_read_ops=%d\n", __func__, tran_id, cnt);
-#endif
-
-	return 0;
-err_out:
-	ERROR_TRACE();
-*/
 }
 
 int dart_rdma_check_reads(int tran_id)
