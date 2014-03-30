@@ -57,7 +57,6 @@ static struct timer timer;
 static int sync_op_id;
 static int cq_id = -1;
 static enum storage_type st = column_major;
-// TODO: 'num_dims' is hardcoded to 2.
 static int num_dims = 2;
 #ifdef DS_HAVE_DIMES
 static struct dimes_client *dimes_c;
@@ -256,13 +255,7 @@ int common_dspaces_get(const char *var_name,
                     return -ENOMEM;
         }
 
-        // set global dimension
-        int i;
-        od->gdim.ndim = ndim;
-        memset(&od->gdim.sizes, 0, sizeof(struct coord));
-        for (i = 0; i < ndim; i++) {
-            od->gdim.sizes.c[i] = gdim[i];
-        }
+        set_global_dimension(&od->gdim, ndim, gdim);
 
         err = dcg_obj_get(od);
         obj_data_free(od);
@@ -294,7 +287,6 @@ int common_dspaces_put(const char *var_name,
 		}
         };
 
-        // TODO: why use 'num_dims'?
         memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*num_dims);
         memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*num_dims);
 
@@ -321,13 +313,7 @@ int common_dspaces_put(const char *var_name,
                 return -ENOMEM;
         }
 
-        // set global dimension
-        int i;
-        od->gdim.ndim = ndim;
-        memset(&od->gdim.sizes, 0, sizeof(struct coord));
-        for (i = 0; i < ndim; i++) {
-            od->gdim.sizes.c[i] = gdim[i];
-        }
+        set_global_dimension(&od->gdim, ndim, gdim);
 
         err = dcg_obj_put(od);
         if (err < 0) {
@@ -570,10 +556,11 @@ int common_dimes_get(const char *var_name,
         int ndim,
         uint64_t *lb, //int xl, int yl, int zl,
         uint64_t *ub, //int xu, int yu, int zu, 
+        uint64_t *gdim,
         void *data)
 {
     return dimes_client_get(var_name, ver, size,
-                ndim, lb, ub, data);
+                ndim, lb, ub, gdim, data);
 }
 
 int common_dimes_put(const char *var_name,
@@ -581,10 +568,11 @@ int common_dimes_put(const char *var_name,
         int ndim,
         uint64_t *lb, //int xl, int yl, int zl,
         uint64_t *ub, //int xu, int yu, int zu, 
+        uint64_t *gdim,
         void *data)
 {
     return dimes_client_put(var_name, ver, size,
-                ndim, lb, ub, data);
+                ndim, lb, ub, gdim, data);
 }
 
 int common_dimes_put_sync_all(void)

@@ -92,12 +92,14 @@ int common_dimes_get(const char *var_name,
         int ndim,
         uint64_t *lb, //int xl, int yl, int zl,
         uint64_t *ub, //int xu, int yu, int zu, 
+        uint64_t *gdim,
         void *data);
 int common_dimes_put(const char *var_name,
         unsigned int ver, int size,
         int ndim,
         uint64_t *lb, //int xl, int yl, int zl,
         uint64_t *ub, //int xu, int yu, int zu, 
+        uint64_t *gdim,
         void *data);
 int common_dimes_put_sync_all(void);
 int common_dimes_put_set_group(const char *group_name, int step);
