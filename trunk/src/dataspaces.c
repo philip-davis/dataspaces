@@ -254,6 +254,7 @@ int dimes_get (const char *var_name,
 {
     uint64_t lb[3] = {xl, yl, zl};
     uint64_t ub[3] = {xu, yu, zu};
+    uint64_t gdim[3] = {0, 0, 0};
 #if defined(TIMING_PERF) && defined(HAVE_UGNI)
     int nid, pmi_rank;
     rca_mesh_coord_t xyz;
@@ -262,7 +263,7 @@ int dimes_get (const char *var_name,
         __func__, pmi_rank, mpi_rank, nid, xyz.mesh_x, xyz.mesh_y, xyz.mesh_z,
         var_name, ver, size, xl, yl, zl, xu, yu, zu);
 #endif
-    return common_dimes_get(var_name, ver, size, 3, lb, ub, data);
+    return common_dimes_get(var_name, ver, size, 3, lb, ub, gdim, data);
 }
 
 int dimes_put (const char *var_name,
@@ -273,6 +274,7 @@ int dimes_put (const char *var_name,
 {
     uint64_t lb[3] = {xl, yl, zl};
     uint64_t ub[3] = {xu, yu, zu};
+    uint64_t gdim[3] = {0, 0, 0};
 #if defined(TIMING_PERF) && defined(HAVE_UGNI)
     int nid, pmi_rank;
     rca_mesh_coord_t xyz;
@@ -281,7 +283,43 @@ int dimes_put (const char *var_name,
         __func__, pmi_rank, mpi_rank, nid, xyz.mesh_x, xyz.mesh_y, xyz.mesh_z,
         var_name, ver, size, xl, yl, zl, xu, yu, zu);
 #endif
-    return common_dimes_put(var_name, ver, size, 3, lb, ub, data);
+    return common_dimes_put(var_name, ver, size, 3, lb, ub, gdim, data);
+}
+
+int dimes_get_with_gdim(const char *var_name,
+    unsigned int ver, int size,
+    int ndim, uint64_t *lb, uint64_t *ub, uint64_t *gdim,
+    void *data)
+{
+#if defined(TIMING_PERF) && defined(HAVE_UGNI)
+    int nid, pmi_rank;
+    rca_mesh_coord_t xyz;
+    get_topology_info(&pmi_rank, &nid, &xyz);
+    uloga("%s(): pmi_rank %d mpi_rank %d nid %d coord %u %u %u var %s ver %d elem_size %d lb= %llu %llu %llu ub= %llu %llu %llu gdim= %llu %llu %llu\n",
+        __func__, pmi_rank, mpi_rank, nid, xyz.mesh_x, xyz.mesh_y, xyz.mesh_z,
+        var_name, ver, size, lb[0], lb[1], lb[2], ub[0], ub[1], ub[2],
+        gdim[0], gdim[1], gdim[2]);
+#endif
+    return common_dimes_get(var_name, ver, size, ndim,
+        lb, ub, gdim, data);
+}
+
+int dimes_put_with_gdim(const char *var_name,
+    unsigned int ver, int size,
+    int ndim, uint64_t *lb, uint64_t *ub, uint64_t *gdim,
+    void *data)
+{
+#if defined(TIMING_PERF) && defined(HAVE_UGNI)
+    int nid, pmi_rank;
+    rca_mesh_coord_t xyz;
+    get_topology_info(&pmi_rank, &nid, &xyz);
+    uloga("%s(): pmi_rank %d mpi_rank %d nid %d coord %u %u %u var %s ver %d elem_size %d lb= %llu %llu %llu ub= %llu %llu %llu gdim= %llu %llu %llu\n",
+        __func__, pmi_rank, mpi_rank, nid, xyz.mesh_x, xyz.mesh_y, xyz.mesh_z,
+        var_name, ver, size, lb[0], lb[1], lb[2], ub[0], ub[1], ub[2],
+        gdim[0], gdim[1], gdim[2]);
+#endif
+    return common_dimes_put(var_name, ver, size, ndim,
+        lb, ub, gdim, data);
 }
 
 int dimes_put_set_group(const char *group_name, int step)

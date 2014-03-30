@@ -48,11 +48,10 @@ struct query_tran_d {
 	int                     num_ent;
 };
 
-#define MAX_NUM_SSD 3
 struct dimes_client {
 	struct dcg_space *dcg;
 	struct sspace *ssd; //only used for hashing
-    struct sspace *spaces[MAX_NUM_SSD];
+    struct list_head sspace_list;
 	struct bbox domain;
 	struct query_tran_d qt;
 	int    f_ss_info;
@@ -66,12 +65,14 @@ int dimes_client_get (const char *var_name,
         int ndim,
         uint64_t *lb, 
         uint64_t *ub,
+        uint64_t *gdim,
         void *data);
 int dimes_client_put (const char *var_name,
         unsigned int ver, int size,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
+        uint64_t *gdim,
         void *data);
 int dimes_client_put_sync_all(void);
 int dimes_client_put_set_group(const char *group_name, int step);
