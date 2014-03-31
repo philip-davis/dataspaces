@@ -235,19 +235,31 @@ struct sspace_conf {
     uint64_t dimx, dimy, dimz;
 };
 
-// TODO: it is all hard coded for now
-static int init_sspace(struct ds_gspace *dsg_l)
+static int init_sspace(struct bbox *default_domain, struct ds_gspace *dsg_l)
 {
+    int err = -ENOMEM;
+    dsg_l->ssd = ssd_alloc(default_domain, dsg_l->ds->num_sp, ds_conf.max_versions);
+    if (!dsg_l->ssd)
+        /* Yes, I don't free resources here, but we should
+           fail anyway. */
+        return err;
+
+    err = ssd_init(dsg_l->ssd, ds_get_rank(dsg_l->ds));
+    if (err < 0)
+        return err;
+
     INIT_LIST_HEAD(&dsg_l->sspace_list);
+    return 0;
 }
 
 static int free_sspace(struct ds_gspace *dsg_l)
 {
+    ssd_free(dsg_l->ssd);
     struct sspace_list_entry *ssd_entry, *temp;
     list_for_each_entry_safe(ssd_entry, temp, &dsg_l->sspace_list,
             struct sspace_list_entry, entry)
     {
-        ssd_free_v2(ssd_entry->ssd);
+        ssd_free(ssd_entry->ssd);
         list_del(&ssd_entry->entry);
         free(ssd_entry);
     }
@@ -280,17 +292,16 @@ static int global_dim_all_zero(const struct global_dimension* gdim)
 
 static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_name, const struct global_dimension* gd)
 {
-    double tm_st, tm_end;
-    //uloga("%s(): var %s global_dim= %llu %llu %llu\n",
-    //    __func__, var_name, gdim->sizes.c[0], gdim->sizes.c[1], gdim->sizes.c[2]);
-
-#ifdef DS_SSD_HASH_V2
     struct global_dimension gdim;
     memcpy(&gdim, gd, sizeof(struct global_dimension));
 
-    tm_st = timer_read(&timer);
-    // check if the variable is 'dpot', and modify the
-    // global dimension if so.
+    // Return the default shared space created based on
+    // global data domain specified in dataspaces.conf 
+    if (global_dim_all_zero(&gdim)) {
+        return dsg_l->ssd;
+    }
+
+    // TODO: hard coding for 'dpot' variable in EPSI application
     int pos;
     size_t len = strlen(var_name);
     if (len >= strlen("dpot")) {
@@ -300,11 +311,8 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
         }
     }
 
-    // check if the global dimension is 0
-    if (global_dim_all_zero(&gdim)) {
-        return dsg_l->ssd;
-    }    
-
+    // Otherwise, search for shared space based on the
+    // global data domain specified by application in put()/get().
     struct sspace_list_entry *ssd_entry = NULL;
     list_for_each_entry(ssd_entry, &dsg_l->sspace_list,
         struct sspace_list_entry, entry)
@@ -317,7 +325,7 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
             return ssd_entry->ssd;
     }
 
-    // add new shared space
+    // If not found, add new shared space
     int i, err;
     struct bbox domain;
     memset(&domain, 0, sizeof(struct bbox));
@@ -329,7 +337,7 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
 
     ssd_entry = malloc(sizeof(struct sspace_list_entry));
     memcpy(&ssd_entry->gdim, &gdim, sizeof(struct global_dimension));
-    ssd_entry->ssd = ssd_alloc_v2(&domain, dsg_l->ds->num_sp, ds_conf.max_versions);     
+    ssd_entry->ssd = ssd_alloc(&domain, dsg_l->ds->num_sp, ds_conf.max_versions);     
     if (!ssd_entry->ssd) {
         uloga("%s(): ssd_alloc failed\n", __func__);
         return dsg_l->ssd;
@@ -341,16 +349,11 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
         return dsg_l->ssd;
     }
 
-    tm_end = timer_read(&timer);
-    uloga("%s(): add new shared space ndim= %d global dimension= %llu %llu %llu time= %lf\n",
-        __func__, gdim.ndim, gdim.sizes.c[0], gdim.sizes.c[1], gdim.sizes.c[2],
-        tm_end-tm_st);
+    uloga("%s(): add new shared space ndim= %d global dimension= %llu %llu %llu\n",
+        __func__, gdim.ndim, gdim.sizes.c[0], gdim.sizes.c[1], gdim.sizes.c[2]);
 
     list_add(&ssd_entry->entry, &dsg_l->sspace_list);
     return ssd_entry->ssd;
-#else
-    return dsg_l->ssd;
-#endif
 }
 
 #ifdef DS_HAVE_ACTIVESPACE
@@ -1154,11 +1157,7 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 	int num_de, i, min_rank, err;
 
 	/* Compute object distribution to nodes in the space. */
-#ifdef DS_SSD_HASH_V2
-	num_de = ssd_hash_v2(ssd, &odsc->bb, dht_tab);
-#else
 	num_de = ssd_hash(ssd, &odsc->bb, dht_tab);
-#endif
 	if (num_de == 0) {
 		uloga("'%s()': this should not happen, num_de == 0 ?!\n",
 			__func__);
@@ -1431,11 +1430,7 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
 
         peer = ds_get_peer(dsg->ds, cmd->id);
 
-#ifdef DS_SSD_HASH_V2
-        peer_num = ssd_hash_v2(ssd, &oh->u.o.odsc.bb, de_tab);
-#else 
         peer_num = ssd_hash(ssd, &oh->u.o.odsc.bb, de_tab);
-#endif
         peer_id_tab = malloc(sizeof(int) * (peer_num+1));
         if (!peer_id_tab)
                 goto err_out;
@@ -2073,25 +2068,15 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
 
         tm_start = timer_read(&timer);
 
-#ifdef DS_SSD_HASH_V2
-        dsg_l->ssd = ssd_alloc_v2(&domain, num_sp, ds_conf.max_versions);
-        init_sspace(dsg_l);
-#else
-        dsg_l->ssd = ssd_alloc(&domain, num_sp, ds_conf.max_versions);
-#endif
-        if (!dsg_l->ssd)
-                /* Yes, I don't free resources here, but we should
-                   fail anyway. */
-                goto err_out;
-        tm_end = timer_read(&timer);
+        err = init_sspace(&domain, dsg_l);
+        if (err < 0) {
+            goto err_free;
+        }
 
+        tm_end = timer_read(&timer);
 #ifdef DEBUG
         printf("SRV %d %lf\n", DSG_ID, tm_end-tm_start);
 #endif
-
-        err = ssd_init(dsg_l->ssd, ds_get_rank(dsg_l->ds));
-        if (err < 0)
-                goto err_out;
 
         return dsg_l;
  err_free:
@@ -2131,12 +2116,7 @@ struct ss_storage *dsg_dht_get_storage(void)
 void dsg_free(struct ds_gspace *dsg)
 {
         ds_free(dsg->ds);
-#ifdef DS_SSD_HASH_V2
-        ssd_free_v2(dsg->ssd);
         free_sspace(dsg);
-#else
-        ssd_free(dsg->ssd);
-#endif
         free(dsg);
 }
 
