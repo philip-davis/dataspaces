@@ -187,6 +187,15 @@ int dimes_put_unset_group();
  */
 int dimes_put_sync_group(const char *group_name, int version);
 
+int dimes_put_with_gdim (const char *var_name,
+        unsigned int ver, int size,
+        int ndim, uint64_t *lb, uint64_t *ub, uint64_t *gdim,
+        void *data);
+int dimes_get_with_gdim (const char *var_name,
+        unsigned int ver, int size,
+        int ndim, uint64_t *lb, uint64_t *ub, uint64_t *gdim,
+        void *data);
+
 #ifdef __cplusplus
 }
 #endif

@@ -674,14 +674,7 @@ static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
         return err;
 }
 
-/*
-  Public API starts here.
-*/
-
-/*
-  Allocate the shared space structure.
-*/
-struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions)
+static struct sspace *ssd_alloc_v1(struct bbox *bb_domain, int num_nodes, int max_versions)
 {
         struct sspace *ssd;
         __u64 max_dim;
@@ -731,10 +724,8 @@ struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions
         return NULL;
 }
 
-void ssd_free(struct sspace *ssd)
+static void ssd_free_v1(struct sspace *ssd)
 {
-        //        int i;
-
         dht_free(ssd->dht);
 
         //TODO: do I need a ls_free() routine ?
@@ -742,6 +733,41 @@ void ssd_free(struct sspace *ssd)
         free(ssd);
 
         sh_free();
+}
+
+static int ssd_hash_v1(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[])
+{
+        struct intv *i_tab;
+        int i, k, n, num_nodes;
+
+        num_nodes = sh_find(bb, de_tab);
+        if (num_nodes > 0)
+                /* This is great, I hit the cache. */
+                return num_nodes;
+
+        num_nodes = 0;
+
+        // bbox_to_intv(bb, ss->max_dim, ss->bpd, &i_tab, &n);
+        bbox_to_intv2(bb, ss->max_dim, ss->bpd, &i_tab, &n);
+        //  printf("After bbox_to_intv2 num_intv = %d\n", n);
+        //  printf("ss->dht->num_entries = %d\n", ss->dht->num_entries);
+
+        for (k = 0; k < ss->dht->num_entries; k++){
+                for (i = 0; i < n; i++) {
+                        if (dht_intersect(ss->dht->ent_tab[k], &i_tab[i])) {
+                                de_tab[num_nodes++] = ss->dht->ent_tab[k];
+                                break;
+                        }
+                }
+        }
+
+        //  printf("num_nodes = %d\n", num_nodes);
+
+        /* Cache the results for later use. */
+        sh_add(bb, de_tab, num_nodes);
+
+        free(i_tab);
+        return num_nodes;
 }
 
 struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max_versions)
@@ -760,11 +786,11 @@ struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max
 
         // decompose the global bbox       
         int num_divide_iteration = compute_bits_v2(next_pow_2_v2(num_nodes));
-        struct bbox *bb, *b1, *b2;        
+        struct bbox *bb, *b1, *b2;
         struct queue q1, q2;
         queue_init(&q1);
         queue_init(&q2);
-    
+
         //printf("%s(): num_nodes= %d num_divide_iteration= %d\n", __func__,
         //    num_nodes, num_divide_iteration);
 
@@ -782,14 +808,13 @@ struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max
             } else {
                 printf("%s(): error, both q1 and q2 is (non)empty.\n", __func__);
             }
-
             while (!queue_is_empty(src_q)) {
                 uint64_t max_dim_size;
                 struct bbox b_tab[2];
 
                 bb = queue_dequeue(src_q);
                 get_bbox_max_dim_size(bb, &max_dim_size, &dim);
-                bbox_divide_in2_ondim(bb, b_tab, dim);                    
+                bbox_divide_in2_ondim(bb, b_tab, dim);
                 free(bb); bb = NULL;
                 b1 = malloc(sizeof(struct bbox));
                 b2 = malloc(sizeof(struct bbox));
@@ -824,7 +849,7 @@ struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max
             free(ssd->storage);
             free(ssd);
             goto err_out;
-        } 
+        }
         for (i = 0; i < num_nodes; i++) {
             ssd->dht->ent_tab[i]->rank = i;
         }
@@ -845,7 +870,7 @@ struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max
             j = i++ % ssd->dht->num_entries;
             k = ssd->dht->ent_tab[j]->num_bbox++;
             ssd->dht->ent_tab[j]->bb_tab[k] = *bb;
-            free(bb);  
+            free(bb);
         }
 
         /*
@@ -874,7 +899,7 @@ void ssd_free_v2(struct sspace *ssd)
         free(ssd->storage);
         free(ssd);
 
-        sh_free();        
+        sh_free();
 }
 
 int ssd_hash_v2(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[])
@@ -898,13 +923,56 @@ int ssd_hash_v2(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_t
                 }
             }
         }
- 
+
         /* Cache the results for later use. */
         sh_add(bb, de_tab, num_nodes);
 
         return num_nodes;
 }
 
+/*
+  Public API starts here.
+*/
+
+/*
+ ssd hashing function v1: uses Hilbert SFC to linearize the global data domain
+    and bounding box passed by put()/get().
+ ssd hashing function v2: NOT use Hilbert SFC for linearization.
+*/
+
+/*
+  Allocate the shared space structure.
+*/
+struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions)
+{
+#ifdef DS_SSD_HASH_V2
+    return ssd_alloc_v2(bb_domain, num_nodes, max_versions);
+#else
+    return ssd_alloc_v1(bb_domain, num_nodes, max_versions);
+#endif
+}
+
+void ssd_free(struct sspace *ssd)
+{
+#ifdef DS_SSD_HASH_V2
+    return ssd_free_v2(ssd);
+#else
+    return ssd_free_v1(ssd);
+#endif
+}
+
+/*
+  Hash a bounding box 'bb' to the hash entries in dht; fill in the
+  entries in the de_tab and return the number of entries.
+*/
+int ssd_hash(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[])
+{
+#ifdef DS_SSD_HASH_V2
+    return ssd_hash_v2(ss, bb, de_tab);
+#else
+    return ssd_hash_v1(ss, bb, de_tab);
+#endif
+}
 
 /*
   Initialize the dht structure.
@@ -1109,60 +1177,6 @@ void ssd_try_remove_free(struct sspace *ss, struct obj_data *od)
                 }
                 obj_data_free(od);
         }
-}
-
-/*
-  Hash a bounding box 'bb' to the hash entries in dht; fill in the
-  entries in the de_tab and return the number of entries.
-*/
-int ssd_hash(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[])
-{
-        struct intv *i_tab;
-        int i, k, n, num_nodes;
-
-        num_nodes = sh_find(bb, de_tab);
-        if (num_nodes > 0)
-                /* This is great, I hit the cache. */
-                return num_nodes;
-
-        num_nodes = 0;
-
-        // bbox_to_intv(bb, ss->max_dim, ss->bpd, &i_tab, &n);
-        bbox_to_intv2(bb, ss->max_dim, ss->bpd, &i_tab, &n);
-//	printf("After bbox_to_intv2 num_intv = %d\n", n);
-//	printf("ss->dht->num_entries = %d\n", ss->dht->num_entries);
-
-        for (k = 0; k < ss->dht->num_entries; k++){
-                for (i = 0; i < n; i++) {
-                        if (dht_intersect(ss->dht->ent_tab[k], &i_tab[i])) {
-                                de_tab[num_nodes++] = ss->dht->ent_tab[k];
-                                break;
-                        }
-                }
-        }
-	
-//	printf("num_nodes = %d\n", num_nodes);
-
-        /* Cache the results for later use. */
-	sh_add(bb, de_tab, num_nodes);
-
-        /*
-        for (i = 0, k = 0; i < n && k < NUM_NODES;) {
-
-                if (node_intersect(&node_tab[k], &i_tab[i])) {
-                        n_tab[num_nodes++] = &node_tab[k];
-                        k++;
-                }
-                // else if (node_tab[k].i_tab[node_tab[k].num_itv-1].ub < i_tab[i].lb)
-                else if (node_tab[k].i_virt.ub < i_tab[i].lb || 
-                         node_tab[k].i_virt.lb > i_tab[i].ub)
-                        k++;
-                else
-                        i++;
-        }
-        */
-        free(i_tab);
-        return num_nodes;
 }
 
 static inline void ls_inc_num_objects(struct ss_storage *ls)
@@ -1527,6 +1541,17 @@ int obj_desc_by_name_intersect(const struct obj_descriptor *odsc1,
             bbox_does_intersect(&odsc1->bb, &odsc2->bb))
                 return 1;
         return 0;
+}
+
+void set_global_dimension(struct global_dimension *l, int ndim,
+                        const uint64_t *gdim)
+{
+    int i;
+    l->ndim = ndim;
+    memset(&l->sizes, 0, sizeof(struct coord));
+    for (i = 0; i < ndim; i++) {
+        l->sizes.c[i] = gdim[i];
+    } 
 }
 
 /*
