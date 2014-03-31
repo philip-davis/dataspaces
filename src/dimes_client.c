@@ -1648,7 +1648,8 @@ static int dimes_put_sync_with_timeout(float timeout_sec, struct dimes_storage_g
 		list_for_each_entry_safe(p, t, &group->mem_obj_list,
 					 struct dimes_memory_obj, entry) {
 			// TODO: fix this part
-#ifdef HAVE_DCMF
+//#ifdef HAVE_DCMF
+#if defined (HAVE_PAMI) || defined (HAVE_DCMF)
 			err = rpc_process_event(RPC_S);
 #else
 			err = rpc_process_event_with_timeout(RPC_S, 1);

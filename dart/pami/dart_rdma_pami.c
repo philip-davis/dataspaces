@@ -82,11 +82,11 @@ static int dart_rdma_get(struct dart_rdma_tran *read_tran,
         dart_rdma_send_hint.use_rdma = PAMI_HINT_ENABLE;
 
 	pami_rget_simple_t parameters;
-	parameters.rma.dest		= read_tran->remote_peer->ptlmap.rank_dcmf;
+	parameters.rma.dest		= read_tran->remote_peer->ptlmap.rank_pami;
 	parameters.rma.hints		= dart_rdma_send_hint;
 	parameters.rma.bytes		= read_op->bytes;
 	parameters.rma.cookie		= (void*)read_op;
-	parameters.rma.done_fn		= rdma_cb_get_completion;
+	parameters.rma.done_fn		= dart_rdma_cb_get_completion;
 	parameters.rdma.local.mr	= &read_tran->dst.memregion;
 	parameters.rdma.local.offset	= read_op->dst_offset;
 	parameters.rdma.remote.mr	= &read_tran->src.memregion;
@@ -95,12 +95,10 @@ static int dart_rdma_get(struct dart_rdma_tran *read_tran,
 	pami_result_t ret = PAMI_Rget(drh->rpc_s->contexts[0], &parameters);
 	if(ret != PAMI_SUCCESS){
 		uloga("%s(): PAMI_Rget failed with %d\n", __func__, ret);
-		goto err_out_free;
+		goto err_out;
 	}
 	
 	return 0;
-err_out_free:
-	free(request);
 err_out:
 	ERROR_TRACE();
 }
