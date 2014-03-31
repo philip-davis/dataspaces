@@ -43,7 +43,6 @@
 #include "dimes_data.h"
 
 static struct dimes_client *dimes_c = NULL;
-//static enum storage_type st = row_major;
 static enum storage_type st = column_major;
 static int num_dims = 2;
 #ifdef TIMING_PERF
@@ -56,92 +55,117 @@ struct sspace_conf {
     uint64_t dimx, dimy, dimz;
 };
 
-// TODO: it is all hard coded for now
-static int init_sspace_dimes(struct dimes_client *d, int num_sp, int max_versions)
+static int init_sspace_dimes(struct dimes_client *d)
 {
-    struct sspace_conf confs[MAX_NUM_SSD];
-    int i, err;
-
-    confs[0].ndims = 2;
-    confs[0].dimx = 11750400;
-    confs[0].dimy = 1;
-    confs[0].dimz = 1;
-
-    confs[1].ndims = 2;
-    confs[1].dimx = 9;
-    confs[1].dimy = 11750400;
-    confs[1].dimz = 1;
-
-    confs[2].ndims = 2;
-    confs[2].dimx = 64;
-    confs[2].dimy = 1;
-    confs[2].dimz = 1;
-
-    for (i = 0; i < MAX_NUM_SSD; i++) {
-        struct bbox domain;
-        memset(&domain, 0, sizeof(struct bbox));
-        domain.num_dims = confs[i].ndims;
-        domain.lb.c[0] = 0;
-        domain.lb.c[1] = 0;
-        domain.lb.c[2] = 0;
-        domain.ub.c[0] = confs[i].dimx - 1; 
-        domain.ub.c[1] = confs[i].dimy - 1; 
-        domain.ub.c[2] = confs[i].dimz - 1; 
-
-        d->spaces[i] = ssd_alloc_v2(&domain, num_sp, max_versions);
-
-        if (!d->spaces[i]) {
-            uloga("%s(): ssd_alloc failed with i= %d\n", __func__, i);
-        }
+    int max_versions = 1;
+    d->ssd = ssd_alloc(&d->domain, d->dcg->ss_info.num_space_srv, max_versions);
+    if (!d->ssd) {
+        uloga("%s(): ssd_alloc failed!\n",__func__);
+        return -1;
     }
 
+    INIT_LIST_HEAD(&d->sspace_list);
     return 0;
 }
 
 static int free_sspace_dimes(struct dimes_client *d)
 {
-    int i;
-    for (i = 0; i < MAX_NUM_SSD; i++) {
-        ssd_free_v2(d->spaces[i]);
+    ssd_free(d->ssd);
+    struct sspace_list_entry *ssd_entry, *temp;
+    list_for_each_entry_safe(ssd_entry, temp, &d->sspace_list,
+            struct sspace_list_entry, entry)
+    {
+        ssd_free(ssd_entry->ssd);
+        list_del(&ssd_entry->entry);
+        free(ssd_entry);
     }
 
     return 0;
 }
 
-static struct sspace* lookup_sspace_dimes(struct dimes_client *d, const char* var_name)
+static int global_dim_equal(const struct global_dimension* gdim1,
+    const struct global_dimension* gdim2)
 {
-#ifdef DS_SSD_HASH_V2
-    char *var1 = "igid";
-    char *var2 = "iphase";
-    char *var3 = "dpot";
+    int i;
+    for (i = 0; i < gdim1->ndim; i++) {
+        if (gdim1->sizes.c[i] != gdim2->sizes.c[i])
+            return 0;
+    }
 
+    return 1;
+}
+
+static int global_dim_all_zero(const struct global_dimension* gdim)
+{
+    int i;
+    for (i = 0; i < gdim->ndim; i++) {
+        if (gdim->sizes.c[i] != 0)
+            return 0;
+    }
+
+    return 1;
+}
+
+static struct sspace* lookup_sspace_dimes(struct dimes_client *d, const char* var_name,
+    const struct global_dimension* gd)
+{
+    struct global_dimension gdim;
+    memcpy(&gdim, gd, sizeof(struct global_dimension));
+
+    // Return the default shared space created based on
+    // global data domain specified in dataspaces.conf 
+    if (global_dim_all_zero(&gdim)) {
+        return d->ssd;
+    }
+
+    // TODO: hard coding for 'dpot' variable in EPSI application
     int pos;
     size_t len = strlen(var_name);
-    if (len >= strlen(var1)) {
-        pos = len - strlen(var1);  
-        if (0 == strcmp(var_name+pos, var1)) {
-            return d->spaces[0];
-        }
-    }
-    
-    if (len >= strlen(var2)) {
-        pos = len - strlen(var2);  
-        if (0 == strcmp(var_name+pos, var2)) {
-            return d->spaces[1];
+    if (len >= strlen("dpot")) {
+        pos = len - strlen("dpot");
+        if (0 == strcmp(var_name+pos, "dpot")) {
+            gdim.sizes.c[1] = 1;
         }
     }
 
-    if (len >= strlen(var3)) {
-        pos = len - strlen(var3);  
-        if (0 == strcmp(var_name+pos, var3)) {
-            return d->spaces[2];
-        }
+    // Otherwise, search for shared space based on the
+    // global data domain specified by application in put()/get().
+    struct sspace_list_entry *ssd_entry = NULL;
+    list_for_each_entry(ssd_entry, &d->sspace_list,
+        struct sspace_list_entry, entry)
+    {
+        // compare global dimension
+        if (gdim.ndim != ssd_entry->gdim.ndim)
+            continue;
+
+        if (global_dim_equal(&gdim, &ssd_entry->gdim))
+            return ssd_entry->ssd;
     }
 
-    return d->ssd; // returns default sspace
-#else
-    return d->ssd;
-#endif
+    // If not found, add new shared space
+    int i, err;
+    struct bbox domain;
+    memset(&domain, 0, sizeof(struct bbox));
+    domain.num_dims = gdim.ndim;
+    for (i = 0; i < gdim.ndim; i++) {
+        domain.lb.c[i] = 0;
+        domain.ub.c[i] = gdim.sizes.c[i] - 1;
+    }
+
+    ssd_entry = malloc(sizeof(struct sspace_list_entry));
+    memcpy(&ssd_entry->gdim, &gdim, sizeof(struct global_dimension));
+    int max_versions = 1;
+    ssd_entry->ssd = ssd_alloc(&domain, d->dcg->ss_info.num_space_srv, max_versions);
+    if (!ssd_entry->ssd) {
+        uloga("%s(): ssd_alloc failed\n", __func__);
+        return d->ssd;
+    }
+
+    uloga("%s(): add new shared space ndim= %d global dimension= %llu %llu %llu\n",
+        __func__, gdim.ndim, gdim.sizes.c[0], gdim.sizes.c[1], gdim.sizes.c[2]);
+
+    list_add(&ssd_entry->entry, &d->sspace_list);
+    return ssd_entry->ssd;
 }
 
 
@@ -305,17 +329,24 @@ static size_t get_available_rdma_buffer_size()
     else return options.rdma_buffer_size-options.rdma_buffer_usage;
 }
 
-static void print_rdma_buffer_usage()
-{
-#ifdef DEBUG_DIMES_BUFFER_USAGE
-    uloga("DIMES rdma buffer usage: peer #%d "
-          "rdma_buffer_size= %u bytes "
-          "rdma_buffer_usage= %u bytes "
-          "rdma_buffer_avail_size= %u bytes\n", DIMES_CID,
-        options.rdma_buffer_size, options.rdma_buffer_usage,
-        get_available_rdma_buffer_size());
-#endif
-}
+enum dimes_put_status {
+	DIMES_PUT_OK = 0,
+	DIMES_PUT_PENDING = 1,
+};
+
+enum dimes_ack_type {
+    dimes_ack_type_msg = 0,
+    dimes_ack_type_rdma,
+};
+
+struct dimes_memory_obj {
+	struct list_head entry;
+	int sync_id;
+    enum dimes_ack_type ack_type;
+    struct obj_descriptor obj_desc;
+    struct global_dimension gdim;
+    struct dart_rdma_mem_handle rdma_handle;
+};
 
 static uint32_t local_obj_index_seed = 0;
 static uint32_t next_local_obj_index()
@@ -994,14 +1025,14 @@ static int dcgrpc_dimes_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	return 0;
 }
 
-static int dimes_ss_info(int *num_dims)
+static int dimes_ss_info(int *ndim)
 {
 	struct msg_buf *msg;
 	struct node_id *peer;
 	int err = -ENOMEM;
 
 	if (dimes_c->f_ss_info) {
-		*num_dims = dimes_c->domain.num_dims;
+		*ndim = dimes_c->domain.num_dims;
 		return 0;
 	}
 
@@ -1029,20 +1060,11 @@ static int dimes_ss_info(int *num_dims)
         DIMES_WAIT_COMPLETION(dimes_c->f_ss_info == 1);
     }
 	
-	*num_dims = dimes_c->dcg->ss_info.num_dims;
-#ifdef DS_SSD_HASH_V2
-	dimes_c->ssd = ssd_alloc_v2(&dimes_c->domain,
-                             dimes_c->dcg->ss_info.num_space_srv, 1);
-    init_sspace_dimes(dimes_c, dimes_c->dcg->ss_info.num_space_srv, 1);
-#else
-	dimes_c->ssd = ssd_alloc(&dimes_c->domain,
-                             dimes_c->dcg->ss_info.num_space_srv, 1);
-#endif
-	if (!dimes_c->ssd) {
-		uloga("%s(): ssd_alloc failed!\n",__func__);
-		err = -1;
-		goto err_out;
-	}
+	*ndim = dimes_c->dcg->ss_info.num_dims;
+    err = init_sspace_dimes(dimes_c);
+    if (err < 0) {
+        goto err_out;
+    }
 
 	return 0;
 err_out:
@@ -1072,12 +1094,9 @@ static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
 	int err = -ENOMEM;
 
 	// Update the DHT nodes
-#ifdef DS_SSD_HASH_V2
-    struct sspace *ssd = lookup_sspace_dimes(dimes_c, mem_obj->obj_desc.name);
-	num_dht_nodes = ssd_hash_v2(ssd, &mem_obj->obj_desc.bb, dht_nodes);
-#else
-	num_dht_nodes = ssd_hash(dimes_c->ssd, &mem_obj->obj_desc.bb, dht_nodes);
-#endif
+    struct sspace *ssd = lookup_sspace_dimes(dimes_c, mem_obj->obj_desc.name,
+                                &mem_obj->gdim);
+	num_dht_nodes = ssd_hash(ssd, &mem_obj->obj_desc.bb, dht_nodes);
 	if (num_dht_nodes <= 0) {
 		uloga("%s(): ERROR: ssd_hash() return %d but the value should be > 0\n",
 				__func__, num_dht_nodes);
@@ -1601,12 +1620,9 @@ static int dimes_obj_get(struct obj_data *od)
 	qt_add_d(&dimes_c->qt, qte);
 
 	/* get dht nodes */
-#ifdef DS_SSD_HASH_V2
-    struct sspace *ssd = lookup_sspace_dimes(dimes_c, od->obj_desc.name);
-	num_dht_nodes = ssd_hash_v2(ssd, &od->obj_desc.bb, dht_nodes);
-#else
-	num_dht_nodes = ssd_hash(dimes_c->ssd, &od->obj_desc.bb, dht_nodes);
-#endif
+    struct sspace *ssd = lookup_sspace_dimes(dimes_c, od->obj_desc.name,
+                                &od->gdim);
+	num_dht_nodes = ssd_hash(ssd, &od->obj_desc.bb, dht_nodes);
 	if (num_dht_nodes <= 0) {
 		uloga("%s(): ERROR ssd_hash() return %d but value should be > 0\n",
             __func__, num_dht_nodes);
@@ -1752,14 +1768,7 @@ void dimes_client_free(void) {
 		return;
 	}
 
-    if (dimes_c->ssd) {
-#ifdef DS_SSD_HASH_V2
-        ssd_free_v2(dimes_c->ssd);
-        free_sspace_dimes(dimes_c);
-#else
-        ssd_free(dimes_c->ssd);
-#endif
-    }
+    free_sspace_dimes(dimes_c);
 	free(dimes_c);
 	dimes_c = NULL;
 
@@ -1776,6 +1785,7 @@ int dimes_client_get(const char *var_name,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
+        uint64_t *gdim,
         void *data)
 {
 	struct obj_descriptor odsc = {
@@ -1803,8 +1813,8 @@ int dimes_client_get(const char *var_name,
 		goto err_out;
 	}
 
-    set_global_dimension(&dimes_c->gdim_list, var_name,
             &dimes_c->dcg->default_gdim, &od->gdim);
+    set_global_dimension(&od->gdim, ndim, gdim);
 	err = dimes_obj_get(od);
 	obj_data_free(od);
 	if (err < 0 && err != -EAGAIN) {
@@ -1821,6 +1831,7 @@ int dimes_client_put(const char *var_name,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
+        uint64_t *gdim,
         void *data)
 {
 	struct obj_descriptor odsc = {
@@ -1859,8 +1870,7 @@ int dimes_client_put(const char *var_name,
     // Copy user data
     memcpy((void*)mem_obj->rdma_handle.base_addr, data, data_size);
 
-    set_global_dimension(&dimes_c->gdim_list, var_name,
-            &dimes_c->dcg->default_gdim, &mem_obj->gdim);
+    set_global_dimension(&mem_obj->gdim, ndim, gdim);
 	err = dimes_obj_put(mem_obj);
 	if (err < 0) {
         dimes_memory_free(&mem_obj->rdma_handle);

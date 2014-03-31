@@ -241,10 +241,6 @@ struct obj_data *ssd_lookup(struct sspace *, char *);
 void ssd_remove(struct sspace *, struct obj_data *);
 void ssd_try_remove_free(struct sspace *, struct obj_data *);
 
-struct sspace * ssd_alloc_v2(const struct bbox *, int, int);
-void ssd_free_v2(struct sspace *);
-int ssd_hash_v2(struct sspace *, const struct bbox *, struct dht_entry *[]);
-
 int dht_add_entry(struct dht_entry *, const struct obj_descriptor *);
 const struct obj_descriptor * dht_find_entry(struct dht_entry *, const struct obj_descriptor *);
 int dht_find_entry_all(struct dht_entry *, struct obj_descriptor *, 
@@ -279,14 +275,5 @@ int obj_desc_equals_intersect(const struct obj_descriptor *odsc1,
 int obj_desc_by_name_intersect(const struct obj_descriptor *odsc1,
                 const struct obj_descriptor *odsc2);
 
-void copy_global_dimension(struct global_dimension *l, int ndim, const uint64_t *gdim);
-int global_dimension_equal(const struct global_dimension* gdim1,
-                const struct global_dimension* gdim2);
-void init_gdim_list(struct list_head *gdim_list);
-void update_gdim_list(struct list_head *gdim_list,
-                const char *var_name, int ndim, uint64_t *gdim);
-struct gdim_list_entry* lookup_gdim_list(struct list_head *gdim_list, const char *var_name);
-void free_gdim_list(struct list_head *gdim_list);
-void set_global_dimension(struct list_head *gdim_list, const char *var_name,
-            const struct global_dimension *default_gdim, struct global_dimension *gdim);
+void set_global_dimension(struct global_dimension *l, int ndim, const uint64_t *gdim);
 #endif /* __SS_DATA_H_ */

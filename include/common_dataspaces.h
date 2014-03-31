@@ -65,22 +65,22 @@ int common_dspaces_put (const char *var_name,
         unsigned int ver, int size,
         int ndim,
         uint64_t *lb,
-        uint64_t *ub,
-        const void *data);
+uint64_t *ub,
+const void *data);
 
 int common_dspaces_remove (const char *var_name, unsigned int ver);
 
 int common_dspaces_select(char *var_name, unsigned int ver,
-        int ndim,
-        uint64_t *lb, //int xl, int yl, int zl,
-        uint64_t *ub, //int xu, int yu, int zu, 
-        uint64_t *gdim,
-        void *data);
+int ndim,
+uint64_t *lb, //int xl, int yl, int zl,
+uint64_t *ub, //int xu, int yu, int zu, 
+uint64_t *gdim,
+void *data);
 int common_dspaces_cq_register(char *var_name,
-        int ndim,
-        uint64_t *lb, //int xl, int yl, int zl,
-        uint64_t *ub, //int xu, int yu, int zu, 
-        void *data);
+int ndim,
+uint64_t *lb, //int xl, int yl, int zl,
+uint64_t *ub, //int xu, int yu, int zu, 
+void *data);
 int common_dspaces_cq_update (void);
 int common_dspaces_put_sync(void);
 void common_dspaces_finalize (void);
@@ -89,16 +89,18 @@ int common_dspaces_get_num_space_server(void);
 #ifdef DS_HAVE_DIMES
 void common_dimes_define_gdim(const char *var_name, int ndim, uint64_t *gdim);
 int common_dimes_get(const char *var_name,
-        unsigned int ver, int size,
-        int ndim,
-        uint64_t *lb,
-        uint64_t *ub,
-        void *data);
+unsigned int ver, int size,
+int ndim,
+uint64_t *lb,
+uint64_t *ub,
+uint64_t *gdim,
+void *data);
 int common_dimes_put(const char *var_name,
         unsigned int ver, int size,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
+        uint64_t *gdim,
         void *data);
 int common_dimes_put_sync_all(void);
 int common_dimes_put_set_group(const char *group_name, int step);

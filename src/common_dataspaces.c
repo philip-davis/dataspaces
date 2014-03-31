@@ -57,9 +57,9 @@
 static struct dcg_space *dcg = NULL;
 static struct timer timer;
 static int sync_op_id;
-static int cq_id = -1; // TODO: still support it?
-static enum storage_type st = column_major; // TODO: still need this?
-static int num_dims = 2; // TODO: remove it 
+static int cq_id = -1;
+static enum storage_type st = column_major;
+static int num_dims = 2;
 #ifdef DS_HAVE_DIMES
 static struct dimes_client *dimes_c = NULL;
 #endif
@@ -276,8 +276,13 @@ int common_dspaces_put(const char *var_name,
                 .bb = {.num_dims = ndim,}
         };
 
+<<<<<<< HEAD
         memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
         memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+=======
+        memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*num_dims);
+        memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*num_dims);
+>>>>>>> 4252154... merge from trunk r1570
 
         memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
         memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
@@ -295,9 +300,14 @@ int common_dspaces_put(const char *var_name,
                 return -ENOMEM;
         }
 
+<<<<<<< HEAD
         // set global dimension
         set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
                              &od->gdim); 
+=======
+        set_global_dimension(&od->gdim, ndim, gdim);
+
+>>>>>>> 4252154... merge from trunk r1570
         err = dcg_obj_put(od);
         if (err < 0) {
             obj_data_free(od);
@@ -422,8 +432,14 @@ void common_dimes_define_gdim(const char *var_name, int ndim, uint64_t *gdim)
 int common_dimes_get(const char *var_name,
         unsigned int ver, int size,
         int ndim,
+<<<<<<< HEAD
         uint64_t *lb,
         uint64_t *ub,
+=======
+        uint64_t *lb, //int xl, int yl, int zl,
+        uint64_t *ub, //int xu, int yu, int zu, 
+        uint64_t *gdim,
+>>>>>>> 4252154... merge from trunk r1570
         void *data)
 {
     if (!is_dimes_lib_init() || !is_ndim_within_bound(ndim)) {
@@ -431,14 +447,20 @@ int common_dimes_get(const char *var_name,
     }
 
     return dimes_client_get(var_name, ver, size,
-                ndim, lb, ub, data);
+                ndim, lb, ub, gdim, data);
 }
 
 int common_dimes_put(const char *var_name,
         unsigned int ver, int size,
         int ndim,
+<<<<<<< HEAD
         uint64_t *lb,
         uint64_t *ub,
+=======
+        uint64_t *lb, //int xl, int yl, int zl,
+        uint64_t *ub, //int xu, int yu, int zu, 
+        uint64_t *gdim,
+>>>>>>> 4252154... merge from trunk r1570
         void *data)
 {
     if (!is_dimes_lib_init() || !is_ndim_within_bound(ndim)) {
@@ -446,7 +468,7 @@ int common_dimes_put(const char *var_name,
     }
 
     return dimes_client_put(var_name, ver, size,
-                ndim, lb, ub, data);
+                ndim, lb, ub, gdim, data);
 }
 
 int common_dimes_put_sync_all(void)
