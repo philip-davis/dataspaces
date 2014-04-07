@@ -96,6 +96,15 @@ int dspaces_rank(void);
 int dspaces_peers(void);
 
 /**
+ *  * @brief Return the number of dataspaces servers.
+ *   *      
+ *    * @return      Number of dataspaces servers.
+ *     */
+int dspaces_servers(void);
+
+
+
+/**
  * @brief Blocks until all processes in the client application have reached
  *    this routine.
  *
@@ -280,6 +289,9 @@ int dspaces_get_with_gdim (const char *var_name,
         void *data);
 
 void dspaces_set_mpi_rank(int rank);
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 
