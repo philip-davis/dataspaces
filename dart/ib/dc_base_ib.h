@@ -22,6 +22,9 @@ struct dart_client {
 
 	int connected;
 	/* Number of compute peers in the app job. */
+
+	int s_connected;
+
 	int cp_in_job;
 	/* Rank of the master peer in the app job. */
 	int cp_min_rank;

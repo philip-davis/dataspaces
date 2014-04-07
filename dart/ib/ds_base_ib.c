@@ -226,6 +226,15 @@ static int dsrpc_cn_unregister_app(struct rpc_server *rpc_s, struct rpc_cmd *cmd
 	struct node_id *temp_peer, *t;
 	list_for_each_entry_safe(temp_peer, t, &ds->rpc_s->peer_list, struct node_id, peer_entry) {
 		if(temp_peer->ptlmap.appid == appid) {
+
+			if(temp_peer->rpc_conn.f_connected){
+                        	rdma_destroy_qp(temp_peer->rpc_conn.id);
+	                        ibv_destroy_cq(temp_peer->rpc_conn.cq);
+        	                rdma_destroy_id(temp_peer->rpc_conn.id);
+                                ibv_destroy_comp_channel(temp_peer->rpc_conn.comp_channel);
+
+			}
+
 			list_del(&temp_peer->peer_entry);
 			ds->peer_size--;
 			ds->num_cp--;
@@ -240,11 +249,6 @@ static int dsrpc_cn_unregister_app(struct rpc_server *rpc_s, struct rpc_cmd *cmd
         if(app){
                 list_del(&app->app_entry);
 	}
-
-
-//	if(ds->num_cp == 0)
-//		ds->f_stop = 1;
-//        printf("I am peer %d after removing app %d  I have %d cp\n", rpc_s->ptlmap.id, appid,ds->num_cp);
 
 	return 0;
 
@@ -262,6 +266,8 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 	hreg->num_cp = 0;
 	peer = ds_get_peer(ds, cmd->id);
+
+	printf("unreg msg from %d appid %d\n", cmd->id, peer->ptlmap.appid);
 
 	int appid = peer->ptlmap.appid;
 	msg = msg_buf_alloc(rpc_s, peer, 1);
@@ -282,7 +288,7 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		if(temp_peer == NULL)
 			continue;
 
-		if(temp_peer->ptlmap.appid == peer->ptlmap.appid) {
+/*		if(temp_peer->ptlmap.appid == peer->ptlmap.appid) {
 			list_del(&temp_peer->peer_entry);
 			ds->peer_size--;
 			ds->num_cp--;
@@ -290,14 +296,34 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 			ds->current_client_size--;
 
 
-		}
+		}*/
 
 		if(temp_peer->ptlmap.id != 0 && temp_peer->ptlmap.appid == 0)
 			ds_remove_app(ds, temp_peer, peer->ptlmap.appid);
+
+
+                if(temp_peer->ptlmap.appid == peer->ptlmap.appid) {
+//                        list_del(&temp_peer->peer_entry);
+                        ds->peer_size--;
+                        ds->num_cp--;
+                        ds->size_cp--;
+                        ds->current_client_size--;
+		
+                        if(temp_peer->rpc_conn.f_connected&&temp_peer->ptlmap.id != peer->ptlmap.id){
+                                rdma_destroy_qp(temp_peer->rpc_conn.id);
+                                ibv_destroy_cq(temp_peer->rpc_conn.cq);
+                                rdma_destroy_id(temp_peer->rpc_conn.id);
+				ibv_destroy_comp_channel(temp_peer->rpc_conn.comp_channel);
+                        }
+			list_del(&temp_peer->peer_entry);
+
+		}
+
 	}
 
 	struct app_info *app = app_find(ds, appid);
 	if(app){
+		printf("remove appid %d\n", appid);
 		list_del(&app->app_entry);
 	}
 
@@ -511,70 +537,31 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct hdr_register *hdr)
 	ds->size_cp = ds->size_cp + hdr->num_cp;
 	ds->rpc_s->num_peers = ds->rpc_s->num_peers + hdr->num_cp;
 	
-	/* COMMENTED:
-	   First check if app has registered all its compute nodes already ! 
-	 */
+	app = app_find(ds, hdr->pm_cp.appid);
+	if(!app) {
+	    uloga("new appid %d from peer %d\n",hdr->pm_cp.appid, cp_rank_cnt);
+		app = app_alloc();
+		if(!app)
+			goto err_out;
+		app->app_id = hdr->pm_cp.appid;
+		app->app_num_peers = hdr->num_cp;
+		app->app_min_id = hdr->id_min = hdr->pm_cp.id = cp_rank_cnt;
 
+        list_add(&app->app_entry, &ds->app_list);
+        cp_rank_cnt = cp_rank_cnt + app->app_num_peers;
+    }
 
-/*
-	if(app->app_cnt_peers == app->app_num_peers) {
-		printf("app cp is full.\n");
+    if(app->app_cnt_peers == app->app_num_peers) {
+        printf("app cp is full.\n");
+        goto err_out;
+    }
 
-		////return ds_register_cp_reject(rpc_s, hreg);
-		goto err_out;
-	}
-*/
-	/* COMMENTED:
-	   cn_peer = app->app_peer_tab + app->app_cnt_peers;
-	   cn_peer->ptlmap = hreg->pm_cp;
-	   cn_peer->ptlmap.id = cn_peer - ds->peer_tab;
-	   cn_peer->num_msg_ret++;//TODO:Credit
-
-	   ds->self->num_msg_ret--;//TODO:Credit
-	 */
-
-        app = app_find(ds, hdr->pm_cp.appid);
-        if(!app) {
-                app = app_alloc();
-                if(!app)
-                        goto err_out;
-                app->app_id = hdr->pm_cp.appid;
-                app->app_num_peers = hdr->num_cp;
-                app->app_min_id = hdr->id_min = hdr->pm_cp.id = cp_rank_cnt;
-
-		//temp_peer->ptlmap.id = hdr->pm_cp.id;
-
-                //app->app_peer_tab = ds_get_peer(ds, hdr->pm_cp.id);
-                //app->app_peer_tab[0].ptlmap = hdr->pm_cp;
-                //app->app_peer_tab[0].ptlmap.id = hdr->pm_cp.id;
-                list_add(&app->app_entry, &ds->app_list);
-                cp_rank_cnt = cp_rank_cnt + app->app_num_peers;
-        }
-
-        if(app->app_cnt_peers == app->app_num_peers) {
-                printf("app cp is full.\n");
-                goto err_out;
-       }
-
-
-
-//	hdr->id_min = app->app_peer_tab[0].ptlmap.id;
 	hdr->id_min = app->app_min_id;
-	//peer = ds_get_peer(ds, app->app_peer_tab[0].ptlmap.id + app->app_cnt_peers);
-	//peer->ptlmap = hdr->pm_cp;
-	//peer->ptlmap.id = 
-//	hdr->pm_cp.id = app->app_peer_tab[0].ptlmap.id + app->app_cnt_peers;
 	hdr->pm_cp.id = app->app_min_id + app->app_cnt_peers;
-
-
 	
 	temp_peer->ptlmap.id = app->app_min_id + app->app_cnt_peers;
 	app->app_cnt_peers++;
 
-	/* Wait for all of the peers to join in. 
-	   if (app->app_cnt_peers != app->app_num_peers || !ds->f_reg)
-	   return 0;
-	   COMMENTED: */
 	return 0;
       err_out:printf("'%s()' failed with %d.\n", __func__, err);
 	return err;
@@ -1053,33 +1040,31 @@ static int cs_disseminate_cp(struct dart_server *ds, struct node_id *peer)
 
 
 
-                err = -ENOMEM;
-                msg = msg_buf_alloc(ds->rpc_s, peer, 1);
-                if(!msg)
-                        goto err_out;
-                msg->cb = default_completion_with_data_callback;
-                msg->size = sizeof(struct ptlid_map) * (ds->num_sp + ds->current_client_size - app->app_num_peers);
-                pptlmap = msg->msg_data = malloc(msg->size);
-                if(!msg->msg_data)
-                        goto err_out_free;
-                struct node_id *temp_peer;
-                list_for_each_entry(temp_peer, &ds->rpc_s->peer_list, struct node_id, peer_entry) {
-			if(temp_peer->ptlmap.id !=0 && temp_peer->ptlmap.appid != app->app_id)
-			{
-//					 printf("Sendin %d peer %d:  %s %d \n",ds->rpc_s->ptlmap.id, temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
-		                        *pptlmap++ = temp_peer->ptlmap;
-			}
-                }
+	err = -ENOMEM;
+	msg = msg_buf_alloc(ds->rpc_s, peer, 1);
+	if(!msg)
+		goto err_out;
+	msg->cb = default_completion_with_data_callback;
+	msg->size = sizeof(struct ptlid_map) * (ds->num_sp + ds->current_client_size - app->app_num_peers);
+	pptlmap = msg->msg_data = malloc(msg->size);
+	if(!msg->msg_data)
+		goto err_out_free;
+	struct node_id *temp_peer;
+	list_for_each_entry(temp_peer, &ds->rpc_s->peer_list, struct node_id, peer_entry) {
+		if(temp_peer->ptlmap.id != 0 && temp_peer->ptlmap.appid != app->app_id) {
+                                       printf("Sendin %d peer %d:  %s %d size: %d\n",ds->rpc_s->ptlmap.id, temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port),ds->num_sp + ds->current_client_size - app->app_num_peers);
+			*pptlmap++ = temp_peer->ptlmap;
+		}
+	}
 
-                msg->msg_rpc->cmd = sp_announce_cp;
-                msg->msg_rpc->id = ds->self->ptlmap.id;
+    msg->msg_rpc->cmd = sp_announce_cp;
+    msg->msg_rpc->id = ds->self->ptlmap.id;
                 hreg = (struct hdr_register *) msg->msg_rpc->pad;
                 hreg->pm_cp = ds->self->ptlmap;
                 hreg->num_cp = ds->current_client_size;
                 hreg->num_sp = ds->size_sp;
 
 
-//		printf("master send %d peers to peer# %d\n",ds->num_sp + ds->current_client_size - app->app_num_peers-1, peer->ptlmap.id);
 
 
                 err = rpc_send(ds->rpc_s, peer, msg);
@@ -1116,13 +1101,11 @@ static int cp_disseminate_cs_completion(struct rpc_server *rpc_s, struct msg_buf
         temp_peer->ptlmap = *pm;
 
 
-        app = app_find(ds,temp_peer->ptlmap.appid);
-        if(!app) {
-                goto err_out;
-        }
-
-//        printf("Got peer %d app id %d  number of peers: %d min_id %d\n",temp_peer->ptlmap.id, temp_peer->ptlmap.appid,app->app_num_peers,app->app_min_id);
-
+	app = app_find(ds, temp_peer->ptlmap.appid);
+	if(!app) {
+		goto err_out;
+	}
+        printf("Got peer %d app id %d  number of peers: %d min_id %d\n",temp_peer->ptlmap.id, temp_peer->ptlmap.appid,app->app_num_peers,app->app_min_id);
 
         for(i = 1; i < app->app_num_peers; i++) {
 		temp_peer = peer_alloc();
@@ -1130,9 +1113,7 @@ static int cp_disseminate_cs_completion(struct rpc_server *rpc_s, struct msg_buf
 
                temp_peer->ptlmap = *pm;
 
-//                printf("%d GET Client %d peer %d:  %s %d \n",app->app_min_id, rpc_s->ptlmap.id, temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
-//                if(temp_peer->ptlmap.id != app->app_min_id)
-//		{
+                printf("%d GET Client %d peer %d:  %s %d appid %d\n",app->app_min_id, rpc_s->ptlmap.id, temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port),temp_peer->ptlmap.appid);
 	                list_add(&temp_peer->peer_entry, &ds->rpc_s->peer_list);
 	                INIT_LIST_HEAD(&temp_peer->req_list);
         	        temp_peer->num_msg_at_peer = rpc_s->max_num_msg;
@@ -1197,8 +1178,8 @@ static int dsrpc_cp_disseminate_cs(struct rpc_server *rpc_s, struct rpc_cmd *cmd
                 goto err_out;
 	struct app_info *app;
 
-//	printf("peer %d app id %d\n",peer->ptlmap.id, peer->ptlmap.appid);
-	app = app_find(ds,peer->ptlmap.appid);
+      printf("peer %d app id %d\n",peer->ptlmap.id, peer->ptlmap.appid);
+	app = app_find(ds, peer->ptlmap.appid);
 	if(!app) {
 		goto err_out;
 	}
@@ -1361,14 +1342,15 @@ static void *ds_master_listen(void *server)
         struct node_id *peer = ds_get_peer(ds, 0);
 
 	peer = NULL;
-        while(ds->rpc_s->thread_alive && (rdma_get_cm_event(ds->rpc_s->rpc_ec, &event) == 0)) {
-                struct con_param conpara;
-                struct rdma_cm_event event_copy;
-                memcpy(&event_copy, event, sizeof(*event));
-                rdma_ack_cm_event(event);
-                if(event_copy.event == RDMA_CM_EVENT_CONNECT_REQUEST) {
+	time_t tm_st, tm_end;
 
-//                        printf("received connection request.\n");//debug
+	while(ds->rpc_s->thread_alive && (rdma_get_cm_event(ds->rpc_s->rpc_ec, &event) == 0)) {
+		struct con_param conpara;
+		struct rdma_cm_event event_copy;
+		memcpy(&event_copy, event, sizeof(*event));
+		rdma_ack_cm_event(event);
+		if(event_copy.event == RDMA_CM_EVENT_CONNECT_REQUEST) {
+
                         conpara = *(struct con_param *) event_copy.param.conn.private_data;
                         if(conpara.type == 0) {
                                 peer = ds_get_peer(ds, conpara.pm_cp.id);
@@ -1376,11 +1358,9 @@ static void *ds_master_listen(void *server)
 				ds->s_connected++;
                         }
 
-                        else {
-                                if(conpara.pm_cp.appid == 0) {
-                                        //peer = ds_get_peer(ds, sp_rank_cnt);
-                                        //peer->ptlmap = conpara.pm_cp;
-                                        //peer->ptlmap.id = sp_rank_cnt;
+			else {
+				printf("connection request from %d appid %d\n", conpara.pm_cp.id, conpara.pm_cp.appid);
+				if(conpara.pm_cp.appid == 0) {
 					ds->s_connected++;
 					struct node_id *temp_peer = peer_alloc();
 					list_add(&temp_peer->peer_entry, &ds->rpc_s->peer_list);
@@ -1406,15 +1386,9 @@ static void *ds_master_listen(void *server)
 					if(!app){
                                         	dsrpc_cn_register(ds->rpc_s, &hdr);
 					}
-//					printf("app %d already register\n",hdr.pm_cp.appid);
-				
-//					struct node_id *temp_peer = peer_alloc();
-//                                      list_add(&temp_peer->peer_entry, &ds->rpc_s->peer_list);
 
-                                       peer = ds_get_peer(ds, hdr.pm_cp.id);
-                                        conpara.pm_cp.id = peer->ptlmap.id;
-
-
+					peer = ds_get_peer(ds, hdr.pm_cp.id);
+					conpara.pm_cp.id = peer->ptlmap.id;
                                 }
                                 conn = &peer->rpc_conn;
                         }
@@ -1446,16 +1420,12 @@ static void *ds_master_listen(void *server)
                                 memset(&conpara, 0, sizeof(struct con_param));
                                 conpara.pm_sp = peer->ptlmap;
                                 conpara.pm_cp = ds->rpc_s->ptlmap;
-//				printf("set number of current peers:%d\n", ds->num_sp + ds->current_client_size-1);
                                 conpara.num_cp = ds->num_sp + ds->current_client_size-1;
                                 conpara.type = hdr.id_min;
 
-                                //printf("id min is %d.\n", conpara.type); 
                                 cm_params.private_data = &conpara;
                                 cm_params.private_data_len = sizeof(conpara);
-                        }
-
-                        else {  
+                        } else {  
                                 cm_params.private_data = &peer->ptlmap.id;
                                 cm_params.private_data_len = sizeof(int);
                         } cm_params.initiator_depth = cm_params.responder_resources = 1;
@@ -1470,19 +1440,11 @@ static void *ds_master_listen(void *server)
                         conn->f_connected = 1;
                 }
 
-                else if(event_copy.event == RDMA_CM_EVENT_ESTABLISHED) {
-//                       printf("Connection is established. %d\n",ds->connected);//DEBUG
-                       ds->connected++;
-                }
-
-                else {  
-//                        rpc_print_connection_err(ds->rpc_s, peer, event_copy);
-//                        printf("event is %d with status %d.\n", event_copy.event, event_copy.status);
-                        err = event_copy.status;
-                //      goto err_out;
-                }
-//                if(connected == 2 * (ds->peer_size - 1) - ds->size_cp)
-//                        break;
+		    else if(event_copy.event == RDMA_CM_EVENT_ESTABLISHED) {
+			    ds->connected++;
+	        } else if(event_copy.event != RDMA_CM_EVENT_DISCONNECTED) {
+                err = event_copy.status;
+            }
         }
 	
         pthread_exit(0);
@@ -1491,15 +1453,7 @@ static void *ds_master_listen(void *server)
         pthread_exit(0);
         return 0;
 
-
 }
-
-
-
-
-
-
-
 
 int ds_boot_master(struct dart_server *ds)	//Done
 {
@@ -1511,23 +1465,30 @@ int ds_boot_master(struct dart_server *ds)	//Done
 	struct node_id *peer;
 	struct connection *conn;
 
+    int rc;
+    ds->rpc_s->thread_alive = 1;
+    rc = pthread_create(&(ds->rpc_s->comm_thread), NULL, ds_master_listen, (void *) ds);
+    if(rc) {
+        printf("ERROR; return code from pthread_create() is %d\n", rc);
+        exit(-1);
+    }
 
-	
-
-        int rc;
-        ds->rpc_s->thread_alive = 1;
-        rc = pthread_create(&(ds->rpc_s->comm_thread), NULL, ds_master_listen, (void *) ds);
-        if(rc) {
-                printf("ERROR; return code from pthread_create() is %d\n", rc);
-                exit(-1);
-        }
-
-	while(ds->s_connected != 2* (ds->size_sp-1)){
-		sleep(1);
+	while(ds->s_connected != 2 * (ds->size_sp - 1)) {
+		pthread_yield();
 	}
 
-
 	ds->rpc_s->ptlmap.id = 0;
+
+	printf("'%s()': all the server are registered.%d %d\n", __func__, ds->peer_size, ds->size_cp);
+	struct node_id *temp_peer;
+	err = 0;
+
+    if(ds->size_sp > 1) {
+	    list_for_each_entry(temp_peer, &ds->rpc_s->peer_list, struct node_id, peer_entry) {
+		    if(temp_peer->ptlmap.appid == 0 && temp_peer->ptlmap.id != 0)
+			    err = ds_disseminate2(ds, temp_peer);
+	    }
+    }
 
 	if(err != 0)
 		goto err_out;
@@ -1560,9 +1521,9 @@ static void *ds_listen(void *server)
 		if(event_copy.event == RDMA_CM_EVENT_CONNECT_REQUEST) {
 			conpara = *(struct con_param *) event_copy.param.conn.private_data;
 			peer = ds_get_peer(ds, conpara.pm_cp.id);
-			while(peer==NULL){
-				sleep(1);
-			peer = ds_get_peer(ds, conpara.pm_cp.id);
+			while(peer == NULL) {
+				pthread_yield();
+				peer = ds_get_peer(ds, conpara.pm_cp.id);
 			}
 
 			if(conpara.type == 0)
@@ -1926,41 +1887,22 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 	ds->connected = 0;
 	INIT_LIST_HEAD(&ds->app_list);
 
-
- //       INIT_LIST_HEAD(&ds->rpc_s->peer_list);
-
-
 	cp_rank_cnt = num_sp;
-	ds->rpc_s = rpc_server_init(0, NULL, 0, INFINIBAND_MSG_QUEUE_SIZE, ds->peer_size, ds, DART_SERVER);
+	ds->rpc_s = rpc_server_init(0, NULL, 0, 100, ds->peer_size, ds, DART_SERVER);
 	if(!ds->rpc_s)
 		goto err_free_dsrv;
 
 
 	ds->rpc_s->num_peers = ds->peer_size;
 
-//	rpc_server_set_peer_ref(ds->rpc_s, ds->peer_tab, ds->peer_size);
 	rpc_server_set_rpc_per_buff(ds->rpc_s, ds->peer_size);
 	ds->rpc_s->app_num_peers = num_sp;
-//	ds->rpc_s->cur_num_peer = 2;
-/*	peer = ds->peer_tab;
-	for(i = 0; i < ds->peer_size; i++) {
-		INIT_LIST_HEAD(&peer->req_list);
-		peer->num_msg_at_peer = ds->rpc_s->max_num_msg;
-		peer->num_msg_ret = 0;
-		peer++;
-	}
-*/
-	//rpc_add_service(cn_register, dsrpc_cn_register);
-	rpc_add_service(cn_unregister, dsrpc_cn_unregister);
+	
+    rpc_add_service(cn_unregister, dsrpc_cn_unregister);
 	rpc_add_service(cn_s_unregister, dsrpc_unregister);
-        rpc_add_service(cp_disseminate_cs, dsrpc_cp_disseminate_cs);
-
-
-	//rpc_add_service(sp_reg_request, dsrpc_sp_register);
-	//rpc_add_service(peer_reg_address, dsrpc_peer_fetch);
-	//rpc_add_service(sp_reg_reply, dsrpc_sp_ack_register);
+    rpc_add_service(cp_disseminate_cs, dsrpc_cp_disseminate_cs);
 	rpc_add_service(sp_announce_cp, dsrpc_announce_cp);
-        rpc_add_service(sp_announce_app, dsrpc_announce_app);
+    rpc_add_service(sp_announce_app, dsrpc_announce_app);
 
 	if(num_sp == 1) {
 
