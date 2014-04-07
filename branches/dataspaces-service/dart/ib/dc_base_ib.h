@@ -21,6 +21,9 @@ struct dart_client {
 
 	int connected;
 	/* Number of compute peers in the app job. */
+
+	int s_connected;
+
 	int cp_in_job;
 	/* Rank of the master peer in the app job. */
 	int cp_min_rank;
@@ -37,7 +40,7 @@ struct dart_client {
 	int num_posted;
 };				// //
 
-#define dc_barrier(dc)          rpc_barrier(dc->rpc_s)
+//#define dc_barrier(dc)          rpc_barrier(dc->rpc_s)
 
 static inline struct node_id *dc_get_peer(struct dart_client *dc, int n)
 {
