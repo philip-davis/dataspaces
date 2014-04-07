@@ -133,6 +133,15 @@ int common_dspaces_peers(void)
 	else return -1;
 }
 
+
+int common_dspaces_servers(void)
+{
+        if (dcg)
+                return dcg_get_num_servers(dcg);
+        else return -1;
+}
+
+
 int common_dspaces_get_num_space_peers(void)
 {
 	if (dcg)
