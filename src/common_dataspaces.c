@@ -154,7 +154,15 @@ int common_dspaces_peers(void)
 	else return -1;
 }
 
-int common_dspaces_get_num_space_server(void)
+int common_dspaces_servers(void)
+{
+        if (dcg)
+                return dcg_get_num_servers(dcg);
+        else return -1;
+}
+
+
+int common_dspaces_get_num_space_peers(void)
 {
 	if (dcg)
 		return dcg_get_num_space_peers(dcg);
@@ -276,13 +284,8 @@ int common_dspaces_put(const char *var_name,
                 .bb = {.num_dims = ndim,}
         };
 
-<<<<<<< HEAD
         memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
         memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
-=======
-        memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*num_dims);
-        memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*num_dims);
->>>>>>> 4252154... merge from trunk r1570
 
         memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
         memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
@@ -300,14 +303,8 @@ int common_dspaces_put(const char *var_name,
                 return -ENOMEM;
         }
 
-<<<<<<< HEAD
-        // set global dimension
-        set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
-                             &od->gdim); 
-=======
         set_global_dimension(&od->gdim, ndim, gdim);
 
->>>>>>> 4252154... merge from trunk r1570
         err = dcg_obj_put(od);
         if (err < 0) {
             obj_data_free(od);
@@ -432,14 +429,9 @@ void common_dimes_define_gdim(const char *var_name, int ndim, uint64_t *gdim)
 int common_dimes_get(const char *var_name,
         unsigned int ver, int size,
         int ndim,
-<<<<<<< HEAD
         uint64_t *lb,
         uint64_t *ub,
-=======
-        uint64_t *lb, //int xl, int yl, int zl,
-        uint64_t *ub, //int xu, int yu, int zu, 
         uint64_t *gdim,
->>>>>>> 4252154... merge from trunk r1570
         void *data)
 {
     if (!is_dimes_lib_init() || !is_ndim_within_bound(ndim)) {
@@ -453,14 +445,9 @@ int common_dimes_get(const char *var_name,
 int common_dimes_put(const char *var_name,
         unsigned int ver, int size,
         int ndim,
-<<<<<<< HEAD
         uint64_t *lb,
         uint64_t *ub,
-=======
-        uint64_t *lb, //int xl, int yl, int zl,
-        uint64_t *ub, //int xu, int yu, int zu, 
         uint64_t *gdim,
->>>>>>> 4252154... merge from trunk r1570
         void *data)
 {
     if (!is_dimes_lib_init() || !is_ndim_within_bound(ndim)) {
