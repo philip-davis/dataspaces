@@ -45,6 +45,7 @@ int common_dspaces_init(int num_peers, int appid);
 void common_dspaces_set_storage_type (int fst);
 int common_dspaces_rank(void);
 int common_dspaces_peers(void);
+int common_dspaces_servers(void);
 void common_dspaces_barrier(void);
 void common_dspaces_lock_on_read(const char *lock_name, void *comm);
 void common_dspaces_unlock_on_read(const char *lock_name, void *comm);
