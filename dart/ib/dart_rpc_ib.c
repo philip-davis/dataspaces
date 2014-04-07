@@ -138,7 +138,8 @@ static int sys_send(struct rpc_server *rpc_s, struct node_id *peer, struct hdr_s
 //                    printf("SYS channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
 //                    sys_connect(rpc_s,peer);
 //              goto err_out;
-		sleep(1);
+//		sleep(1);
+		 pthread_yield();
 	}
 
 
@@ -254,9 +255,10 @@ static int sys_process(struct rpc_server *rpc_s, struct node_id *peer)
 		}
 
 		if(wc.status != IBV_WC_SUCCESS) {
-			printf("Status (%d) is not IBV_WC_SUCCESS.\n", wc.status);
+			//printf("Status (%d) is not IBV_WC_SUCCESS.\n", wc.status);
 			err = wc.status;
-			goto err_out;
+			return 0;
+			//goto err_out;
 		}
 		if(wc.opcode & IBV_WC_RECV) {
 			struct hdr_sys *hs = (struct hdr_sys *) (uintptr_t) wc.wr_id;
@@ -783,7 +785,7 @@ char *ip_search(void)
 	intr = ifc.ifc_len / sizeof(struct ifreq);
 	while(intr-- > 0 && ioctl(sfd, SIOCGIFADDR, (char *) &buf[intr]));
 	close(sfd);
-	return inet_ntoa(((struct sockaddr_in *) (&buf[intr].ifr_addr))->sin_addr);
+	return inet_ntoa(((struct sockaddr_in *) (&buf[intr-1].ifr_addr))->sin_addr);
 }
 
 // Check if the format of IP address is correct. (done)
@@ -1431,8 +1433,8 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 			peer->rpc_conn.f_connected = 1;
 			check = 1;
 		} else {
-			rpc_print_connection_err(rpc_s, peer, event_copy);
-			printf("event is %d with status %d.\n", event_copy.event, event_copy.status);
+//			rpc_print_connection_err(rpc_s, peer, event_copy);
+//			printf("event is %d with status %d.\n", event_copy.event, event_copy.status);
 			err = event_copy.status;
 			goto err_out;
 		}
@@ -1445,7 +1447,7 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 
 	return 0;
       err_out:
-	printf("'%s()': failed with %d.\n", __func__, err);
+//	printf("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -1494,6 +1496,7 @@ int sys_connect(struct rpc_server *rpc_s, struct node_id *peer)
 		rdma_ack_cm_event(event);
 
 		if(event_copy.event == RDMA_CM_EVENT_ADDR_RESOLVED) {
+//			printf("SYS connect %d %d ADDRESOLVED\n", rpc_s->ptlmap.id, peer->ptlmap.id);
 			build_context(event_copy.id->verbs, &peer->sys_conn);
 			build_qp_attr(&peer->sys_conn.qp_attr, &peer->sys_conn, rpc_s);
 
@@ -1521,6 +1524,8 @@ int sys_connect(struct rpc_server *rpc_s, struct node_id *peer)
 				goto err_out;
 			}
 		} else if(event_copy.event == RDMA_CM_EVENT_ROUTE_RESOLVED) {
+  //                      printf("SYS connect %d %d ROUTERESOLVED\n", rpc_s->ptlmap.id, peer->ptlmap.id);
+
 			//printf("route resolved.\n");
 			memset(&cm_params, 0, sizeof(struct rdma_conn_param));
 
@@ -1541,18 +1546,27 @@ int sys_connect(struct rpc_server *rpc_s, struct node_id *peer)
 				goto err_out;
 			}
 		} else if(event_copy.event == RDMA_CM_EVENT_ESTABLISHED) {
-			//printf("Connection Established.\n");
-			if(peer->ptlmap.id == 0)
-				rpc_s->ptlmap.id = *((int *) event_copy.param.conn.private_data);
+//                        printf("SYS connect %d %d ESTABLISH\n", rpc_s->ptlmap.id, peer->ptlmap.id);
 
+			//printf("Connection Established.\n");
+//			if(peer->ptlmap.id == 0)
+//				rpc_s->ptlmap.id = *((int *) event_copy.param.conn.private_data);
+	
+//			printf("I am %d connected to %d\n",rpc_s->ptlmap.id, peer->ptlmap.id);
 			peer->sys_conn.f_connected = 1;
 			check = 1;
 		} else {
-			rpc_print_connection_err(rpc_s, peer, event_copy);
-			printf("event is %d with status %d.\n", event_copy.event, event_copy.status);
+//                        printf("SYS connect %d %d ERROR\n", rpc_s->ptlmap.id, peer->ptlmap.id);
+
+//			rpc_print_connection_err(rpc_s, peer, event_copy);
+//			printf("event is %d with status %d.\n", event_copy.event, event_copy.status);
+//			if(peer->sys_conn.f_connected==1)
+//				return 0;
 			err = event_copy.status;
 			goto err_out;
 		}
+//                printf("SYS connect %d %d OUTSIDE\n", rpc_s->ptlmap.id, peer->ptlmap.id);
+
 
 		if(check == 1)
 			break;
@@ -1560,7 +1574,7 @@ int sys_connect(struct rpc_server *rpc_s, struct node_id *peer)
 
 	return 0;
       err_out:
-	printf("'%s()': failed with %d.\n", __func__, err);
+	printf("'%s()': failed with %d peer# %d peer# %d.\n", __func__, err, rpc_s->ptlmap.id, peer->ptlmap.id);
 	return err;
 }
 
@@ -1636,8 +1650,14 @@ static int rpc_process(struct rpc_server *rpc_s, struct node_id *peer)
 			continue;
 		}
 		if(wc.status != IBV_WC_SUCCESS) {
-			printf("Status (%d) is not IBV_WC_SUCCESS.\n", wc.status);
+//			printf("Status (%d) is not IBV_WC_SUCCESS.\n", wc.status);
+			const char *descr;
+ 
+			descr = ibv_wc_status_str(IBV_WC_SUCCESS);
+ 
+			printf("The description of the enumerated value %d is %s\n", IBV_WC_SUCCESS, descr);
 			err = -wc.status;
+			return 0;
 			goto err_out;
 		}
 		if(wc.opcode & IBV_WC_RECV) {
@@ -1729,7 +1749,8 @@ static int __process_event(struct rpc_server *rpc_s, int timeout)	//Done
 
 
 	if(err < 0) {
-		printf("Poll Errer.\n");
+//		printf("Poll Errer.\n");
+		return 0;
 		goto err_out;
 	} else if(err == 0) {
 		return -ETIME;
@@ -1753,7 +1774,7 @@ static int __process_event(struct rpc_server *rpc_s, int timeout)	//Done
 	return 0;
 
       err_out:
-	printf("(%s): err (%d).\n", __func__, err);
+	printf("%d (%s): err (%d). %d\n",rpc_s->ptlmap.id, __func__, err, peer->ptlmap.id);
 	return err;
 }
 
@@ -2120,7 +2141,7 @@ void rpc_print_connection_err(struct rpc_server *rpc_s, struct node_id *peer, st
 		printf("Connection Timewait Exit ");
 	else if(event.event == RDMA_CM_EVENT_CONNECT_REQUEST)
 		printf("Connection Timewait Exit ");
-	printf("peer# %d (%s)  to peer# %d (%s:%d)\n", rpc_s->ptlmap.id, inet_ntoa(rpc_s->ptlmap.address.sin_addr), peer->ptlmap.id, inet_ntoa(peer->ptlmap.address.sin_addr));
+	printf("peer# %d (%s)  to peer# %d (%s)\n", rpc_s->ptlmap.id, inet_ntoa(rpc_s->ptlmap.address.sin_addr), peer->ptlmap.id, inet_ntoa(peer->ptlmap.address.sin_addr));
 	return;
 }
 
