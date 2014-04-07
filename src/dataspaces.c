@@ -109,6 +109,13 @@ int dspaces_peers(void)
 	return common_dspaces_peers();
 }
 
+
+int dspaces_servers(void)
+{
+        return common_dspaces_servers();
+}
+
+
 int dspaces_get_num_space_peers(void)
 {
 	return common_dspaces_get_num_space_peers();
