@@ -39,6 +39,12 @@
 #ifndef __DATASPACES_H_
 #define __DATASPACES_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
+
 #include <stdint.h>
 
 /**
@@ -96,6 +102,15 @@ int dspaces_rank(void);
  * @return	Number of application peers.
  */
 int dspaces_peers(void);
+
+/**
+ *  * @brief Return the number of dataspaces servers.
+ *   *      
+ *    * @return      Number of dataspaces servers.
+ *     */
+int dspaces_servers(void);
+
+
 
 /**
  * @brief Blocks until all processes in the client application have reached
@@ -252,6 +267,9 @@ int dspaces_get_with_gdim (const char *var_name,
         void *data);
 
 void dspaces_set_mpi_rank(int rank);
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 
