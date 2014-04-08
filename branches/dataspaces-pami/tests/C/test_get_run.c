@@ -163,8 +163,8 @@ static int couple_read_3d(unsigned int ts, int num_vars, enum transport_type typ
     for (i = 0; i < num_vars; i++) {
         data_tab[i] = NULL;
     }
-
 	common_lock_on_read("m3d_lock", &gcomm_);
+	sleep(2);
 
 	//get data from space
     set_offset_3d(rank_, npx_, npy_, npz_, spx_, spy_, spz_);
