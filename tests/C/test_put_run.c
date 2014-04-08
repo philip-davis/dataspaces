@@ -104,7 +104,7 @@ static void set_offset_3d(int rank, int npx, int npy, int npz, int spx, int spy,
 static int generate_3d(double *m3d, unsigned int ts, int spx, int spy, int spz)
 {
     int num_double = (spx*spy*spz*elem_size_) / sizeof(double);
-	double value = ts;
+	double value = rank_;
 	int i;
 	for (i = 0; i < num_double; i++) {
 		m3d[i] = value;
@@ -247,6 +247,8 @@ static int couple_write_3d(unsigned int ts, int num_vars, enum transport_type ty
         }
     }
     tm_end = timer_read(&timer_);
+
+    sleep(2);
     common_unlock_on_write("m3d_lock", &gcomm_);
 
 	tm_diff = tm_end-tm_st;
