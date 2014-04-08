@@ -163,7 +163,7 @@ int dart_rdma_register_mem(struct dart_rdma_mem_handle *mem_hndl,
 	}
 
 	mem_hndl->size = bytes;
-	mem_hndl->base_addr = data;
+	mem_hndl->base_addr = (uint64_t)data;
 
 	return 0;
 err_out:
@@ -255,14 +255,17 @@ int dart_rdma_perform_reads(int tran_id)
 	}
 
 	int cnt = 0;
-	struct dart_rdma_op *read_op;
+	struct dart_rdma_op *read_op = NULL;
 	list_for_each_entry(read_op, &read_tran->read_ops_list,
 							struct dart_rdma_op, entry) {
+		if(read_op == NULL)
+			uloga("clt=%d, trans_peer=%d, tran_id=%d, read_op is NULL\n", drh->rpc_s->ptlmap.rank_pami, read_tran->remote_peer->ptlmap.rank_pami, tran_id);
+		//if(read_op != NULL){
 		err = dart_rdma_get(read_tran, read_op);
 		if (err < 0) {
 			goto err_out;
 		}
-		cnt++;
+		cnt++;//}
 	}
 
 #ifdef DEBUG

@@ -37,7 +37,8 @@
 
 struct dart_rdma_mem_handle {
 	pami_memregion_t memregion;
-	void *base_addr; // Only used for local data copy
+	//void *base_addr; // Only used for local data copy
+	uint64_t base_addr; // Only used for local data copy
 	size_t size;
 };
 
