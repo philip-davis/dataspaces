@@ -276,6 +276,7 @@ enum cmd_type {
         dimes_get_location_peers_msg,
         dimes_obj_get_msg,
         dimes_obj_get_ack_v3_msg,
+	dimes_get_ack_msg,
 #endif
 	/* Added for CCGrid Demo. */
 	CN_TIMING_AVG,
