@@ -1,1 +1,1 @@
-SUBDIRS=C Fortran fastspace_c
+SUBDIRS=fastspace_c
