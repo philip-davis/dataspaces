@@ -150,11 +150,11 @@ AC_CONFIG_FILES([
 		Makefile
 		dart/Makefile
 		src/Makefile
+		fastspace/Makefile
 		tests/Makefile
 		tests/C/Makefile
 		tests/Fortran/Makefile
 		tests/fastspace_c/Makefile
-		fastspace/Makefile
 		])
 
 AC_OUTPUT
