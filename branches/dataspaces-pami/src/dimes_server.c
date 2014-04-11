@@ -168,8 +168,8 @@ static int locate_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd,
 	msg->msg_rpc->id = DIMES_SID;
 
 #ifdef DEBUG
-	uloga("%s(): #%d num_obj= %d for request from #%d\n",
-		__func__, DIMES_SID, num_obj, cmd->id);
+    uloga("%s(): #%d num_obj= %d for request from #%d\n",
+        __func__, DIMES_SID, num_obj, cmd->id);
 #endif
 
 	err = rpc_send(rpc_s, peer, msg);
@@ -207,11 +207,11 @@ static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	}
 
 #ifdef DEBUG    
-	uloga("%s(): get cmd from peer #%d, "
-				"with has_rdma_data=%d, "
-				"name=%s, owner=%d, version=%d, data_size=%u.\n",
-					__func__, cmd->id, hdr->has_rdma_data,
-					odsc->name, odsc->owner, odsc->version, obj_data_size(odsc));
+    uloga("%s(): get cmd from peer #%d, "
+                "with has_rdma_data=%d, "
+                "name=%s, owner=%d, version=%d, data_size=%u.\n",
+                    __func__, cmd->id, hdr->has_rdma_data,
+                    odsc->name, odsc->owner, odsc->version, obj_data_size(odsc));
 #endif
     
     //uloga("%s(): %lf name=%s version=%d process_time %lf from peer %d\n", __func__,
