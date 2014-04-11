@@ -104,7 +104,8 @@ static void set_offset_3d(int rank, int npx, int npy, int npz, int spx, int spy,
 static int generate_3d(double *m3d, unsigned int ts, int spx, int spy, int spz)
 {
     int num_double = (spx*spy*spz*elem_size_) / sizeof(double);
-	double value = rank_;
+	// double value = rank_;
+    double value = ts;
 	int i;
 	for (i = 0; i < num_double; i++) {
 		m3d[i] = value;

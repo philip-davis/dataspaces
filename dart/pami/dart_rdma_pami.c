@@ -61,8 +61,8 @@ static int dart_perform_local_reads(struct dart_rdma_tran *read_tran)
 	struct dart_rdma_op *read_op, *t;
 	list_for_each_entry_safe(read_op, t, &read_tran->read_ops_list,
 				struct dart_rdma_op, entry) {
-		memcpy(read_tran->dst.base_addr + read_op->dst_offset,
-			read_tran->src.base_addr + read_op->src_offset,
+		memcpy((void*)read_tran->dst.base_addr + read_op->dst_offset,
+			(void*)read_tran->src.base_addr + read_op->src_offset,
 			read_op->bytes);
 		list_del(&read_op->entry);
 		free(read_op);
@@ -255,21 +255,19 @@ int dart_rdma_perform_reads(int tran_id)
 	}
 
 	int cnt = 0;
-	struct dart_rdma_op *read_op = NULL;
-	list_for_each_entry(read_op, &read_tran->read_ops_list,
+	struct dart_rdma_op *read_op, *temp;
+	list_for_each_entry_safe(read_op, temp, &read_tran->read_ops_list,
 							struct dart_rdma_op, entry) {
-		if(read_op == NULL)
-			uloga("clt=%d, trans_peer=%d, tran_id=%d, read_op is NULL\n", drh->rpc_s->ptlmap.rank_pami, read_tran->remote_peer->ptlmap.rank_pami, tran_id);
-		//if(read_op != NULL){
 		err = dart_rdma_get(read_tran, read_op);
 		if (err < 0) {
 			goto err_out;
 		}
-		cnt++;//}
+		cnt++;
 	}
 
 #ifdef DEBUG
-	uloga("%s(): tran_id=%d num_read_ops=%d\n", __func__, tran_id, cnt);
+	uloga("%s(): #%d tran_id=%d num_read_ops=%d\n", __func__, drh->rpc_s->ptlmap.id,
+        read_tran->tran_id, cnt);
 #endif
 
 	return 0;
