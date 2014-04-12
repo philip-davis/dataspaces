@@ -221,6 +221,8 @@ static int couple_read_3d(unsigned int ts, int num_vars, enum transport_type typ
 
 static int couple_value_query_2d(double *m2d, unsigned int ts, enum transport_type type, void* qcond)
 {
+	int i;
+	int qret_size = 0;
         common_lock_on_read("m2d_lock", &gcomm_);
 
         //get data from space
@@ -230,7 +232,11 @@ static int couple_value_query_2d(double *m2d, unsigned int ts, enum transport_ty
         MPI_Barrier(gcomm_);
         tm_st = timer_read(&timer_);
 
-        common_value_query("m2d", ts, elem_size, qcond);
+	/*for(i = 0; i < num_vars; i++){
+		sprintf(var_name, "m2d_%d", i);
+	        common_value_query(var_name, ts, elem_size, qcond);
+	}*/
+	qret_size = common_value_query("m2d", ts, elem_size, qcond, m2d);
 //      char *qcond1 = "select name where name>300";
 //      common_value_query("m2d", ts, elem_size, qcond1);
         tm_end1 = timer_read(&timer_);
@@ -246,6 +252,44 @@ static int couple_value_query_2d(double *m2d, unsigned int ts, enum transport_ty
         }
 
         common_unlock_on_read("m2d_lock", &gcomm_);
+
+//      check_data("m2d", m2d, spx_*spy_, rank_, ts);
+
+	return qret_size;
+}
+
+static int couple_value_query_3d(double *m3d, unsigned int ts, enum transport_type type, void* qcond)
+{
+	int i;
+        common_lock_on_read("m3d_lock", &gcomm_);
+
+        //get data from space
+        int elem_size = sizeof(double);
+        double tm_st, tm_end1, tm_end2;
+
+        MPI_Barrier(gcomm_);
+        tm_st = timer_read(&timer_);
+
+	/*for(i = 0; i < num_vars; i++){
+		sprintf(var_name, "m3d_%d", i);
+	        common_value_query(var_name, ts, elem_size, qcond);
+	}*/
+	common_value_query("m3d", ts, elem_size, qcond);
+//      char *qcond1 = "select name where name>300";
+//      common_value_query("m2d", ts, elem_size, qcond1);
+        tm_end1 = timer_read(&timer_);
+
+        MPI_Barrier(gcomm_);
+        tm_end2 = timer_read(&timer_);
+
+        uloga("TS= %u TRANSPORT_TYPE= %d RANK= %d read time= %lf\n",
+                ts, type, rank_, tm_end1-tm_st);
+        if (rank_ == 0) {
+                uloga("TS= %u TRANSPORT_TYPE= %d read MAX time= %lf\n",
+                        ts, type, tm_end2-tm_st);
+        }
+
+        common_unlock_on_read("m3d_lock", &gcomm_);
 
 //      check_data("m2d", m2d, spx_*spy_, rank_, ts);
 
@@ -298,23 +342,30 @@ int test_get_run(enum transport_type type, int npapp, int npx, int npy, int npz,
         uloga("%s(): done\n", __func__);
     }
     */
+	//malloc enough space for the query result
         double *m2d = NULL;
-        //char *qcond;
-        m2d = allocate_2d(spx_, spy_);
+	m2d = malloc(spx_*spy_*elem_size);
+
+	int qret_size = 0;
+        
         if (m2d) {
                 unsigned int ts;
                 for (ts = 1; ts <= timestep_; ts++){
-                //for (ts = 1; ts <= 2; ts++){
                         if (rank_ == 0)
                                 uloga("%s: At timestep %u\n", __func__, ts);
-                        //char* qcond = "select name where name>0 and name<200";
-			char* qcond = "select var1 where var2>3 and var2<8 and var1>4 and var3>5";
-                        couple_value_query_2d(m2d, ts, USE_DSPACES, (void*)qcond);
+			//char* qcond = "select var1 where var2>3 and var2<9";	//for var1:d, var2:i case
+
+			char* qcond = "select var1 where var3>3 and var3<9 and var2<5";	//for var1:d, var2:f, var3:i case
+                        qret_size = couple_value_query_2d(m2d, ts, USE_DSPACES, (void*)qcond);
+
+			printf("qret_size = %d\n", qret_size);
+			/*if(qret_size > 0)
+				printf("the last elem=%lf\n", *((double*)m2d+qret_size/8-1));*/
 		}
 	}	
 
 	//common_barrier();
-    MPI_Barrier(gcomm_);
+    	MPI_Barrier(gcomm_);
 	common_finalize();
 	if(m2d)
 		free(m2d);

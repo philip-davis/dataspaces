@@ -30,7 +30,6 @@ int parse_meta(char* meta_conf, struct metaData* mtdata)
 	time int	//[attr_name, data_type]
 	tempreture float
 	**************/
-	printf("Start to parse_meta file\n");
 	FILE* fin = fopen(meta_conf, "rt");
 	if(!fin)
 		return -errno;
@@ -44,7 +43,7 @@ int parse_meta(char* meta_conf, struct metaData* mtdata)
 		if(err == NULL){
 			fclose(fin);
 			return -1;	//TODO
-		}	
+		}
                 char *t = strstr(buff, ";");
                 t[0] = '\0';
 		eat_spaces(buff);
@@ -62,7 +61,6 @@ int parse_meta(char* meta_conf, struct metaData* mtdata)
 				mtdata->type[i] = '';
 			}
 		}*/
-		printf("attr=%s\ntype=%c\n", mtdata->attr[i], mtdata->type[i]);
 	}
 	return 0;
 }
@@ -199,6 +197,20 @@ int build_obj_idx(struct obj_data* obj, struct metaData *mtdata)
                         }
                         stride += sizeof(double);
                 }
+		else if(mtdata->type[i] == 'f'){	//DataType is FLOAT
+			for(j = 0; j < nelem; j++){
+				*(float*)(tmp + cur_pt) = *(float*)(obj->data + j*(obj->obj_desc.size) + stride);
+				cur_pt += sizeof(float);
+			}
+			stride += sizeof(float);
+		}
+		else if(mtdata->type[i] == 'i'){	//DataType is Integer
+			for(j = 0; j < nelem; j++){
+				*(int*)(tmp + cur_pt) = *(int*)(obj->data + j*(obj->obj_desc.size) + stride);
+				cur_pt += sizeof(int);
+			}
+			stride += sizeof(int); 
+		}
         }
 	free(obj->_data);
 	obj->data = obj->_data = tmp;

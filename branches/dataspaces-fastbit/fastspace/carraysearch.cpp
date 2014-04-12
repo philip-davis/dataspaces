@@ -95,15 +95,24 @@ void* fb_build_index(int numVars, void **vals, void *dataType, size_t varSize, c
 	ibis::TYPE_T *type = new ibis::TYPE_T[numVars];
 
 	for(int i = 0; i < numVars; i++){
-		//if(strcmp((char*)dataType[i], "double")==0){
-		if(*((char*)dataType+i) == 'd'){
+		if(*((char*)dataType+i) == 'd'){	//DOUBLE
 			ibis::array_t<double> *arr;
 			arr = new ibis::array_t<double>((double*)vals[i], varSize);
 			raw[i] = arr;
 			type[i] = ibis::DOUBLE;
-		}else if(*((char*)dataType+i) == 's'){
+		}else if(*((char*)dataType+i) == 's'){	//STRING
 			std::vector<std::string> *arr;
 			//arr = new std::vector<std::string>();
+		}else if(*((char*)dataType+i) == 'f'){	//FLOAT
+			ibis::array_t<float> *arr;
+			arr = new ibis::array_t<float>((float*)vals[i], varSize);
+			raw[i] = arr;
+			type[i] = ibis::FLOAT;
+		}else if(*((char*)dataType+i) == 'i'){	//INT
+			ibis::array_t<int> *arr;
+			arr = new ibis::array_t<int>((int*)vals[i], varSize);
+			raw[i] = arr;
+			type[i] = ibis::INT;
 		}
 	}
 
@@ -174,23 +183,25 @@ int fb_build_result_set(void *ca, const char *select, const char *from, const ch
         aquery.setSelectClause(select);
         aquery.evaluate();
 
-        gettimeofday(&tv2, NULL);
 #ifdef DEBUG
+        gettimeofday(&tv2, NULL);
+     	printf("Evaluate time = %f seconds\n",
+             (double) (tv2.tv_usec - tv1.tv_usec)/1000000 +
+             (double) (tv2.tv_sec - tv1.tv_sec));
+        gettimeofday(&tv1, NULL);
+#endif
+
+        if(strstr(select, "count") != NULL){
+                long int num = aquery.getNumHits();
+                //printf("count=%ld\n", num);
+        }
+
+#ifdef DEBUG
+        gettimeofday(&tv2, NULL);
      	printf("Evaluate time = %f seconds\n",
              (double) (tv2.tv_usec - tv1.tv_usec)/1000000 +
              (double) (tv2.tv_sec - tv1.tv_sec));
 #endif
-
-        gettimeofday(&tv1, NULL);
-        if(strstr(select, "count") != NULL){
-                long int num = aquery.getNumHits();
-                printf("count=%ld\n", num);
-        }
-        gettimeofday(&tv2, NULL);
-     	printf("Evaluate time = %f seconds\n",
-             (double) (tv2.tv_usec - tv1.tv_usec)/1000000 +
-             (double) (tv2.tv_sec - tv1.tv_sec));
-
 	//=========explore acquire query result==============
         ibis::colValues *col = 0;
         ibis::selectClause comps(select);
@@ -216,10 +227,28 @@ int fb_build_result_set(void *ca, const char *select, const char *from, const ch
                                 break;
                         }
                 }
-                *size = col->size() * sizeof(double);	//total data size
-                for(int i = 0; i < col->size(); i++){
-                        *((double*)qret+i) = col->getDouble(i);
-                }
+
+		//extract the query result
+		switch(col->getType()){
+			case ibis::DOUBLE:{
+				*size = col->size() * sizeof(double);   //total data size
+		                for(int i = 0; i < col->size(); i++)
+                		        *((double*)qret+i) = col->getDouble(i);
+				break;}
+			case ibis::FLOAT:{
+				*size = col->size() * sizeof(float);
+				for(int i = 0; i < col->size(); i++)
+					*((float*)qret+i) = col->getFloat(i);
+				break;}
+			case ibis::INT:{
+				*size = col->size() * sizeof(float);
+				for(int i = 0; i < col->size(); i++)
+					*((float*)qret+i) = col->getFloat(i);
+				break;}
+			default:{
+				printf("Can not able to extract result for this column type\n");	
+				break;}
+                }	
 	}
 	return 0;
 }

@@ -293,6 +293,17 @@ int common_dspaces_get_versions(int **p_versions)
 	return dcg_get_versions(p_versions);
 }
 
+/*#ifdef DS_HAVE_FASTBIT
+int common_dspaces_vq_put(const char *app_name,
+	unsigned int ver, int size,
+	int xl, int yl, int zl,
+	int xu, int yu, int zu,
+	int num_vars, char* vars[],
+	char type[], void *data)
+{
+}
+#endif*/
+
 int common_dspaces_put(const char *var_name, 
         unsigned int ver, int size,
         int xl, int yl, int zl,
@@ -604,7 +615,7 @@ int common_dimes_put_sync_group(const char *group_name, int step)
 #endif
 
 #ifdef DS_HAVE_FASTBIT
-int common_dspaces_value_query(char *var_name, unsigned int vers, int size_elem, void *query)
+int common_dspaces_value_query(char *var_name, unsigned int vers, int size_elem, void *query, void *data)
 {
         int size_query = strlen(query);
         printf("Query_size before send=%d\n", size_query);
@@ -636,6 +647,9 @@ int common_dspaces_value_query(char *var_name, unsigned int vers, int size_elem,
         memset(od->data, '\0', size_query);
         memcpy(od->data, query, size_query);
 
+	//store the user pointer store the query result
+	od->qret = data;
+
         if(!od)
                 goto err_out;
 
@@ -647,7 +661,7 @@ int common_dspaces_value_query(char *var_name, unsigned int vers, int size_elem,
                 goto err_out;
         }
 
-        return 0; //TODO
+        return err; //TODO
 err_out:
         ERROR_TRACE();
 }

@@ -253,7 +253,7 @@ int dspaces_get (const char *var_name,
 int dspaces_put_sync(void);
 
 #ifdef DS_HAVE_FASTBIT
-int dspaces_value_query(char*, unsigned int, int, void*);
+int dspaces_value_query(char*, unsigned int, int, void*, void*);
 #endif
 
 #endif
