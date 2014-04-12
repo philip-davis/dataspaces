@@ -95,7 +95,7 @@ int common_dimes_put_sync_group(const char *group_name, int step);
 #endif
 
 #ifdef DS_HAVE_FASTBIT
-int common_dspaces_value_query(char*, unsigned int, int, void*);
+int common_dspaces_value_query(char*, unsigned int, int, void*, void*);
 #endif
 
 #endif

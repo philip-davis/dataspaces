@@ -76,6 +76,15 @@ struct query_dht {
         int                     *qh_peerid_tab;
 };
 
+#ifdef DS_HAVE_FASTBIT
+struct query_result{
+	int 			size;
+	void			*data;
+	void 			*_data;
+	int 			qid;
+};
+#endif
+
 /* 
    A query is a multi step transaction that serves an 'obj_get'
    request. This structure keeps query info to assemble the result.
@@ -104,6 +113,7 @@ struct query_tran_entry {
 #ifdef DS_HAVE_FASTBIT
         int                     num_server;
         int                     num_qret;
+	struct query_result	**qret;
 #endif
 };
 
@@ -1499,6 +1509,37 @@ static int check_data(void *data, int size)
 	return 0;
 }
 
+static int dcg_vq_result_assemble(struct query_tran_entry *qte, struct obj_data *od)
+{
+	//uloga("get into dcg_vq_result_assemble\n");
+
+	int i;
+	int total_size = 0;
+	for(i = 0; i < qte->num_qret; i++){
+		total_size += qte->qret[i]->size;
+	}	
+
+	if(total_size == 0)
+		return 0;
+	else{
+		int cur = 0;
+		//void *result = malloc(total_size);
+		for(i = 0; i < qte->num_qret; i++){	
+			memcpy(od->qret+cur, qte->qret[i]->data, qte->qret[i]->size);
+			cur += qte->qret[i]->size;	
+		}
+
+		//free resource
+		for(i = 0; i < qte->num_qret; i++){
+			if(qte->qret[i]->_data)
+				free(qte->qret[i]->_data);
+			free(qte->qret[i]);
+		}
+		free(qte->qret);
+	}
+	return total_size;
+}
+
 static int vq_complete_with_no_data(struct hdr_vq_result *hvr)
 {
 	struct query_tran_entry *qte;
@@ -1514,34 +1555,34 @@ err_out:
 
 static int obj_get_vq_result_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-	/*check the query result*//*
-	void *query;
-	query = msg->msg_data;
-	printf("Client received query result is %s\n", (char*)query);
-	*/
-	struct hdr_vq_result *hvr = msg->private;
+	//struct hdr_vq_result *hvr = msg->private;
+	struct query_result *result = msg->private;
 	struct query_tran_entry *qte;
 	int err = -ENOENT;
 
-	if(msg->msg_data){
-		//printf("start to check data....\n");
-		//check_data(msg->msg_data, hvr->size);
-	}
-
-	qte = qt_find(&dcg->qt, hvr->qid);
+	//qte = qt_find(&dcg->qt, hvr->qid);
+	qte = qt_find(&dcg->qt, result->qid);
 	if(!qte){
 		printf("can not find qte\n");
 		goto err_out;
 	}
 
 	//TODO copy result back to the result reference
-
+	if(result->data){
+		/*struct query_result *result = (struct query_result*)malloc(sizeof(struct query_result));
+		result->size = hvr->size;
+		result->data = malloc(sizeof(hvr->size));
+		uloga("test1\n");
+		memcpy(result->data, msg->msg_data, hvr->size);
+		uloga("test2\n");*/
+		qte->qret[qte->num_parts_rec] = result;
+	}
 	if(++qte->num_parts_rec == qte->num_qret && qte->num_server == 0){
-		printf("qte->num_parts_rec=%d\n", qte->num_parts_rec);
+		//printf("qte->num_parts_rec=%d\n", qte->num_parts_rec);
 		qte->f_complete = 1;
 	}
 
-	free(msg->msg_data);
+	//free(msg->msg_data);
 	free(msg);
 	return 0;
 err_out:
@@ -1552,7 +1593,6 @@ static int update_num_vq_reply(struct hdr_vq_result *hvr)
 {
 	struct query_tran_entry *qte;
 	int err = -ENOENT;
-	//printf("hvr_qid=%d, hvr->size=%d\n", hvr->qid, hvr->size);
 
 	qte = qt_find(&dcg->qt, hvr->qid);
 	if(!qte){
@@ -1561,6 +1601,7 @@ static int update_num_vq_reply(struct hdr_vq_result *hvr)
 	}
 	qte->num_qret += hvr->size;
 	qte->num_server--;
+	qte->qret = (struct query_result **)realloc(qte->qret, sizeof(struct query_result*)*qte->num_qret);		
 	if(qte->num_qret == 0 && qte->num_server == 0)
 		qte->f_complete = 1;
 	return 0;
@@ -1581,21 +1622,33 @@ static int dcgrpc_vq_reply(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	int err = -ENOMEM;
 
 	if(hvr->flag == 1){
+#ifdef DEBUG
 		printf("num_vq_reply = %d\n", hvr->size);
-		update_num_vq_reply(hvr);				
+#endif
+		update_num_vq_reply(hvr);	
 	}else{
+#ifdef DEBUG
 	printf("received ret_count in client=%d\n", hvr->size/sizeof(double));
+#endif
 	//if(hvr->size > 0){
 	msg = msg_buf_alloc(rpc_s, peer, 1);
 	if(!msg)
 		goto err_out;
 
-        msg->msg_data = malloc(7 + hvr->size);
-        ALIGN_ADDR_QUAD_BYTES(msg->msg_data);
+	struct query_result *result = malloc(sizeof(struct query_result));
+	memset(result, 0, sizeof(*result));
+	result->size = hvr->size;
+	result->qid = hvr->qid;
+	result->_data = result->data = malloc(7 + hvr->size);
+        ALIGN_ADDR_QUAD_BYTES(result->data);
+
+        //msg->msg_data = malloc(7 + hvr->size);
+        //ALIGN_ADDR_QUAD_BYTES(msg->msg_data);
+        msg->msg_data = result->data;
 	msg->size = hvr->size;
 	msg->cb = obj_get_vq_result_completion;
-	msg->private = hvr;
-	//rpc_mem_info_cache(peer, msg, cmd);
+	//msg->private = hvr;
+	msg->private = result;
 
 	//peer->mdh_addr = cmd->mdh_addr; // Modified by Tong Jin for GEMINI
 	rpc_mem_info_cache(peer, msg, cmd); 
@@ -2457,13 +2510,14 @@ static int dcg_value_query_at_peers(struct query_tran_entry *qte)
 	struct hdr_value_query *hq;
 	int err, i;
 
-	/* TODO: assume number of client is smaller than number of server */
+	/* TODO: assume number of client < number of server */
+	qte->num_server = dcg->dc->num_sp / dcg->dc->cp_in_job;
 	for(i = 0; i < dcg->dc->num_sp; i++){
 		int peer_id = dcg->dc->self->ptlmap.id % dcg->dc->num_sp;
 		//printf("---get peer in send value query = %d---\n", peer_id);
 		
 		/* server map to client */
-		if(peer_id == i % dcg->dc->cp_in_job){
+	    	if(peer_id == i % dcg->dc->cp_in_job){
 		//printf("num_cp=%d, C%d send query to S%d\n",dcg->dc->cp_in_job, peer_id, i);
 		peer = dc_get_peer(dcg->dc, i);
 		
@@ -2482,7 +2536,7 @@ static int dcg_value_query_at_peers(struct query_tran_entry *qte)
 		msg->msg_data = qte->data_ref; //qte->data_ref = od->data = qcond
 		//msg->size = size;
 		msg->size = 1024;
-		printf("-----------msg_data size=%d-----------\n", msg->size);
+		//printf("-----------msg_data size=%d-----------\n", msg->size);
 		msg->cb = send_query_completion; //TODO
 		//msg->private_var = od;
 
@@ -2498,10 +2552,9 @@ static int dcg_value_query_at_peers(struct query_tran_entry *qte)
 			free(msg);
 			goto err_out;
 		}
-		qte->num_server++;
+		//qte->num_server += 1;
 		}
 	}
-	//printf("num of server has been send query = %d\n", qte->num_server);
 	return 0;
 err_out:
 	ERROR_TRACE();
@@ -2537,7 +2590,8 @@ int dcg_send_value_query(struct obj_data *od)
             (double) (tv2.tv_usec - tv1.tv_usec)/1000000 +
             (double) (tv2.tv_sec - tv1.tv_sec));	
 */	//return 0;
-	//err = dcg_query_result_assemble(qte, od);
+		
+	err = dcg_vq_result_assemble(qte, od);
 
 err_qte_free:
 	qt_free_obj_data(qte, 1);

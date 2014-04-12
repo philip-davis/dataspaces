@@ -380,8 +380,8 @@ int common_get_transport_type_str(enum transport_type type, char* str)
 #ifdef DS_HAVE_FASTBIT
 int common_value_query (const char *var_name,
         unsigned int ver, int size,
-        void *qcond){
+        void *qcond, void *data){
         //uloga("%s(): call value_query of dataspaces!\n", __func__);
-        return dspaces_value_query(var_name, ver, size, qcond);
+        return dspaces_value_query(var_name, ver, size, qcond, data);
 }
 #endif

@@ -62,6 +62,7 @@ Matrix representation
 v (y)
 */
 // TODO(fan): split the function into 2
+
 static double* allocate_2d(int x, int y)
 {
 	double* tmp = NULL;
@@ -114,10 +115,11 @@ static int generate_3d(double *m3d, unsigned int ts, int spx, int spy, int spz)
 	return 0;
 }
 
-//organize mutiple variables as one element for input
-static int generate_multi_vars_2d(void *mltvars, unsigned int ts, int spx, int spy)
+
+
+static int generate_multi_vars_3d(void *mltvars, unsigned int ts, int spx, int spy, int spz)
 {
-        int nelem = spx * spy;
+        int nelem = spx * spy * spz;
         //int elem_size = sizeof(double) * 2; //try 2-double/elem
 
         int i, j;
@@ -127,6 +129,95 @@ static int generate_multi_vars_2d(void *mltvars, unsigned int ts, int spx, int s
                 	*(double*)(mltvars + i*elem_size_ + 8*j) = ts + j;
         }
         return 0;
+}
+
+//organize mutiple variables as one element for input
+static int generate_multi_vars_2d(void *data, unsigned int ts, int spx, int spy)
+{
+	int i = 0;
+	int elem_size = elem_size_;
+
+	//double+int
+	if(elem_size == sizeof(double) + sizeof(int)){
+		for(i = 0; i < spx*spy; i++){
+			*((double*)(data + i*elem_size)) = ts*0.1;
+			*((int*)(data + i*elem_size + sizeof(double))) = ts+i;
+		}
+	}
+
+	//double+float+int
+	else if(elem_size == sizeof(double) + sizeof(float) + sizeof(int)){
+		for(i = 0; i < spx*spy; i++){
+			*((double*)(data + i*elem_size)) = ts*0.1;
+			*((float*)(data + i*elem_size + sizeof(double))) = ts*1.1;
+			*((int*)(data + i*elem_size + sizeof(double) + sizeof(float))) = ts+i;
+		}	
+	}
+	
+	return 0;
+}
+
+static int couple_write_2d_multi_var(unsigned int ts, int num_vars, enum transport_type type)
+{
+	common_lock_on_write("m2d_lock", &gcomm_);
+    	if (type == USE_DIMES) {
+        	common_put_sync(type);
+    	}
+
+	//put the m2d into the space
+	set_offset_2d(rank_, npx_, npy_, spx_, spy_);
+	int elem_size = elem_size_;
+	int xl = offx_;
+	int yl = offy_;
+	int zl = 0;
+	int xu = offx_ + spx_ - 1;
+	int yu = offy_ + spy_ - 1;
+	int zu = 0;
+	double tm_st, tm_end, tm_max, tm_diff;
+	int root = 0;
+
+#ifdef DEBUG
+	uloga("Timestep=%u, %d write m2d:{(%d,%d,%d),(%d,%d,%d)} into space\n",
+		ts, rank_, xl,yl,zl,xu,yu,zu);
+#endif
+	
+	//Allocate enough space
+	void *data = NULL;
+	int nelem = spx_ * spy_;
+	data = malloc(nelem * elem_size);
+	if (data == NULL) {
+            	uloga("%s(): allocate_2d() failed.\n", __func__);
+            	return -1; // TODO: free buffers
+        }
+
+	//generate data
+	generate_multi_vars_2d(data, ts, spx_, spy_);
+
+	MPI_Barrier(gcomm_);
+        tm_st = timer_read(&timer_);
+
+        common_put("m2d", ts, elem_size,
+            	xl, yl, zl, xu, yu, zu, data, type);
+        if (type == USE_DSPACES) {
+            	common_put_sync(type);
+        }
+    
+    	tm_end = timer_read(&timer_);
+
+    	sleep(2);
+    	common_unlock_on_write("m2d_lock", &gcomm_);
+
+	tm_diff = tm_end-tm_st;
+	MPI_Reduce(&tm_diff, &tm_max, 1, MPI_DOUBLE, MPI_MAX, root, gcomm_);
+
+	if (rank_ == root) {
+		uloga("TS= %u TRANSPORT_TYPE= %s write MAX time= %lf\n",
+			ts, transport_type_str_, tm_max);
+	}
+
+    	free(data);
+
+	return 0;
 }
 
 
@@ -250,7 +341,8 @@ static int couple_write_3d(unsigned int ts, int num_vars, enum transport_type ty
             uloga("%s(): allocate_3d() failed.\n", __func__);
             return -1; // TODO: free buffers
         }
-        generate_3d(data, ts, spx_, spy_, spz_);
+        //generate_3d(data, ts, spx_, spy_, spz_);
+        generate_multi_vars_3d(data, ts, spx_, spy_, spz_);
         data_tab[i] = data;
     }
 
@@ -307,36 +399,37 @@ int test_put_run(enum transport_type type, int npapp, int npx, int npy, int npz,
 	timer_start(&timer_);
 
 	int app_id = 1;
-    common_init(npapp_, app_id);
-    common_set_storage_type(row_major, type);
-    common_get_transport_type_str(type, transport_type_str_);
+    	common_init(npapp_, app_id);
+    	common_set_storage_type(row_major, type);
+    	common_get_transport_type_str(type, transport_type_str_);
 
 	MPI_Comm_rank(gcomm_, &rank_);
 	MPI_Comm_size(gcomm_, &nproc_);
 
-    unsigned int ts;
+    	unsigned int ts;
 	if (dims == 2) {
-        for (ts = 1; ts <= timestep_; ts++){
-            couple_write_2d(ts, num_vars, type);
-        }
+        	for (ts = 1; ts <= timestep_; ts++){
+            		//couple_write_2d(ts, num_vars, type);
+            		couple_write_2d_multi_var(ts, num_vars, type);
+        	}
 
-        if (type == USE_DIMES) {
-            // Wait for the reader to finish the last step
-            common_lock_on_write("m2d_lock", &gcomm_);
-            common_put_sync(type);
-            common_unlock_on_write("m2d_lock", &gcomm_);
-        }
+        	if (type == USE_DIMES) {
+            		// Wait for the reader to finish the last step
+            		common_lock_on_write("m2d_lock", &gcomm_);
+            		common_put_sync(type);
+            		common_unlock_on_write("m2d_lock", &gcomm_);
+        	}
 	} else if (dims == 3) {
-        for (ts = 1; ts <= timestep_; ts++) {
-            couple_write_3d(ts, num_vars, type);
-        }
+        	for (ts = 1; ts <= timestep_; ts++) {
+        	    	couple_write_3d(ts, num_vars, type);
+        	}
 
-        if (type == USE_DIMES) {
-            // Wait for the reader to finish the last step
-            common_lock_on_write("m3d_lock", &gcomm_);
-            common_put_sync(type);
-            common_unlock_on_write("m3d_lock", &gcomm_);
-        }
+        	if (type == USE_DIMES) {
+       	     		// Wait for the reader to finish the last step
+            		common_lock_on_write("m3d_lock", &gcomm_);
+            		common_put_sync(type);
+            		common_unlock_on_write("m3d_lock", &gcomm_);
+        	}
 	} else {
 		uloga("%s(): error dims= %d\n", __func__, dims);
 	}

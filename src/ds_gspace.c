@@ -1117,9 +1117,11 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
                 printf("build_obj_idx failed\n");
                 return err;
         }
+#ifdef DEBUG
         uloga("rank=%d Build index Total time = %f seconds\n",rpc_s->ptlmap.id,
              (double) (tv2.tv_usec - tv1.tv_usec)/1000000 +
              (double) (tv2.tv_sec - tv1.tv_sec));
+#endif
 #endif
 
         free(msg);
@@ -1954,7 +1956,9 @@ static int fb_query_return_result(struct obj_descriptor *odsc, struct node_id *p
 	hvr->odsc = *odsc;
 	hvr->flag = 0;
 	}else{
+#ifdef DEBUG
 		printf("num of reply = %d\n", *(int*)result);
+#endif	
 		msg->private = query_ret = malloc(sizeof(int) + 7);
 		size = 4;
 			
@@ -1995,9 +1999,9 @@ static int local_value_query(struct hdr_value_query *hq, void* qcond, int* size_
         memset(from, '\0', strsize);
         memset(where, '\0', strsize);
         parse_query_str(qcond, select, from, where);
-
+#ifdef DEBUG
         printf("------select=%s, from=%s, where=%s\n", select, from, where);
-        
+#endif        
         struct obj_data *od;
         struct list_head *list;
 	struct obj_descriptor *odsc = &hq->odsc;
@@ -2078,8 +2082,9 @@ static int query_receive_completion(struct rpc_server *rpc_s, struct msg_buf *ms
 	memcpy(qcond, msg->msg_data, hq->size);
 	*((char*)qcond+hq->size) = '\0';
 	peer = ds_get_peer(dsg->ds, msg->peer->ptlmap.id);
+#ifdef DEBUG
 	printf("\nReceived query condition = %s\n", qcond);
-	
+#endif	
 	local_value_query(hq, qcond, &size_qret, peer);
 	
 	free(msg->msg_data);

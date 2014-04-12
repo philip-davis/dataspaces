@@ -82,6 +82,7 @@ struct obj_data {
 
 	/* Fastbit builded INDEX pointer for this obj*/
 #ifdef DS_HAVE_FASTBIT
+	void *			qret;	//user's pointer that store the query result
         void *                  fb_obj;
 #endif
 };

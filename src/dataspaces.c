@@ -121,6 +121,17 @@ int dspaces_put(const char *var_name,
 	return common_dspaces_put(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
 }
 
+/*#ifdef DS_HAVE_FASTBIT
+int dspaces_vq_put(const char *app_name,
+	unsigned int ver, int size,
+	int xl, int yl, int zl,
+	int xu, int yu, int zu,
+	int num_vars, char* vars[],
+	char type[], void *data)
+{
+}
+#endif*/
+
 int dspaces_put_sync(void)
 {
 	return common_dspaces_put_sync();
@@ -187,8 +198,8 @@ int dimes_put_sync_group(const char *group_name, int step)
 #endif
 
 #ifdef DS_HAVE_FASTBIT
-int dspaces_value_query(char *var_name, unsigned int vers, int size_elem, void *query)
+int dspaces_value_query(char *var_name, unsigned int vers, int size_elem, void *query, void *data)
 {
-	return common_dspaces_value_query(var_name, vers, size_elem, query);
+	return common_dspaces_value_query(var_name, vers, size_elem, query, data);
 }
 #endif
