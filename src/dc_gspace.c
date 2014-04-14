@@ -1958,6 +1958,13 @@ int dcg_get_num_peers(struct dcg_space *dcg)
         return dcg->dc->cp_in_job;
 }
 
+
+int dcg_get_num_servers(struct dcg_space *dcg)
+{	
+	return dcg->dc->num_sp;
+}
+
+
 int dcg_get_num_space_peers(struct dcg_space *dcg)
 {
 	return dcg->dc->num_sp;
