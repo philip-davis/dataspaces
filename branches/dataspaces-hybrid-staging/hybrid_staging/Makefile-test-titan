@@ -6,7 +6,7 @@ FTN = ftn
 DSPACES_DIR=/ccs/home/zhangfan/dataspaces-hybrid-staging
 HPGV_DIR=/ccs/home/zhangfan/ExaCT-titan/insitu_s3d_box/visualization/hpgv
 FASTBIT_DIR=/ccs/home/zhangfan/install/fastbit
-MEMQ_DIR=/ccs/home/zhangfan/software/memq
+MEMQ_DIR=/ccs/home/zhangfan/titan/software/memq
 
 INCLUDES=-I. \
 	-I$(DSPACES_DIR) \
