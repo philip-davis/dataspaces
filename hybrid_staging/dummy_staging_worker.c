@@ -563,6 +563,7 @@ int task_fb_indexing(struct task_descriptor *t, struct parallel_communicator *co
     cas = fb_build_index_double(data, num_double_elem, indopt, (void*)colname, &size_index); 
 
     // perform I/O
+/*
     char index_fname[256];
     sprintf(index_fname, "fb_index_process%d.dat", t->rank);
     FILE *f = fopen(index_fname, "a");
@@ -587,6 +588,7 @@ int task_fb_indexing(struct task_descriptor *t, struct parallel_communicator *co
         fclose(f); 
         free(data_buf);
     } 
+*/
 
     tm_end = MPI_Wtime();
     if (cas == 0) {
