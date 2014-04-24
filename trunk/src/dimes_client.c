@@ -161,8 +161,8 @@ static struct sspace* lookup_sspace_dimes(struct dimes_client *d, const char* va
         return d->ssd;
     }
 
-    uloga("%s(): add new shared space ndim= %d global dimension= %llu %llu %llu\n",
-        __func__, gdim.ndim, gdim.sizes.c[0], gdim.sizes.c[1], gdim.sizes.c[2]);
+    //uloga("%s(): add new shared space ndim= %d global dimension= %llu %llu %llu\n",
+    // __func__, gdim.ndim, gdim.sizes.c[0], gdim.sizes.c[1], gdim.sizes.c[2]);
 
     list_add(&ssd_entry->entry, &d->sspace_list);
     return ssd_entry->ssd;
