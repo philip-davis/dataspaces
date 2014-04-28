@@ -59,7 +59,7 @@ OUT6 = ./intransit_staging_driver
 OUT7 = ./dag_executor
 OUT8 = ./dag_submitter
 
-default: $(OUT2) $(OUT4) $(OUT5) $(OUT6) $(OUT7) $(OUT8)
+default: $(OUT2) $(OUT7) $(OUT8)
 
 .c.o:
 	$(CC) $(INCLUDES) $(CFLAGS) -c $< -o $@
