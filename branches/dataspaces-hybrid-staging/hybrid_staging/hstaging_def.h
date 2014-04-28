@@ -13,8 +13,7 @@ extern "C" {
 #define MAX_NUM_TASKS 512 
 #define MAX_NUM_VARS 48 
 
-#define BK_GROUP_BASIC_SIZE 4 
-#define MAX_NUM_SPLIT_LEVEL 30
+//#define BK_GROUP_BASIC_SIZE 4 
 
 // TODO: change to lowercase, reasonable naming for the enum types below
 enum hstaging_var_type {
@@ -24,16 +23,16 @@ enum hstaging_var_type {
 };
 
 enum hstaging_var_status {
-	NOT_AVAILABLE = 0,
-	AVAILABLE,
+	var_not_available = 0,
+	var_available,
 };
 
 enum hstaging_task_status {
-	NOT_READY = 0,
-	READY,
-	PENDING,
-	RUN,
-	FINISH,
+	task_not_ready = 0,
+    task_ready,
+    task_pending,
+    task_running,
+    task_finish,
 };
 
 enum hstaging_bucket_status {
@@ -67,7 +66,7 @@ enum hstaging_placement_hint {
  *  Message headers 
  */
 struct hdr_register_resource {
-    int location_type;
+    int pool_id;
     int num_bucket;
     int mpi_rank;
 } __attribute__((__packed__));
@@ -80,27 +79,18 @@ struct hdr_update_var {
 	struct bbox bb;
 } __attribute__((__packed__));
 
-/*
-struct hdr_request_task {
-	int mpi_rank;
-	int location_type;
-} __attribute__((__packed__));
-*/
-
 struct hdr_exec_task {
 	int tid;
 	int step;
-    int color;
 	int rank_hint;
 	int nproc_hint;
 	int num_input_vars;
 } __attribute__((__packed__));
 
 struct hdr_finish_task {
+    int pool_id;
     int tid;
     int step;
-    int color;
-    int location_type;
 } __attribute__((__packed__));
 
 struct hdr_exec_dag {
@@ -127,10 +117,10 @@ struct var_descriptor {
 struct task_descriptor {
 	int tid;
 	int step;
-    int color;
 	int rank;
 	int nproc;
 	int num_input_vars;
+    int *bk_mpi_rank_tab;
 	struct var_descriptor *input_vars;
 };
 

@@ -14,15 +14,12 @@ struct viz_task_info {
     double *viz_data;
     // int num_viz_step;
 };
+// Information kept for rendering task
+struct viz_task_info viz_info;
 
 struct parallel_communicator {
-    int level;
-    int color;
     MPI_Comm comm;
-    // Information kept for rendering task
-    struct viz_task_info viz_info;
 };
-static struct parallel_communicator comms[MAX_NUM_SPLIT_LEVEL];
 
 typedef int (*task_function)(struct task_descriptor *t, struct parallel_communicator *comm);
 struct parallel_task {
@@ -30,22 +27,9 @@ struct parallel_task {
 	task_function func_ptr;
 };
 static struct parallel_task ptasks[MAX_NUM_TASKS+1];
-static int num_tasks_ = 0;
-
-static enum hstaging_location_type loctype_;
+static int num_tasks = 0;
 static struct g_info g;
-
-static struct parallel_communicator* parallel_comm_lookup(int color)
-{
-    int i;
-    for (i = 0; i < MAX_NUM_SPLIT_LEVEL; i++) {
-        if (comms[i].color == color) {
-            return &(comms[i]);
-        }
-    }
-
-    return NULL; 
-}
+static MPI_Comm origin_mpi_comm; 
 
 static void viz_task_info_init(struct viz_task_info *p)
 {
@@ -60,68 +44,36 @@ static void viz_task_info_free(struct viz_task_info *p)
     }
 }
 
-static int parallel_comm_init()
+static int parallel_comm_init(MPI_Comm comm)
 {
-    int i;
-    for (i = 0; i < MAX_NUM_SPLIT_LEVEL; i++) {
-        comms[i].level = -1;
-        comms[i].color = -1;
-        viz_task_info_init(&comms[i].viz_info);
-    }
+    viz_task_info_init(&viz_info);
+    origin_mpi_comm = comm;
 
     return 0;    
 }
 
 static int parallel_comm_free()
 {
-    int i;
-    for (i = 0; i < MAX_NUM_SPLIT_LEVEL; i++) {
-        viz_task_info_free(&comms[i].viz_info);
-    }
-
+    viz_task_info_free(&viz_info);
     return 0;    
 }
 
-void recursive_split_mpi_comm(int current_level, int color)
+static struct parallel_communicator* create_parallel_comm(struct task_descriptor *t)
 {
-    int rank, nproc;
-    int l = current_level;
-    MPI_Comm_rank(comms[l].comm, &rank);
-    MPI_Comm_size(comms[l].comm, &nproc);
-    if (rank == 0) {
-        uloga("%s(): loctype %d level %d color %d nproc %d\n",
-            __func__, loctype_, current_level, color, nproc);
-    } 
+    struct parallel_communicator *comm = malloc(sizeof(*comm));
+    MPI_Group origin_mpi_comm_group;
+    MPI_Group new_group;
 
-    if (nproc <= BK_GROUP_BASIC_SIZE) return; // Done!
-    if (0 != (nproc % BK_GROUP_BASIC_SIZE)) {
-        uloga("%s(): nproc is not multiply of %d\n",
-            __func__, nproc, BK_GROUP_BASIC_SIZE);
-        return;
-    }
-    if (current_level+1 >= MAX_NUM_SPLIT_LEVEL) return;
+    MPI_Comm_group(origin_mpi_comm, &origin_mpi_comm_group);
+    MPI_Group_incl(origin_mpi_comm_group, t->nproc, t->bk_mpi_rank_tab, &new_group);
+    MPI_Comm_create_group(origin_mpi_comm, new_group, 0, &comm->comm); 
 
-    int left_child_size, right_child_size;
-    int left_child_color = color * 2;
-    int right_child_color = color * 2 + 1;
+    return comm;
+}
 
-    left_child_size = nproc / 2;
-    if ((left_child_size % BK_GROUP_BASIC_SIZE) != 0) {
-        int t = left_child_size / BK_GROUP_BASIC_SIZE;
-        left_child_size = (t+1) * BK_GROUP_BASIC_SIZE;
-    }     
-    right_child_size = nproc - left_child_size;
-
-    if (rank < left_child_size) {
-        MPI_Comm_split(comms[l].comm, left_child_color, rank, &(comms[l+1].comm));
-        comms[l+1].level = l+1;
-        comms[l+1].color = left_child_color;
-        recursive_split_mpi_comm(l+1, left_child_color);
-    } else {
-        MPI_Comm_split(comms[l].comm, right_child_color, rank, &(comms[l+1].comm));
-        comms[l+1].level = l+1;
-        comms[l+1].color = right_child_color;
-        recursive_split_mpi_comm(l+1, right_child_color);
+static void free_parallel_comm(struct parallel_communicator *comm) {
+    if (comm) {
+        free(comm);
     }
 }
 
@@ -139,20 +91,27 @@ static void task_done(struct task_descriptor *t, struct parallel_communicator *c
 
 static int add_task_function(int tid, task_function func_ptr)
 {
-	ptasks[num_tasks_].tid = tid;
-	ptasks[num_tasks_].func_ptr = func_ptr;
-	num_tasks_++;
+	ptasks[num_tasks].tid = tid;
+	ptasks[num_tasks].func_ptr = func_ptr;
+	num_tasks++;
 }
 
 static int exec_task_function(struct task_descriptor *t)
 {
 	int i, err;
-	for (i = 0; i < num_tasks_; i++) {
+	for (i = 0; i < num_tasks; i++) {
 		if (t->tid == ptasks[i].tid) {
-            struct parallel_communicator *comm;
-            comm = parallel_comm_lookup(t->color);	
+            struct parallel_communicator *comm = create_parallel_comm(t);	
             err = (ptasks[i].func_ptr)(t, comm);
             task_done(t, comm); 
+            free_parallel_comm(comm); 
+
+            if (t->bk_mpi_rank_tab) {
+                free(t->bk_mpi_rank_tab);
+            }
+            if (t->input_vars) {
+                free(t->input_vars);
+            }
             return err;
 		}
 	}
@@ -273,8 +232,8 @@ static int read_input_data(struct task_descriptor *t)
 		free(databuf);
 	}
 
-	uloga("%s(): task color= %d tid= %d step= %d rank= %d nproc= %d "
-		"num_input_vars= %d\n", __func__, t->color, t->tid, t->step, 
+	uloga("%s(): task tid= %d step= %d rank= %d nproc= %d "
+		"num_input_vars= %d\n", __func__, t->tid, t->step, 
         t->rank, t->nproc, t->num_input_vars);
 	
 	return 0;
@@ -339,9 +298,9 @@ int dag_task(struct task_descriptor *t, struct parallel_communicator *comm)
 
     // Print input variable information
     if (t->rank == 0) {
-        uloga("%s(): task color= %d tid= %d step= %d rank= %d nproc= %d "
+        uloga("%s(): task tid= %d step= %d rank= %d nproc= %d "
             "num_input_vars= %d comm_size= %d comm_rank= %d\n", __func__, 
-            t->color, t->tid, t->step,
+            t->tid, t->step,
             t->rank, t->nproc, t->num_input_vars, comm_size, comm_rank);
 
         int i;
@@ -363,6 +322,76 @@ int dag_task(struct task_descriptor *t, struct parallel_communicator *comm)
         update_var_nodata(var_name, t->step);
     }
         
+    return 0;
+}
+
+int xgc1_task(struct task_descriptor *t, struct parallel_communicator *comm)
+{
+    int comm_size, comm_rank;
+    MPI_Barrier(comm->comm);
+    MPI_Comm_size(comm->comm, &comm_size);
+    MPI_Comm_rank(comm->comm, &comm_rank);
+
+    // print input variable information
+    if (t->rank == 0) {
+        uloga("%s(): task id= %d step= %d rank= %d nproc= %d "
+            "num_input_vars= %d comm_size= %d comm_rank= %d\n", __func__,
+            t->tid, t->step,
+            t->rank, t->nproc, t->num_input_vars, comm_size, comm_rank);
+
+        int i;
+        for (i = 0; i < t->num_input_vars; i++) {
+            uloga("%s(): task tid %d input vars %s step %d elem_size %d\n",
+                __func__, t->tid, t->input_vars[i].var_name,
+                t->input_vars[i].step, t->input_vars[i].size);
+        }
+    }
+
+    // sleep for 1 second
+    unsigned int seconds = 2;
+    sleep(seconds);
+
+    MPI_Barrier(comm->comm);
+
+    if (t->rank == 0) {
+        update_var_nodata("xgc1_output", t->step);
+    }
+
+    return 0;
+}
+
+int xgca_task(struct task_descriptor *t, struct parallel_communicator *comm)
+{
+    int comm_size, comm_rank;
+    MPI_Barrier(comm->comm);
+    MPI_Comm_size(comm->comm, &comm_size);
+    MPI_Comm_rank(comm->comm, &comm_rank);
+
+    // print input variable information
+    if (t->rank == 0) {
+        uloga("%s(): task id= %d step= %d rank= %d nproc= %d "
+            "num_input_vars= %d comm_size= %d comm_rank= %d\n", __func__,
+            t->tid, t->step,
+            t->rank, t->nproc, t->num_input_vars, comm_size, comm_rank);
+
+        int i;
+        for (i = 0; i < t->num_input_vars; i++) {
+            uloga("%s(): task tid %d input vars %s step %d elem_size %d\n",
+                __func__, t->tid, t->input_vars[i].var_name,
+                t->input_vars[i].step, t->input_vars[i].size);
+        }
+    }
+
+    // sleep for 1 second
+    unsigned int seconds = 2;
+    sleep(seconds);
+
+    MPI_Barrier(comm->comm);
+
+    if (t->rank == 0) {
+        update_var_nodata("xgca_output", t->step);
+    }
+
     return 0;
 }
 
@@ -453,8 +482,6 @@ int task_viz_render(struct task_descriptor *t, struct parallel_communicator *com
     int npx, npy, npz, mypx, mypy, mypz;
     int domain_grid_size[3];
     int render_root = 0;
-    struct viz_task_info *viz_info = &comm->viz_info;
-
     double tm_st, tm_end;
 
     MPI_Comm_rank(comm->comm, &t->rank);
@@ -469,11 +496,11 @@ int task_viz_render(struct task_descriptor *t, struct parallel_communicator *com
 
     var_desc = &(t->input_vars[0]);
     set_data_decomposition(t, var_desc);
-    if (!viz_info->is_viz_init) {
+    if (!viz_info.is_viz_init) {
         data = allocate_data(g.spx*g.spy*g.spz);
-        viz_info->viz_data = data;
+        viz_info.viz_data = data;
     } else {
-        data = viz_info->viz_data;
+        data = viz_info.viz_data;
     }
     generate_bbox(&g, &xl, &yl, &zl, &xu, &yu, &zu);
     err = hstaging_get_var(var_desc->var_name, t->step, elem_size,
@@ -509,11 +536,11 @@ int task_viz_render(struct task_descriptor *t, struct parallel_communicator *com
     //    mypx, mypy, mypz);
 
     // compute_stats(var_desc->var_name, data, g.spx*g.spy*g.spz, t->rank);
-    if (!viz_info->is_viz_init) {
+    if (!viz_info.is_viz_init) {
         hpgv_insituvis_init_(g.rank, comm->comm, render_root,
                     npx, npy, npz, mypx, mypy, mypz,
                     domain_grid_size, data);
-        viz_info->is_viz_init = 1;
+        viz_info.is_viz_init = 1;
     }
 
     hpgv_insitu_render_tstep_(g.rank, comm->comm, t->step, my_data_quantize);
@@ -608,6 +635,7 @@ int task_fb_indexing(struct task_descriptor *t, struct parallel_communicator *co
     return 0;
 }
 
+/*
 int dummy_s3d_staging_parallel_job(MPI_Comm comm, enum hstaging_location_type loc_type)
 {
     int err;
@@ -621,8 +649,7 @@ int dummy_s3d_staging_parallel_job(MPI_Comm comm, enum hstaging_location_type lo
         return -1;
     }
 
-    parallel_comm_init();
-	loctype_ = loc_type;	
+    parallel_comm_init(comm);
     level = 0;
     color = 1;
     comms[level].level = level;
@@ -639,16 +666,48 @@ int dummy_s3d_staging_parallel_job(MPI_Comm comm, enum hstaging_location_type lo
     add_task_function(7, task_viz_render);
     add_task_function(8, task_fb_indexing);
 
-    hstaging_register_bucket_resource(loctype_, mpi_nproc, mpi_rank);
+    hstaging_register_executor(mpi_nproc, mpi_rank);
     MPI_Barrier(comm);
 
 	struct task_descriptor t;
 	while (!hstaging_request_task(&t)) {
 		hstaging_put_sync_all();
 		err = exec_task_function(&t);	
-		if (t.num_input_vars > 0 && t.input_vars) {
-			free(t.input_vars);
+		if (err < 0) {
+			return err;
 		}
+	}
+
+    hstaging_put_sync_all();
+    parallel_comm_free();
+
+	return 0;
+ err_out:
+	return -1;
+}
+*/
+
+int dummy_dag_parallel_job(MPI_Comm comm)
+{
+    int err;
+    int mpi_rank, mpi_nproc;
+    MPI_Comm_size(comm, &mpi_nproc);
+    MPI_Comm_rank(comm, &mpi_rank);
+
+    parallel_comm_init(comm);
+
+    int tid;
+    for (tid = 1; tid < MAX_NUM_TASKS; tid++) {
+        add_task_function(tid, dag_task);
+    }
+    int pool_id = 1;
+    hstaging_register_executor(pool_id, mpi_nproc, mpi_rank);
+    MPI_Barrier(comm);
+
+	struct task_descriptor t;
+	while (!hstaging_request_task(&t)) {
+		hstaging_put_sync_all();
+		err = exec_task_function(&t);	
 		if (err < 0) {
 			return err;
 		}
@@ -662,52 +721,32 @@ int dummy_s3d_staging_parallel_job(MPI_Comm comm, enum hstaging_location_type lo
 	return -1;
 }
 
-int dummy_dag_parallel_job(MPI_Comm comm, enum hstaging_location_type loc_type)
+int dummy_epsi_coupling_workflow(MPI_Comm comm)
 {
     int err;
-    int level, color;
     int mpi_rank, mpi_nproc;
     MPI_Comm_size(comm, &mpi_nproc);
     MPI_Comm_rank(comm, &mpi_rank);
-    if ((mpi_nproc % BK_GROUP_BASIC_SIZE) != 0) {
-        uloga("%s(): error size needs to be multiply of %d\n",
-            __func__, BK_GROUP_BASIC_SIZE);
-        return -1;
-    }
 
-    parallel_comm_init();
-	loctype_ = loc_type;	
-    // TODO: simplify the API for recursive split of MPI comm
-    level = 0;
-    color = 1;
-    comms[level].level = level;
-    comms[level].color = color;
-    comms[level].comm = comm;
-    recursive_split_mpi_comm(level, color);
+    parallel_comm_init(comm);
 
-    int tid;
-    for (tid = 1; tid < MAX_NUM_TASKS; tid++) {
-        add_task_function(tid, dag_task);
-    }
-    hstaging_register_bucket_resource(loctype_, mpi_nproc, mpi_rank);
+    add_task_function(1, xgc1_task);
+    add_task_function(2, xgca_task);
+
+    int pool_id = 1;
+    hstaging_register_executor(pool_id, mpi_nproc, mpi_rank);
     MPI_Barrier(comm);
 
-	struct task_descriptor t;
-	while (!hstaging_request_task(&t)) {
-		hstaging_put_sync_all();
-		err = exec_task_function(&t);	
-		if (t.num_input_vars > 0 && t.input_vars) {
-			free(t.input_vars);
-		}
-		if (err < 0) {
-			return err;
-		}
-	}
-
+    struct task_descriptor t;
+    while (!hstaging_request_task(&t)) {
+        hstaging_put_sync_all();
+        err = exec_task_function(&t);
+        if (err < 0) {
+            return err;
+        }
+    }
     hstaging_put_sync_all();
     parallel_comm_free();
 
-	return 0;
- err_out:
-	return -1;
+    return 0;
 }

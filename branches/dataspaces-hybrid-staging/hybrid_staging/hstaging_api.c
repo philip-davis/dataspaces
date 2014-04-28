@@ -38,8 +38,8 @@ struct bucket_info {
 	double tm_st, tm_end;
 
 	enum hstaging_pe_type pe_type;
-    enum hstaging_location_type location_type;
-    int mpi_rank, num_bucket;
+    // enum hstaging_location_type location_type;
+    int pool_id, mpi_rank, num_bucket;
 };
 static struct bucket_info bk_info;
 
@@ -78,14 +78,28 @@ err_out:
 }
 #endif
 
-static int fetch_input_vars_info_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+static int fetch_task_info_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
+    size_t mpi_rank_tab_size = bk_info.current_task->nproc*sizeof(int);
+    size_t input_var_tab_size =
+                bk_info.current_task->num_input_vars*sizeof(struct var_descriptor);
+
+    // copy origin mpi ranks for allocated bk
+    bk_info.current_task->bk_mpi_rank_tab = malloc(mpi_rank_tab_size);
+    memcpy(bk_info.current_task->bk_mpi_rank_tab, msg->msg_data, mpi_rank_tab_size);
+
+    // copy input vars
+    bk_info.current_task->input_vars = malloc(input_var_tab_size);
+    memcpy(bk_info.current_task->input_vars, msg->msg_data+mpi_rank_tab_size,
+            input_var_tab_size);
+
 	bk_info.f_get_task = 1;
+    free(msg->msg_data);
 	free(msg);
 	return 0;
 }
 
-static int fetch_input_vars_info(struct rpc_cmd *cmd)
+static int fetch_task_info(struct rpc_cmd *cmd)
 {
 	struct node_id *peer = dc_get_peer(dc, cmd->id);
 	struct msg_buf *msg;
@@ -95,12 +109,10 @@ static int fetch_input_vars_info(struct rpc_cmd *cmd)
 	if (!msg)
 		goto err_out;
 
-	size_t size = bk_info.current_task->num_input_vars * 
-					sizeof(struct var_descriptor);
-	bk_info.current_task->input_vars = (struct var_descriptor *)malloc(size);
-	msg->msg_data = bk_info.current_task->input_vars;
-	msg->size = size;
-	msg->cb = fetch_input_vars_info_completion;
+    msg->size = bk_info.current_task->num_input_vars*sizeof(struct var_descriptor)
+                + bk_info.current_task->nproc*sizeof(int);
+    msg->msg_data = malloc(msg->size);
+	msg->cb = fetch_task_info_completion;
 
 	rpc_mem_info_cache(peer, msg, cmd);
 	err = rpc_receive_direct(dc->rpc_s, peer, msg);
@@ -118,22 +130,18 @@ static int callback_hs_exec_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	struct hdr_exec_task *hdr = (struct hdr_exec_task *)cmd->pad;
 	bk_info.current_task->tid = hdr->tid;
 	bk_info.current_task->step = hdr->step;
-    bk_info.current_task->color = hdr->color;
 	bk_info.current_task->rank = hdr->rank_hint;
 	bk_info.current_task->nproc = hdr->nproc_hint;
+    bk_info.current_task->num_input_vars = hdr->num_input_vars;
+    bk_info.current_task->input_vars = NULL;
 
-	if (hdr->num_input_vars > 0) {
-		bk_info.current_task->num_input_vars = hdr->num_input_vars;
-		if (fetch_input_vars_info(cmd) < 0) {
-			bk_info.current_task = NULL;
-			return -1;
-		}
-	} else {
-		bk_info.current_task->num_input_vars = 0;
-		bk_info.current_task->input_vars = NULL;
-		bk_info.f_get_task = 1;
-	}
-
+    if (fetch_task_info(cmd) < 0) {
+        uloga("ERROR %s(): failed to fetch info for task (%d,%d)\n",
+            __func__, hdr->tid, hdr->step);
+        bk_info.current_task = NULL;
+        return -1;
+    }
+    
 	return 0;
 }
 
@@ -339,7 +347,7 @@ int hstaging_request_task(struct task_descriptor *t)
 	return 0;
 }
 
-int hstaging_register_bucket_resource(enum hstaging_location_type loc_type, int num_bucket, int mpi_rank)
+int hstaging_register_executor(int pool_id, int num_bucket, int mpi_rank)
 {
     struct msg_buf *msg;
     struct node_id *peer;
@@ -354,11 +362,11 @@ int hstaging_register_bucket_resource(enum hstaging_location_type loc_type, int 
     msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
     struct hdr_register_resource *hdr = (struct hdr_register_resource *)
             msg->msg_rpc->pad;
-    hdr->location_type = loc_type;
+    hdr->pool_id = pool_id;
     hdr->num_bucket = num_bucket;
     hdr->mpi_rank = mpi_rank;
 
-    bk_info.location_type = loc_type;
+    bk_info.pool_id = pool_id;
     bk_info.num_bucket = num_bucket;
     bk_info.mpi_rank = mpi_rank;
 
@@ -387,10 +395,9 @@ int hstaging_set_task_done(struct task_descriptor *t)
     msg->msg_rpc->cmd = hs_finish_task_msg;
     msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
     struct hdr_finish_task *hdr= (struct hdr_finish_task *)msg->msg_rpc->pad;
+    hdr->pool_id = bk_info.pool_id;
     hdr->tid = t->tid;
     hdr->step = t->step;
-    hdr->color = t->color;
-    hdr->location_type = bk_info.location_type;
 
     err = rpc_send(dc->rpc_s, peer, msg);
     if (err < 0) {

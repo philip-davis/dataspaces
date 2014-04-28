@@ -29,6 +29,7 @@ static struct ds_gspace *dsg = NULL;
 
 static struct hstaging_workflow *wf = NULL;
 static struct timer tm; 
+static double tm_st;
 static double dag_tm_st, dag_tm_end;
 
 struct job_id {
@@ -41,16 +42,15 @@ struct job {
 	struct task_instance *ti;
 	int num_input_vars;
 	struct job_id jid;
-	int	num_required_bk; // number of buckets required for job execution
-    enum hstaging_location_type location_type;
-    int bk_group_color;
+    // enum hstaging_location_type location_type;
+    int bk_allocation_size; // number of buckets required for job execution
+    int *bk_idx_tab; // array of idx to the buckets in bk_tab 
 };
 
-enum bucket_group_status {
-    bk_group_none = 0, // group not exist
-    bk_group_idle,
-    bk_group_busy,
-    bk_group_invalidated
+enum bucket_status {
+    bk_none = 0, // not ready for task execution 
+    bk_idle,
+    bk_busy,
 };
 
 struct mpi_rank_range {
@@ -58,24 +58,18 @@ struct mpi_rank_range {
 };
 
 struct bucket {
-    int dart_id;
-    int mpi_rank;
-};
-
-struct bucket_group {
-    enum bucket_group_status status;
-    int color;
-    int size;
-    struct mpi_rank_range rank_range;
-    struct job_id current_jid;
+    int dart_id; // unique id
+    int pool_id; // indicate which resource pool the bucket is from
+    int origin_mpi_rank;
+    enum bucket_status status;
+    struct job_id current_jid;    
 };
 
 struct staging_resource {
     struct list_head entry;
-    enum hstaging_location_type location_type;
+    // enum hstaging_location_type location_type;
+    int pool_id;
     int num_bucket;
-    int group_tab_size;
-    struct bucket_group *group_tab;
     int bk_tab_size;
     struct bucket *bk_tab;
 };
@@ -94,34 +88,34 @@ static inline int equal_jid(struct job_id *l, struct job_id *r)
 	return (l->tid == r->tid) && (l->step == r->step);
 }
 
+/*
 static inline int is_master()
 {
 	return ( 0 == ds->rpc_s->ptlmap.id );
 }
+*/
 
 static inline void rs_init()
 {
     INIT_LIST_HEAD(&rs_list);
 }
 
-static struct staging_resource* rs_lookup(enum hstaging_location_type loctype)
+static struct staging_resource* rs_lookup(int pool_id)
 {
     struct staging_resource *rs;
     list_for_each_entry(rs, &rs_list, struct staging_resource, entry) {
-        if (rs->location_type == loctype)
+        if (rs->pool_id == pool_id)
             return rs;
     }
 
     return NULL;    
 }
 
-static struct staging_resource* rs_create_new(enum hstaging_location_type loctype, int num_bucket)
+static struct staging_resource* rs_create_new(int pool_id, int num_bucket)
 {
     struct staging_resource *rs;
     rs = malloc(sizeof(*rs));
-    rs->location_type = loctype;
-    rs->group_tab_size = 0;
-    rs->group_tab = NULL;
+    rs->pool_id = pool_id;
     rs->num_bucket = 0;
     rs->bk_tab_size = num_bucket;
     rs->bk_tab = malloc(sizeof(struct bucket) * num_bucket);
@@ -132,108 +126,89 @@ static struct staging_resource* rs_create_new(enum hstaging_location_type loctyp
     return rs; 
 }
 
-static int rs_add_bucket(struct staging_resource *rs, int mpi_rank, int dart_id)
+static int rs_add_bucket(struct staging_resource *rs, int origin_mpi_rank, int dart_id,
+                        int pool_id)
 {
-    if (mpi_rank < 0 || mpi_rank >= rs->bk_tab_size) {
-        uloga("%s(): mpi_rank out of range\n", __func__);
+    if (origin_mpi_rank < 0 || origin_mpi_rank >= rs->bk_tab_size) {
+        uloga("ERROR %s(): origin_mpi_rank out of range\n", __func__);
         return -1;
     }
 
-    struct bucket *bk = &(rs->bk_tab[mpi_rank]);
+    struct bucket *bk = &(rs->bk_tab[origin_mpi_rank]);
     bk->dart_id = dart_id;
-    bk->mpi_rank = mpi_rank;
-    rs->num_bucket++;
+    bk->pool_id = pool_id;
+    bk->origin_mpi_rank = origin_mpi_rank;
+    bk->status = bk_none;
 
+    rs->num_bucket++;
     return 0;
 }
 
-static struct bucket* rs_get_bucket(struct staging_resource *rs, int mpi_rank)
+static void rs_free_bk_allocation(struct staging_resource *rs, int *bk_idx_tab,
+                                int allocation_size)
 {
-    if (mpi_rank < 0 || mpi_rank >= rs->bk_tab_size) {
-        uloga("%s(): mpi_rank out of range\n", __func__);
-        return NULL;
-    }
-
-    return &(rs->bk_tab[mpi_rank]);
-}
-
-void recursive_add_bucket_group(struct staging_resource *r, int color, int current_group_size, struct mpi_rank_range *rank_range)
-{
-    // Add
-    r->group_tab[color].status = bk_group_idle;
-    r->group_tab[color].color = color;
-    r->group_tab[color].size = current_group_size;
-    r->group_tab[color].rank_range.l = rank_range->l;
-    r->group_tab[color].rank_range.r = rank_range->r;
-    
-    int left_child_size, right_child_size;
-    struct mpi_rank_range left_child_rank_range, right_child_rank_range;
-
-    if (current_group_size <= BK_GROUP_BASIC_SIZE) {
-        return; // Done!
-    }
-
-    left_child_size = current_group_size / 2;
-    if ((left_child_size % BK_GROUP_BASIC_SIZE) != 0) {
-        int t = left_child_size / BK_GROUP_BASIC_SIZE;
-        left_child_size = (t+1) * BK_GROUP_BASIC_SIZE;
-    }
-    right_child_size = current_group_size - left_child_size;
-
-    left_child_rank_range.l = rank_range->l;
-    left_child_rank_range.r = rank_range->l + left_child_size - 1;
-    right_child_rank_range.l = rank_range->l + left_child_size;
-    right_child_rank_range.r = rank_range->r; 
-
-    // Add left child
-    recursive_add_bucket_group(r, 2*color, left_child_size, &left_child_rank_range);
-
-    // Add right child
-    recursive_add_bucket_group(r, 2*color+1, right_child_size, &right_child_rank_range);
-}
-
-void rs_build_bk_group(struct staging_resource *r)
-{
-    // Calculate max number of levels/groups can be built for the given staging
-    // resource
-    double n1 = r->num_bucket;
-    double n2 = BK_GROUP_BASIC_SIZE;
-    int max_levels = ceil(log2(n1)+1-log2(n2)); 
-    int max_groups = pow(2, max_levels) - 1;
-
-    // set tab size as (max_groups + 1), so we can index group using color value
-    r->group_tab_size = max_groups+1;
-    if (r->group_tab_size <= 1) {
-        uloga("%s(): error max_levels %d max_groups %d\n", __func__,
-            max_levels, max_groups);
-    }
-    r->group_tab = (struct bucket_group*)
-            malloc(sizeof(struct bucket_group) * r->group_tab_size);
-    if (r->group_tab == NULL) {
-        uloga("%s(): error malloc failed\n", __func__);
+    if (allocation_size > rs->bk_tab_size) {
+        uloga("ERROR %s(): allocation_size is larger than bk_tab_size\n", __func__);
         return;
     }
 
     int i;
-    for (i = 0; i < r->group_tab_size; i++) {
-        r->group_tab[i].status = bk_group_none;
+    for (i = 0; i < allocation_size; i++) {
+        rs->bk_tab[bk_idx_tab[i]].status = bk_idle;
+    }
+}
+
+
+static int* rs_request_bk_allocation(struct staging_resource *rs, int allocation_size)
+{
+    if (allocation_size > rs->bk_tab_size) {
+        uloga("ERROR %s(): allocation_size is larger than bk_tab_size\n", __func__);
+        return NULL;
     }
 
-    int color = 1;
-    int current_group_size = r->num_bucket;
-    struct mpi_rank_range rank_range;
-    rank_range.l = 0;
-    rank_range.r = r->num_bucket-1;
-    recursive_add_bucket_group(r, color, current_group_size, &rank_range); 
+    int *bk_idx_tab = (int*)malloc(allocation_size*sizeof(int));
+    if (!bk_idx_tab) return NULL;
 
-    for (i = 0; i < r->group_tab_size; i++) {
-        if (r->group_tab[i].status != bk_group_none) {
-            uloga("%s(): group: tab index %d, color %d, size %d "
-                " rank range (%d, %d)\n",
-                __func__, i, r->group_tab[i].color, r->group_tab[i].size,
-                r->group_tab[i].rank_range.l, r->group_tab[i].rank_range.r);
+    int i, j;
+    for (i = 0, j = 0; i < rs->bk_tab_size; i++) {
+        if (rs->bk_tab[i].status == bk_idle) {
+            bk_idx_tab[j++] = i;
         }
+        if (j == allocation_size) break;
     }
+
+    if (j < allocation_size) {
+        // no sufficient idle buckets
+        free(bk_idx_tab);
+        return NULL;  
+    }
+
+    for (i = 0; i < allocation_size; i++) {
+        // update status of the bucket
+        rs->bk_tab[bk_idx_tab[i]].status = bk_busy;
+    }
+    return bk_idx_tab;
+}
+
+static struct bucket* rs_get_bucket(struct staging_resource *rs, int origin_mpi_rank)
+{
+    if (origin_mpi_rank < 0 || origin_mpi_rank >= rs->bk_tab_size) {
+        uloga("ERROR %s(): origin_mpi_rank out of range\n", __func__);
+        return NULL;
+    }
+
+    return &(rs->bk_tab[origin_mpi_rank]);
+}
+
+static void rs_set_bucket_idle(struct staging_resource *rs)
+{
+    int i;
+    for (i = 0; i < rs->bk_tab_size; i++) {
+        rs->bk_tab[i].status = bk_idle;
+    }
+
+    uloga("%s(): bucket resource pool %d is ready, num_bucket %d\n",
+        __func__, rs->pool_id, rs->bk_tab_size);
 }
 
 static void rs_free()
@@ -242,104 +217,8 @@ static void rs_free()
     list_for_each_entry_safe(rs, t, &rs_list, struct staging_resource, entry)
     {
         list_del(&rs->entry);
-        if (rs->group_tab) free(rs->group_tab);
         if (rs->bk_tab) free(rs->bk_tab);
         free(rs);
-    }
-}
-
-static void invalidate_ancestor_groups(struct staging_resource *r, int color)
-{
-    int parent_color = color / 2;
-    if (parent_color >= 1) {
-        r->group_tab[parent_color].status = bk_group_invalidated;
-    }
-
-    return;
-}
-
-static void invalidate_descendant_groups(struct staging_resource *r, int color)
-{
-    int i;
-    int colors[2];
-    colors[0] = 2*color;
-    colors[1] = 2*color + 1;
-    
-    for ( i = 0; i < 2; i++) {
-        if (colors[i] <= r->group_tab_size &&
-            r->group_tab[colors[i]].status != bk_group_none) {
-            r->group_tab[colors[i]].status = bk_group_invalidated;
-            invalidate_descendant_groups(r, colors[i]);
-        }
-    }
-
-    return;
-}
-
-static struct bucket_group* request_bucket_group(struct staging_resource *r, int num_required_bk)
-{
-    int i;
-    for (i = 0; i < r->group_tab_size; i++) {
-        struct bucket_group *g = &(r->group_tab[i]);
-        if (g->status == bk_group_idle && g->size == num_required_bk) {
-            // Mark the bucket group as busy
-            g->status = bk_group_busy;
-            // Invalid all its ancestors and descendants
-            invalidate_ancestor_groups(r, g->color);
-            invalidate_descendant_groups(r, g->color);
-
-            return g;
-        }
-    } 
-
-    return NULL;    
-}
-
-
-void validate_ancestor_groups(struct staging_resource *r, int color)
-{
-    int parent_color = color / 2;
-    if (parent_color < 1) return;
-
-    // Check if both children of my parent is idle
-    int left = parent_color * 2;
-    int right = parent_color * 2 + 1;
-    if (r->group_tab[left].status == bk_group_idle &&
-        r->group_tab[right].status == bk_group_idle) {
-        r->group_tab[parent_color].status = bk_group_idle;
-        validate_ancestor_groups(r, parent_color);
-    }
-
-    return;
-}
-
-void validate_descendant_groups(struct staging_resource *r, int color)
-{
-    int i;
-    int colors[2];
-    colors[0] = 2*color;
-    colors[1] = 2*color + 1;
-
-    for ( i = 0; i < 2; i++) {
-        if (colors[i] <= r->group_tab_size &&
-            r->group_tab[colors[i]].status != bk_group_none) {
-            r->group_tab[colors[i]].status = bk_group_idle;
-            validate_descendant_groups(r, colors[i]);
-        }
-    }
-
-    return; 
-}
-
-int free_bucket_group(struct staging_resource *r, int color)
-{
-    if (color < r->group_tab_size &&
-        r->group_tab[color].status == bk_group_busy)
-    {
-        // Mark the bucket group as idle
-        r->group_tab[color].status = bk_group_idle;
-        validate_ancestor_groups(r, color);
-        validate_descendant_groups(r, color);
     }
 }
 
@@ -361,12 +240,6 @@ static int busy_bk_count()
 	int cnt = 0;
 
 	return cnt;
-}
-
-static struct bucket* busy_bk_lookup(int dart_id)
-{
-	struct bucket *bk;
-	return NULL;	
 }
 
 static int jobq_count()
@@ -397,38 +270,42 @@ static struct job * jobq_create_job(struct task_instance *ti)
 	j->jid.tid = ti->tid;
 	j->jid.step = ti->step;
 	j->ti = ti;
-    unsigned int num_basic_bk_group = j->ti->size_hint / BK_GROUP_BASIC_SIZE;
-    if (num_basic_bk_group == 0) num_basic_bk_group = 1;
-    j->num_required_bk = num_basic_bk_group * BK_GROUP_BASIC_SIZE; 
     j->num_input_vars = 0;
+    j->bk_allocation_size = j->ti->size_hint;
+    j->bk_idx_tab = NULL;
 	struct var_instance *vi;
 	list_for_each_entry(vi, &ti->input_vars_list, struct var_instance, entry) {
 		j->num_input_vars++;
 	}
 
-    update_task_instance_status(ti, PENDING);
+    update_task_instance_status(ti, task_pending);
 	list_add_tail(&j->entry, &jobq);	
-	
 	return j;
 }
 
 static inline int job_is_pending(struct job *j) {
-	return j->ti->status == PENDING;
+	return j->ti->status == task_pending;
 }
 
 static inline int job_is_running(struct job *j) {
-	return j->ti->status == RUN;
+	return j->ti->status == task_running;
 }
 
 static inline int job_is_finish(struct job *j) {
-	return j->ti->status == FINISH;
+	return j->ti->status == task_finish;
 }
 
 static void job_done(struct job *j)
 {
-	if (j->ti->status == RUN) {
-        update_task_instance_status(j->ti, FINISH);
+	if (j->ti->status == task_running) {
+        update_task_instance_status(j->ti, task_finish);
 	}
+}
+
+static void free_job(struct job *j) {
+    list_del(&j->entry);
+    if (j->bk_idx_tab) free(j->bk_idx_tab);
+    free(j);
 }
 
 static int job_notify_bk_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
@@ -441,7 +318,8 @@ static int job_notify_bk_completion(struct rpc_server *rpc_s, struct msg_buf *ms
 	return 0;
 }
 
-static int job_notify_bk(struct job *j, struct bucket *bk, int rank_hint, int nproc_hint)
+static int job_notify_bk(struct job *j, struct staging_resource *rs, struct bucket *bk,
+    int rank_hint, int nproc_hint)
 {
 	int err = -ENOMEM;
 	struct msg_buf *msg;
@@ -450,25 +328,30 @@ static int job_notify_bk(struct job *j, struct bucket *bk, int rank_hint, int np
 	msg = msg_buf_alloc(ds->rpc_s, peer, 1);
 	if (!msg)
 		goto err_out;
+    
+    size_t mpi_rank_tab_size = j->bk_allocation_size*sizeof(int);
+    size_t input_var_tab_size = j->num_input_vars*sizeof(struct var_descriptor);
+    msg->size = mpi_rank_tab_size + input_var_tab_size;
+    msg->msg_data = malloc(msg->size); 
+    msg->cb = job_notify_bk_completion;
 
-	if (j->num_input_vars > 0) {
-		msg->msg_data = malloc(j->num_input_vars*sizeof(struct var_descriptor));
-		msg->size = j->num_input_vars*sizeof(struct var_descriptor);
-		msg->cb = job_notify_bk_completion;
-
-		// Copy the input var information
-		struct var_descriptor *vars = msg->msg_data;
-		struct var_instance *vi;
-		int i = 0;
-		list_for_each_entry(vi, &j->ti->input_vars_list, struct var_instance,
-				entry) {
-			strcpy(vars[i].var_name, vi->var->name);
-			vars[i].step = j->ti->step;
-			vars[i].bb = vi->bb;
-			vars[i].size = vi->size;
-			i++;
-		}	
-	}
+    int i;
+    int *mpi_rank_tab = (int*)msg->msg_data;
+    for (i = 0; i < j->bk_allocation_size; i++) {
+        mpi_rank_tab[i] = rs->bk_tab[j->bk_idx_tab[i]].origin_mpi_rank; 
+    }
+    // Copy the input var information
+    struct var_descriptor *vars = (struct var_descriptor*)(msg->msg_data+mpi_rank_tab_size);
+    struct var_instance *vi;
+    i = 0;
+    list_for_each_entry(vi, &j->ti->input_vars_list, struct var_instance,
+            entry) {
+        strcpy(vars[i].var_name, vi->var->name);
+        vars[i].step = j->ti->step;
+        vars[i].bb = vi->bb;
+        vars[i].size = vi->size;
+        i++;
+    }	
 
 	msg->msg_rpc->cmd = hs_exec_task_msg;
 	msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
@@ -476,7 +359,6 @@ static int job_notify_bk(struct job *j, struct bucket *bk, int rank_hint, int np
 		(struct hdr_exec_task *)msg->msg_rpc->pad;
 	hdr->tid = j->ti->tid;
 	hdr->step = j->ti->step;
-    hdr->color = j->bk_group_color;
 	hdr->rank_hint = rank_hint; 
 	hdr->nproc_hint = nproc_hint;
 	hdr->num_input_vars = j->num_input_vars;
@@ -495,11 +377,12 @@ err_out:
 
 static int job_allocate_bk(struct job *j)
 {
-	if (j->ti->status != PENDING) {
+	if (j->ti->status != task_pending) {
 		return 0;
 	}
 
     // Try to determine placement location
+/*
     enum hstaging_location_type preferred_loc;
     switch (j->ti->placement_hint) {
     case hint_insitu:
@@ -509,51 +392,42 @@ static int job_allocate_bk(struct job *j)
         preferred_loc = loc_intransit;
         break;
     case hint_none:
-        preferred_loc = loc_insitu;
+        preferred_loc = loc_intransit;
         break;
     default:
-        preferred_loc = loc_insitu;
+        preferred_loc = loc_intransit;
         uloga("%s(): unknown placement hint information\n", __func__);
         break;
     }
+*/
 
-    // Lookup staging resource based on placement location
-    struct staging_resource *rs = rs_lookup(preferred_loc);
-    if (rs == NULL) {
-        return -1;
+    // try to allocate buckets in a simple first-fit manner
+    struct staging_resource *rs;
+    list_for_each_entry(rs, &rs_list, struct staging_resource, entry) {
+        j->bk_idx_tab = rs_request_bk_allocation(rs, j->bk_allocation_size);
+        if (j->bk_idx_tab) break;
+    }    
+    
+    if (!j->bk_idx_tab) {
+        return 0;
     }
 
-    // Request for bucket group
-    struct bucket_group *bk_group;
-    bk_group = request_bucket_group(rs, j->num_required_bk);
-    if (bk_group == NULL) {
-        // No matched bucket group resource
-        uloga("%s(): failed to request bucket for job tid= %d step= %d "
-            "num_required_bk=%d\n", __func__, j->jid.tid, j->jid.step,
-            j->num_required_bk);
-        return -1;
-    }
-
-    j->location_type = rs->location_type;
-    j->bk_group_color = bk_group->color;
-    bk_group->current_jid = j->jid;
-
+    // notify the allocated buckets
     int i;
-	for (i = bk_group->rank_range.l; i <= bk_group->rank_range.r; i++) {
-        struct bucket *bk = rs_get_bucket(rs, i);
-        int rank_hint = i - bk_group->rank_range.l;
-        int nproc_hint = bk_group->size;
-		if (job_notify_bk(j, bk, rank_hint, nproc_hint) < 0) {
+    for (i = 0; i < j->bk_allocation_size; i++) {
+        struct bucket *bk = rs_get_bucket(rs, j->bk_idx_tab[i]);
+        int rank_hint = i;
+        int nproc_hint = j->bk_allocation_size;
+		if (job_notify_bk(j, rs, bk, rank_hint, nproc_hint) < 0) {
 			return -1;
 		}
 	}
 
 	// Update job state
-    update_task_instance_status(j->ti, RUN);
+    update_task_instance_status(j->ti, task_running);
 
-    uloga("%s(): assign job (%d,%d) to bk_group: size %d color %d\n",
-        __func__, j->jid.tid, j->jid.step, bk_group->size, bk_group->color);
-
+    uloga("%s(): assign job (%d,%d) to buckets timestamp %lf\n",
+        __func__, j->jid.tid, j->jid.step, timer_read(&tm)-tm_st);
 	return 0;	
 }
 
@@ -705,33 +579,30 @@ static int process_jobq()
 static int callback_hs_finish_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     struct hdr_finish_task *hdr = (struct hdr_finish_task*)cmd->pad;
-    struct staging_resource *rs = rs_lookup(hdr->location_type);
+    struct staging_resource *rs = rs_lookup(hdr->pool_id);
     if (rs == NULL) {
-        uloga("%s(): should not happen rs == NULL\n", __func__);
+        uloga("ERROR %s(): should not happen rs == NULL\n", __func__);
         return 0;
     }
 
-    uloga("%s(): finish task tid= %d step= %d color= %d location_type= %d\n",
-        __func__, hdr->tid, hdr->step, hdr->color, hdr->location_type);
+    uloga("%s(): finish task tid= %d step= %d\n",
+        __func__, hdr->tid, hdr->step);
 
-    int color = hdr->color;
-    struct bucket_group *bk_group = NULL;
-    if (color < rs->group_tab_size) {
-        bk_group = &(rs->group_tab[color]);
-    }
-
-    if (bk_group && bk_group->status == bk_group_busy) {
-        // Mark job as done
-        struct job *j = jobq_lookup(&(bk_group->current_jid));
-        if (j) {
-            job_done(j);
-            list_del(&j->entry);
-            free(j);
-        }
-
-        // Free bk group resource
-        free_bucket_group(rs, color);
-    }
+    struct job_id jid;
+    jid.tid = hdr->tid;
+    jid.step = hdr->step;
+    struct job *j = jobq_lookup(&jid);
+    if (j) {
+        // mark job as done
+        job_done(j);
+        // free bucket allocation
+        rs_free_bk_allocation(rs, j->bk_idx_tab, j->bk_allocation_size);
+        // free job
+        free_job(j); 
+    } else {
+        uloga("ERROR %s(): failed to find job (%d,%d) in jobq\n",
+            __func__, jid.tid, jid.step);
+    } 
 
     return 0;
 }
@@ -739,27 +610,27 @@ static int callback_hs_finish_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd
 static int callback_hs_reg_resource(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     struct hdr_register_resource *hdr = (struct hdr_register_resource*)cmd->pad;
-    enum hstaging_location_type loctype = hdr->location_type;
+    int pool_id = hdr->pool_id;
     int num_bucket = hdr->num_bucket;
     int mpi_rank = hdr->mpi_rank;
-    int dart_id = cmd->id;
+    int dart_id = cmd->id; // TODO: do we need to store dart id explicitly in hdr?
 
-    uloga("%s(): get msg from peer #%d mpi_rank %d num_bucket %d loctype %d\n",
-            __func__, dart_id, mpi_rank, num_bucket, loctype);
+    uloga("%s(): get msg from peer #%d mpi_rank %d num_bucket %d pool_id %d\n",
+            __func__, dart_id, mpi_rank, num_bucket, pool_id);
 
-    struct staging_resource *rs = rs_lookup(loctype);
+    struct staging_resource *rs = rs_lookup(pool_id);
     if (rs == NULL) {
-        rs = rs_create_new(loctype, num_bucket);
+        rs = rs_create_new(pool_id, num_bucket);
         if (rs == NULL) {
-            uloga("%s(): error rs == NULL\n", __func__);
+            uloga("ERROR %s(): rs_create_new() failed\n", __func__);
             return -1;
         }
     }
 
-    rs_add_bucket(rs, mpi_rank, dart_id);
-    // Check if all peers of the staging resource have registered
+    rs_add_bucket(rs, mpi_rank, dart_id, pool_id);
+    // Check if all peers of the resource pool have registered
     if (rs->num_bucket == rs->bk_tab_size) {
-        rs_build_bk_group(rs);
+        rs_set_bucket_idle(rs);
     }
 
     return 0;
@@ -801,20 +672,18 @@ static int callback_hs_exec_dag(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
     uloga("%s(): dag config file %s\n", __func__, hdr->dag_conf_file);
 
-    if (is_master()) {
-        wf = read_workflow_conf_file(hdr->dag_conf_file);
-        if (wf == NULL) {
-            uloga("%s(): failed to read workflow config file\n", __func__);
-            return 0;
-        }
-        
-        wf->submitter_dart_id = cmd->id;
-        state.f_done = 0;
-        state.f_send_exit_msg = 0;
-
-        print_workflow(wf);
-        dag_tm_st = timer_read(&tm);
+    wf = read_workflow_conf_file(hdr->dag_conf_file);
+    if (wf == NULL) {
+        uloga("ERROR %s(): failed to read workflow config file\n", __func__);
+        return 0;
     }
+        
+    wf->submitter_dart_id = cmd->id;
+    state.f_done = 0;
+    state.f_send_exit_msg = 0;
+
+    print_workflow(wf);
+    dag_tm_st = timer_read(&tm);
 
     return 0;
 }
@@ -844,6 +713,7 @@ int hstaging_scheduler_parallel_init()
 
     timer_init(&tm, 1);
     timer_start(&tm);
+    tm_st = timer_read(&tm);
 
 	return 0;
 }
@@ -866,11 +736,9 @@ int hstaging_scheduler_parallel_run()
 			return err;
 		}
 
-		if (is_master()) {
-            process_jobq();
-            process_dag_state();
-			process_workflow_state();
-		}
+        process_jobq();
+        process_dag_state();
+        process_workflow_state();
 	}
 
     rs_free();

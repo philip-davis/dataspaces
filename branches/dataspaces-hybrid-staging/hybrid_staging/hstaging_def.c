@@ -66,21 +66,21 @@ void update_task_instance_status(struct task_instance *ti, enum hstaging_task_st
 
 static int is_task_instance_finish(struct task_instance *ti)
 {
-    return ti->status == FINISH;
+    return ti->status == task_finish;
 }
 
 static int is_task_instance_ready(struct task_instance *ti)
 {
-	if (ti->status == READY) return 1;
-	else if (ti->status == NOT_READY) {
+	if (ti->status == task_ready) return 1;
+	else if (ti->status == task_not_ready) {
 		struct var_instance *vi;
 		list_for_each_entry(vi, &ti->input_vars_list, struct var_instance, entry)
 		{
-			if (vi->status == NOT_AVAILABLE)
+			if (vi->status == var_not_available)
 				return 0;
 		}
 
-		update_task_instance_status(ti, READY);
+		update_task_instance_status(ti, task_ready);
 		return 1;
 	}
 
@@ -142,7 +142,7 @@ static struct var_instance *new_var_instance(struct task_instance *ti, struct hs
 	struct var_instance *vi = (struct var_instance*)malloc(size);
     memset(vi, 0, size);
 	vi->var = var;
-	vi->status = NOT_AVAILABLE;
+	vi->status = var_not_available;
 	
 	list_add(&vi->entry, &ti->input_vars_list);
 	return vi;
@@ -167,7 +167,7 @@ static struct task_instance *new_task_instance(struct hstaging_task *task, int s
     memset(ti, 0, size);
 	ti->tid = task->tid;
 	ti->step = step;
-	ti->status = NOT_READY;
+	ti->status = task_not_ready;
     ti->placement_hint = task->placement_hint;
     ti->size_hint = task->size_hint;
 
@@ -199,7 +199,7 @@ static int evaluate_task_by_available_var(struct hstaging_task *task, struct hst
 		return -1;
 	}
 	
-	vi->status = AVAILABLE;
+	vi->status = var_available;
 	vi->size = var_desc->size;
 	vi->bb = var_desc->bb;
 	return 0;
@@ -604,7 +604,7 @@ int read_emulated_vars_sequence(struct hstaging_workflow *wf, const char *fname)
 			for (j = 0; j < num_ready_tasks; j++) {
 				printf("Execute tid= %d step= %d\n",
 					ready_tasks[j]->tid, ready_tasks[j]->step);
-				update_task_instance_status(ready_tasks[j], FINISH);
+				update_task_instance_status(ready_tasks[j], task_finish);
 			}
 		}
 	}
