@@ -175,8 +175,7 @@ void FC_FUNC(dspaces_get, DSPACES_GET) (const char *var_name,
     int ndim = 3;
     uint64_t lb[3] = {*xl, *yl, *zl};
     uint64_t ub[3] = {*xu, *yu, *zu};
-    uint64_t gdim[3] = {0, 0, 0};
-	*err = common_dspaces_get(vname, *ver, *size, ndim, lb, ub, gdim, data);
+	*err = common_dspaces_get(vname, *ver, *size, ndim, lb, ub, data);
 }
 
 /*
@@ -207,8 +206,7 @@ void FC_FUNC(dspaces_put, DSPACES_PUT) (const char *var_name,
 	int ndim = 3;
     uint64_t lb[3] = {*xl, *yl, *zl};
     uint64_t ub[3] = {*xu, *yu, *zu};
-    uint64_t gdim[3] = {0, 0, 0};
-	*err =  common_dspaces_put(vname, *ver, *size, ndim, lb, ub, gdim, data);
+	*err =  common_dspaces_put(vname, *ver, *size, ndim, lb, ub, data);
 }
 
 /*
@@ -353,8 +351,7 @@ void FC_FUNC(dimes_get, DIMES_GET) (const char *var_name,
     int ndim = 3;
     uint64_t lb[3] = {*xl, *yl, *zl};
     uint64_t ub[3] = {*xu, *yu, *zu};
-    uint64_t gdim[3] = {0, 0, 0};
-    *err = common_dimes_get(vname, *ver, *size, ndim, lb, ub, gdim, data);
+    *err = common_dimes_get(vname, *ver, *size, ndim, lb, ub, data);
 }
 
 void FC_FUNC(dimes_put, DIMES_PUT) (const char *var_name,
@@ -374,8 +371,7 @@ void FC_FUNC(dimes_put, DIMES_PUT) (const char *var_name,
     int ndim = 3;
     uint64_t lb[3] = {*xl, *yl, *zl};
     uint64_t ub[3] = {*xu, *yu, *zu};
-    uint64_t gdim[3] = {0, 0, 0};
-    *err = common_dimes_put(vname, *ver, *size, ndim, lb, ub, gdim, data);
+    *err = common_dimes_put(vname, *ver, *size, ndim, lb, ub, data);
 }
 
 void FC_FUNC(dimes_put_sync_all, DIMES_PUT_SYNC_ALL)(int *err)

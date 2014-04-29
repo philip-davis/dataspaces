@@ -74,10 +74,6 @@ Structures
 
 /* Define a type for flags. */
 
-struct coord2{
-	__u64 c[3];	//extend to 10d
-};
-
 typedef enum {
 	unset = 0,
 	set
@@ -131,13 +127,6 @@ struct lockhdr {
 	int id;
 	int lock_num;
 	char name[LOCK_NAME_SIZE];		/* lock name */
-} __attribute__ ((__packed__));
-
-/* Header for space info. */
-struct hdr_ss_info {
-	int num_dims;
-	struct coord2 dims;
-	int num_space_srv;
 } __attribute__ ((__packed__));
 
 /* Header for data kernel function remote deployment. */

@@ -50,11 +50,6 @@ static char log_header[256] = "";
 static struct timer tm_perf;
 #endif
 
-struct sspace_conf {
-    int ndims;
-    uint64_t dimx, dimy, dimz;
-};
-
 static int init_sspace_dimes(struct dimes_client *d)
 {
     int max_versions = 1;
@@ -83,29 +78,6 @@ static int free_sspace_dimes(struct dimes_client *d)
     return 0;
 }
 
-static int global_dim_equal(const struct global_dimension* gdim1,
-    const struct global_dimension* gdim2)
-{
-    int i;
-    for (i = 0; i < gdim1->ndim; i++) {
-        if (gdim1->sizes.c[i] != gdim2->sizes.c[i])
-            return 0;
-    }
-
-    return 1;
-}
-
-static int global_dim_all_zero(const struct global_dimension* gdim)
-{
-    int i;
-    for (i = 0; i < gdim->ndim; i++) {
-        if (gdim->sizes.c[i] != 0)
-            return 0;
-    }
-
-    return 1;
-}
-
 static struct sspace* lookup_sspace_dimes(struct dimes_client *d, const char* var_name,
     const struct global_dimension* gd)
 {
@@ -114,7 +86,7 @@ static struct sspace* lookup_sspace_dimes(struct dimes_client *d, const char* va
 
     // Return the default shared space created based on
     // global data domain specified in dataspaces.conf 
-    if (global_dim_all_zero(&gdim)) {
+    if (global_dimension_equal(&gdim, &d->dcg->default_gdim)) {
         return d->ssd;
     }
 
@@ -138,7 +110,7 @@ static struct sspace* lookup_sspace_dimes(struct dimes_client *d, const char* va
         if (gdim.ndim != ssd_entry->gdim.ndim)
             continue;
 
-        if (global_dim_equal(&gdim, &ssd_entry->gdim))
+        if (global_dimension_equal(&gdim, &ssd_entry->gdim))
             return ssd_entry->ssd;
     }
 
@@ -945,13 +917,6 @@ static int dcgrpc_dimes_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	dimes_c->dcg->ss_info.num_dims = hsi->num_dims;
 	dimes_c->dcg->ss_info.num_space_srv = hsi->num_space_srv;
 	dimes_c->domain.num_dims = hsi->num_dims;
-/*	dimes_c->domain.lb.c[0] = 0;
-	dimes_c->domain.lb.c[1] = 0;
-	dimes_c->domain.lb.c[2] = 0;
-	dimes_c->domain.ub.c[0] = hsi->val_dims[0]-1;
-	dimes_c->domain.ub.c[1] = hsi->val_dims[1]-1;
-	dimes_c->domain.ub.c[2] = hsi->val_dims[2]-1;
-*/
     int i;
     for(i = 0; i < hsi->num_dims; i++){
         dimes_c->domain.lb.c[i] = 0;
@@ -1003,19 +968,6 @@ static int dimes_ss_info(int *ndim)
     if (err < 0) {
         goto err_out;
     }
-
-#ifdef DEBUG
-	uloga("%s(): num_dims=%d, num_space_srv=%d, "
-		"global domain={(%d,%d,%d),(%d,%d,%d)}\n",
-		__func__, dimes_c->domain.num_dims,
-        dimes_c->dcg->ss_info.num_space_srv,
-        dimes_c->domain.lb.c[0],
-        dimes_c->domain.lb.c[1],
-        dimes_c->domain.lb.c[2],
-        dimes_c->domain.ub.c[0],
-        dimes_c->domain.ub.c[1],
-        dimes_c->domain.ub.c[2]);
-#endif
 
 	return 0;
 err_out:
@@ -2013,6 +1965,7 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 	storage_init();
 	dart_rdma_init(RPC_S);
     dimes_memory_init();
+    init_gdim_list(&dimes_c->gdim_list);
 
 #ifdef TIMING_PERF
     timer_init(&tm_perf, 1);
@@ -2032,6 +1985,7 @@ void dimes_client_free(void) {
 		return;
 	}
 
+    free_gdim_list(&dimes_c->gdim_list);
     free_sspace_dimes(dimes_c);
 	free(dimes_c);
 	dimes_c = NULL;
@@ -2054,18 +2008,17 @@ int dimes_client_get(const char *var_name,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
-        uint64_t *gdim,
         void *data)
 {
+    uint64_t *gdim;
 	struct obj_descriptor odsc = {
 			.version = ver, .owner = -1,
 			.st = st,
 			.size = size,
-			.bb = {.num_dims = num_dims,
-		}
+			.bb = {.num_dims = ndim,}
 	};
-	memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*num_dims);
-    memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*num_dims);
+	memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+    memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
 
     memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
     memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);	
@@ -2089,7 +2042,8 @@ int dimes_client_get(const char *var_name,
 		goto err_out;
 	}
 
-    set_global_dimension(&od->gdim, ndim, gdim);
+    set_global_dimension(&dimes_c->gdim_list, var_name,
+            &dimes_c->dcg->default_gdim, &od->gdim);
 	err = dimes_obj_get(od);
  
 	obj_data_free(od);
@@ -2108,7 +2062,6 @@ int dimes_client_put(const char *var_name,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
-        uint64_t *gdim,
         void *data)
 {
     // TODO: assign owner id is important.
@@ -2116,17 +2069,15 @@ int dimes_client_put(const char *var_name,
 			.version = ver, .owner = DIMES_CID,
 			.st = st,
 			.size = size,
-			.bb = {.num_dims = num_dims,
-			}
+			.bb = {.num_dims = ndim,}
 	};
-	memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*num_dims);
-    memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*num_dims);
+	memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+    memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
 
     memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
     memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
 
 	int err = -ENOMEM;
-
 	if (!dimes_c->dcg) {
 		uloga("%s(): library was not properly initialized!\n", __func__);
 		err = -EINVAL;
@@ -2157,7 +2108,8 @@ int dimes_client_put(const char *var_name,
     // Copy user data
     memcpy(mem_obj->rdma_handle.base_addr, data, data_size);
 
-    set_global_dimension(&mem_obj->gdim, ndim, gdim);
+    set_global_dimension(&dimes_c->gdim_list, var_name,
+            &dimes_c->dcg->default_gdim, &mem_obj->gdim);
 	err = dimes_obj_put(mem_obj);
 	if (err < 0) {
         dimes_memory_free(&mem_obj->rdma_handle, dimes_memory_rdma);

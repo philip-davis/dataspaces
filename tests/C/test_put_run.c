@@ -310,7 +310,7 @@ int test_put_run(enum transport_type type, int npapp, int npx, int npy, int npz,
     tm_st = timer_read(&timer_);
     common_init(npapp_, app_id);
     tm_end = timer_read(&timer_);
-    common_set_storage_type(row_major, type);
+    //common_set_storage_type(row_major, type);
     common_get_transport_type_str(type, transport_type_str_);
 
 	MPI_Comm_rank(gcomm_, &rank_);

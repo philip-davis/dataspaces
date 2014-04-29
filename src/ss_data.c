@@ -1543,7 +1543,7 @@ int obj_desc_by_name_intersect(const struct obj_descriptor *odsc1,
         return 0;
 }
 
-void set_global_dimension(struct global_dimension *l, int ndim,
+void copy_global_dimension(struct global_dimension *l, int ndim,
                         const uint64_t *gdim)
 {
     int i;
@@ -1552,6 +1552,74 @@ void set_global_dimension(struct global_dimension *l, int ndim,
     for (i = 0; i < ndim; i++) {
         l->sizes.c[i] = gdim[i];
     } 
+}
+
+void init_gdim_list(struct list_head *gdim_list)
+{
+    if (!gdim_list) return;
+    INIT_LIST_HEAD(gdim_list);
+}
+
+void free_gdim_list(struct list_head *gdim_list) {
+    if (!gdim_list) return;
+    struct gdim_list_entry *e, *t;
+    list_for_each_entry_safe(e, t, gdim_list, struct gdim_list_entry, entry)
+    {
+        list_del(&e->entry);
+        free(e->var_name);
+        free(e);
+    }
+} 
+
+struct gdim_list_entry* lookup_gdim_list(struct list_head *gdim_list,
+        const char *var_name)
+{
+    if (!gdim_list) return NULL;
+    struct gdim_list_entry *e;
+    list_for_each_entry(e, gdim_list, struct gdim_list_entry, entry)
+    {
+        if (0==strcmp(e->var_name, var_name)) return e;
+    }
+    return NULL;
+}
+
+void update_gdim_list(struct list_head *gdim_list, const char *var_name,
+        int ndim, uint64_t *gdim)
+{
+    struct gdim_list_entry *e = lookup_gdim_list(gdim_list, var_name);
+    if (!e) {
+        // add new entry
+        e = (struct gdim_list_entry*)malloc(sizeof(*e));
+        e->var_name = malloc(strlen(var_name)+1);
+        strcpy(e->var_name, var_name);
+        list_add(&e->entry, gdim_list); 
+    }
+
+    // update entry
+    copy_global_dimension(&e->gdim, ndim, gdim);
+}
+
+void set_global_dimension(struct list_head *gdim_list, const char *var_name,
+            const struct global_dimension *default_gdim, struct global_dimension *gdim)
+{
+    struct gdim_list_entry *e = lookup_gdim_list(gdim_list, var_name);
+    if (e) {
+        memcpy(gdim, &e->gdim, sizeof(struct global_dimension));
+    } else {
+        memcpy(gdim, default_gdim, sizeof(struct global_dimension));
+    }
+}
+
+int global_dimension_equal(const struct global_dimension* gdim1,
+    const struct global_dimension* gdim2)
+{
+    int i;
+    for (i = 0; i < gdim1->ndim; i++) {
+        if (gdim1->sizes.c[i] != gdim2->sizes.c[i])
+            return 0;
+    }
+
+    return 1;
 }
 
 /*
