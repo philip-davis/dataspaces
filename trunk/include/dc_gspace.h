@@ -64,9 +64,12 @@ struct dcg_space {
         int                     f_ss_info;
         struct ss_info          ss_info;
         struct bbox             ss_domain;
+        struct global_dimension default_gdim;
 
         /* List of 'struct dcg_lock' */
         struct list_head        locks_list;
+        /* List of 'struct gdim_list_entry' */
+        struct list_head        gdim_list;
 
         int                     num_pending;
 

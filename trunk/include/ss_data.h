@@ -67,6 +67,12 @@ struct global_dimension {
         struct coord sizes;
 } __attribute__((__packed__));
 
+struct gdim_list_entry {
+        struct list_head    entry;
+        char *var_name;       
+        struct global_dimension gdim; 
+};
+
 struct obj_data {
         struct list_head        obj_entry;
 
@@ -155,6 +161,13 @@ struct sspace_list_entry {
         struct global_dimension gdim;
         struct sspace   *ssd;
 };
+
+// Header for space info.
+struct hdr_ss_info {
+    int     num_dims;
+    struct  coord dims;
+    int     num_space_srv;
+} __attribute__ ((__packed__));
 
 /* Header structure for obj_get requests. */
 struct hdr_obj_get {
@@ -266,5 +279,14 @@ int obj_desc_equals_intersect(const struct obj_descriptor *odsc1,
 int obj_desc_by_name_intersect(const struct obj_descriptor *odsc1,
                 const struct obj_descriptor *odsc2);
 
-void set_global_dimension(struct global_dimension *l, int ndim, const uint64_t *gdim);
+void copy_global_dimension(struct global_dimension *l, int ndim, const uint64_t *gdim);
+int global_dimension_equal(const struct global_dimension* gdim1,
+                const struct global_dimension* gdim2);
+void init_gdim_list(struct list_head *gdim_list);
+void update_gdim_list(struct list_head *gdim_list,
+                const char *var_name, int ndim, uint64_t *gdim);
+struct gdim_list_entry* lookup_gdim_list(struct list_head *gdim_list, const char *var_name);
+void free_gdim_list(struct list_head *gdim_list);
+void set_global_dimension(struct list_head *gdim_list, const char *var_name,
+            const struct global_dimension *default_gdim, struct global_dimension *gdim);
 #endif /* __SS_DATA_H_ */

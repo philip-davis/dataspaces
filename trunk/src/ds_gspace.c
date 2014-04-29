@@ -230,11 +230,6 @@ static inline struct ds_gspace * dsg_ref_from_rpc(struct rpc_server *rpc_s)
         return ds->dart_ref;
 }
 
-struct sspace_conf {
-    int ndims;
-    uint64_t dimx, dimy, dimz;
-};
-
 static int init_sspace(struct bbox *default_domain, struct ds_gspace *dsg_l)
 {
     int err = -ENOMEM;
@@ -247,6 +242,12 @@ static int init_sspace(struct bbox *default_domain, struct ds_gspace *dsg_l)
     err = ssd_init(dsg_l->ssd, ds_get_rank(dsg_l->ds));
     if (err < 0)
         return err;
+
+    dsg_l->default_gdim.ndim = ds_conf.ndim;
+    int i;
+    for (i = 0; i < ds_conf.ndim; i++) {
+        dsg_l->default_gdim.sizes.c[i] = ds_conf.dims.c[i];
+    }
 
     INIT_LIST_HEAD(&dsg_l->sspace_list);
     return 0;
@@ -267,29 +268,6 @@ static int free_sspace(struct ds_gspace *dsg_l)
     return 0;
 }
 
-static int global_dim_equal(const struct global_dimension* gdim1,
-    const struct global_dimension* gdim2)
-{
-    int i;
-    for (i = 0; i < gdim1->ndim; i++) {
-        if (gdim1->sizes.c[i] != gdim2->sizes.c[i])
-            return 0;
-    }
-
-    return 1;
-}
-
-static int global_dim_all_zero(const struct global_dimension* gdim)
-{
-    int i;
-    for (i = 0; i < gdim->ndim; i++) {
-        if (gdim->sizes.c[i] != 0)
-            return 0;
-    }
-
-    return 1;
-}
-
 static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_name, const struct global_dimension* gd)
 {
     struct global_dimension gdim;
@@ -297,7 +275,7 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
 
     // Return the default shared space created based on
     // global data domain specified in dataspaces.conf 
-    if (global_dim_all_zero(&gdim)) {
+    if (global_dimension_equal(&gdim, &dsg_l->default_gdim )) {
         return dsg_l->ssd;
     }
 
@@ -321,7 +299,7 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
         if (gdim.ndim != ssd_entry->gdim.ndim)
             continue;
 
-        if (global_dim_equal(&gdim, &ssd_entry->gdim))
+        if (global_dimension_equal(&gdim, &ssd_entry->gdim))
             return ssd_entry->ssd;
     }
 
@@ -1985,14 +1963,10 @@ static int dsgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 	hsi = (struct hdr_ss_info *) msg->msg_rpc->pad;
 	hsi->num_dims = ds_conf.ndim;
-//	hsi->val_dims[bb_x] = ds_conf.dimx;
-//	hsi->val_dims[bb_y] = ds_conf.dimy;
-//	hsi->val_dims[bb_z] = ds_conf.dimz;
-        int i; 
-        for(i = 0; i < hsi->num_dims; i++){
-                hsi->dims.c[i] = ds_conf.dims.c[i]; 
-        }
-
+    int i; 
+    for(i = 0; i < hsi->num_dims; i++){
+        hsi->dims.c[i] = ds_conf.dims.c[i]; 
+    }
 	hsi->num_space_srv = dsg->ds->size_sp;
 
 	err = rpc_send(rpc_s, peer, msg);

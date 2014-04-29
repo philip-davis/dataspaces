@@ -71,10 +71,6 @@ typedef int (*rpc_service)(struct rpc_server*, struct rpc_cmd*);
 */
 typedef int (*completion_callback)(struct rpc_server *, struct msg_buf *);
 
-struct coord2{
-    __u64 c[3];       //TODO-Q
-};
-
 struct ptlid_map {
 	size_t rank_dcmf; //ibm dcmf rank
 	int id;
@@ -100,13 +96,6 @@ struct lockhdr {
         int                     lock_num;
 	char			name[LOCK_NAME_SIZE]; //lock name
 } __attribute__ ((__packed__));
-
-/* Header for space info. */
-struct hdr_ss_info {
-	int			num_dims;
-	struct coord2		dims;
-	int			num_space_srv;		
-} __attribute__((__packed__));
 
 /* Rpc command structure. */
 struct rpc_cmd {

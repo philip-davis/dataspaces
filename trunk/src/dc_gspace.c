@@ -1453,27 +1453,15 @@ static int dcgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	dcg->ss_info.num_dims = hsi->num_dims;
 	dcg->ss_info.num_space_srv = hsi->num_space_srv;
     dcg->ss_domain.num_dims = hsi->num_dims;
-    /*dcg->ss_domain.lb.c[0] = 0;
-    dcg->ss_domain.lb.c[1] = 0;
-    dcg->ss_domain.lb.c[2] = 0;
-    dcg->ss_domain.ub.c[0] = hsi->val_dims[0]-1;
-    dcg->ss_domain.ub.c[1] = hsi->val_dims[1]-1;
-    dcg->ss_domain.ub.c[2] = hsi->val_dims[2]-1;*/
+    dcg->default_gdim.ndim = hsi->num_dims;
 	int i;
 	for(i = 0; i < hsi->num_dims; i++){
 		dcg->ss_domain.lb.c[i] = 0;
 		dcg->ss_domain.ub.c[i] = hsi->dims.c[i]-1;
+        dcg->default_gdim.sizes.c[i] = hsi->dims.c[i];
 	}
-
 	dcg->f_ss_info = 1;
 
-	// TODO: read  in the  rest of the  variables from  the header
-	// message, e.g., the values in each dimension.
-
-	/* DELETE:
-	uloga("'%s()': received space info, num_dims = %d.\n", 
-		__func__, hsi->num_dims);
-	*/
 	return 0;
 }
 
@@ -1544,6 +1532,7 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid)
         }
 
         INIT_LIST_HEAD(&dcg_l->locks_list);
+        init_gdim_list(&dcg_l->gdim_list);    
 
         qc_init(&dcg_l->qc);
 
@@ -1569,19 +1558,17 @@ void dcg_free(struct dcg_space *dcg)
 #ifdef DEBUG
         uloga("'%s()': num pending = %d.\n", __func__, dcg->num_pending);
 #endif
-	//printf("Rank(%d): dcg->num_pending is %d.\n", dcg->dc->rpc_s->ptlmap.id, dcg->num_pending);////debug
-	//system("sleep 5");
 
 	while (dcg->num_pending)
 	      dc_process(dcg->dc);
-	//printf("Rank(%d): dcg->num_pending2 is %d.\n", dcg->dc->rpc_s->ptlmap.id, dcg->num_pending);////debug
 
-        dc_free(dcg->dc);
-        qc_free(&dcg->qc);
+    dc_free(dcg->dc);
+    qc_free(&dcg->qc);
 
 	lock_free();
 
-        free(dcg);
+    free_gdim_list(&dcg->gdim_list);
+    free(dcg);
 }
 
 /*

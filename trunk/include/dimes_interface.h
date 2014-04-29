@@ -57,85 +57,96 @@ extern "C" {
  * The following enum type defines the types of memory layout:
  * enum storage_type {row_major, column_major};
  *
- * @param[in] fst:	Type of memory layout for the matrix.
+ * @param[in] fst:  Type of memory layout for the matrix.
  *
- * @return:	Void.
+ * @return: Void.
  */
-void dimes_set_storage_type (int fst);
+//void dimes_set_storage_type (int fst);
 
 /**
  * @brief Query the space to insert data specified by a geometric
- * 	  descriptor.
+ *    descriptor.
  * 
  * Memory buffer pointed by pointer "data" is a sub-region of the
- * global n-dimensional array (n <= 3) in user application, which is described
- * by the local bounding box {(xl, yl, zl), (xu, yu, zu)}.
+ * global n-dimensional array in user application, which is described
+ * by the local bounding box {(lb[0],lb[1],..,lb[n-1]), (ub[0],ub[1],..,ub[n-1])}.
  *
  * This routine is non-blocking, and successful return of the routine does not 
  * guarantee the completion of data transfer from data inserting processes to 
  * data retrieving processes. 
  * 
- * @param[in] var_name:		Name of the variable.
- * @param[in] ver:		Version of the variable.
- * @param[in] size:		Size (in bytes) for each element of the global
- *				array.
- * @param[in] xl:		x-coordinate for the lower corner of the local
- *				bounding box.
- * @param[in] yl:		y-coordinate for the lower corner of the local
- *				bounding box.
- * @param[in] zl:		z-coordinate for the lower corner of the local
- *				bounding box.
- * @param[in] xu:		x-coordinate for the upper corner of the local
- *				bounding box.
- * @param[in] yu:		y-coordinate for the upper corner of the local
- *				bounding box.
- * @param[in] zu:		z-coordinate for the upper corner of the local
- *				bounding box.
- * @param[in] data:		Pointer to user data buffer. 
+ * Note: ordering of dimension (fast->slow) is 0, 1, ..., n-1. For C row-major
+ * array, the dimensions need to be reordered to construct the bounding box. For
+ * example, the bounding box for C array c[2][4] is lb: {0,0}, ub: {3,1}. 
+ * 
+ * @param[in] var_name:     Name of the variable.
+ * @param[in] ver:      Version of the variable.
+ * @param[in] size:     Size (in bytes) for each element of the global
+ *              array.
+ * @param[in] ndim:     the number of dimensions for the local bounding
+ *              box. 
+ * @param[in] lb:       coordinates for the lower corner of the local
+ *                  bounding box.
+ * @param[in] ub:       coordinates for the upper corner of the local
+ *                  bounding box. 
+ * @param[in] data:     Pointer to user data buffer. 
  *
- * @return	0 indicates success.
+ * @return  0 indicates success.
  */
 int dimes_put (const char *var_name,
         unsigned int ver, int size,
-        uint64_t xl, uint64_t yl, uint64_t zl,
-        uint64_t xu, uint64_t yu, uint64_t zu,
-        void *data);
+        int ndim, uint64_t *lb, uint64_t *ub, 
+        void *data); 
+
 
 /**
  * @brief Query the space to retrieve data specified by a geometric descriptor.
  *
  * Memory buffer pointed by pointer "data" is a sub-region of the
- * global n-dimensional array (n <= 3) in user application, which is described
- * by the local bounding box {(xl, yl, zl), (xu, yu, zu)}.
+ * global n-dimensional array in user application, which is described
+ * by the local bounding box {(lb[0],lb[1],..,lb[n-1]), (ub[0],ub[1],..,ub[n-1])}.
  *
  * After successful return of the routine, received data is copied into user
  * buffer pointed by "data".
  *
- * @param[in] var_name:		Name of the variable.
- * @param[in] ver:		Version of the variable.
- * @param[in] size:		Size (in bytes) for each element of the global
- *				array.
- * @param[in] xl:		x-coordinate for the lower corner of the local
- *				bounding box.
- * @param[in] yl:		y-coordinate for the lower corner of the local
- *				bounding box.
- * @param[in] zl:		z-coordinate for the lower corner of the local
- *				bounding box.
- * @param[in] xu:		x-coordinate for the upper corner of the local
- *				bounding box.
- * @param[in] yu:		y-coordinate for the upper corner of the local
- *				bounding box.
- * @param[in] zu:		z-coordinate for the upper corner of the local
- *				bounding box.
- * @param[in] data:		Pointer to user data buffer. 
+ * Note: ordering of dimension (fast->slow) is 0, 1, ..., n-1. For row-major
+ * array, the dimensions need to be reordered to construct the bounding box. For
+ * example, the bounding box for C array c[2][4] is lb: {0,0}, ub: {3,1}.
+ *
+ * @param[in] var_name:     Name of the variable.
+ * @param[in] ver:      Version of the variable.
+ * @param[in] size:     Size (in bytes) for each element of the global
+ *              array.
+ * @param[in] ndim:     the number of dimensions for the local bounding
+ *              box. 
+ * @param[in] lb:       coordinates for the lower corner of the local
+ *              bounding box.
+ * @param[in] ub:       coordinates for the upper corner of the local
+ *              bounding box.
+ * @param[in] data:     Pointer to user data buffer. 
  * 
- * @return	0 indicates success.
+ * @return  0 indicates success.
  */
 int dimes_get (const char *var_name,
         unsigned int ver, int size,
-        uint64_t xl, uint64_t yl, uint64_t zl,
-        uint64_t xu, uint64_t yu, uint64_t zu,
+        int ndim, uint64_t *lb, uint64_t *ub,
         void *data);
+
+/**
+ * @brief Define the global dimension for array variable.
+ *
+ * Note: ordering of dimension (fast->slow) is 0, 1, ..., n-1. For C row-major
+ * array, the dimensions need to be reordered to construct the bounding box. For
+ * example, the bounding box for C array c[2][4] is lb: {0,0}, ub: {3,1}.
+ *
+ * @param[in] var_name:     Name of the variable.
+ * @param[in] ndim:     the number of dimensions for the global array. 
+ * @param[in] gdim:     dimension for the global array.
+ * 
+ * @return  0 indicates success.
+ */
+void dimes_define_gdim (const char *var_name,
+        int ndim, uint64_t *gdim);
 
 /**
  * @brief When configure option "enable_dimes_ack" is set, this function
@@ -150,7 +161,7 @@ int dimes_get (const char *var_name,
  * dspaces.h) between the coupled applications to make sure that data is 
  * fetched by the reading appication before freed.
  *
- * @return	0 indicates success.
+ * @return  0 indicates success.
  */
 int dimes_put_sync_all(void);
 
@@ -187,14 +198,6 @@ int dimes_put_unset_group();
  */
 int dimes_put_sync_group(const char *group_name, int version);
 
-int dimes_put_with_gdim (const char *var_name,
-        unsigned int ver, int size,
-        int ndim, uint64_t *lb, uint64_t *ub, uint64_t *gdim,
-        void *data);
-int dimes_get_with_gdim (const char *var_name,
-        unsigned int ver, int size,
-        int ndim, uint64_t *lb, uint64_t *ub, uint64_t *gdim,
-        void *data);
 
 #ifdef __cplusplus
 }

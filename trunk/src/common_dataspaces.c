@@ -101,11 +101,11 @@ int common_dspaces_init(int num_peers, int appid)
 	}
 
 #ifdef DS_HAVE_DIMES
-        dimes_c = dimes_client_alloc(dcg);
-        if (dimes_c == NULL) {
-                uloga("%s(): failed to init DIMES.\n", __func__);
-                return err;
-        }
+    dimes_c = dimes_client_alloc(dcg);
+    if (dimes_c == NULL) {
+        uloga("%s(): failed to init DIMES.\n", __func__);
+        return err;
+    }
 #endif
 
 	return 0;
@@ -215,23 +215,26 @@ void common_dspaces_unlock_on_write(const char *lock_name, void *comm)
 		ERROR_TRACE_AND_EXIT();
 }
 
+void common_dspaces_define_gdim(const char *var_name, int ndim, uint64_t *gdim)
+{
+    update_gdim_list(&dcg->gdim_list, var_name, ndim, gdim);
+}
+
 int common_dspaces_get(const char *var_name,
 	unsigned int ver, int size,
 	int ndim,
 	uint64_t *lb,
 	uint64_t *ub,
-    uint64_t *gdim,
 	void *data)
 {
         struct obj_descriptor odsc = {
                 .version = ver, .owner = -1, 
                 .st = st,
                 .size = size,
-                .bb = {.num_dims = num_dims, 
-		}
+                .bb = {.num_dims = ndim,}
         };
-        memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*num_dims);
-        memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*num_dims);
+        memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+        memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
 
         memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
         memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
@@ -255,8 +258,9 @@ int common_dspaces_get(const char *var_name,
                     return -ENOMEM;
         }
 
-        set_global_dimension(&od->gdim, ndim, gdim);
-
+        // set global dimension
+        set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
+                             &od->gdim);
         err = dcg_obj_get(od);
         obj_data_free(od);
         if (err < 0 && err != -EAGAIN) 
@@ -276,19 +280,17 @@ int common_dspaces_put(const char *var_name,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
-        uint64_t *gdim,
         void *data)
 {
         struct obj_descriptor odsc = {
                 .version = ver, .owner = -1, 
                 .st = st,
                 .size = size,
-                .bb = {.num_dims = num_dims,
-		}
+                .bb = {.num_dims = ndim,}
         };
 
-        memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*num_dims);
-        memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*num_dims);
+        memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+        memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
 
         memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
         memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
@@ -302,7 +304,6 @@ int common_dspaces_put(const char *var_name,
             return -EINVAL;
         }
 
-
         strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
         odsc.name[sizeof(odsc.name)-1] = '\0';
 
@@ -313,8 +314,13 @@ int common_dspaces_put(const char *var_name,
                 return -ENOMEM;
         }
 
-        set_global_dimension(&od->gdim, ndim, gdim);
-
+        // set global dimension
+        set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
+                             &od->gdim); 
+        uloga("%s(): %s default_gdim %llu %llu %llu od->gdim %llu %llu %llu\n",
+            __func__, var_name, dcg->default_gdim.sizes.c[0], dcg->default_gdim.sizes.c[1],
+            dcg->default_gdim.sizes.c[2], od->gdim.sizes.c[0], od->gdim.sizes.c[1],
+            od->gdim.sizes.c[2]);
         err = dcg_obj_put(od);
         if (err < 0) {
             obj_data_free(od);
@@ -515,11 +521,11 @@ void common_dspaces_finalize(void)
 	}
 
 #ifdef DS_HAVE_DIMES
-        dimes_client_free();
+    dimes_client_free();
 #endif
-
-        dcg_free(dcg);
-        dcg = 0;
+    
+    dcg_free(dcg);
+    dcg = 0;
 }
 
 int common_dspaces_collect_timing(double time, double *sum_ptr)
@@ -551,28 +557,31 @@ void common_dimes_set_storage_type(int fst)
     return dimes_client_set_storage_type(fst);
 }
 
+void common_dimes_define_gdim(const char *var_name, int ndim, uint64_t *gdim)
+{
+    return update_gdim_list(&dimes_c->gdim_list, var_name, ndim, gdim);
+}
+
 int common_dimes_get(const char *var_name,
         unsigned int ver, int size,
         int ndim,
-        uint64_t *lb, //int xl, int yl, int zl,
-        uint64_t *ub, //int xu, int yu, int zu, 
-        uint64_t *gdim,
+        uint64_t *lb,
+        uint64_t *ub,
         void *data)
 {
     return dimes_client_get(var_name, ver, size,
-                ndim, lb, ub, gdim, data);
+                ndim, lb, ub, data);
 }
 
 int common_dimes_put(const char *var_name,
         unsigned int ver, int size,
         int ndim,
-        uint64_t *lb, //int xl, int yl, int zl,
-        uint64_t *ub, //int xu, int yu, int zu, 
-        uint64_t *gdim,
+        uint64_t *lb,
+        uint64_t *ub,
         void *data)
 {
     return dimes_client_put(var_name, ver, size,
-                ndim, lb, ub, gdim, data);
+                ndim, lb, ub, data);
 }
 
 int common_dimes_put_sync_all(void)
