@@ -66,7 +66,10 @@ void * safemalloc(size_t n)
 }
 
 int rpc_barrier(struct rpc_server *rpc_s)
-{}
+{
+	uloga("error: Not support dspaces_barrier on BGQ, please use MPI_Barrier instead.\n");
+	return 0;
+}
 
 void rpc_report_md_usage(struct rpc_server *rpc_s)
 {}
