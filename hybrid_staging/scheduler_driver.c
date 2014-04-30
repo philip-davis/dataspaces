@@ -33,7 +33,7 @@
 #include "unistd.h"
 #include "mpi.h"
 
-#include "hstaging_scheduler_parallel_job.h"
+#include "hstaging_scheduler.h"
 
 #include "common.h"
 #include "hstaging_partition.h"
@@ -43,24 +43,24 @@ static enum core_type coretype_ = hs_manager_core;
 static enum worker_type workertype_;
 static enum location_type loctype_ = 0;
 
-// Run parallel jobs scheduler
-int run_scheduler_parallel(int argc, char **argv) {
-	if (hstaging_scheduler_parallel_parse_args(argc, argv) < 0) {
-		hstaging_scheduler_parallel_usage();
+// Run scheduler
+int run_scheduler(int argc, char **argv) {
+	if (hstaging_scheduler_parse_args(argc, argv) < 0) {
+		hstaging_scheduler_usage();
 		return -1;
 	}
 
-	if (hstaging_scheduler_parallel_init() < 0) {
+	if (hstaging_scheduler_init() < 0) {
 		printf("DART server init failed!\n");
 		return -1;
 	}
 
-	if (hstaging_scheduler_parallel_run() < 0) {
+	if (hstaging_scheduler_run() < 0) {
 		printf("DART server got an error at runtime!\n");
 		return -1;
 	}
 
-	hstaging_scheduler_parallel_finish();
+	hstaging_scheduler_finish();
 
 	uloga("%s(): all ok.\n", __func__);	
 
@@ -78,7 +78,7 @@ int main(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_split(MPI_COMM_WORLD, color, rank, &comm);
 
-	err = run_scheduler_parallel(argc, argv);
+	err = run_scheduler(argc, argv);
 
     MPI_Barrier(comm);
     MPI_Finalize();

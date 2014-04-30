@@ -15,6 +15,7 @@
 #include "ds_gspace.h"
 #include "dimes_server.h"
 
+#include "hstaging_scheduler.h"
 #include "hstaging_api.h"
 #include "hstaging_def.h"
 #include "mpi.h"
@@ -65,7 +66,7 @@ struct bucket {
     struct job_id current_jid;    
 };
 
-struct staging_resource {
+struct bucket_pool {
     struct list_head entry;
     // enum hstaging_location_type location_type;
     int pool_id;
@@ -79,7 +80,7 @@ struct workflow_state {
 	unsigned int f_send_exit_msg;
 };
 
-static struct list_head rs_list;
+static struct list_head bk_pool_list;
 static struct list_head jobq;
 static struct workflow_state state;
 
@@ -95,73 +96,73 @@ static inline int is_master()
 }
 */
 
-static inline void rs_init()
+static inline void init_bk_pool_list()
 {
-    INIT_LIST_HEAD(&rs_list);
+    INIT_LIST_HEAD(&bk_pool_list);
 }
 
-static struct staging_resource* rs_lookup(int pool_id)
+static struct bucket_pool* bk_pool_lookup(int pool_id)
 {
-    struct staging_resource *rs;
-    list_for_each_entry(rs, &rs_list, struct staging_resource, entry) {
-        if (rs->pool_id == pool_id)
-            return rs;
+    struct bucket_pool *bp;
+    list_for_each_entry(bp, &bk_pool_list, struct bucket_pool, entry) {
+        if (bp->pool_id == pool_id)
+            return bp;
     }
 
     return NULL;    
 }
 
-static struct staging_resource* rs_create_new(int pool_id, int num_bucket)
+static struct bucket_pool* bk_pool_create_new(int pool_id, int num_bucket)
 {
-    struct staging_resource *rs;
-    rs = malloc(sizeof(*rs));
-    rs->pool_id = pool_id;
-    rs->num_bucket = 0;
-    rs->bk_tab_size = num_bucket;
-    rs->bk_tab = malloc(sizeof(struct bucket) * num_bucket);
+    struct bucket_pool *bp;
+    bp = malloc(sizeof(*bp));
+    bp->pool_id = pool_id;
+    bp->num_bucket = 0;
+    bp->bk_tab_size = num_bucket;
+    bp->bk_tab = malloc(sizeof(struct bucket) * num_bucket);
 
     // Add to the list
-    list_add_tail(&rs->entry, &rs_list);
+    list_add_tail(&bp->entry, &bk_pool_list);
 
-    return rs; 
+    return bp; 
 }
 
-static int rs_add_bucket(struct staging_resource *rs, int origin_mpi_rank, int dart_id,
+static int bk_pool_add_bucket(struct bucket_pool *bp, int origin_mpi_rank, int dart_id,
                         int pool_id)
 {
-    if (origin_mpi_rank < 0 || origin_mpi_rank >= rs->bk_tab_size) {
+    if (origin_mpi_rank < 0 || origin_mpi_rank >= bp->bk_tab_size) {
         uloga("ERROR %s(): origin_mpi_rank out of range\n", __func__);
         return -1;
     }
 
-    struct bucket *bk = &(rs->bk_tab[origin_mpi_rank]);
+    struct bucket *bk = &(bp->bk_tab[origin_mpi_rank]);
     bk->dart_id = dart_id;
     bk->pool_id = pool_id;
     bk->origin_mpi_rank = origin_mpi_rank;
     bk->status = bk_none;
 
-    rs->num_bucket++;
+    bp->num_bucket++;
     return 0;
 }
 
-static void rs_free_bk_allocation(struct staging_resource *rs, int *bk_idx_tab,
+static void bk_pool_free_bk_allocation(struct bucket_pool *bp, int *bk_idx_tab,
                                 int allocation_size)
 {
-    if (allocation_size > rs->bk_tab_size) {
+    if (allocation_size > bp->bk_tab_size) {
         uloga("ERROR %s(): allocation_size is larger than bk_tab_size\n", __func__);
         return;
     }
 
     int i;
     for (i = 0; i < allocation_size; i++) {
-        rs->bk_tab[bk_idx_tab[i]].status = bk_idle;
+        bp->bk_tab[bk_idx_tab[i]].status = bk_idle;
     }
 }
 
 
-static int* rs_request_bk_allocation(struct staging_resource *rs, int allocation_size)
+static int* bk_pool_request_bk_allocation(struct bucket_pool *bp, int allocation_size)
 {
-    if (allocation_size > rs->bk_tab_size) {
+    if (allocation_size > bp->bk_tab_size) {
         uloga("ERROR %s(): allocation_size is larger than bk_tab_size\n", __func__);
         return NULL;
     }
@@ -170,8 +171,8 @@ static int* rs_request_bk_allocation(struct staging_resource *rs, int allocation
     if (!bk_idx_tab) return NULL;
 
     int i, j;
-    for (i = 0, j = 0; i < rs->bk_tab_size; i++) {
-        if (rs->bk_tab[i].status == bk_idle) {
+    for (i = 0, j = 0; i < bp->bk_tab_size; i++) {
+        if (bp->bk_tab[i].status == bk_idle) {
             bk_idx_tab[j++] = i;
         }
         if (j == allocation_size) break;
@@ -185,40 +186,40 @@ static int* rs_request_bk_allocation(struct staging_resource *rs, int allocation
 
     for (i = 0; i < allocation_size; i++) {
         // update status of the bucket
-        rs->bk_tab[bk_idx_tab[i]].status = bk_busy;
+        bp->bk_tab[bk_idx_tab[i]].status = bk_busy;
     }
     return bk_idx_tab;
 }
 
-static struct bucket* rs_get_bucket(struct staging_resource *rs, int origin_mpi_rank)
+static struct bucket* bk_pool_get_bucket(struct bucket_pool *bp, int origin_mpi_rank)
 {
-    if (origin_mpi_rank < 0 || origin_mpi_rank >= rs->bk_tab_size) {
+    if (origin_mpi_rank < 0 || origin_mpi_rank >= bp->bk_tab_size) {
         uloga("ERROR %s(): origin_mpi_rank out of range\n", __func__);
         return NULL;
     }
 
-    return &(rs->bk_tab[origin_mpi_rank]);
+    return &(bp->bk_tab[origin_mpi_rank]);
 }
 
-static void rs_set_bucket_idle(struct staging_resource *rs)
+static void bk_pool_set_bucket_idle(struct bucket_pool *bp)
 {
     int i;
-    for (i = 0; i < rs->bk_tab_size; i++) {
-        rs->bk_tab[i].status = bk_idle;
+    for (i = 0; i < bp->bk_tab_size; i++) {
+        bp->bk_tab[i].status = bk_idle;
     }
 
     uloga("%s(): bucket resource pool %d is ready, num_bucket %d\n",
-        __func__, rs->pool_id, rs->bk_tab_size);
+        __func__, bp->pool_id, bp->bk_tab_size);
 }
 
-static void rs_free()
+static void free_bk_pool_list()
 {
-    struct staging_resource *rs, *t;
-    list_for_each_entry_safe(rs, t, &rs_list, struct staging_resource, entry)
+    struct bucket_pool *bp, *t;
+    list_for_each_entry_safe(bp, t, &bk_pool_list, struct bucket_pool, entry)
     {
-        list_del(&rs->entry);
-        if (rs->bk_tab) free(rs->bk_tab);
-        free(rs);
+        list_del(&bp->entry);
+        if (bp->bk_tab) free(bp->bk_tab);
+        free(bp);
     }
 }
 
@@ -318,7 +319,7 @@ static int job_notify_bk_completion(struct rpc_server *rpc_s, struct msg_buf *ms
 	return 0;
 }
 
-static int job_notify_bk(struct job *j, struct staging_resource *rs, struct bucket *bk,
+static int job_notify_bk(struct job *j, struct bucket_pool *bp, struct bucket *bk,
     int rank_hint, int nproc_hint)
 {
 	int err = -ENOMEM;
@@ -338,7 +339,7 @@ static int job_notify_bk(struct job *j, struct staging_resource *rs, struct buck
     int i;
     int *mpi_rank_tab = (int*)msg->msg_data;
     for (i = 0; i < j->bk_allocation_size; i++) {
-        mpi_rank_tab[i] = rs->bk_tab[j->bk_idx_tab[i]].origin_mpi_rank; 
+        mpi_rank_tab[i] = bp->bk_tab[j->bk_idx_tab[i]].origin_mpi_rank; 
     }
     // Copy the input var information
     struct var_descriptor *vars = (struct var_descriptor*)(msg->msg_data+mpi_rank_tab_size);
@@ -402,9 +403,9 @@ static int job_allocate_bk(struct job *j)
 */
 
     // try to allocate buckets in a simple first-fit manner
-    struct staging_resource *rs;
-    list_for_each_entry(rs, &rs_list, struct staging_resource, entry) {
-        j->bk_idx_tab = rs_request_bk_allocation(rs, j->bk_allocation_size);
+    struct bucket_pool *bp;
+    list_for_each_entry(bp, &bk_pool_list, struct bucket_pool, entry) {
+        j->bk_idx_tab = bk_pool_request_bk_allocation(bp, j->bk_allocation_size);
         if (j->bk_idx_tab) break;
     }    
     
@@ -415,10 +416,10 @@ static int job_allocate_bk(struct job *j)
     // notify the allocated buckets
     int i;
     for (i = 0; i < j->bk_allocation_size; i++) {
-        struct bucket *bk = rs_get_bucket(rs, j->bk_idx_tab[i]);
+        struct bucket *bk = bk_pool_get_bucket(bp, j->bk_idx_tab[i]);
         int rank_hint = i;
         int nproc_hint = j->bk_allocation_size;
-		if (job_notify_bk(j, rs, bk, rank_hint, nproc_hint) < 0) {
+		if (job_notify_bk(j, bp, bk, rank_hint, nproc_hint) < 0) {
 			return -1;
 		}
 	}
@@ -504,13 +505,13 @@ static int process_workflow_state()
 	if (state.f_done && 0 == busy_bk_count()) {
         struct msg_buf *msg;
         struct node_id *peer;
-        struct staging_resource *rs;
+        struct bucket_pool *bp;
         struct bucket *bk;
-        list_for_each_entry(rs, &rs_list, struct staging_resource, entry)
+        list_for_each_entry(bp, &bk_pool_list, struct bucket_pool, entry)
         {
             int mpi_rank;
-            for (mpi_rank = 0; mpi_rank < rs->bk_tab_size; mpi_rank++) {
-                bk = rs_get_bucket(rs, mpi_rank);
+            for (mpi_rank = 0; mpi_rank < bp->bk_tab_size; mpi_rank++) {
+                bk = bk_pool_get_bucket(bp, mpi_rank);
                 peer = ds_get_peer(ds, bk->dart_id);
                 msg = msg_buf_alloc(ds->rpc_s, peer, 1);
                 if (!msg)
@@ -579,9 +580,9 @@ static int process_jobq()
 static int callback_hs_finish_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     struct hdr_finish_task *hdr = (struct hdr_finish_task*)cmd->pad;
-    struct staging_resource *rs = rs_lookup(hdr->pool_id);
-    if (rs == NULL) {
-        uloga("ERROR %s(): should not happen rs == NULL\n", __func__);
+    struct bucket_pool *bp = bk_pool_lookup(hdr->pool_id);
+    if (bp == NULL) {
+        uloga("ERROR %s(): should not happen bp == NULL\n", __func__);
         return 0;
     }
 
@@ -596,7 +597,7 @@ static int callback_hs_finish_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd
         // mark job as done
         job_done(j);
         // free bucket allocation
-        rs_free_bk_allocation(rs, j->bk_idx_tab, j->bk_allocation_size);
+        bk_pool_free_bk_allocation(bp, j->bk_idx_tab, j->bk_allocation_size);
         // free job
         free_job(j); 
     } else {
@@ -618,19 +619,19 @@ static int callback_hs_reg_resource(struct rpc_server *rpc_s, struct rpc_cmd *cm
     uloga("%s(): get msg from peer #%d mpi_rank %d num_bucket %d pool_id %d\n",
             __func__, dart_id, mpi_rank, num_bucket, pool_id);
 
-    struct staging_resource *rs = rs_lookup(pool_id);
-    if (rs == NULL) {
-        rs = rs_create_new(pool_id, num_bucket);
-        if (rs == NULL) {
-            uloga("ERROR %s(): rs_create_new() failed\n", __func__);
+    struct bucket_pool *bp = bk_pool_lookup(pool_id);
+    if (bp == NULL) {
+        bp = bk_pool_create_new(pool_id, num_bucket);
+        if (bp == NULL) {
+            uloga("ERROR %s(): bk_pool_create_new() failed\n", __func__);
             return -1;
         }
     }
 
-    rs_add_bucket(rs, mpi_rank, dart_id, pool_id);
+    bk_pool_add_bucket(bp, mpi_rank, dart_id, pool_id);
     // Check if all peers of the resource pool have registered
-    if (rs->num_bucket == rs->bk_tab_size) {
-        rs_set_bucket_idle(rs);
+    if (bp->num_bucket == bp->bk_tab_size) {
+        bk_pool_set_bucket_idle(bp);
     }
 
     return 0;
@@ -688,7 +689,7 @@ static int callback_hs_exec_dag(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
     return 0;
 }
 
-int hstaging_scheduler_parallel_init()
+int hstaging_scheduler_init()
 {
 	rpc_add_service(hs_finish_workflow_msg, callback_hs_finish_workflow);
 	rpc_add_service(hs_update_var_msg, callback_hs_update_var); 
@@ -706,7 +707,7 @@ int hstaging_scheduler_parallel_init()
 
 	// Init
 	jobq_init();
-    rs_init();
+    init_bk_pool_list();
 
 	state.f_done = 0;
 	state.f_send_exit_msg = 0;
@@ -718,7 +719,7 @@ int hstaging_scheduler_parallel_init()
 	return 0;
 }
 
-int hstaging_scheduler_parallel_run()
+int hstaging_scheduler_run()
 {
 	int err;
 
@@ -741,13 +742,13 @@ int hstaging_scheduler_parallel_run()
         process_workflow_state();
 	}
 
-    rs_free();
+    free_bk_pool_list();
 	jobq_free();
 
 	return 0;
 }
 
-int hstaging_scheduler_parallel_finish(void)
+int hstaging_scheduler_finish()
 {
 	dimes_server_barrier(dimes_s);
 	dimes_server_free(dimes_s);
@@ -756,7 +757,7 @@ int hstaging_scheduler_parallel_finish(void)
 }
 
 
-void hstaging_scheduler_parallel_usage(void)
+void hstaging_scheduler_usage()
 {
 	printf("Usage: server OPTIONS\n"
 			"OPTIONS: \n"
@@ -765,7 +766,7 @@ void hstaging_scheduler_parallel_usage(void)
 			"--conf, -f      Define configuration file\n");
 }
 
-int hstaging_scheduler_parallel_parse_args(int argc, char *argv[])
+int hstaging_scheduler_parse_args(int argc, char *argv[])
 {
 	const char opt_short[] = "s:c:f:";
 	const struct option opt_long[] = {
