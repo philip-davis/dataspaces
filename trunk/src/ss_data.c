@@ -47,13 +47,13 @@
   matrix.
 */
 struct matrix_view {
-        __u64   lb[BBOX_MAX_NDIM];	//TODO-Q
+        __u64   lb[BBOX_MAX_NDIM];
         __u64   ub[BBOX_MAX_NDIM];	
 };
 
 /* Generic matrix representation. */
 struct matrix {
-        __u64   dist[BBOX_MAX_NDIM];	//TODO-Q
+        __u64   dist[BBOX_MAX_NDIM];
         int 			        num_dims;
         size_t                  size_elem;
         enum storage_type       mat_storage;
@@ -171,102 +171,6 @@ void sh_free(void)
         is_sfc_hash_list_free = 1;
 }
 
-#if 0 /* DELETE this unused part. */
-/*
-  Allocate and initialize a matrix "view". It allows you to easily
-  access the elements of sub-matrix described by bounding box bb_loc
-  from the matrix described by bb_glb. When accessing the sub-matrix,
-  the indices should be reversed, i.e., A(k, j, i).
-*/
-static struct matrix * 
-matrix_alloc(struct bbox *bb_glb, struct bbox *bb_loc, void *data, size_t se)
-{
-        struct matrix *mat;
-        size_t size;
-        int dimx, dimy, dimz;
-        int shx, shy, shz;
-        int i, j;
-
-        dimx = bbox_dist(bb_glb, 0);
-        dimy = bbox_dist(bb_glb, 1);
-        dimz = bbox_dist(bb_glb, 2);
-
-        size = sizeof(*mat) + sizeof(void ***) * dimz +
-                sizeof(void **) * dimx * dimz;
-        mat = malloc(size);
-        if (!mat)
-                return NULL;
-
-        mat->data = data;
-        mat->se = se;
-        /* X is columns. */
-        mat->dimx = bbox_dist(bb_loc, 0);
-        /* Y is rows. */
-        mat->dimy = bbox_dist(bb_loc, 1);
-        /* Z is slices of 2d matrices of XxY. */
-        mat->dimz = bbox_dist(bb_loc, 2);
-        mat->m = (void ***) (mat+1);
-
-        /*
-        for (i = 0; i < mat->z_dim; i++) {
-                mat->m[i] = (double **) (mat->m + mat->z_dim + i * mat->y_dim);
-                for (j = 0; j < mat->y_dim; j++) 
-                        mat->m[i][j] = data + 
-                                (i + bb_loc->lb.c[2]) * x_dim * y_dim + 
-                                (j + bb_loc->lb.c[1]) * x_dim + 
-                                bb_loc->lb.c[0];
-        }
-        */
-
-        /* Shift amounts from the initial matrix. */
-        shx = bb_loc->lb.c[0] - bb_glb->lb.c[0];
-        shy = bb_loc->lb.c[1] - bb_glb->lb.c[1];
-        shz = bb_loc->lb.c[2] - bb_glb->lb.c[2];
-
-        /* Column major matrix representation. */
-        for (i = 0; i < mat->dimz; i++) {
-                mat->m[i] = (void **) (mat->m + dimz + i * dimx);
-                for (j = 0; j < mat->dimx; j++) 
-                        mat->m[i][j] = data + 
-                                /* Skip 'i' 2d slices. */
-                                ((i + shz) * dimx * dimy + 
-                                /* Skip 'j' 1d columns. */
-                                (j + shx) * dimy + 
-                                /* Select the line. */
-                                shy) * se;
-        }
-
-        return mat;
-}
-
-static void matrix_copy(struct matrix *mat_to, struct matrix *mat_from)
-{
-        int i, j, k;
-        size_t size;
-        /*
-        for (i = 0; i < mat_to->z_dim; i++) {
-                for (j = 0; j < mat_to->y_dim; j++)
-                        memcpy(mat_to->m[i][j], 
-                               mat_from->m[i][j], 
-                               sizeof(double) * mat_to->x_dim);
-        }
-        */
-
-        size = mat_to->se * mat_to->dimy;
-        for (i = 0; i < mat_to->dimz; i++) {
-                for (j = 0; j < mat_to->dimx; j++)
-                        memcpy(mat_to->m[i][j], 
-                               mat_from->m[i][j], 
-                               size);
-        }
-}
-
-static void matrix_free(struct matrix *mat)
-{
-        free(mat);
-}
-#endif /* 0 */
-
 static void matrix_init(struct matrix *mat, enum storage_type st,
                         struct bbox *bb_glb, struct bbox *bb_loc, 
                         void *pdata, size_t se)
@@ -298,56 +202,103 @@ static void matrix_copy(struct matrix *a, struct matrix *b)
         __u64 b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
         __u64 bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
 
-
-	
-        /*for(a9 = a->mat_view.lb[9], b9 = b->mat_view.lb[9];	//TODO-Q
+    switch(a->num_dims){
+        case(1):    
+            goto dim1;
+            break;
+        case(2):
+            goto dim2;
+            break;
+        case(3):
+            goto dim3;
+            break;
+        case(4):
+            goto dim4;
+            break;
+        case(5):
+            goto dim5;
+            break;
+        case(6):
+            goto dim6;
+            break;
+        case(7):
+            goto dim7;
+            break;
+        case(8):
+            goto dim8;
+            break;
+        case(9):
+            goto dim9;
+            break;
+        case(10):
+            goto dim10;
+            break;
+        default:
+            break;
+    }
+    
+dim10:        for(a9 = a->mat_view.lb[9], b9 = b->mat_view.lb[9];   //TODO-Q
             a9 <= a->mat_view.ub[9]; a9++, b9++){
             aloc9 = a9 * a->dist[8];
             bloc9 = a9 * b->dist[8];
-        for(a8 = a->mat_view.lb[8], b8 = b->mat_view.lb[8];	//TODO-Q
+dim9:        for(a8 = a->mat_view.lb[8], b8 = b->mat_view.lb[8];    //TODO-Q
             a8 <= a->mat_view.ub[8]; a8++, b8++){
             aloc8 = (aloc9 + a8) * a->dist[7];
             bloc8 = (bloc9 + b8) * b->dist[7];
-        for(a7 = a->mat_view.lb[7], b7 = b->mat_view.lb[7];	//TODO-Q
+dim8:        for(a7 = a->mat_view.lb[7], b7 = b->mat_view.lb[7];    //TODO-Q
             a7 <= a->mat_view.ub[7]; a7++, b7++){
             aloc7 = (aloc8 + a7) * a->dist[6];
             bloc7 = (bloc8 + b7) * b->dist[6];
-        for(a6 = a->mat_view.lb[6], b6 = b->mat_view.lb[6];	//TODO-Q
+dim7:        for(a6 = a->mat_view.lb[6], b6 = b->mat_view.lb[6];    //TODO-Q
             a6 <= a->mat_view.ub[6]; a6++, b6++){
             aloc6 = (aloc7 + a6) * a->dist[5];
             bloc6 = (bloc7 + b6) * b->dist[5];
-        for(a5 = a->mat_view.lb[5], b5 = b->mat_view.lb[5];	//TODO-Q
+dim6:        for(a5 = a->mat_view.lb[5], b5 = b->mat_view.lb[5];    //TODO-Q
             a5 <= a->mat_view.ub[5]; a5++, b5++){
             aloc5 = (aloc6 + a5) * a->dist[4];
             bloc5 = (bloc6 + b5) * b->dist[4];
-        for(a4 = a->mat_view.lb[4], b4 = b->mat_view.lb[4];
+dim5:        for(a4 = a->mat_view.lb[4], b4 = b->mat_view.lb[4];
             a4 <= a->mat_view.ub[4]; a4++, b4++){
             aloc4 = (aloc5 + a4) * a->dist[3];
             bloc4 = (bloc5 + b4) * b->dist[3];
-        for(a3 = a->mat_view.lb[3], b3 = b->mat_view.lb[3];
+dim4:        for(a3 = a->mat_view.lb[3], b3 = b->mat_view.lb[3];
             a3 <= a->mat_view.ub[3]; a3++, b3++){
             aloc3 = (aloc4 + a3) * a->dist[2];
-            bloc3 = (bloc4 + b3) * b->dist[2];*/
-            for(a2 = a->mat_view.lb[2], b2 = b->mat_view.lb[2];
+            bloc3 = (bloc4 + b3) * b->dist[2];
+dim3:            for(a2 = a->mat_view.lb[2], b2 = b->mat_view.lb[2];
                 a2 <= a->mat_view.ub[2]; a2++, b2++){
                 aloc2 = (aloc3 + a2) * a->dist[1];
                 bloc2 = (bloc3 + b2) * b->dist[1];
-                for(a1 = a->mat_view.lb[1], b1 = b->mat_view.lb[1];
+dim2:                for(a1 = a->mat_view.lb[1], b1 = b->mat_view.lb[1];
                     a1 <= a->mat_view.ub[1]; a1++, b1++){
                     aloc1 = (aloc2 + a1) * a->dist[0];
                     bloc1 = (bloc2 + b1) * b->dist[0];
-                    for(a0 = a->mat_view.lb[0], b0 = b->mat_view.lb[0];
+dim1:                    for(a0 = a->mat_view.lb[0], b0 = b->mat_view.lb[0];
                         a0 <= a->mat_view.ub[0]; a0++, b0++){
                         aloc = aloc1 + a0;
                         bloc = bloc1 + b0;
                         //memcpy(&(*A)[aloc], &(*B)[bloc], a->size_elem);
                         memcpy(&A[aloc*a->size_elem], &B[bloc*a->size_elem], a->size_elem);
                     }
+            if(a->num_dims == 1)    return;
                 }
+        if(a->num_dims == 2)    return;
             }
-        /*}}}}}}}*/
+        if(a->num_dims == 3)    return; 
+        }
+    if(a->num_dims == 4)    return;
+    }
+    if(a->num_dims == 5)    return;
+    }
+    if(a->num_dims == 6)    return;
+    }
+    if(a->num_dims == 7)    return;
+    }
+    if(a->num_dims == 8)    return;
+    }
+    if(a->num_dims == 9)    return;
+    }
 }
-
 
 /* a = destination, b = source. Destination uses iovec_t format. */
 static void matrix_copyv(struct matrix *a, struct matrix *b)
@@ -955,9 +906,9 @@ struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions
 void ssd_free(struct sspace *ssd)
 {
 #ifdef DS_SSD_HASH_V2
-    return ssd_free_v2(ssd);
+    ssd_free_v2(ssd);
 #else
-    return ssd_free_v1(ssd);
+    ssd_free_v1(ssd);
 #endif
 }
 
@@ -1020,44 +971,21 @@ void ssd_add_obj(struct sspace *ss, struct obj_data *od)
 */
 int ssd_copy(struct obj_data *to_obj, struct obj_data *from_obj)
 {
-        // struct matrix *to_mat, *from_mat;
         struct matrix to_mat, from_mat;
         struct bbox bbcom;
-        // int err = -ENOMEM;
 
         bbox_intersect(&to_obj->obj_desc.bb, &from_obj->obj_desc.bb, &bbcom);
 
         matrix_init(&from_mat, from_obj->obj_desc.st,
                     &from_obj->obj_desc.bb, &bbcom, 
                     from_obj->data, from_obj->obj_desc.size);
-        /*
-        from_mat = matrix_alloc(&from_obj->obj_desc.bb,
-                                &bbcom, from_obj->data, from_obj->obj_desc.size);
-        if (!from_mat)
-                goto err_out;
-        */
+
         matrix_init(&to_mat, to_obj->obj_desc.st, 
                     &to_obj->obj_desc.bb, &bbcom,
                     to_obj->data, to_obj->obj_desc.size);
-        /*
-        to_mat = matrix_alloc(&to_obj->obj_desc.bb, 
-                              &bbcom, to_obj->data, to_obj->obj_desc.size);
-        if (!to_mat) {
-                free(from_mat);
-                goto err_out;
-        }
-        */
+
         matrix_copy(&to_mat, &from_mat);
-        /*
-        matrix_free(to_mat);
-        matrix_free(from_mat);
-        */
         return 0;
-        /*
- err_out:
-        uloga("'%s()': failed with %d.\n", __func__, err);
-        return err;
-        */
 }
 
 int ssd_copyv(struct obj_data *obj_dest, struct obj_data *obj_src)
@@ -1085,10 +1013,8 @@ int ssd_copyv(struct obj_data *obj_dest, struct obj_data *obj_src)
 int ssd_copy_list(struct obj_data *to, struct list_head *od_list)
 {
         struct obj_data *from;
-        // struct matrix *mto, *mfrom;
         struct matrix to_mat, from_mat;
         struct bbox bbcom;
-        // int err = -ENOMEM;
 
         list_for_each_entry(from, od_list, struct obj_data, obj_entry) {
 
@@ -1097,37 +1023,15 @@ int ssd_copy_list(struct obj_data *to, struct list_head *od_list)
                 matrix_init(&from_mat, from->obj_desc.st,
                             &from->obj_desc.bb, &bbcom, 
                             from->data, from->obj_desc.size);
-                /*
-                mfrom = matrix_alloc(&from->obj_desc.bb, 
-                                     &bbcom, from->data, from->obj_desc.size);
-                if (!mfrom) {
-                        matrix_free(mto);
-                        goto err_out;
-                }
-                */
 
                 matrix_init(&to_mat, to->obj_desc.st, 
                             &to->obj_desc.bb, &bbcom, 
                             to->data, to->obj_desc.size);
-                /*
-                mto = matrix_alloc(&to->obj_desc.bb, 
-                                   &bbcom, to->data, to->obj_desc.size);
-                if (!mto)
-                        goto err_out;
-                */
+
                 matrix_copy(&to_mat, &from_mat);
-                /*
-                matrix_free(mto);
-                matrix_free(mfrom);
-                */
         }
 
         return 0;
-        /*
- err_out:
-        uloga("'%s()': failed with %d.\n", __func__, err);
-        return err;
-        */
 }
 
 int ssd_filter(struct obj_data *from, struct obj_descriptor *odsc, double *dval)
@@ -1348,17 +1252,7 @@ int dht_find_versions(struct dht_entry *de, struct obj_descriptor *q_odsc, int o
 */
 struct obj_data *obj_data_alloc(struct obj_descriptor *odsc)
 {
-        struct obj_data *od = 0;
-	/*
-        od = malloc(sizeof(*od) + obj_data_size(odsc) + 7);
-        if (!od)
-                return NULL;
-        memset(od, 0, sizeof(*od));
-
-        od->data = od + 1;
-        ALIGN_ADDR_QUAD_BYTES(od->data);
-        od->obj_desc = *odsc;
-	*/
+    struct obj_data *od = 0;
 
 	od = malloc(sizeof(*od));
 	if (!od)
@@ -1382,17 +1276,6 @@ struct obj_data *obj_data_alloc(struct obj_descriptor *odsc)
 struct obj_data *obj_data_allocv(struct obj_descriptor *odsc)
 {
 	struct obj_data *od;
-
-	/*
-	od = malloc(sizeof(*od) + obj_data_sizev(odsc) + 7);
-	if (!od)
-		return 0;
-	memset(od, 0, sizeof(*od));
-
-	od->data = od + 1;
-	ALIGN_ADDR_QUAD_BYTES(od->data);
-	od->obj_desc = *odsc;
-	*/
 
 	od = malloc(sizeof(*od));
 	if (!od)
@@ -1456,11 +1339,6 @@ void obj_data_free(struct obj_data *od)
 {
 	if (od->_data)
 		free(od->_data);
-	/*
-	else 
-		uloga("'%s()': implicit free for descriptor %s with external data\n",
-			__func__, od->obj_desc.name);
-	*/
 	free(od);
 }
 
@@ -1471,9 +1349,7 @@ __u64 obj_data_size(struct obj_descriptor *obj_desc)
 
 __u64 obj_data_sizev(struct obj_descriptor *odsc)
 {
-	//size_t size = 1; // sizeof(iovec_t);
 	__u64 size = 1; // sizeof(iovec_t);
-	//static int PTL_MAX_IOV = 65535;
 
 	if (odsc->bb.num_dims == 2) {
 		if (odsc->st == row_major)
@@ -1486,11 +1362,6 @@ __u64 obj_data_sizev(struct obj_descriptor *odsc)
 			size = size * bbox_dist(&odsc->bb, bb_y);
 		else	size = size * bbox_dist(&odsc->bb, bb_x);
 	}
-
-	/* If we exceed the IOVEC portals limit, should fall back on
-	   the copy method.*/
-	//if (size > PTL_MAX_IOV)
-	//	return (size_t) -1;
 
 	return size;
 }

@@ -36,6 +36,8 @@
 
 #include <stdio.h>
 #include <stdint.h>
+
+#include "config.h"
 #include "strutil.h"
 
 #define max(a,b) (a) > (b) ? (a):(b)
@@ -52,7 +54,6 @@ enum bb_dim {
         bb_z = 2
 };
 
-#define BBOX_MAX_NDIM 3
 struct coord {
         __u64 c[BBOX_MAX_NDIM];
 };

@@ -1134,54 +1134,89 @@ static void matrix_init_d(struct matrix_d *mat, enum storage_type st,
 
 static int matrix_rdma_copy(struct matrix_d *a, struct matrix_d *b, int tran_id)
 {
-	__u64 src_offset = 0;
-	__u64 dst_offset = 0;
-	__u64 bytes = 0;
-	int err = -ENOMEM;
+    __u64 src_offset = 0;
+    __u64 dst_offset = 0;
+    __u64 bytes = 0;
+    int err = -ENOMEM;
 
-	__u64 a0, a1, a2, a3, a4, a5, a6, a7, a8, a9;
+    __u64 a0, a1, a2, a3, a4, a5, a6, a7, a8, a9;
     __u64 aloc=0, aloc1=0, aloc2=0, aloc3=0, aloc4=0, aloc5=0, aloc6=0, aloc7=0, aloc8=0, aloc9=0;
     __u64 b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
     __u64 bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
 
-	__u64 n = 0;
-	n = a->mat_view.ub[0] - a->mat_view.lb[0] + 1;
-	a0 = a->mat_view.lb[0];
+    __u64 n = 0;
+    n = a->mat_view.ub[0] - a->mat_view.lb[0] + 1;
+    a0 = a->mat_view.lb[0];
     b0 = b->mat_view.lb[0];
 
-    /*for(a9 = a->mat_view.lb[9], b9 = b->mat_view.lb[9];     //TODO-Q
+    switch(a->num_dims){
+        case(1):
+                        goto dim1;
+                        break;
+                case(2):
+                        goto dim2;
+                        break;
+                case(3):
+                        goto dim3;
+                        break;
+                case(4):
+                        goto dim4;
+                        break;
+                case(5):
+                        goto dim5;
+                        break;
+                case(6):
+                        goto dim6;
+                        break;
+                case(7):
+                        goto dim7;
+                        break;
+                case(8):
+                        goto dim8;
+                        break;
+                case(9):
+                        goto dim9;
+                        break;
+                case(10):
+                        goto dim10;
+                        break;
+                default:
+                        break;
+    }
+
+dim10:    for(a9 = a->mat_view.lb[9], b9 = b->mat_view.lb[9];     //TODO-Q
         a9 <= a->mat_view.ub[9]; a9++, b9++){
         aloc9 = a9 * a->dist[8];
         bloc9 = a9 * b->dist[8];
-    for(a8 = a->mat_view.lb[8], b8 = b->mat_view.lb[8];     //TODO-Q
+dim9:    for(a8 = a->mat_view.lb[8], b8 = b->mat_view.lb[8];     //TODO-Q
         a8 <= a->mat_view.ub[8]; a8++, b8++){
         aloc8 = (aloc9 + a8) * a->dist[7];
         bloc8 = (bloc9 + b8) * b->dist[7];
-    for(a7 = a->mat_view.lb[7], b7 = b->mat_view.lb[7];     //TODO-Q
+dim8:    for(a7 = a->mat_view.lb[7], b7 = b->mat_view.lb[7];     //TODO-Q
         a7 <= a->mat_view.ub[7]; a7++, b7++){
         aloc7 = (aloc8 + a7) * a->dist[6];
         bloc7 = (bloc8 + b7) * b->dist[6];
-    for(a6 = a->mat_view.lb[6], b6 = b->mat_view.lb[6];     //TODO-Q
+dim7:    for(a6 = a->mat_view.lb[6], b6 = b->mat_view.lb[6];     //TODO-Q
         a6 <= a->mat_view.ub[6]; a6++, b6++){
         aloc6 = (aloc7 + a6) * a->dist[5];
         bloc6 = (bloc7 + b6) * b->dist[5];
-    for(a5 = a->mat_view.lb[5], b5 = b->mat_view.lb[5];     //TODO-Q
+dim6:    for(a5 = a->mat_view.lb[5], b5 = b->mat_view.lb[5];     //TODO-Q
         a5 <= a->mat_view.ub[5]; a5++, b5++){
         aloc5 = (aloc6 + a5) * a->dist[4];
         bloc5 = (bloc6 + b5) * b->dist[4];
-    for(a4 = a->mat_view.lb[4], b4 = b->mat_view.lb[4];
+dim5:    for(a4 = a->mat_view.lb[4], b4 = b->mat_view.lb[4];
         a4 <= a->mat_view.ub[4]; a4++, b4++){
         aloc4 = (aloc5 + a4) * a->dist[3];
         bloc4 = (bloc5 + b4) * b->dist[3];
-    for(a3 = a->mat_view.lb[3], b3 = b->mat_view.lb[3];
+dim4:    for(a3 = a->mat_view.lb[3], b3 = b->mat_view.lb[3];
         a3 <= a->mat_view.ub[3]; a3++, b3++){
         aloc3 = (aloc4 + a3) * a->dist[2];
-        bloc3 = (bloc4 + b3) * b->dist[2]; */
-        for(a2 = a->mat_view.lb[2], b2 = b->mat_view.lb[2];
+        bloc3 = (bloc4 + b3) * b->dist[2]; 
+dim3:        for(a2 = a->mat_view.lb[2], b2 = b->mat_view.lb[2];
             a2 <= a->mat_view.ub[2]; a2++, b2++){
             aloc2 = (aloc3 + a2) * a->dist[1];
             bloc2 = (bloc3 + b2) * b->dist[1];
-            for(a1 = a->mat_view.lb[1], b1 = b->mat_view.lb[1];
+dim2:            for(a1 = a->mat_view.lb[1], b1 = b->mat_view.lb[1];
                 a1 <= a->mat_view.ub[1]; a1++, b1++){
                 aloc1 = (aloc2 + a1) * a->dist[0];
                 bloc1 = (bloc2 + b1) * b->dist[0];
@@ -1190,7 +1225,7 @@ static int matrix_rdma_copy(struct matrix_d *a, struct matrix_d *b, int tran_id)
                     aloc = aloc1 + a0;
                     bloc = bloc1 + b0;
                */
-                aloc = aloc1 + a0;
+dim1:           aloc = aloc1 + a0;
                 bloc = bloc1 + b0;
                 src_offset = bloc * a->size_elem;
                 dst_offset = aloc * a->size_elem;
@@ -1198,76 +1233,29 @@ static int matrix_rdma_copy(struct matrix_d *a, struct matrix_d *b, int tran_id)
                 err = dart_rdma_schedule_read(tran_id, src_offset, dst_offset, bytes);
                 if (err < 0)
                         goto err_out;
-	}} /*}}}}}}}*/
+        if(a->num_dims == 1)    return 0;
+    }
+    if(a->num_dims == 2)    return 0;
+    }
+    if(a->num_dims == 3)    return 0;
+    }
+    if(a->num_dims == 4)    return 0;
+    }
+    if(a->num_dims == 5)    return 0;
+    }
+    if(a->num_dims == 6)    return 0;
+    }
+    if(a->num_dims == 7)    return 0;
+    }
+    if(a->num_dims == 8)    return 0;
+    }
+    if(a->num_dims == 9)    return 0;
+    }
 
     return 0;
 err_out:
     ERROR_TRACE();
 }
-
-/*
-static int matrix_rdma_copy(struct matrix_d *a, struct matrix_d *b, int tran_id)
-{
-	int ai, aj, ak, bi, bj, bk;
-	int n;
-	int err = -ENOMEM;
-	size_t src_offset = 0;
-	size_t dst_offset = 0;
-	size_t bytes = 0;
-
-	if (a->mat_storage == row_major && b->mat_storage == row_major) {
-		n = a->mat_view.ub[bb_x] - a->mat_view.lb[bb_x] + 1;
-		ak = a->mat_view.lb[bb_x];
-		bk = b->mat_view.lb[bb_x];
-		for (ai = a->mat_view.lb[bb_z], bi = b->mat_view.lb[bb_z];
-			 ai <= a->mat_view.ub[bb_z]; ai++, bi++) {
-			for (aj = a->mat_view.lb[bb_y], bj = b->mat_view.lb[bb_y];
-				 aj <= a->mat_view.ub[bb_y]; aj++, bj++) {
-				bytes = a->size_elem * n;
-				src_offset = a->size_elem *
-					(bk + b->dimx * (bj + b->dimy * bi));
-				dst_offset = a->size_elem *
-					(ak + a->dimx * (aj + a->dimy * ai));
-				#ifdef DEBUG
-				uloga("%s(): tran_id=%d, bk=%d, bj=%d, bi=%d, "
-				  "src_offset=%u, ak=%d, aj=%d, ai=%d, "
-				  "dst_offset=%u, bytes=%u\n",
-					__func__, tran_id, bk, bj, bi, src_offset,
-					ak, aj, ai, dst_offset, bytes);
-				#endif
-
-				err = dart_rdma_schedule_read(tran_id, src_offset, dst_offset, bytes);
-				if (err < 0)
-					goto err_out;
-			}
-		}
-	} else if (a->mat_storage == column_major && b->mat_storage == column_major) {
-		n = a->mat_view.ub[bb_y] - a->mat_view.lb[bb_y] + 1;
-		ak = a->mat_view.lb[bb_y];
-		bk = b->mat_view.lb[bb_y];
-		for (ai = a->mat_view.lb[bb_z], bi = b->mat_view.lb[bb_z];
-			 ai <= a->mat_view.ub[bb_z]; ai++, bi++) {
-			for (aj = a->mat_view.lb[bb_x], bj = b->mat_view.lb[bb_x];
-				 aj <= a->mat_view.ub[bb_x]; aj++, bj++) {
-				bytes = a->size_elem * n;
-				src_offset = a->size_elem *
-						(bk + b->dimy * (bj + b->dimx * bi));
-				dst_offset = a->size_elem *
-						(ak + a->dimy * (aj + a->dimx * ai));
-
-				err = dart_rdma_schedule_read(
-						tran_id, src_offset, dst_offset, bytes);
-				if (err < 0)
-					goto err_out;
-			}
-		}
-	}
-	
-	return 0;
-err_out:
-	ERROR_TRACE();
-}
-*/
 
 static int schedule_rdma_reads(int tran_id,
         struct obj_descriptor *src_odsc, struct obj_descriptor *dst_odsc)
