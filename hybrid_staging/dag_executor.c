@@ -38,7 +38,7 @@
 #include "hstaging_api.h"
 
 extern int dummy_epsi_coupling_workflow(MPI_Comm comm);
-extern int dummy_dag_parallel_job(MPI_Comm comm);
+extern int dummy_sample_dag_workflow(MPI_Comm comm);
 
 int main(int argc, char **argv)
 {
@@ -57,8 +57,8 @@ int main(int argc, char **argv)
     }
 	err = hstaging_init(nproc, appid, hs_executor); 
 
-	//err = dummy_epsi_coupling_workflow(comm);
-    err = dummy_dag_parallel_job(comm);
+	err = dummy_epsi_coupling_workflow(comm);
+    //err = dummy_sample_dag_workflow(comm);
 	if (err < 0)
 		goto err_out;
 

@@ -325,6 +325,7 @@ int dag_task(struct task_descriptor *t, struct parallel_communicator *comm)
     return 0;
 }
 
+static int sml_mstep = 10;
 int xgc1_task(struct task_descriptor *t, struct parallel_communicator *comm)
 {
     int comm_size, comm_rank;
@@ -346,10 +347,27 @@ int xgc1_task(struct task_descriptor *t, struct parallel_communicator *comm)
                 t->input_vars[i].step, t->input_vars[i].size);
         }
     }
+    
+    // read particle data
+    if (comm_rank == 0) {
+        uloga("%s(): read particle data\n", __func__);
+    }
 
     // sleep for 1 second
-    unsigned int seconds = 2;
-    sleep(seconds);
+    unsigned int seconds = 1;
+    int ts;
+    for (ts = 1; ts <= sml_mstep; ts++) {
+        sleep(seconds);
+        // write turbulence data
+        if (comm_rank == 0) {
+            uloga("%s(): ts %d write turbulence data\n", __func__, ts);
+        }
+    }
+
+    // write particle data
+    if (comm_rank == 0) {
+        uloga("%s(): write particle data\n", __func__);
+    }
 
     MPI_Barrier(comm->comm);
 
@@ -382,9 +400,27 @@ int xgca_task(struct task_descriptor *t, struct parallel_communicator *comm)
         }
     }
 
+
+    // read particle data
+    if (comm_rank == 0) {
+        uloga("%s(): read particle data\n", __func__);
+    }
+
     // sleep for 1 second
-    unsigned int seconds = 2;
-    sleep(seconds);
+    unsigned int seconds = 1;
+    int ts;
+    for (ts = 1; ts <= sml_mstep; ts++) {
+        // read turbulence data
+        if (comm_rank == 0) {
+            uloga("%s(): ts %d read turbulence data\n", __func__, ts);
+        }
+        sleep(seconds);
+    }
+
+    // write particle data
+    if (comm_rank == 0) {
+        uloga("%s(): write particle data\n", __func__);
+    }
 
     MPI_Barrier(comm->comm);
 
@@ -687,7 +723,7 @@ int dummy_s3d_staging_parallel_job(MPI_Comm comm, enum hstaging_location_type lo
 }
 */
 
-int dummy_dag_parallel_job(MPI_Comm comm)
+int dummy_sample_dag_workflow(MPI_Comm comm)
 {
     int err;
     int mpi_rank, mpi_nproc;
