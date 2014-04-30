@@ -431,6 +431,120 @@ int xgca_task(struct task_descriptor *t, struct parallel_communicator *comm)
     return 0;
 }
 
+static s3d_nstep = 20;
+int s3d_task(struct task_descriptor *t, struct parallel_communicator *comm)
+{
+    int comm_size, comm_rank;
+    MPI_Barrier(comm->comm);
+    MPI_Comm_size(comm->comm, &comm_size);
+    MPI_Comm_rank(comm->comm, &comm_rank);
+
+    // print input variable information
+    if (t->rank == 0) {
+        uloga("%s(): task id= %d step= %d rank= %d nproc= %d "
+            "num_input_vars= %d comm_size= %d comm_rank= %d\n", __func__,
+            t->tid, t->step,
+            t->rank, t->nproc, t->num_input_vars, comm_size, comm_rank);
+
+        int i;
+        for (i = 0; i < t->num_input_vars; i++) {
+            uloga("%s(): task tid %d input vars %s step %d elem_size %d\n",
+                __func__, t->tid, t->input_vars[i].var_name,
+                t->input_vars[i].step, t->input_vars[i].size);
+        }
+    }
+
+    // sleep for 2 second
+    unsigned int seconds = 2;
+    int ts;
+    for (ts = 1; ts <= s3d_nstep; ts++) {
+        sleep(seconds);
+        // write data
+        if (comm_rank == 0) {
+            uloga("%s(): write s3d data ts= %d\n", __func__, ts);
+        }
+    }
+
+    MPI_Barrier(comm->comm);
+    return 0;
+}
+
+int s3d_insitu_analysis_task(struct task_descriptor *t,
+    struct parallel_communicator *comm)
+{
+    int comm_size, comm_rank;
+    MPI_Barrier(comm->comm);
+    MPI_Comm_size(comm->comm, &comm_size);
+    MPI_Comm_rank(comm->comm, &comm_rank);
+
+    // print input variable information
+    if (t->rank == 0) {
+        uloga("%s(): task id= %d step= %d rank= %d nproc= %d "
+            "num_input_vars= %d comm_size= %d comm_rank= %d\n", __func__,
+            t->tid, t->step,
+            t->rank, t->nproc, t->num_input_vars, comm_size, comm_rank);
+
+        int i;
+        for (i = 0; i < t->num_input_vars; i++) {
+            uloga("%s(): task tid %d input vars %s step %d elem_size %d\n",
+                __func__, t->tid, t->input_vars[i].var_name,
+                t->input_vars[i].step, t->input_vars[i].size);
+        }
+    }
+
+    // sleep for 2 second
+    unsigned int seconds = 2;
+    int ts;
+    for (ts = 1; ts <= s3d_nstep; ts++) {
+        // read data
+        if (comm_rank == 0) {
+            uloga("%s(): read s3d data ts= %d\n", __func__, ts);
+        }
+        sleep(seconds);
+    }
+
+    MPI_Barrier(comm->comm);
+    return 0;
+}
+
+int s3d_intransit_analysis_task(struct task_descriptor *t,
+    struct parallel_communicator *comm)
+{
+    int comm_size, comm_rank;
+    MPI_Barrier(comm->comm);
+    MPI_Comm_size(comm->comm, &comm_size);
+    MPI_Comm_rank(comm->comm, &comm_rank);
+    
+    // print input variable information
+    if (t->rank == 0) {
+        uloga("%s(): task id= %d step= %d rank= %d nproc= %d "
+            "num_input_vars= %d comm_size= %d comm_rank= %d\n", __func__,
+            t->tid, t->step,
+            t->rank, t->nproc, t->num_input_vars, comm_size, comm_rank);
+
+        int i;
+        for (i = 0; i < t->num_input_vars; i++) {
+            uloga("%s(): task tid %d input vars %s step %d elem_size %d\n",
+                __func__, t->tid, t->input_vars[i].var_name,
+                t->input_vars[i].step, t->input_vars[i].size);
+        }
+    }
+
+    // sleep for 2 second
+    unsigned int seconds = 2;
+    int ts;
+    for (ts = 1; ts <= s3d_nstep; ts++) {
+        // read data
+        if (comm_rank == 0) {
+            uloga("%s(): read s3d data ts= %d\n", __func__, ts);
+        }
+        sleep(seconds);
+    }
+
+    MPI_Barrier(comm->comm);
+    return 0;
+}
+
 int task1(struct task_descriptor *t, struct parallel_communicator *comm)
 {
 	read_input_data(t);
@@ -768,6 +882,37 @@ int dummy_epsi_coupling_workflow(MPI_Comm comm)
 
     add_task_function(1, xgc1_task);
     add_task_function(2, xgca_task);
+
+    int pool_id = 1;
+    hstaging_register_executor(pool_id, mpi_nproc, mpi_rank);
+    MPI_Barrier(comm);
+
+    struct task_descriptor t;
+    while (!hstaging_request_task(&t)) {
+        hstaging_put_sync_all();
+        err = exec_task_function(&t);
+        if (err < 0) {
+            return err;
+        }
+    }
+    hstaging_put_sync_all();
+    parallel_comm_free();
+
+    return 0;
+}
+
+int dummy_s3d_analysis_workflow(MPI_Comm comm)
+{
+    int err;
+    int mpi_rank, mpi_nproc;
+    MPI_Comm_size(comm, &mpi_nproc);
+    MPI_Comm_rank(comm, &mpi_rank);
+
+    parallel_comm_init(comm);
+
+    add_task_function(1, s3d_task);
+    add_task_function(2, s3d_insitu_analysis_task);
+    add_task_function(3, s3d_intransit_analysis_task); 
 
     int pool_id = 1;
     hstaging_register_executor(pool_id, mpi_nproc, mpi_rank);

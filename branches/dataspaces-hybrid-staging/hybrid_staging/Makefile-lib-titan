@@ -23,7 +23,7 @@ CFLAGS= -g ${UGNI_CFLAGS} ${PMI_CLFASG} -DDS_HAVE_DIMES -DDS_HAVE_HYBRID_STAGING
 SRC1 =  hstaging_api.c \
 		hstaging_strutil.c \
 		hstaging_def.c \
-		hstaging_scheduler_parallel_job.c 
+		hstaging_scheduler.c 
 
 OBJ1 = $(SRC1:.c=.o)
 
