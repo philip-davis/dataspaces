@@ -309,7 +309,7 @@ struct dimes_server *dimes_server_alloc(int num_sp, int num_cp, char *conf_name)
 	rpc_add_service(dimes_get_ack_msg, dsgrpc_dimes_get_ack);
 
 	dimes_s_l->meta_store =
-        metadata_s_alloc(dimes_s_l->dsg->ssd->storage->size_hash);
+        metadata_s_alloc(dimes_s_l->dsg->ls->size_hash);
 	if (!dimes_s_l->meta_store) {
 		free(dimes_s_l->dsg);
 		free(dimes_s_l);

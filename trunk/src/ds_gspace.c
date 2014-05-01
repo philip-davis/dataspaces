@@ -478,7 +478,7 @@ static int bin_code_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg
 
 	struct obj_data *from_obj;
 
-        from_obj = ls_find(dsg->ssd->storage, &hc->odsc);
+    from_obj = ls_find(dsg->ls, &hc->odsc);
 	// TODO: what if you can not find it ?!
 
 	memset(&rargs, 0, sizeof(rargs));
@@ -1211,9 +1211,7 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
     struct obj_data *od = msg->private;
-
-    struct sspace* ssd = lookup_sspace(dsg, od->obj_desc.name, &od->gdim);
-    ssd_add_obj(ssd, od);
+    ls_add_obj(dsg->ls, od);
 
     free(msg);
 #ifdef DEBUG
@@ -1834,9 +1832,8 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
  }
 #endif
 
-        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name, &oh->gdim);
         // CRITICAL: use version here !!!
-        from_obj = ls_find(ssd->storage, &oh->u.o.odsc);
+        from_obj = ls_find(dsg->ls, &oh->u.o.odsc);
         if (!from_obj) {
             char *str;
             str = obj_desc_sprint(&oh->u.o.odsc);
@@ -1881,7 +1878,6 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 
         rpc_mem_info_cache(peer, msg, cmd); 
-        // err = rpc_send_direct(rpc_s, peer, msg);
         err = (fast_v)? rpc_send_directv(rpc_s, peer, msg) : rpc_send_direct(rpc_s, peer, msg);
         rpc_mem_info_reset(peer, msg, cmd);
         if (err == 0)
@@ -1907,7 +1903,7 @@ static int dsgrpc_obj_filter(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         int err = -ENOENT;
 
         // BUG: when using version numbers here.
-        from = ls_find(dsg->ssd->storage, &hf->odsc);
+        from = ls_find(dsg->ls, &hf->odsc);
         if (!from) {
 		char *str;
                 str = obj_desc_sprint(&hf->odsc);
@@ -2047,6 +2043,12 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
             goto err_free;
         }
 
+        dsg_l->ls = ls_alloc(ds_conf.max_versions);
+        if (!dsg_l->ls) {
+            uloga("%s(): ERROR ls_alloc() failed\n", __func__);
+            goto err_free;
+        }
+
         tm_end = timer_read(&timer);
 #ifdef DEBUG
         printf("SRV %d %lf\n", DSG_ID, tm_end-tm_start);
@@ -2081,16 +2083,11 @@ void dsg_dht_print_descriptors(const struct obj_descriptor *odsc_tab[], int n)
 	free(str);
 }
 
-/* Helper routine for external calls, e.g., rexec. */
-struct ss_storage *dsg_dht_get_storage(void)
-{
-	return dsg->ssd->storage;
-}
-
 void dsg_free(struct ds_gspace *dsg)
 {
         ds_free(dsg->ds);
         free_sspace(dsg);
+        ls_free(dsg->ls);
         free(dsg);
 }
 

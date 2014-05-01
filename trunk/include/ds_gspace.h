@@ -42,6 +42,8 @@ struct ds_gspace {
 
         /* Shared space data structure. */
         struct sspace           *ssd;
+        /* Local in-memory storage. */
+        struct ss_storage       *ls;
         /* Default global data domain dimension */
         struct global_dimension default_gdim;
 

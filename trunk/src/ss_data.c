@@ -471,8 +471,8 @@ dht_alloc(struct sspace *ssd, struct bbox *bb_domain, int num_nodes, int size_ha
 	}
 	memset(dht, 0, sizeof(*dht));
 
-        dht->bb_glb_domain = *bb_domain;
-        dht->num_entries = num_nodes;
+    dht->bb_glb_domain = *bb_domain;
+    dht->num_entries = num_nodes;
 
 	for (i = 0; i < num_nodes; i++) {
 		dht->ent_tab[i] = dht_entry_alloc(ssd, size_hash);
@@ -526,28 +526,6 @@ static int dht_intersect(struct dht_entry *de, struct intv *itv)
                 if (intv_do_intersect(&de->i_tab[i], itv))
                         return 1;
         return 0;
-}
-
-/*
-  Allocate and init the local storage structure.
-*/
-static struct ss_storage *ls_alloc(int max_versions)
-{
-        struct ss_storage *ls = 0;
-        int i;
-
-        ls = malloc(sizeof(*ls) + sizeof(struct list_head) * max_versions);
-        if (!ls) {
-                errno = ENOMEM;
-                return ls;
-        }
-
-        memset(ls, 0, sizeof(*ls));
-        for (i = 0; i < max_versions; i++)
-                INIT_LIST_HEAD(&ls->obj_hash[i]);
-        ls->size_hash = max_versions;
-
-        return ls;
 }
 
 static __u64 ssd_get_max_dim(struct sspace *ss)
@@ -636,16 +614,8 @@ static struct sspace *ssd_alloc_v1(struct bbox *bb_domain, int num_nodes, int ma
                 goto err_out;
         memset(ssd, 0, sizeof(*ssd));
 
-        ssd->storage = ls_alloc(max_versions);
-        if (!ssd->storage) {
-                free(ssd);
-                goto err_out;
-        }
-
         ssd->dht = dht_alloc(ssd, bb_domain, num_nodes, max_versions);
         if (!ssd->dht) {
-            // TODO: free storage 
-            free(ssd->storage);
             free(ssd);
             goto err_out;
         }
@@ -661,10 +631,7 @@ static struct sspace *ssd_alloc_v1(struct bbox *bb_domain, int num_nodes, int ma
 
         err = dht_construct_hash(ssd->dht, ssd);
         if (err < 0) {
-                //TODO: do I need a ls_free() routine to clean up the
-                //      objects in the space ?
                 dht_free(ssd->dht);
-                free(ssd->storage);
                 free(ssd);
                 goto err_out;
         }
@@ -678,11 +645,7 @@ static struct sspace *ssd_alloc_v1(struct bbox *bb_domain, int num_nodes, int ma
 static void ssd_free_v1(struct sspace *ssd)
 {
         dht_free(ssd->dht);
-
-        //TODO: do I need a ls_free() routine ?
-        free(ssd->storage);
         free(ssd);
-
         sh_free();
 }
 
@@ -787,17 +750,10 @@ struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max
 
         ssd->max_dim = max_dim;
         ssd->bpd = nbits_max_dim;
-        ssd->storage = ls_alloc(max_versions);
-        if (!ssd->storage) {
-                free(ssd);
-                goto err_out;
-        }
 
         ssd->total_num_bbox = queue_size(q);
         ssd->dht = dht_alloc(ssd, bb_domain, num_nodes, max_versions);
         if (!ssd->dht) {
-            // TODO: free storage 
-            free(ssd->storage);
             free(ssd);
             goto err_out;
         }
@@ -845,11 +801,7 @@ struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max
 void ssd_free_v2(struct sspace *ssd)
 {
         dht_free_v2(ssd->dht);
-
-        //TODO: do I need a ls_free() routine ?
-        free(ssd->storage);
         free(ssd);
-
         sh_free();
 }
 
@@ -930,41 +882,10 @@ int ssd_hash(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[
 */
 int ssd_init(struct sspace *ssd, int rank)
 {
-	//        int err = -ENOMEM;
+    ssd->rank = rank;
+    ssd->ent_self = ssd->dht->ent_tab[rank];
 
-        ssd->rank = rank;
-        ssd->ent_self = ssd->dht->ent_tab[rank];
-
-        return 0;
-}
-
-/*
-  Add an object to the local storage.
-*/
-void ssd_add_obj(struct sspace *ss, struct obj_data *od)
-{
-        int index;
-        struct list_head *bin;
-        struct obj_data *od_existing;
-
-        od_existing = ls_find_no_version(ss->storage, &od->obj_desc);
-        if (od_existing) {
-                od_existing->f_free = 1;
-                if (od_existing->refcnt == 0) {
-                        ssd_remove(ss, od_existing);
-                        obj_data_free(od_existing);
-                }
-                else {
-                        uloga("'%s()': object eviction delayed.\n", __func__);
-                }
-        }
-
-        index = od->obj_desc.version % ss->storage->size_hash; 
-        bin = &ss->storage->obj_hash[index];
-
-        /* NOTE: new object comes first in the list. */
-        list_add(&od->obj_entry, bin);
-        ss->storage->num_obj++;
+    return 0;
 }
 
 /*
@@ -1045,14 +966,87 @@ int ssd_filter(struct obj_data *from, struct obj_descriptor *odsc, double *dval)
         return 0;
 }
 
-struct obj_data *ssd_lookup(struct sspace *ss, char *name)
+/*
+  Allocate and init the local storage structure.
+*/
+struct ss_storage *ls_alloc(int max_versions)
+{
+        struct ss_storage *ls = 0;
+        int i;
+
+        ls = malloc(sizeof(*ls) + sizeof(struct list_head) * max_versions);
+        if (!ls) {
+                errno = ENOMEM;
+                return ls;
+        }
+
+        memset(ls, 0, sizeof(*ls));
+        for (i = 0; i < max_versions; i++)
+                INIT_LIST_HEAD(&ls->obj_hash[i]);
+        ls->size_hash = max_versions;
+
+        return ls;
+}
+
+void ls_free(struct ss_storage *ls)
+{
+    if (!ls) return;
+
+    struct obj_data *od, *t;
+    struct list_head *list;
+    int i;
+
+    for (i = 0; i < ls->size_hash; i++) {
+        list = &ls->obj_hash[i];
+        list_for_each_entry_safe(od, t, list, struct obj_data, obj_entry ) {
+            ls_remove(ls, od);
+            obj_data_free(od);
+        }
+    }
+
+    if (ls->num_obj != 0) {
+        uloga("%s(): ERROR ls->num_obj is %d not 0\n", __func__, ls->num_obj);
+    }
+    free(ls);
+}
+
+/*
+  Add an object to the local storage.
+*/
+void ls_add_obj(struct ss_storage *ls, struct obj_data *od)
+{
+        int index;
+        struct list_head *bin;
+        struct obj_data *od_existing;
+
+        od_existing = ls_find_no_version(ls, &od->obj_desc);
+        if (od_existing) {
+                od_existing->f_free = 1;
+                if (od_existing->refcnt == 0) {
+                        ls_remove(ls, od_existing);
+                        obj_data_free(od_existing);
+                }
+                else {
+                        uloga("'%s()': object eviction delayed.\n", __func__);
+                }
+        }
+
+        index = od->obj_desc.version % ls->size_hash;
+        bin = &ls->obj_hash[index];
+
+        /* NOTE: new object comes first in the list. */
+        list_add(&od->obj_entry, bin);
+        ls->num_obj++;
+}
+
+struct obj_data* ls_lookup(struct ss_storage *ls, char *name)
 {
         struct obj_data *od;
         struct list_head *list;
         int i;
 
-        for (i = 0; i < ss->storage->size_hash; i++) {
-                list = &ss->storage->obj_hash[i];
+        for (i = 0; i < ls->size_hash; i++) {
+                list = &ls->obj_hash[i];
 
                 list_for_each_entry(od, list, struct obj_data, obj_entry ) {
                         if (strcmp(od->obj_desc.name, name) == 0)
@@ -1063,29 +1057,24 @@ struct obj_data *ssd_lookup(struct sspace *ss, char *name)
         return NULL;
 }
 
-void ssd_remove(struct sspace *ss, struct obj_data *od)
+void ls_remove(struct ss_storage *ls, struct obj_data *od)
 {
         list_del(&od->obj_entry);
-        ss->storage->num_obj--;
+        ls->num_obj--;
 }
 
-void ssd_try_remove_free(struct sspace *ss, struct obj_data *od)
+void ls_try_remove_free(struct ss_storage *ls, struct obj_data *od)
 {
         /* Note:  we   assume  the  object  data   is  allocated  with
            obj_data_alloc(), i.e., the data follows the structure.  */
         if (od->refcnt == 0) {
-                ssd_remove(ss, od);
+                ls_remove(ls, od);
                 if (od->data != od+1) {
                         uloga("'%s()': we are about to free an object " 
                               "with external allocation.\n", __func__);
                 }
                 obj_data_free(od);
         }
-}
-
-static inline void ls_inc_num_objects(struct ss_storage *ls)
-{
-        ls->num_obj++;
 }
 
 /*
