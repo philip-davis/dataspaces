@@ -116,12 +116,6 @@ struct dht_entry {
         int                     num_intv;
         struct intv             *i_tab;
 
-        /* Local  info: object  descriptors  that fall  into this  DHT
-           entry.
-        int                     size_objs, num_objs;
-        struct obj_descriptor   *od_tab;
-        */
-
         // for v2 
         int num_bbox;
         int size_bb_tab;
@@ -146,7 +140,6 @@ struct sspace {
         unsigned int            bpd;
 
         struct dht              *dht;
-        struct ss_storage       *storage;
 
         int                     rank;
         /* Pointer into "dht.ent_tab" corresponding to this node. */
@@ -230,17 +223,13 @@ struct hdr_bin_result {
 struct sspace * ssd_alloc(struct bbox *, int, int);
 int ssd_init(struct sspace *, int);
 void ssd_free(struct sspace *);
-void ssd_add_obj(struct sspace *, struct obj_data *);
 void ssd_add_entry(struct dht_entry *, struct obj_descriptor *);
-// int ssd_copy(struct sspace *, struct obj_data *, struct bbox *);
 int ssd_copy(struct obj_data *, struct obj_data *);
+// TODO: ssd_copyv is not supported yet
 int ssd_copyv(struct obj_data *, struct obj_data *);
 int ssd_copy_list(struct obj_data *, struct list_head *);
 int ssd_filter(struct obj_data *, struct obj_descriptor *, double *);
 int ssd_hash(struct sspace *, const struct bbox *, struct dht_entry *[]);
-struct obj_data *ssd_lookup(struct sspace *, char *);
-void ssd_remove(struct sspace *, struct obj_data *);
-void ssd_try_remove_free(struct sspace *, struct obj_data *);
 
 int dht_add_entry(struct dht_entry *, const struct obj_descriptor *);
 const struct obj_descriptor * dht_find_entry(struct dht_entry *, const struct obj_descriptor *);
@@ -248,9 +237,14 @@ int dht_find_entry_all(struct dht_entry *, struct obj_descriptor *,
                        const struct obj_descriptor *[]);
 int dht_find_versions(struct dht_entry *, struct obj_descriptor *, int []);
 
+struct ss_storage *ls_alloc(int max_versions);
+void ls_free(struct ss_storage *);
+void ls_add_obj(struct ss_storage *, struct obj_data *);
+struct obj_data* ls_lookup(struct ss_storage *, char *);
+void ls_remove(struct ss_storage *, struct obj_data *);
+void ls_try_remove_free(struct ss_storage *, struct obj_data *);
 struct obj_data * ls_find(struct ss_storage *, const struct obj_descriptor *);
 struct obj_data * ls_find_no_version(struct ss_storage *, struct obj_descriptor *);
-
 
 struct obj_data *obj_data_alloc(struct obj_descriptor *);
 struct obj_data *obj_data_allocv(struct obj_descriptor *);
@@ -258,14 +252,6 @@ struct obj_data *obj_data_alloc_no_data(struct obj_descriptor *, void *);
 struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *, void *);
 
 void obj_data_free(struct obj_data *od);
-
-/*
-static inline void obj_data_free(struct obj_data *od)
-{
-        free(od);
-}
-*/
-
 void obj_data_free_with_data(struct obj_data *);
 __u64 obj_data_size(struct obj_descriptor *);
 __u64 obj_data_sizev(struct obj_descriptor *);
