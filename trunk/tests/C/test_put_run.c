@@ -114,7 +114,7 @@ static int generate_3d(double *m3d, unsigned int ts, uint64_t spx, uint64_t spy,
 	return 0;
 }
 
-static int couple_write_2d(unsigned int ts, int num_vars, enum transport_type type)
+static int couple_write_2d(unsigned int ts, int ndim, int num_vars, enum transport_type type)
 {
     double **data_tab = (double **)malloc(sizeof(double *) * num_vars);
     char var_name[128];
@@ -162,7 +162,7 @@ static int couple_write_2d(unsigned int ts, int num_vars, enum transport_type ty
     for (i = 0; i < num_vars; i++) {
         sprintf(var_name, "m2d_%d", i);
         // Note: needs to change dimensions ordering to column-major: y,x
-        common_put(var_name, ts, elem_size,
+        common_put(var_name, ts, ndim, elem_size,
             yl, xl, zl, yu, xu, zu, data_tab[i], type);
         if (type == USE_DSPACES) {
             common_put_sync(type);
@@ -196,7 +196,7 @@ static int couple_write_2d(unsigned int ts, int num_vars, enum transport_type ty
 }
 
 
-static int couple_write_3d(unsigned int ts, int num_vars, enum transport_type type)
+static int couple_write_3d(unsigned int ts, int ndim, int num_vars, enum transport_type type)
 {
     double **data_tab = (double **)malloc(sizeof(double *) * num_vars);
     char var_name[128];
@@ -244,7 +244,7 @@ static int couple_write_3d(unsigned int ts, int num_vars, enum transport_type ty
     for (i = 0; i < num_vars; i++) {
         sprintf(var_name, "m3d_%d", i);
         // Note: need to change dimensions ordering to column-major: z,y,x
-        common_put(var_name, ts, elem_size,
+        common_put(var_name, ts, ndim, elem_size,
             zl, yl, xl, zu, yu, xu, data_tab[i], type);
         if (type == USE_DSPACES) {
             common_put_sync(type);
@@ -284,7 +284,7 @@ int test_put_run(enum transport_type type, int npapp, int npx, int npy, int npz,
 	timestep_ = timestep;
 	npapp_ = npapp;
     // Note: dimensions reodering
-    if (dims = 2) {
+    if (2 == dims) {
         npx_ = npy;
         npy_ = npx;
         npz_ = npz;
@@ -292,7 +292,7 @@ int test_put_run(enum transport_type type, int npapp, int npx, int npy, int npz,
         spx_ = spy;
         spy_ = spx;
     }
-    if (dims = 3) {
+    if (3 == dims) {
         npx_ = npz;
         npy_ = npy;
         npz_ = npx;
@@ -323,7 +323,7 @@ int test_put_run(enum transport_type type, int npapp, int npx, int npy, int npz,
     unsigned int ts;
 	if (dims == 2) {
         for (ts = 1; ts <= timestep_; ts++){
-            couple_write_2d(ts, num_vars, type);
+            couple_write_2d(ts, dims, num_vars, type);
         }
 
         if (type == USE_DIMES) {
@@ -334,7 +334,7 @@ int test_put_run(enum transport_type type, int npapp, int npx, int npy, int npz,
         }
 	} else if (dims == 3) {
         for (ts = 1; ts <= timestep_; ts++) {
-            couple_write_3d(ts, num_vars, type);
+            couple_write_3d(ts, dims, num_vars, type);
         }
 
         if (type == USE_DIMES) {

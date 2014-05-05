@@ -57,12 +57,12 @@ void common_unlock_on_read(const char *lock_name, void *gcomm);
 void common_lock_on_write(const char *lock_name, void *gcomm); 
 void common_unlock_on_write(const char *lock_name, void *gcomm); 
 int common_put (const char *var_name,
-        unsigned int ver, int size,
+        unsigned int ver, int ndim, int size,
         uint64_t xl, uint64_t yl, uint64_t zl,
         uint64_t xu, uint64_t yu, uint64_t zu,
         void *data, enum transport_type type);
 int common_get (const char *var_name,
-        unsigned int ver, int size,
+        unsigned int ver, int ndim, int size,
         uint64_t xl, uint64_t yl, uint64_t zl,
         uint64_t xu, uint64_t yu, uint64_t zu, 
         void *data, enum transport_type type); 
