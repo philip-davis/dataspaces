@@ -89,7 +89,7 @@ static void set_offset_3d(int rank, int npx, int npy, int npz, uint64_t spx, uin
     offz_ = (rank / npx / npy) * spz;
 }
 
-static int couple_read_2d(unsigned int ts, int num_vars, enum transport_type type)
+static int couple_read_2d(unsigned int ts, int ndim, int num_vars, enum transport_type type)
 {
     double **data_tab = (double **)malloc(sizeof(double*) * num_vars);
     char var_name[128];
@@ -130,7 +130,7 @@ static int couple_read_2d(unsigned int ts, int num_vars, enum transport_type typ
     for (i = 0; i < num_vars; i++) {
         sprintf(var_name, "m2d_%d", i);
         // Note: change dimensions ordering to column-major: y,x
-        common_get(var_name, ts, elem_size,
+        common_get(var_name, ts, ndim, elem_size,
             yl, xl, zl, yu, xu, zu, data_tab[i], type);
     }	
 	tm_end = timer_read(&timer_);
@@ -159,7 +159,7 @@ static int couple_read_2d(unsigned int ts, int num_vars, enum transport_type typ
 	return 0;
 }
 
-static int couple_read_3d(unsigned int ts, int num_vars, enum transport_type type)
+static int couple_read_3d(unsigned int ts, int ndim, int num_vars, enum transport_type type)
 {
     double **data_tab = (double **)malloc(sizeof(double*) * num_vars);
     char var_name[128];
@@ -200,7 +200,7 @@ static int couple_read_3d(unsigned int ts, int num_vars, enum transport_type typ
     for (i = 0; i < num_vars; i++) {
         sprintf(var_name, "m3d_%d", i);
         // Note: change dimension ordering to column-major: z,y,x
-        common_get(var_name, ts, elem_size,
+        common_get(var_name, ts, ndim, elem_size,
             zl, yl, xl, zu, yu, xu, data_tab[i], type);
     }	
 	tm_end = timer_read(&timer_);
@@ -238,7 +238,7 @@ int test_get_run(enum transport_type type, int npapp, int npx, int npy, int npz,
 	timestep_ = timestep;
 	npapp_ = npapp;
     // Note: dimensions reodering
-    if (dims = 2) {
+    if (2 == dims) {
         npx_ = npy;
         npy_ = npx;
         npz_ = npz;
@@ -246,7 +246,7 @@ int test_get_run(enum transport_type type, int npapp, int npx, int npy, int npz,
         spx_ = spy;
         spy_ = spx;
     }
-    if (dims = 3) {
+    if (3 == dims) {
         npx_ = npz;
         npy_ = npy;
         npz_ = npx;
@@ -277,11 +277,11 @@ int test_get_run(enum transport_type type, int npapp, int npx, int npy, int npz,
     unsigned int ts;
 	if (dims == 2) {
         for (ts = 1; ts <= timestep_; ts++){
-            couple_read_2d(ts, num_vars, type);
+            couple_read_2d(ts, dims, num_vars, type);
         }
 	} else if (dims == 3) {
         for (ts = 1; ts <= timestep_; ts++) {
-            couple_read_3d(ts, num_vars, type);
+            couple_read_3d(ts, dims, num_vars, type);
         }
 	} else {
         uloga("%s(): error dims= %d\n", __func__, dims);

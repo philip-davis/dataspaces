@@ -820,8 +820,8 @@ static int dcgrpc_dimes_locate_data(struct rpc_server *rpc_s,
 	int err = -ENOMEM;
 
 #ifdef DEBUG
-	uloga("%s(): #%d oh->qid=%d, oh->rc=%d, oh->num_obj=%d\n", __func__,
-		DIMES_CID, oh->qid, oh->rc, oh->num_obj);
+	uloga("%s(): peer #%d query id %d rpc return code %d number of obj to fetch %d\n",
+        __func__, DIMES_CID, oh->qid, oh->rc, oh->num_obj);
 #endif
 
 	if (oh->rc == -1) {
@@ -1100,13 +1100,12 @@ static int dimes_locate_data(struct query_tran_entry_d *qte)
 }
 
 struct matrix_view_d {
-	__u64 lb[BBOX_MAX_NDIM]; //int lb[3];
-	__u64 ub[BBOX_MAX_NDIM]; //int ub[3];
+	__u64 lb[BBOX_MAX_NDIM];
+	__u64 ub[BBOX_MAX_NDIM];
 };
 
 struct matrix_d {
-	//int dimx, dimy, dimz;
-	int 	dist[BBOX_MAX_NDIM];
+	__u64 	dist[BBOX_MAX_NDIM];
 	int 	num_dims;
 	size_t size_elem;
 	enum storage_type mat_storage;
@@ -1127,9 +1126,9 @@ static void matrix_init_d(struct matrix_d *mat, enum storage_type st,
         mat->mat_view.ub[i] = bb_loc->ub.c[i] - bb_glb->lb.c[i];
     }
 
-    	mat->num_dims = ndims;
-    	mat->mat_storage = st;
-    	mat->size_elem = se;
+    mat->num_dims = ndims;
+    mat->mat_storage = st;
+    mat->size_elem = se;
 }
 
 static int matrix_rdma_copy(struct matrix_d *a, struct matrix_d *b, int tran_id)
@@ -1298,6 +1297,50 @@ static int schedule_rdma_reads(int tran_id,
 err_out:
 	ERROR_TRACE();
 } 
+
+static int is_remote_data_contiguous_in_memory(struct obj_descriptor *src_odsc,
+                struct obj_descriptor *dst_odsc)
+{
+    if (!src_odsc || !dst_odsc) return 0;
+
+    // check dimension first
+    if (src_odsc->bb.num_dims != dst_odsc->bb.num_dims) return 0;
+
+    struct matrix_d from;
+    struct bbox bb;
+    bbox_intersect(&dst_odsc->bb, &src_odsc->bb, &bb);
+    matrix_init_d(&from, src_odsc->st, &src_odsc->bb, &bb, src_odsc->size);
+    
+    // check dimension 0 -> n-2 (fast to slow)
+    int i, ret = 1;
+    for (i = 0; i < from.num_dims-1; i++) {
+        if ((from.mat_view.ub[i]-from.mat_view.lb[i]+1) != from.dist[i]) {
+            ret = 0;
+            break;
+        }
+    }
+    
+    return ret; 
+}
+
+static size_t calculate_offset_for_remote_data(struct obj_descriptor *src_odsc,
+                struct obj_descriptor *dst_odsc)
+{
+    struct matrix_d from;
+    struct bbox bb;
+    bbox_intersect(&dst_odsc->bb, &src_odsc->bb, &bb);
+    matrix_init_d(&from, src_odsc->st, &src_odsc->bb, &bb, src_odsc->size);
+
+    size_t num_elem = 1, offset = 0;
+    int i;
+    for (i = 0; i < from.num_dims-1; i++) {
+        num_elem *= from.dist[i];
+    }
+    num_elem *= from.mat_view.lb[from.num_dims-1];
+    offset = num_elem*from.size_elem;
+
+    return offset;
+}
 
 static int get_num_posted_fetch(struct fetch_entry **fetch_tab, int *fetch_status_tab, int fetch_tab_size)
 {
@@ -1560,13 +1603,13 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
         }
 
         if (!is_peer_on_same_core(fetch->read_tran->remote_peer) &&
-            obj_desc_equals_no_owner(&fetch->src_odsc, &fetch->dst_odsc))
+            is_remote_data_contiguous_in_memory(&fetch->src_odsc, &fetch->dst_odsc))
         {
             fetch_tab[i] = fetch;
 
             size_t data_size, src_offset, dst_offset;
             data_size = obj_data_size(&fetch->dst_odsc);
-            src_offset = 0;
+            src_offset = calculate_offset_for_remote_data(&fetch->src_odsc, &fetch->dst_odsc);
             dst_offset = 0;
             // TODO: why this can not be moved to the loop below?
             dart_rdma_schedule_read(fetch_tab[i]->read_tran->tran_id,
@@ -1639,8 +1682,7 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
             // Copy fetched data
             obj_assemble(fetch, qte->data_ref);
             dimes_memory_free(&fetch->read_tran->dst, dimes_memory_non_rdma);
-        } else if (!obj_desc_equals_no_owner(&fetch->src_odsc,
-                                             &fetch->dst_odsc))
+        } else if (!is_remote_data_contiguous_in_memory(&fetch->src_odsc, &fetch->dst_odsc))
         {
             // Data on remote peer
             // Alloc receive buffer, schedle reads, perform reads
@@ -1958,6 +2000,20 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 	dart_rdma_init(RPC_S);
     dimes_memory_init();
     init_gdim_list(&dimes_c->gdim_list);
+
+/*
+    uloga("sizeof(struct fetch_entry) %u bytes\n", sizeof(struct fetch_entry));
+    uloga("sizeof(struct dart_rdma_tran) %u bytes\n", sizeof(struct dart_rdma_tran));
+    uloga("sizeof(struct dart_rdma_op) %u bytes\n", sizeof(struct dart_rdma_op));
+    uloga("sizeof(struct rpc_cmd) %u bytes\n", sizeof(struct rpc_cmd));
+    uloga("sizeof(struct hdr_ss_info) %u bytes\n", sizeof(struct hdr_ss_info));
+    uloga("sizeof(struct hdr_obj_get) %u bytes\n", sizeof(struct hdr_obj_get));
+    uloga("sizeof(struct hdr_obj_put) %u bytes\n", sizeof(struct hdr_obj_put));
+    uloga("sizeof(struct hdr_dimes_put) %u bytes\n", sizeof(struct hdr_dimes_put));
+    uloga("sizeof(struct hdr_dimes_get) %u bytes\n", sizeof(struct hdr_dimes_get));
+    uloga("sizeof(struct hdr_dimes_get_ack) %u bytes\n", sizeof(struct hdr_dimes_get_ack));
+    uloga("sizeof(struct hdr_register) %u bytes\n", sizeof(struct hdr_register));
+*/
 
 #ifdef TIMING_PERF
     timer_init(&tm_perf, 1);
