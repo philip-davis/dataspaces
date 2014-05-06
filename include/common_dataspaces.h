@@ -40,6 +40,7 @@
 #define __COMMON_DATASPACES_H_
 
 #include <stdint.h>
+#include "config.h"
 
 int common_dspaces_init(int num_peers, int appid);
 void common_dspaces_set_storage_type (int fst);

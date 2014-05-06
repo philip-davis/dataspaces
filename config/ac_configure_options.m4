@@ -13,7 +13,7 @@ cond_configure_options=yes
 
 AC_ARG_WITH(max-num-array-dimension,
 	[AS_HELP_STRING([--with-max-num-array-dimension=integer value],
-		[This option is used to configure the maximum number of array dimension that can be supported in DataSpaces/DIMES. Default value is set as 3. Note: currently the value can not be larger than 10.])],
+		[This option is used to configure the maximum number of array dimension that can be supported in DataSpaces/DIMES. Default value is set as 3. Note: the value can not be set larger than 10, or smaller than 3.])],
 	[have_max_num_array_dimension=yes;
 	 MAX_NUM_ARRAY_DIMENSION="$withval";])
 

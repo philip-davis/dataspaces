@@ -28,9 +28,10 @@
 *  Fan Zhang (2013) TASSL Rutgers University
 *  zhangfan@cac.rutgers.edu
 */
-#ifdef DS_HAVE_DIMES
 #include <stdint.h>
 #include "dart_rdma_gni.h"
+
+#ifdef DS_HAVE_DIMES
 
 #define MAX_NUM_RDMA_OP_POSTED 65536
 
