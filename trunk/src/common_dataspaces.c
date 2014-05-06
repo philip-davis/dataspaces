@@ -90,7 +90,7 @@ int common_dspaces_init(int num_peers, int appid)
 
 	dcg = dcg_alloc(num_peers, appid);
 	if (!dcg) {
-                uloga("'%s()': failed to initialize.\n", __func__);
+        uloga("'%s()': failed to initialize.\n", __func__);
 		return err;
 	}
 

@@ -32,7 +32,6 @@
 #define __DART_RPC_GNI_H__
 
 #include <stdlib.h>
-#include "list.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <fcntl.h>
@@ -47,11 +46,15 @@
 #include <arpa/inet.h>
 #include <sys/utsname.h>
 #include <errno.h>
+
 #include "pmi.h"
 //#include "pmi_cray_ext.h"
 #include "gni_pub.h"
 #include "utility_functions.h"
 #include <sys/ioctl.h>
+
+#include "config.h"
+#include "list.h"
 
 #define ALIGN_ADDR_QUAD_BYTES(a)				\
 {								\
@@ -217,7 +220,7 @@ struct rpc_cmd {
 	struct mdh_addr_t	mdh_addr;
 	__u32			id;
 	// payload of the command
-	__u8			pad[280];
+	__u8			pad[280+(BBOX_MAX_NDIM-3)*24]; // TODO: fix this
 };
 
 struct node_id {
