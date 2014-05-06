@@ -28,9 +28,10 @@
 *  Fan Zhang (2011) TASSL Rutgers University
 *  zhangfan@cac.rutgers.edu
 */
+#include "dart_rdma_dcmf.h"
+
 #ifdef DS_HAVE_DIMES
 
-#include "dart_rdma_dcmf.h"
 #include "debug.h"
 
 static struct dart_rdma_handle *drh = NULL;

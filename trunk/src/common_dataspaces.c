@@ -42,6 +42,7 @@
 #include <errno.h>
 #include <unistd.h>
 
+#include "common_dataspaces.h"
 #include "debug.h"
 #include "dc_gspace.h"
 #include "ss_data.h"

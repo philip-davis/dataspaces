@@ -28,7 +28,6 @@
 *  Fan Zhang (2012)  TASSL Rutgers University
 *  zhangfan@cac.rutgers.edu
 */
-#ifdef DS_HAVE_DIMES
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,10 +35,13 @@
 #include <errno.h>
 #include <stdint.h>
 
-#include "dimes_data.h"
+#include "config.h"
 #include "debug.h"
 #include "ss_data.h"
 #include "timer.h"
+
+#ifdef DS_HAVE_DIMES
+#include "dimes_data.h"
 
 static struct var_list_node* var_node_lookup(struct list_head *var_list,
                                     const char* var_name)

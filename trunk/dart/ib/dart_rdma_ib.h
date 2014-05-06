@@ -6,6 +6,8 @@
 #ifndef __DART_RDMA_IB_H__
 #define __DART_RDMA_IB_H__
 
+#include "config.h"
+
 #ifdef DS_HAVE_DIMES
 #include "dart_rpc_ib.h"
 

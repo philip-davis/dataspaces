@@ -28,7 +28,7 @@
 *  Fan Zhang (2012)  TASSL Rutgers University
 *  zhangfan@cac.rutgers.edu
 */
-#ifdef DS_HAVE_DIMES
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,6 +36,8 @@
 #include <unistd.h>
 
 #include "config.h"
+
+#ifdef DS_HAVE_DIMES
 #include "dimes_interface.h"
 #include "dimes_client.h"
 #include "dimes_data.h"

@@ -29,18 +29,18 @@
 *  zhangfan@cac.rutgers.edu
 */
 
-#ifdef DS_HAVE_DIMES
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "config.h"
 #include "debug.h"
-
-#include "dimes_server.h"
 #include "dart.h"
 #include "ds_gspace.h"
 #include "ss_data.h"
+
+#ifdef DS_HAVE_DIMES
+#include "dimes_server.h"
 
 static struct dimes_server *dimes_s = NULL;
 

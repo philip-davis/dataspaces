@@ -31,6 +31,7 @@
 #ifndef __TEST_COMMON_H_
 #define __TEST_COMMON_H_
 
+#include "config.h"
 #include "debug.h"
 #include "timer.h"
 #include "dataspaces.h"
