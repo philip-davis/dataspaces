@@ -2015,6 +2015,7 @@ struct dimes_client* dimes_client_alloc(void * ptr)
     uloga("sizeof(struct hdr_dimes_get) %u bytes\n", sizeof(struct hdr_dimes_get));
     uloga("sizeof(struct hdr_dimes_get_ack) %u bytes\n", sizeof(struct hdr_dimes_get_ack));
     uloga("sizeof(struct hdr_register) %u bytes\n", sizeof(struct hdr_register));
+    uloga("sizeof(struct bbox) %u bytes\n", sizeof(struct bbox));
 */
 
 #ifdef TIMING_PERF
