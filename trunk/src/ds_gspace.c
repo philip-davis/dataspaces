@@ -45,7 +45,7 @@
 #include "rexec.h"
 #endif
 #include "timer.h"
-#include "strutil.h"
+#include "util.h"
 
 #define DSG_ID                  dsg->ds->self->ptlmap.id
 

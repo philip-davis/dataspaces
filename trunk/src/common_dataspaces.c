@@ -44,6 +44,7 @@
 
 #include "common_dataspaces.h"
 #include "debug.h"
+#include "util.h"
 #include "dc_gspace.h"
 #include "ss_data.h"
 #include "timer.h"
@@ -56,9 +57,9 @@
 static struct dcg_space *dcg;
 static struct timer timer;
 static int sync_op_id;
-static int cq_id = -1;
-static enum storage_type st = column_major;
-static int num_dims = 2;
+static int cq_id = -1; // TODO: still support it?
+static enum storage_type st = column_major; // TODO: still need this?
+static int num_dims = 2; // TODO: remove it 
 #ifdef DS_HAVE_DIMES
 static struct dimes_client *dimes_c;
 #endif
@@ -79,7 +80,7 @@ do {								\
    Common interface for DataSpaces.
 */
 
-int common_dspaces_init(int num_peers, int appid)
+int common_dspaces_init(int num_peers, int appid, const char *parameters)
 {
 	int err = -ENOMEM;
 
@@ -87,6 +88,13 @@ int common_dspaces_init(int num_peers, int appid)
 		/* Library already initialized. */
 		return 0;
 	}
+
+    PairStruct *params, *p;
+    params = text_to_name_value_pairs(parameters);
+    p  = params;
+    while (p) {
+        p = p->next;
+    }
 
 	dcg = dcg_alloc(num_peers, appid);
 	if (!dcg) {
@@ -109,6 +117,7 @@ int common_dspaces_init(int num_peers, int appid)
     }
 #endif
 
+    free_name_value_pairs(params);
 	return 0;
 }
 
@@ -401,7 +410,7 @@ int common_dspaces_cq_register(char *var_name,
                 .version = 0, .owner = -1,
                 .st = st,
                 .size = 8,
-                .bb = {.num_dims = ndim, //num_dims,
+                .bb = {.num_dims = ndim,
                        //.lb.c = {xl, yl, zl},
                        //.ub.c = {xu, yu, zu}
                 },
