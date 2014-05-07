@@ -42,7 +42,7 @@
 #include <stdint.h>
 #include "config.h"
 
-int common_dspaces_init(int num_peers, int appid);
+int common_dspaces_init(int num_peers, int appid, const char *parameters);
 void common_dspaces_set_storage_type (int fst);
 int common_dspaces_rank(void);
 int common_dspaces_peers(void);

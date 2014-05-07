@@ -48,14 +48,14 @@
 
 /**
  * @brief Initialize dataspaces client library.
- * 
- * @param[in] parameters:   A series of name=value pairs separated by ";", for
- *                          "num_peers = 1024 ; appid=1;".
+ *
+ * @param[in] num_peers:    Number of peers in the client application.
+ * @param[in] appid:        Unique id for client application. 
+ * @param[in] parameters:   A series of name=value pairs separated by ";", 
  *
  * @return  0 indicates success.
  */
-//int dspaces_init(const char *parameters);
-int dspaces_init(int num_peers, int appid);
+int dspaces_init(int num_peers, int appid, const char *parameters);
 
 /**
  * @brief Finalize dataspaces client library.
