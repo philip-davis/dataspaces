@@ -290,7 +290,7 @@ static __u64 intv_compact(struct intv *i_tab, __u64 num_itv)
         }
 
 #ifdef DEBUG
-        printf("in intv_compact, num_itv=%llu, i=%llu\n", num_itv, i);
+        //printf("in intv_compact, num_itv=%llu, i=%llu\n", num_itv, i);
 #endif
         return (i+1);
 }
@@ -319,7 +319,7 @@ void bbox_to_intv(const struct bbox *bb, __u64 dim_virt, int bpd,
     bb_virt->num_dims = bb->num_dims;
 
 #ifdef DEBUG
-    printf("bbox_to_intv ndims=%d\n", bb->num_dims);
+    // printf("bbox_to_intv ndims=%d\n", bb->num_dims);
 #endif
 
     for(i = 0; i < bb->num_dims; i++){
@@ -462,7 +462,7 @@ void bbox_to_intv2(const struct bbox *bb, __u64 dim_virt, int bpd,
                 bb_head = (bb_head + 1) % bb_size;
     }
 #ifdef DEBUG
-	printf("============bb_size = %d, total_size=%d===========\n", bb_size, bb_size*sizeof(*bb_tab));
+	//printf("============bb_size = %d, total_size=%d===========\n", bb_size, bb_size*sizeof(*bb_tab));
 #endif
     free(bb_tab);
     // printf("I had to resize the interval array %d times.\n", i_resize);

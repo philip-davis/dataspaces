@@ -50,7 +50,7 @@ struct query_tran_d {
 
 struct dimes_client {
 	struct dcg_space *dcg;
-	struct sspace *ssd; //only used for hashing
+	struct sspace *ssd;
     struct list_head sspace_list;
     struct list_head gdim_list;
 	struct bbox domain;

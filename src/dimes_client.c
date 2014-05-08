@@ -192,6 +192,7 @@ static size_t get_available_rdma_buffer_size()
 
 static void print_rdma_buffer_usage()
 {
+#ifdef DEBUG_DIMES_BUFFER_USAGE
     uloga("DIMES rdma buffer usage: peer #%d "
           "rdma_buffer_size= %u bytes "
           "rdma_buffer_write_usage= %u bytes "
@@ -199,6 +200,7 @@ static void print_rdma_buffer_usage()
           "rdma_buffer_avail_size= %u bytes\n", DIMES_CID,
         options.rdma_buffer_size, options.rdma_buffer_write_usage,
         options.rdma_buffer_read_usage, get_available_rdma_buffer_size());
+#endif
 }
 
 
@@ -1782,7 +1784,7 @@ static int dimes_obj_get(struct obj_data *od)
 	DIMES_WAIT_COMPLETION(qte->f_locate_data_complete == 1);
     // TODO: check the received data location information
 #ifdef DEBUG
-	uloga("%s(): #%d locate data complete!\n", __func__, DIMES_CID);
+	//uloga("%s(): #%d locate data complete!\n", __func__, DIMES_CID);
 #endif
 #ifdef TIMING_PERF
     tm_end = timer_read(&tm_perf);
@@ -1802,7 +1804,7 @@ static int dimes_obj_get(struct obj_data *od)
 		goto out_no_data;
 	}
 #ifdef DEBUG
-	uloga("%s(): #%d fetch data complete!\n", __func__, DIMES_CID);
+	//uloga("%s(): #%d fetch data complete!\n", __func__, DIMES_CID);
 #endif
 #ifdef TIMING_PERF
     tm_end = timer_read(&tm_perf);

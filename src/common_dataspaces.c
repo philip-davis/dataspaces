@@ -118,6 +118,10 @@ int common_dspaces_init(int num_peers, int appid, const char *parameters)
 #endif
 
     free_name_value_pairs(params);
+
+#ifdef DS_SSD_HASH_V2
+    // check if the number of servers is power of 2
+#endif    
 	return 0;
 }
 
