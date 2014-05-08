@@ -39,6 +39,10 @@
 #include "ss_data.h"
 #include "queue.h"
 
+#ifdef TIMING_PERF
+#include "timer.h"
+#endif
+
 // TODO: I should  import the header file with  the definition for the
 // iovec_t data type.
 
@@ -636,6 +640,7 @@ static struct sspace *ssd_alloc_v1(struct bbox *bb_domain, int num_nodes, int ma
                 goto err_out;
         }
 
+        ssd->hash_version = ssd_hash_version_v1;
         return ssd;
  err_out:
         uloga("'%s()': failed with %d\n", __func__, err);
@@ -780,7 +785,6 @@ struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max
             free(bb);
         }
 
-        /*
         for (i = 0; i < ssd->dht->num_entries; i++) {
             printf("dht entry %d size_bb_tab= %d num_bbox= %d\n", i,
                 ssd->dht->ent_tab[i]->size_bb_tab,
@@ -790,8 +794,8 @@ struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max
             }        
             printf("\n");
         }
-        */
 
+        ssd->hash_version = ssd_hash_version_v2;        
         return ssd;
  err_out:
         uloga("'%s()': failed with %d\n", __func__, err);
@@ -848,20 +852,43 @@ int ssd_hash_v2(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_t
 */
 struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions)
 {
-#ifdef DS_SSD_HASH_V2
-    return ssd_alloc_v2(bb_domain, num_nodes, max_versions);
-#else
-    return ssd_alloc_v1(bb_domain, num_nodes, max_versions);
+    struct sspace *ss = NULL;
+
+#ifdef TIMING_PERF
+    struct timer tm;
+    double tm_st, tm_end;
+    timer_init(&tm, 1);
+    timer_start(&tm);
+    tm_st = timer_read(&tm);
 #endif
+
+#ifdef DS_SSD_HASH_V2
+    ss = ssd_alloc_v2(bb_domain, num_nodes, max_versions);
+#else
+    ss = ssd_alloc_v1(bb_domain, num_nodes, max_versions);
+#endif
+
+#ifdef TIMING_PERF
+    tm_end = timer_read(&tm);
+    uloga("%s(): time %lf seconds\n", __func__, tm_end-tm_st);
+#endif
+
+    return ss;
 }
 
-void ssd_free(struct sspace *ssd)
+void ssd_free(struct sspace *ss)
 {
-#ifdef DS_SSD_HASH_V2
-    ssd_free_v2(ssd);
-#else
-    ssd_free_v1(ssd);
-#endif
+    switch (ss->hash_version) {
+    case ssd_hash_version_v1:
+        ssd_free_v1(ss);
+        break;
+    case ssd_hash_version_v2:
+        ssd_free_v2(ss);
+        break;
+    default:
+        uloga("%s(): ERROR unknown ss->hash_version\n", __func__);
+        break;
+    }
 }
 
 /*
@@ -870,11 +897,33 @@ void ssd_free(struct sspace *ssd)
 */
 int ssd_hash(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[])
 {
-#ifdef DS_SSD_HASH_V2
-    return ssd_hash_v2(ss, bb, de_tab);
-#else
-    return ssd_hash_v1(ss, bb, de_tab);
+#ifdef TIMING_PERF
+    struct timer tm;
+    double tm_st, tm_end;
+    timer_init(&tm, 1);
+    timer_start(&tm);
+    tm_st = timer_read(&tm);
 #endif
+
+    int ret;
+    switch (ss->hash_version) {
+    case ssd_hash_version_v1:
+        ret = ssd_hash_v1(ss, bb, de_tab);
+        break;
+    case ssd_hash_version_v2:
+        ret = ssd_hash_v2(ss, bb, de_tab);
+        break;
+    default:
+        uloga("%s(): ERROR unknown ss->hash_version\n", __func__);
+        ret = 0;
+        break;
+    }
+
+#ifdef TIMING_PERF
+    tm_end = timer_read(&tm);
+    uloga("%s(): time %lf seconds\n", __func__, tm_end-tm_st);
+#endif
+    return ret;
 }
 
 /*

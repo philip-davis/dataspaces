@@ -44,7 +44,6 @@
 #ifdef DS_HAVE_ACTIVESPACE
 #include "rexec.h"
 #endif
-#include "timer.h"
 #include "util.h"
 
 #define DSG_ID                  dsg->ds->self->ptlmap.id
@@ -112,7 +111,6 @@ struct dsg_lock {
 };
 
 static struct ds_gspace *dsg;
-static struct timer timer;
 
 /* Server configuration parameters */
 static struct {
@@ -1455,12 +1453,7 @@ static int __dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd 
         double tm_start, tm_end;
         static int num = 1;
 
-        tm_start = timer_read(&timer);
         peer_num = ssd_hash(dsg->ssd, &oh->u.o.odsc.bb, de_tab);
-        tm_end = timer_read(&timer);
-#ifdef DEBUG
-        printf("SRV %d %d %lf\n", DSG_ID, num++, tm_end-tm_start);
-#endif
         peer_id_tab = malloc(sizeof(int) * peer_num);
         if (!peer_id_tab)
                 goto err_out;
@@ -2007,10 +2000,6 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
             domain.ub.c[i] = ds_conf.dims.c[i] - 1;
         }
 
-        double tm_start, tm_end;
-        timer_init(&timer, 1);
-        timer_start(&timer);
-
         dsg = dsg_l = malloc(sizeof(*dsg_l));
         if (!dsg_l)
                 goto err_out;
@@ -2036,8 +2025,6 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         if (!dsg_l->ds)
                 goto err_free;
 
-        tm_start = timer_read(&timer);
-
         err = init_sspace(&domain, dsg_l);
         if (err < 0) {
             goto err_free;
@@ -2048,11 +2035,6 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
             uloga("%s(): ERROR ls_alloc() failed\n", __func__);
             goto err_free;
         }
-
-        tm_end = timer_read(&timer);
-#ifdef DEBUG
-        printf("SRV %d %lf\n", DSG_ID, tm_end-tm_start);
-#endif
 
         return dsg_l;
  err_free:
@@ -2124,7 +2106,6 @@ int dsghlp_obj_put(struct ds_gspace *dsg, struct obj_data *od)
         int err = -ENOMEM;
         double tm_start, tm_end;
 
-        tm_start = timer_read(&timer);
         od->obj_desc.owner = DSG_ID; // dsg->ds->self->id;
         msg = msg_buf_alloc(dsg->ds->rpc_s, dsg->ds->self, 0);
         if (!msg)
@@ -2132,10 +2113,6 @@ int dsghlp_obj_put(struct ds_gspace *dsg, struct obj_data *od)
 
         msg->private = od;
         err = obj_put_completion(dsg->ds->rpc_s, msg);
-		tm_end = timer_read(&timer);
-#ifdef DEBUG
-        printf("SRV %d %d %lf.\n", DSG_ID, -2, (tm_end-tm_start));
-#endif
         if (err == 0)
                 return 0;
 

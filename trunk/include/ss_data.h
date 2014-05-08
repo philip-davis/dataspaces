@@ -37,7 +37,6 @@
 #include "bbox.h"
 #include "list.h"
 
-// #define MAX_VERSION_SIZE        10
 typedef struct {
 	void			*iov_base;
 	size_t			iov_len;
@@ -46,7 +45,7 @@ typedef struct {
 enum storage_type {row_major, column_major};
 
 struct obj_descriptor {
-        char                    name[154]; // 170
+        char                    name[154];
 
         enum storage_type       st;
 
@@ -132,6 +131,13 @@ struct dht {
         struct dht_entry        *ent_tab[1];
 };
 
+enum sspace_hash_version {
+    ssd_hash_version_v1 = 0, // (default) decompose the global data domain
+                             //  using hilbert SFC
+    ssd_hash_version_v2, // decompose the global data domain using
+                         // recursive bisection of the longest dimension   
+};
+
 /*
   Shared space structure.
 */
@@ -147,6 +153,7 @@ struct sspace {
 
         // for v2 
         int total_num_bbox;
+        enum sspace_hash_version    hash_version;
 };
 
 struct sspace_list_entry {
@@ -191,7 +198,6 @@ struct hdr_obj_put {
 /* Header structure for obj_filter requests. */
 struct hdr_obj_filter {
         int                     qid;
-        // int                     rank;
         int                     rc;
         double                  res;
         struct obj_descriptor   odsc;
@@ -220,7 +226,7 @@ struct hdr_bin_result {
 	unsigned char		pad[210]; // max is sizeof(struct rpc_cmd.pad == 218)
 } __attribute__((__packed__));
 
-struct sspace * ssd_alloc(struct bbox *, int, int);
+struct sspace* ssd_alloc(struct bbox *, int, int);
 int ssd_init(struct sspace *, int);
 void ssd_free(struct sspace *);
 void ssd_add_entry(struct dht_entry *, struct obj_descriptor *);
