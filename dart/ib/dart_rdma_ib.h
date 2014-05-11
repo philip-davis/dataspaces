@@ -67,6 +67,8 @@ int dart_rdma_schedule_read(int tran_id, size_t src_offset, size_t dst_offset, s
 int dart_rdma_perform_reads(int tran_id);
 int dart_rdma_process_reads();
 int dart_rdma_check_reads(int tran_id);
+
+int dart_rdma_perform_reads_local(int tran_id);
 #endif
 
 #endif

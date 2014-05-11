@@ -34,6 +34,16 @@
 #include <errno.h>
 #include <unistd.h>
 
+#ifdef DS_HAVE_DIMES_SHMEM
+/* shm_* stuff, and mmap() */
+#include <sys/mman.h>
+#include <sys/types.h>
+/* exit() etc */
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#endif
+
 #include "config.h"
 
 #ifdef DS_HAVE_DIMES
@@ -54,6 +64,14 @@ struct sspace_conf {
     int ndims;
     uint64_t dimx, dimy, dimz;
 };
+
+#ifdef DS_HAVE_DIMES_SHMEM
+int compare_peer_by_dart_id(const void *a, const void *b)
+{
+    return (*(const struct node_id**)a)->ptlmap.id -
+           (*(const struct node_id**)b)->ptlmap.id;
+}
+#endif
 
 static int init_sspace_dimes(struct dimes_client *d)
 {
@@ -171,9 +189,9 @@ static struct sspace* lookup_sspace_dimes(struct dimes_client *d, const char* va
 
 struct dimes_client_option {
     int enable_dimes_ack;
-    int enable_pre_allocated_rdma_buffer;
-    size_t pre_allocated_rdma_buffer_size;
-    struct dart_rdma_mem_handle pre_allocated_rdma_handle;
+    int enable_rdma_buffer;
+    int enable_shmem_buffer;
+    struct dart_rdma_mem_handle rdma_buffer_handle;
     size_t rdma_buffer_size;
     size_t rdma_buffer_write_usage;
     size_t rdma_buffer_read_usage;
@@ -254,9 +272,20 @@ static int is_peer_on_same_core(struct node_id *peer)
 	return (peer->ptlmap.id == DIMES_CID);
 }
 
-// Deallocate the default shared space dht and shared space dhts that stored
-// in linked list sspace_list. 
-static int free_sspace_dimes(struct dimes_client *d)
+#ifdef DS_HAVE_DIMES_SHMEM
+static int is_peer_on_same_node(struct node_id *peer)
+{
+    int i;
+    for (i = 0; i < dimes_c->num_local_peer; i++) {
+        if (dimes_c->local_peer_tab[i]->ptlmap.id == peer->ptlmap.id) {
+            return 1;
+        }
+    }
+    return 0;
+}
+#endif
+
+static size_t get_available_rdma_buffer_size()
 {
     ssd_free(d->default_ssd);
     struct sspace_list_entry *ssd_entry, *temp;
@@ -344,6 +373,9 @@ struct dimes_memory_obj {
 	int sync_id;
     enum dimes_ack_type ack_type;
     struct obj_descriptor obj_desc;
+#ifdef DS_HAVE_DIMES_SHMEM
+    struct dimes_shmem_descriptor shmem_desc;
+#endif
     struct global_dimension gdim;
     struct dart_rdma_mem_handle rdma_handle;
 };
@@ -501,43 +533,214 @@ static struct dimes_memory_obj* storage_lookup_obj(const struct dimes_obj_id *oi
 	return NULL;
 }
 
+/**************************************************
+  Shared memory segment
+***************************************************/
+
+#ifdef DS_HAVE_DIMES_SHMEM
+static struct shared_memory_obj* create_shmem_obj(const char* shmem_obj_path,
+    const size_t shmem_obj_size)
+{
+    int fd;
+    void *seg_ptr = NULL;
+
+    if (DIMES_CID == dimes_c->node_master_dart_id) {
+        fd = shm_open(shmem_obj_path, O_CREAT | O_EXCL | O_RDWR,
+                        S_IRWXU | S_IRWXG);
+        if (fd < 0) {
+            uloga("%s(): failed with shm_obj_path %s\n",
+                __func__, shmem_obj_path);
+            perror("shm_open() failed");
+            return NULL;
+        }
+
+        if (ftruncate(fd, shmem_obj_size) < 0) {
+            perror("ftruncate() failed");
+            return NULL;
+        }
+
+        seg_ptr = mmap(NULL, shmem_obj_size, PROT_READ | PROT_WRITE, MAP_SHARED,
+                        fd, 0);
+        if (seg_ptr == NULL) {
+            perror("mmap() failed");
+            return NULL;
+        }
+
+        printf("%s(): create shared memory obj %s "
+            "size %u bytes ptr %p\n", __func__, 
+            shmem_obj_path, shmem_obj_size, seg_ptr);
+    }
+
+    // synchronize node-local peers
+    MPI_Barrier(dimes_c->node_mpi_comm);   
+ 
+    // open/mmap
+    if (DIMES_CID != dimes_c->node_master_dart_id) {
+        fd = shm_open(shmem_obj_path, O_RDWR, S_IRWXU | S_IRWXG);
+        if (fd < 0 ) {
+            perror("shm_open() failed");
+            return NULL;
+        }
+
+        seg_ptr = mmap(NULL, shmem_obj_size, PROT_READ | PROT_WRITE, MAP_SHARED,
+                        fd, 0);
+        if (seg_ptr == NULL) {
+            perror("mmap() failed");
+            return NULL;
+        }
+
+        printf("%s(): open shared memory obj %s "
+            "size %u bytes ptr %p\n", __func__,
+            shmem_obj_path, shmem_obj_size, seg_ptr);
+    }
+    
+    struct shared_memory_obj *shmem_obj = (struct shared_memory_obj*)
+                                            malloc(sizeof(*shmem_obj));
+    shmem_obj->id = 0; //TODO: hash obj_path to integer?
+    strcpy(shmem_obj->path, shmem_obj_path);
+    shmem_obj->seg_size = shmem_obj_size;
+    shmem_obj->seg_ptr = seg_ptr;
+    shmem_obj->seg_fd = fd;
+    
+    // TODO: create regions ... 
+    shmem_obj->num_region = dimes_c->num_local_peer;
+    shmem_obj->region_tab = (struct shared_memory_region*)
+            malloc(sizeof(struct shared_memory_region)*shmem_obj->num_region);
+    int i;
+    size_t region_size = shmem_obj->seg_size / shmem_obj->num_region;
+    for (i = 0; i < shmem_obj->num_region; i++) {
+        shmem_obj->region_tab[i].shmem_obj_id = shmem_obj->id;
+        shmem_obj->region_tab[i].shmem_obj_region_id = i;
+        shmem_obj->region_tab[i].offset = region_size * i; 
+        if (region_size*(i+1) > shmem_obj->seg_size) {
+            shmem_obj->region_tab[i].size =
+                shmem_obj->seg_size - region_size*(i+1);
+        } else shmem_obj->region_tab[i].size = region_size; 
+        shmem_obj->region_tab[i].owner_dart_id =
+                dimes_c->local_peer_tab[i]->ptlmap.id;
+    }    
+
+    return shmem_obj;
+}
+
+static void remove_shmem_obj(struct shared_memory_obj *shmem_obj)
+{
+    // unmap
+    if (munmap(shmem_obj->seg_ptr, shmem_obj->seg_size) < 0) {
+        perror("munmap() failed");
+    }
+
+    // synchronize node-local peers
+    MPI_Barrier(dimes_c->node_mpi_comm);
+
+    // unlink
+    if (DIMES_CID == dimes_c->node_master_dart_id) {
+        if (shm_unlink(shmem_obj->path) != 0) {
+            perror("shm_unlink() failed");
+        }
+        uloga("%s(): unlink shmem_obj %s\n", __func__, shmem_obj->path);
+    }
+
+    shmem_obj->seg_ptr = NULL;
+    shmem_obj->seg_size = 0;
+
+    // free region_tab
+    if (shmem_obj->region_tab)
+        free(shmem_obj->region_tab);    
+    free(shmem_obj);
+}
+
+static struct shared_memory_obj* find_shmem_obj(int id)
+{
+    struct shared_memory_obj* shmem_obj = NULL;
+    list_for_each_entry(shmem_obj, &dimes_c->shmem_obj_list,
+            struct shared_memory_obj, entry)
+    {
+        if (shmem_obj->id == id) {
+            return shmem_obj;
+        }
+    }
+
+    return NULL;
+}
+
+static struct shared_memory_region* find_shmem_region(struct shared_memory_obj *shmem_obj, int shmem_obj_region_id)
+{
+    if (!shmem_obj) return NULL;
+    int i;
+    for (i = 0; i < shmem_obj->num_region; i++) {
+        if (shmem_obj->region_tab[i].shmem_obj_region_id == shmem_obj_region_id) {
+            return &(shmem_obj->region_tab[i]);
+        }
+    }
+    return NULL;
+}
+
+static struct shared_memory_region* find_my_shmem_region(struct shared_memory_obj *shmem_obj)
+{
+    if (!shmem_obj) return NULL;
+
+    int i;
+    for (i = 0; i < shmem_obj->num_region; i++) {
+        if (shmem_obj->region_tab[i].owner_dart_id == DIMES_CID) {
+            return &(shmem_obj->region_tab[i]);
+        }
+    }
+
+    return NULL;
+}
+#endif // end of #ifdef DS_HAVE_DIMES_SHMEM
+
+/**************************************************
+  Data structures & functions for DIMES transaction
+***************************************************/
+enum fetch_status {
+    fetch_ready = 0,
+    fetch_posted,
+    fetch_done
+};
+
+enum fetch_dst_memory_type {
+    fetch_dst_memory_non_rdma = 0,
+    fetch_dst_memory_rdma
+};
+
 static int dimes_memory_init()
 {
     void *data_buf = NULL;
     int err;
 
-    if (options.enable_pre_allocated_rdma_buffer) {
-        data_buf = malloc(options.pre_allocated_rdma_buffer_size);
+    if (options.enable_rdma_buffer) {
+        data_buf = malloc(options.rdma_buffer_size);
         if (!data_buf) goto err_out;
-        memset(data_buf, 0, options.pre_allocated_rdma_buffer_size);
+        memset(data_buf, 0, options.rdma_buffer_size);
 
-        err = dart_rdma_register_mem(&options.pre_allocated_rdma_handle,
-                     data_buf, options.pre_allocated_rdma_buffer_size);
+        err = dart_rdma_register_mem(&options.rdma_buffer_handle,
+                     data_buf, options.rdma_buffer_size);
         if (err < 0) {
             uloga("%s(): ERROR peer #%d failed to register RDMA memory\n",
                     __func__, DIMES_CID);
             goto err_out_free;
         }
 
-        dimes_buffer_init(options.pre_allocated_rdma_handle.base_addr,
-                          options.pre_allocated_rdma_buffer_size);
-        options.rdma_buffer_size = options.pre_allocated_rdma_buffer_size;
+        dimes_buffer_init(options.rdma_buffer_handle.base_addr,
+                          options.rdma_buffer_size);
     }
 
     return 0;
  err_out_free:
     free(data_buf);
  err_out:
-    options.enable_pre_allocated_rdma_buffer = 0;
+    options.enable_rdma_buffer = 0;
     return -1;
 }
 
 static int dimes_memory_finalize()
 {
     int err;
-    if (options.enable_pre_allocated_rdma_buffer) {
+    if (options.enable_rdma_buffer) {
         // Deregister the memory buffer
-        err = dart_rdma_deregister_mem(&options.pre_allocated_rdma_handle);
+        err = dart_rdma_deregister_mem(&options.rdma_buffer_handle);
         if (err < 0) {
             uloga("%s(): ERROR peer #%d failed to deregister RDMA memory\n",
                 __func__, DIMES_CID);
@@ -545,7 +748,7 @@ static int dimes_memory_finalize()
         }
 
         dimes_buffer_finalize();
-        free((void*)options.pre_allocated_rdma_handle.base_addr);
+        free(options.rdma_buffer_handle.base_addr);
     }
 
     return 0;
@@ -578,8 +781,8 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl,
         rdma_hndl->base_addr = buf;
         rdma_hndl->size = size;
         break;
-    case dart_memory_rdma:
-        if (options.enable_pre_allocated_rdma_buffer) {
+    case dimes_memory_rdma:
+        if (options.enable_rdma_buffer) {
             dimes_buffer_alloc(size, &buf);
             if (!buf) {
                 uloga("%s(): dimes_buffer_alloc() failed size %u bytes\n",
@@ -589,11 +792,28 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl,
 
             // TODO: more clean way to do this?
             // Copy the rdma memory handle and update the base_addr, size
-            memcpy(rdma_hndl, &options.pre_allocated_rdma_handle,
+            memcpy(rdma_hndl, &options.rdma_buffer_handle,
                    sizeof(struct dart_rdma_mem_handle));
             rdma_hndl->base_addr = buf;
             rdma_hndl->size = size;
-        } else {
+        }
+#ifdef DS_HAVE_DIMES_SHMEM 
+        else if (options.enable_shmem_buffer) {
+            dimes_buffer_alloc(size, &buf);
+            if (!buf) {
+                uloga("%s(): dimes_buffer_alloc() failed size %u bytes\n",
+                      __func__, size);
+                return -1;
+            }
+
+            err = dart_rdma_register_mem(rdma_hndl, buf, size);
+            if (err < 0) {
+                uloga("%s(): dart_rdma_register_mem() failed\n", __func__);
+                return -1;
+            }
+        }
+#endif
+        else {
             buf = (uint64_t)malloc(size);
             if (!buf) goto err_out_malloc;
 
@@ -632,10 +852,22 @@ static int dimes_memory_free(struct dart_rdma_mem_handle *rdma_hndl)
     case dart_memory_non_rdma:
         free((void*)rdma_hndl->base_addr);
         break;
-    case dart_memory_rdma:
-        if (options.enable_pre_allocated_rdma_buffer) {
+    case dimes_memory_rdma:
+        if (options.enable_rdma_buffer) {
             dimes_buffer_free(rdma_hndl->base_addr);
-        } else {
+        }
+#ifdef DS_HAVE_DIMES_SHMEM 
+        else if (options.enable_shmem_buffer) {
+            err = dart_rdma_deregister_mem(rdma_hndl);
+            if (err < 0) {
+                uloga("%s(): dart_rdma_deregister_mem failed\n", __func__);
+                return -1;
+            }
+    
+            dimes_buffer_free(rdma_hndl->base_addr);        
+        }
+#endif 
+        else {
             err = dart_rdma_deregister_mem(rdma_hndl);
             if (err < 0) {
                 uloga("%s(): ERROR peer #%d failed to deregister RDMA memory\n",
@@ -660,6 +892,46 @@ static int dimes_memory_free(struct dart_rdma_mem_handle *rdma_hndl)
  err_out:
     return -1;
 }
+
+struct fetch_entry {
+    struct list_head entry;
+    int remote_sync_id;
+    struct obj_descriptor src_odsc;
+    struct obj_descriptor dst_odsc;
+    // TODO: can we use array of read_tran pointers?
+    struct dart_rdma_tran *read_tran;
+#ifdef DS_HAVE_DIMES_SHMEM
+    struct dimes_shmem_descriptor src_shmem_desc;
+#endif
+};
+
+struct query_dht_d {
+	int                     qh_size, qh_num_peer;
+	int                     qh_num_req_posted;
+	int                     qh_num_req_received;
+	int                     *qh_peerid_tab;
+};
+
+/* 
+   A query is a multi step transaction that serves an 'obj_get'
+   request. This structure keeps query info to assemble the result.
+*/
+struct query_tran_entry_d {
+	struct list_head        q_entry;
+
+    struct obj_data         *data_ref;
+	int                     q_id;
+	struct obj_descriptor   q_obj;
+
+    int                     num_fetch;
+	struct list_head        fetch_list;
+
+	struct query_dht_d        *qh;
+
+    unsigned int    f_dht_peer_recv:1,
+					f_locate_data_complete:1,
+					f_complete:1;
+};
 
 /*
   Generate a unique query id.
@@ -800,6 +1072,11 @@ static int qt_add_obj_with_cmd_d(struct query_tran_entry_d *qte,
     fetch->remote_obj_id = hdr->obj_id;
     fetch->src_odsc = hdr->odsc;
     fetch->dst_odsc = *odsc;
+#ifdef DS_HAVE_DIMES_SHMEM
+    if (options.enable_shmem_buffer) {
+        fetch->src_shmem_desc = hdr->shmem_desc;
+    }
+#endif
 
     // Set source rdma memory handle
     dart_rdma_get_memregion_from_cmd(&fetch->read_tran->src, cmd);
@@ -1128,7 +1405,15 @@ static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
 		hdr = (struct hdr_dimes_put *)msg->msg_rpc->pad;
         hdr->ptlmap = dimes_c->dcg->dc->rpc_s->ptlmap; 
 		hdr->odsc = mem_obj->obj_desc;
-		hdr->obj_id = mem_obj->obj_id;
+		hdr->sync_id = mem_obj->sync_id;
+		hdr->has_rdma_data = 1;
+#ifdef DS_HAVE_DIMES_SHMEM
+        hdr->has_shmem_data = 0;
+        if (options.enable_shmem_buffer) {
+            hdr->has_shmem_data = 1; 
+            hdr->shmem_desc = mem_obj->shmem_desc;
+        }
+#endif
 	
 		err = rpc_send(RPC_SERVER_PTR, peer, msg);
 		if (err < 0) {
@@ -1463,34 +1748,30 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
     i = 0;
     list_for_each_entry(fetch, &qte->fetch_list, struct fetch_entry, entry)
     {
-        // check the size of remote data object
-        if (obj_data_size(&fetch->dst_odsc) > get_available_rdma_buffer_size())
-        {
-            uloga("%s(): ERROR no sufficient RDMA memory for fetching "
-                "remote data object with size %u bytes. Suggested fix: "
-                "increase the value of '--with-dimes-rdma-buffer-size' "
-                "at configuration.\n",
-                __func__, obj_data_size(&fetch->dst_odsc));
-            print_rdma_buffer_usage();
-            goto err_out_free;
+        if (is_peer_on_same_core(fetch->read_tran->remote_peer) ||
+            !obj_desc_equals_no_owner(&fetch->src_odsc, &fetch->dst_odsc)) {
+            continue;
         }
 
-        if (!is_peer_myself(fetch->read_tran->remote_peer) &&
-            is_remote_data_contiguous_in_memory(&fetch->src_odsc, &fetch->dst_odsc))
-        {
-            fetch_tab[i] = fetch;
-
-            size_t data_size, src_offset, dst_offset;
-            data_size = obj_data_size(&fetch->dst_odsc);
-            src_offset = calculate_offset_for_remote_data(&fetch->src_odsc, &fetch->dst_odsc);
-            dst_offset = 0;
-            // TODO: why this can not be moved to the loop below?
-            dart_rdma_schedule_read(fetch_tab[i]->read_tran->tran_id,
-                                  src_offset,
-                                  dst_offset,
-                                  data_size);
-            i++; // Count number of fetch entry in the table
+#ifdef DS_HAVE_DIMES_SHMEM
+        if (options.enable_shmem_buffer &&
+            is_peer_on_same_node(fetch->read_tran->remote_peer)) {
+            continue;
         }
+#endif
+
+        fetch_tab[i] = fetch;
+
+        size_t data_size, src_offset, dst_offset;
+        data_size = obj_data_size(&fetch->dst_odsc);
+        src_offset = 0;
+        dst_offset = 0;
+        // TODO: why this can not be moved to the loop below?
+        dart_rdma_schedule_read(fetch_tab[i]->read_tran->tran_id,
+                              src_offset,
+                              dst_offset,
+                              data_size);
+        i++; // Count number of fetch entry in the table
     }
     fetch_tab_size = i;
 
@@ -1556,9 +1837,45 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
             dart_rdma_perform_reads(fetch->read_tran->tran_id);
             // Copy fetched data
             obj_assemble(fetch, qte->data_ref);
-            dimes_memory_free(&fetch->read_tran->dst);
-        } 
-        else if (!is_remote_data_contiguous_in_memory(&fetch->src_odsc, &fetch->dst_odsc))
+            dimes_memory_free(&fetch->read_tran->dst, dimes_memory_non_rdma);
+        }
+#ifdef DS_HAVE_DIMES_SHMEM 
+        else if (options.enable_shmem_buffer &&
+                   is_peer_on_same_node(fetch->read_tran->remote_peer)) {
+            printf("%s(): peer %d fetch from peer %d on local node\n", __func__,
+                DIMES_CID, fetch->read_tran->remote_peer->ptlmap.id);
+
+            // Data on the same node, and is in the shared memory segment
+            struct shared_memory_obj *shmem_obj =
+                        find_shmem_obj(fetch->src_shmem_desc.shmem_obj_id);
+            struct shared_memory_region *shmem_region = 
+                find_shmem_region(shmem_obj, fetch->src_shmem_desc.shmem_obj_region_id);
+            if (!shmem_obj || !shmem_region) {
+                uloga("%s(): failed to find shmem region obj_id %d region_id %d\n",
+                    __func__, fetch->src_shmem_desc.shmem_obj_id,
+                    fetch->src_shmem_desc.shmem_obj_region_id);
+                goto err_out;
+            } 
+
+            // Update source memory region
+            fetch->read_tran->src.base_addr = 
+                (shmem_obj->seg_ptr+shmem_region->offset+fetch->src_shmem_desc.offset);
+            fetch->read_tran->src.size = fetch->src_shmem_desc.size; 
+
+            // Allocate receive buffer, schedule reads, perform reads
+            dimes_memory_alloc(&fetch->read_tran->dst,
+                                obj_data_size(&fetch->dst_odsc),
+                                dimes_memory_non_rdma);
+            schedule_rdma_reads(fetch->read_tran->tran_id,
+                                &fetch->src_odsc, &fetch->dst_odsc);
+            dart_rdma_perform_reads_local(fetch->read_tran->tran_id);
+            // Copy fetched data
+            obj_assemble(fetch, qte->data_ref);
+            dimes_memory_free(&fetch->read_tran->dst, dimes_memory_non_rdma);
+        }
+#endif 
+        else if (!obj_desc_equals_no_owner(&fetch->src_odsc,
+                                             &fetch->dst_odsc))
         {
             // Data on remote peer
             // Alloc receive buffer, schedle reads, perform reads
@@ -1713,8 +2030,8 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 		return dimes_c;
 	}
 
-    options.enable_pre_allocated_rdma_buffer = 0;
-    options.pre_allocated_rdma_buffer_size = DIMES_RDMA_BUFFER_SIZE*1024*1024; // bytes
+    options.enable_rdma_buffer = 0;
+    options.enable_shmem_buffer = 0;
     options.rdma_buffer_size = DIMES_RDMA_BUFFER_SIZE*1024*1024; // bytes 
     options.rdma_buffer_usage = 0;
     options.max_num_concurrent_rdma_read_op = DIMES_RDMA_MAX_NUM_CONCURRENT_READ;
@@ -1868,7 +2185,27 @@ int dimes_client_put(const char *var_name,
     }
 
     // Copy user data
-    memcpy((void*)mem_obj->rdma_handle.base_addr, data, data_size);
+    memcpy(mem_obj->rdma_handle.base_addr, data, data_size);
+#ifdef DS_HAVE_DIMES_SHMEM
+    if (options.enable_shmem_buffer) {
+        // TODO: id hardcoded as 0 for now, and assume there is 
+        // only one shared mem obj
+        struct shared_memory_obj *shmem_obj = find_shmem_obj(0);
+        struct shared_memory_region *shmem_region = find_my_shmem_region(shmem_obj);
+        if (shmem_obj && shmem_region) {
+            mem_obj->shmem_desc.size = data_size;
+            mem_obj->shmem_desc.offset =
+                mem_obj->rdma_handle.base_addr -
+                (uint64_t)shmem_obj->seg_ptr -
+                shmem_region->offset;      
+            mem_obj->shmem_desc.shmem_obj_id = 0;
+            mem_obj->shmem_desc.shmem_obj_region_id = shmem_region->shmem_obj_region_id;
+            mem_obj->shmem_desc.owner_dart_id = shmem_region->owner_dart_id;
+        } else {
+            uloga("%s(): find_shmem_obj() or find_my_shmem_region() failed\n", __func__);
+        }
+    }
+#endif
 
     set_global_dimension(&mem_obj->gdim, ndim, gdim);
 	err = dimes_obj_put(mem_obj);
@@ -1920,6 +2257,102 @@ int dimes_client_put_sync_group(const char *group_name, int step)
 
     return 0;
 }
+
+#ifdef DS_HAVE_DIMES_SHMEM
+int dimes_client_init_shmem(void *comm, size_t shmem_obj_size)
+{
+    int ret;
+    MPI_Comm *mpi_comm = (MPI_Comm*)comm;
+    MPI_Barrier(*mpi_comm);
+   
+    INIT_LIST_HEAD(&dimes_c->shmem_obj_list);
+    options.enable_shmem_buffer = 1;
+    if (options.enable_shmem_buffer) {
+        int i;
+        rpc_server_find_local_peers(RPC_S, dimes_c->local_peer_tab,
+            &dimes_c->num_local_peer,
+            MAX_NUM_PEER_PER_NODE);
+
+        // sort the node-local peers by dart id 
+        qsort(dimes_c->local_peer_tab, dimes_c->num_local_peer,
+            sizeof(struct node_id*), compare_peer_by_dart_id);
+
+        // find the node-local master peer (which has the smallest dart id)
+        dimes_c->node_master_dart_id = dimes_c->local_peer_tab[0]->ptlmap.id;
+        dimes_c->node_id = rpc_server_get_nid(RPC_S);
+
+        printf("%s() nid %u dart_id %d node_master_peer %d num_local_peer %d:",
+             __func__, dimes_c->node_id, DIMES_CID,
+             dimes_c->node_master_dart_id, dimes_c->num_local_peer);
+        for (i = 0; i < dimes_c->num_local_peer; i++) {
+            printf(" %d ", dimes_c->local_peer_tab[i]->ptlmap.id);
+        }
+        printf("\n");
+
+        // create node-local mpi communicator for inter-process communication
+        int node_mpi_rank;
+        int node_color = dimes_c->node_master_dart_id;
+        ret = MPI_Comm_split(*mpi_comm, node_color,
+            DIMES_CID, &dimes_c->node_mpi_comm);
+        if (ret != MPI_SUCCESS) {
+            uloga("%s(): mpi_comm_split() failed with %d\n", __func__, ret);
+        }                
+        MPI_Barrier(dimes_c->node_mpi_comm);
+        MPI_Comm_rank(dimes_c->node_mpi_comm, &node_mpi_rank);
+        // printf("dart_id %d node_mpi_rank %d\n", DIMES_CID, node_mpi_rank);
+
+        // (1) create node-local shared memory segment
+        // (2) divide shared memory segment into regions,
+        // and assign regions to node-local peers
+        // TODO: make the size of shared memory obj configurable
+        struct shared_memory_obj *shmem_obj =
+                create_shmem_obj(SHMEM_OBJ_PATH, shmem_obj_size); 
+        if (!shmem_obj) {
+            uloga("%s(): create_shmem_obj() failed\n", __func__);
+            return -1;
+        }
+
+        list_add(&shmem_obj->entry, &dimes_c->shmem_obj_list);            
+
+        // init dimes buffer with my region
+        struct shared_memory_region *shmem_region = NULL;
+        for (i = 0; i < shmem_obj->num_region; i++) {
+            printf("%s() dart_id %d region %d obj_id %d obj_region_id %d "
+                "offset %u size %u owner_dart_id %d\n", __func__,
+            DIMES_CID, i, shmem_obj->region_tab[i].shmem_obj_id,
+            shmem_obj->region_tab[i].shmem_obj_region_id,
+            shmem_obj->region_tab[i].offset,
+            shmem_obj->region_tab[i].size,
+            shmem_obj->region_tab[i].owner_dart_id);
+            if (DIMES_CID == shmem_obj->region_tab[i].owner_dart_id) {
+                shmem_region = &shmem_obj->region_tab[i];
+            }
+        }
+
+        dimes_buffer_init(shmem_obj->seg_ptr+shmem_region->offset, shmem_region->size);                            
+    }
+
+    return 0;
+}
+
+int dimes_client_finalize_shmem()
+{
+    if (options.enable_shmem_buffer) {
+        dimes_buffer_finalize();
+
+        struct shared_memory_obj *shmem_obj, *temp;
+        list_for_each_entry_safe(shmem_obj, temp, &dimes_c->shmem_obj_list,
+                                 struct shared_memory_obj, entry)
+        {
+            list_del(&shmem_obj->entry);
+            remove_shmem_obj(shmem_obj);
+        }
+    }
+
+    return 0;
+}
+#endif // end of #ifdef DS_HAVE_DIMES_SHMEM
+
 
 #ifdef TIMING_PERF
 int common_dimes_set_log_header(const char *str)

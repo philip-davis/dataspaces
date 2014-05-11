@@ -47,26 +47,20 @@ struct box_2pointers{
 	void *ptr2;
 };
 
-struct dimes_obj_id {
-    int dart_id;
-    uint32_t local_obj_index; 
-};
-int equal_dimes_obj_id(const struct dimes_obj_id *oid1, const struct dimes_obj_id *oid2);
-
-struct dimes_memory_obj {
-    struct list_head entry;
-    struct dimes_obj_id obj_id;
-    struct obj_descriptor obj_desc;
-    struct global_dimension gdim;
-    struct dart_rdma_mem_handle rdma_handle;
+enum dimes_memory_type {
+    dimes_memory_non_rdma = 0,
+    dimes_memory_rdma,
 };
 
-#define STORAGE_GROUP_NAME_MAXLEN 256
-struct dimes_storage_group {
-    struct list_head entry;
-    char name[STORAGE_GROUP_NAME_MAXLEN+1];
-    struct list_head *version_tab;
-};
+#ifdef DS_HAVE_DIMES_SHMEM
+struct dimes_shmem_descriptor {
+    size_t size;
+    size_t offset;
+    int shmem_obj_id;
+    int shmem_obj_region_id;
+    int owner_dart_id;
+} __attribute__((__packed__));
+#endif
 
 struct obj_data_wrapper {
 	struct list_head obj_entry;
@@ -80,6 +74,10 @@ struct hdr_dimes_put { // TODO: more comments
     struct ptlid_map ptlmap;
 	struct dimes_obj_id obj_id;
 	struct obj_descriptor odsc;
+#ifdef DS_HAVE_DIMES_SHMEM
+    __u8 has_shmem_data;
+    struct dimes_shmem_descriptor shmem_desc;
+#endif
 } __attribute__((__packed__));
 
 // Header structure

@@ -481,6 +481,17 @@ int common_dimes_put_sync_group(const char *group_name, int step)
     if (!is_dimes_lib_init()) return -EINVAL;
     return dimes_client_put_sync_group(group_name, step);
 }
+
+#ifdef DS_HAVE_DIMES_SHMEM
+int common_dimes_init_shmem(void *comm, size_t shmem_obj_size) {
+    return dimes_client_init_shmem(comm, shmem_obj_size);
+}
+
+int common_dimes_finalize_shmem() {
+    return dimes_client_finalize_shmem();
+}
+#endif
+
 #endif
 
 void common_dspaces_set_mpi_rank(int rank)

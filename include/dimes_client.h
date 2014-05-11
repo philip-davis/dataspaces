@@ -43,49 +43,13 @@ extern "C" {
 #include "ss_data.h"
 #include "timer.h"
 
-#include "dimes_data.h"
-
-// Status of a data fetch operation. 
-enum fetch_status {
-    fetch_ready = 0,
-    fetch_posted,
-    fetch_done
-};
-
-struct fetch_entry {
-    struct list_head entry;
-    struct dimes_obj_id remote_obj_id;
-    struct obj_descriptor src_odsc;
-    struct obj_descriptor dst_odsc;
-    struct dart_rdma_tran *read_tran;
-};
-
-struct query_dht_d {
-    int                     qh_size, qh_num_peer;
-    int                     qh_num_req_posted;
-    int                     qh_num_req_received;
-    int                     *qh_peerid_tab;
-};
-
-/* 
-   A query transaction serves a dimes_get request.
-   This structure keeps query info to assemble the result.
-*/
-struct query_tran_entry_d {
-    struct list_head        q_entry;
-
-    struct obj_data         *data_ref;
-    int                     q_id;
-    struct obj_descriptor   q_obj;
-
-    int                     num_fetch;
-    struct list_head        fetch_list;
-
-    struct query_dht_d        *qh;
-
-    unsigned int    f_locate_data_complete:1,
-                    f_complete:1;
-};
+#ifdef DS_HAVE_DIMES_SHMEM
+#include "mpi.h"
+#define MAX_NUM_PEER_PER_NODE 64
+#define PAGE_SIZE sysconf(_SC_PAGE_SIZE)
+#define SHMEM_OBJ_PATH "/dataspaces_shared_memory_segment"
+#define SHMEM_OBJ_PATH_MAX_LEN 255
+#endif
 
 struct query_tran_d {
 	struct list_head        q_list;
@@ -104,13 +68,43 @@ struct dimes_client_option {
     int max_num_concurrent_rdma_read_op;
 };
 
+#ifdef DS_HAVE_DIMES_SHMEM
+struct shared_memory_region {
+    int shmem_obj_id;
+    int shmem_obj_region_id;
+    size_t offset;
+    size_t size;
+    int owner_dart_id; 
+};
+
+struct shared_memory_obj {
+    struct list_head    entry;
+    int id;
+    char path[SHMEM_OBJ_PATH_MAX_LEN+1];
+    size_t seg_size;
+    void *seg_ptr;
+    int seg_fd;    
+    int num_region;
+    struct shared_memory_region *region_tab; 
+};
+#endif
+
 struct dimes_client {
 	struct dcg_space *dcg;
 	struct sspace *ssd; //only used for hashing
     struct list_head sspace_list;
 	struct bbox domain;
 	struct query_tran_d qt;
-    struct list_head storage;
+	int    f_ss_info;
+#ifdef DS_HAVE_DIMES_SHMEM
+    struct list_head shmem_obj_list;
+    struct node_id* local_peer_tab[MAX_NUM_PEER_PER_NODE];
+    int num_local_peer;
+    int node_master_dart_id;
+    uint32_t node_id;
+    MPI_Comm node_mpi_comm;
+    // TODO: put struct list_head storage; into dimes_client
+#endif
 };
 
 struct dimes_client* dimes_client_alloc(void *);
@@ -134,6 +128,11 @@ int dimes_client_put_sync_all(void); //TODO: rename to dimes_client_delete_all?
 int dimes_client_put_set_group(const char *group_name, int step);
 int dimes_client_put_unset_group();
 int dimes_client_put_sync_group(const char *group_name, int step); //TODO: rename to dimes_client_delete_group?
+
+#ifdef DS_HAVE_DIMES_SHMEM
+int dimes_client_init_shmem(void *comm, size_t shmem_obj_size);
+int dimes_client_finalize_shmem();
+#endif
 
 #ifdef __cplusplus
 }
