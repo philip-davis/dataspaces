@@ -314,6 +314,23 @@ int dart_rdma_perform_reads(int tran_id)
 	return 0;
 }
 
+int dart_rdma_perform_reads_local(int tran_id)
+{
+    if(!drh) {
+        uloga("%s(): dart rdma not init!\n", __func__);
+        return -1;
+    }
+
+    struct dart_rdma_tran *read_tran = dart_rdma_find_read_tran(tran_id, &drh->read_tran_list);
+    if(read_tran == NULL) {
+        uloga("%s(): read tran with id= %d not found!\n", __func__, tran_id);
+        return -1;
+    }
+
+    dart_perform_local_copy(read_tran);
+    return 0;
+};
+
 int dart_rdma_check_reads(int tran_id)
 {
 	// Block till all RDMA reads for current transaction complete

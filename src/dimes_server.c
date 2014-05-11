@@ -210,13 +210,24 @@ static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
     metadata_s_add_obj_location(dimes_s->meta_store, cmd);
 
 #ifdef DEBUG    
-	uloga("%s(): get request from peer #%d "
-           "name= %s version= %d data_size= %u\n",
-            __func__, cmd->id, odsc->name, odsc->version, obj_data_size(odsc));
+	uloga("%s(): get cmd from peer #%d, "
+				"with has_rdma_data=%d, "
+				"name=%s, owner=%d, version=%d, data_size=%u.\n",
+					__func__, cmd->id, hdr->has_rdma_data,
+					odsc->name, odsc->owner, odsc->version, obj_data_size(odsc));
+#ifdef DS_HAVE_DIMES_SHMEM
+    if (hdr->has_shmem_data) {
+        uloga("%s(): #%d get update from peer #%d "
+            "shmem_desc: size= %u offset= %u shmem_obj_id= %d "
+            "shmem_obj_region_id= %d owner_dart_id= %d\n",
+            __func__, DIMES_SID, cmd->id, hdr->shmem_desc.size, hdr->shmem_desc.offset,
+            hdr->shmem_desc.shmem_obj_id, hdr->shmem_desc.shmem_obj_region_id,
+            hdr->shmem_desc.owner_dart_id);
+    }
+#endif
+
 #endif
     
-    //uloga("%s(): %lf name=%s version=%d process_time %lf from peer %d\n", __func__,
-    //        t1, odsc->name, odsc->version, t2-t1, cmd->id);
 	return 0;
 }
 
