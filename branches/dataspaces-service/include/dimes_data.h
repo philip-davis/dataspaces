@@ -47,6 +47,21 @@ struct box_2pointers{
 	void *ptr2;
 };
 
+enum dimes_memory_type {
+    dimes_memory_non_rdma = 0,
+    dimes_memory_rdma,
+};
+
+#ifdef DS_HAVE_DIMES_SHMEM
+struct dimes_shmem_descriptor {
+    size_t size;
+    size_t offset;
+    int shmem_obj_id;
+    int shmem_obj_region_id;
+    int owner_dart_id;
+} __attribute__((__packed__));
+#endif
+
 struct obj_data_wrapper {
 	struct list_head obj_entry;
 	struct obj_data *od;
@@ -59,6 +74,10 @@ struct hdr_dimes_put { // TODO: more comments
 	__u8 has_rdma_data;
 	int sync_id;
 	struct obj_descriptor odsc;
+#ifdef DS_HAVE_DIMES_SHMEM
+    __u8 has_shmem_data;
+    struct dimes_shmem_descriptor shmem_desc;
+#endif
 } __attribute__((__packed__));
 
 // Header structure

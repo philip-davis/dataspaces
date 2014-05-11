@@ -106,6 +106,11 @@ int common_dimes_put_sync_all(void);
 int common_dimes_put_set_group(const char *group_name, int step);
 int common_dimes_put_unset_group();
 int common_dimes_put_sync_group(const char *group_name, int step);
+
+#ifdef DS_HAVE_DIMES_SHMEM
+int common_dimes_init_shmem(void *comm, size_t shmem_obj_size);
+int common_dimes_finalize_shmem();
+#endif
 #endif
 
 void common_dspaces_set_mpi_rank(int rank);

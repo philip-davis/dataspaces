@@ -105,7 +105,27 @@ struct node_id *rpc_server_find(struct rpc_server *rpc_s, int nodeid)
 	return 0;
 }
 
+void rpc_server_find_local_peers(struct rpc_server *rpc_s,
+    struct node_id **peer_tab, int *num_local_peer, int peer_tab_size)
+{
+    // find all peers (include current peer itself) that reside on the
+    // same compute node as current peer
+    int i = 0;
+    struct node_id *temp_peer;
+    list_for_each_entry(temp_peer, &rpc_s->peer_list, struct node_id, peer_entry) {
+        uint32_t my_addr = rpc_s->ptlmap.address.sin_addr.s_addr;
+        uint32_t remote_addr = temp_peer->ptlmap.address.sin_addr.s_addr;
+        if (my_addr == remote_addr) {
+            peer_tab[i++] = temp_peer;
+        }
+    }
+    *num_local_peer = i;
+}
 
+uint32_t rpc_server_get_nid(struct rpc_server *rpc_s)
+{
+    return rpc_s->ptlmap.address.sin_addr.s_addr;
+} 
 
 static int sys_bar_send(struct rpc_server *rpc_s, int peerid)	//Done
 {

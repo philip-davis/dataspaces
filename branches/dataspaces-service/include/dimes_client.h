@@ -43,10 +43,39 @@ extern "C" {
 #include "ss_data.h"
 #include "timer.h"
 
+#ifdef DS_HAVE_DIMES_SHMEM
+#include "mpi.h"
+#define MAX_NUM_PEER_PER_NODE 64
+#define PAGE_SIZE sysconf(_SC_PAGE_SIZE)
+#define SHMEM_OBJ_PATH "/dataspaces_shared_memory_segment"
+#define SHMEM_OBJ_PATH_MAX_LEN 255
+#endif
+
 struct query_tran_d {
 	struct list_head        q_list;
 	int                     num_ent;
 };
+
+#ifdef DS_HAVE_DIMES_SHMEM
+struct shared_memory_region {
+    int shmem_obj_id;
+    int shmem_obj_region_id;
+    size_t offset;
+    size_t size;
+    int owner_dart_id; 
+};
+
+struct shared_memory_obj {
+    struct list_head    entry;
+    int id;
+    char path[SHMEM_OBJ_PATH_MAX_LEN+1];
+    size_t seg_size;
+    void *seg_ptr;
+    int seg_fd;    
+    int num_region;
+    struct shared_memory_region *region_tab; 
+};
+#endif
 
 struct dimes_client {
 	struct dcg_space *dcg;
@@ -55,6 +84,15 @@ struct dimes_client {
 	struct bbox domain;
 	struct query_tran_d qt;
 	int    f_ss_info;
+#ifdef DS_HAVE_DIMES_SHMEM
+    struct list_head shmem_obj_list;
+    struct node_id* local_peer_tab[MAX_NUM_PEER_PER_NODE];
+    int num_local_peer;
+    int node_master_dart_id;
+    uint32_t node_id;
+    MPI_Comm node_mpi_comm;
+    // TODO: put struct list_head storage; into dimes_client
+#endif
 };
 
 struct dimes_client* dimes_client_alloc(void *);
@@ -78,6 +116,11 @@ int dimes_client_put_sync_all(void);
 int dimes_client_put_set_group(const char *group_name, int step);
 int dimes_client_put_unset_group();
 int dimes_client_put_sync_group(const char *group_name, int step);
+
+#ifdef DS_HAVE_DIMES_SHMEM
+int dimes_client_init_shmem(void *comm, size_t shmem_obj_size);
+int dimes_client_finalize_shmem();
+#endif
 
 #ifdef __cplusplus
 }
