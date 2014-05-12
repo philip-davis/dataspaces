@@ -40,6 +40,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <stdint.h>
 
 #include "debug.h"
 #include "timer.h"
@@ -83,10 +84,13 @@ void FC_FUNC(dspaces_init, DSPACES_INIT)(int *num_peers, int *appid, void *comm,
 	*err = common_dspaces_init(*num_peers, *appid, &c_comm, NULL);
 }
 
+// TODO: remove it
+/*
 void FC_FUNC(dspaces_set_storage_type, DSPACES_SET_STORAGE_TYPE) (int *fst)
 {
 	common_dspaces_set_storage_type(*fst);
 }
+*/
 
 void FC_FUNC(dspaces_rank, DSPACES_RANK)(int *rank)
 {
@@ -156,11 +160,23 @@ void FC_FUNC(dspaces_unlock_on_write, DSPACES_UNLOCK_ON_WRITE)(const char *lock_
         common_dspaces_unlock_on_write(c_lock_name, &c_comm);
 }
 
+void FC_FUNC(dspaces_define_gdim, DSPACES_DEFINE_GDIM)(const char *var_name,
+        int *ndim, uint64_t *gdim, int len)
+{
+    char vname[256];
+
+    if (!fstrncpy(vname, var_name, (size_t) len, sizeof(vname))) {
+        uloga("'%s()': failed, can not copy Fortran var of len %d.\n",
+            __func__, len);
+        return;
+    }
+
+    common_dspaces_define_gdim(vname, *ndim, gdim);
+}
+
 void FC_FUNC(dspaces_get, DSPACES_GET) (const char *var_name, 
-        unsigned int *ver, int *size,
-        int *xl, int *yl, int *zl, 
-        int *xu, int *yu, int *zu, 
-        void *data, int *err, int len)
+        unsigned int *ver, int *size, int *ndim,
+        uint64_t *lb, uint64_t *ub, void *data, int *err, int len)
 {
 	char vname[256];
 
@@ -170,10 +186,7 @@ void FC_FUNC(dspaces_get, DSPACES_GET) (const char *var_name,
 		*err = -ENOMEM;
 	}
 
-    int ndim = 3;
-    uint64_t lb[3] = {*xl, *yl, *zl};
-    uint64_t ub[3] = {*xu, *yu, *zu};
-	*err = common_dspaces_get(vname, *ver, *size, ndim, lb, ub, data);
+	*err = common_dspaces_get(vname, *ver, *size, *ndim, lb, ub, data);
 }
 
 /*
@@ -187,10 +200,8 @@ void FC_FUNC(dspaces_get_versions, DSPACES_GET_VERSIONS)(int *num_vers, int *ver
 */
 
 void FC_FUNC(dspaces_put, DSPACES_PUT) (const char *var_name, 
-        unsigned int *ver, int *size,
-        int *xl, int *yl, int *zl,
-        int *xu, int *yu, int *zu, 
-        void *data, int *err, int len)
+        unsigned int *ver, int *size, int *ndim,
+        uint64_t *lb, uint64_t *ub, void *data, int *err, int len)
 {
 	char vname[256];
 
@@ -200,11 +211,7 @@ void FC_FUNC(dspaces_put, DSPACES_PUT) (const char *var_name,
 		*err = -ENOMEM;
 	}
 
-
-	int ndim = 3;
-    uint64_t lb[3] = {*xl, *yl, *zl};
-    uint64_t ub[3] = {*xu, *yu, *zu};
-	*err =  common_dspaces_put(vname, *ver, *size, ndim, lb, ub, data);
+    *err = common_dspaces_put(vname, *ver, *size, *ndim, lb, ub, data);
 }
 
 /*
@@ -327,16 +334,10 @@ void FC_FUNC(ftimer_sleep, FTIMER_SLEEP)(int *msec)
   Fortran interface to DIMES
 */
 #ifdef DS_HAVE_DIMES
-void FC_FUNC(dimes_set_storage_type, DIMES_SET_STORAGE_TYPE) (int *fst)
-{
-        common_dimes_set_storage_type(*fst);
-}
 
 void FC_FUNC(dimes_get, DIMES_GET) (const char *var_name,
-        unsigned int *ver, int *size,
-        int *xl, int *yl, int *zl,
-        int *xu, int *yu, int *zu,
-        void *data, int *err, int len)
+        unsigned int *ver, int *size, int *ndim,
+        uint64_t *lb, uint64_t *ub, void *data, int *err, int len)
 {
     char vname[256];
 
@@ -346,17 +347,12 @@ void FC_FUNC(dimes_get, DIMES_GET) (const char *var_name,
             *err = -ENOMEM;
     }
 
-    int ndim = 3;
-    uint64_t lb[3] = {*xl, *yl, *zl};
-    uint64_t ub[3] = {*xu, *yu, *zu};
-    *err = common_dimes_get(vname, *ver, *size, ndim, lb, ub, data);
+    *err = common_dimes_get(vname, *ver, *size, *ndim, lb, ub, data);
 }
 
 void FC_FUNC(dimes_put, DIMES_PUT) (const char *var_name,
-        unsigned int *ver, int *size,
-        int *xl, int *yl, int *zl,
-        int *xu, int *yu, int *zu,
-        void *data, int *err, int len)
+        unsigned int *ver, int *size, int *ndim,
+        uint64_t *lb, uint64_t *ub, void *data, int *err, int len)
 {
     char vname[256];
 
@@ -366,14 +362,58 @@ void FC_FUNC(dimes_put, DIMES_PUT) (const char *var_name,
             *err = -ENOMEM;
     }
 
-    int ndim = 3;
-    uint64_t lb[3] = {*xl, *yl, *zl};
-    uint64_t ub[3] = {*xu, *yu, *zu};
-    *err = common_dimes_put(vname, *ver, *size, ndim, lb, ub, data);
+    *err = common_dimes_put(vname, *ver, *size, *ndim, lb, ub, data);
 }
 
 void FC_FUNC(dimes_put_sync_all, DIMES_PUT_SYNC_ALL)(int *err)
 {
         *err = common_dimes_put_sync_all();
 }
+
+void FC_FUNC(dimes_put_set_group, DIMES_PUT_SET_GROUP)(const char *group_name,
+            int *version, int *err, int len)
+{
+    char vname[256];
+
+    if (!fstrncpy(vname, group_name, (size_t) len, sizeof(vname))) {
+            uloga("'%s': failed, can not copy Fortran var of len %d.\n",
+                    __func__, len);
+            *err = -ENOMEM;
+    }
+
+    *err = common_dimes_put_set_group(vname, *version);
+}
+
+void FC_FUNC(dimes_put_unset_group, DIMES_PUT_UNSET_GROUP)(int *err)
+{
+    *err = common_dimes_put_unset_group();
+}
+
+void FC_FUNC(dimes_put_sync_group, DIMES_PUT_SYNC_GROUP)(const char *group_name,
+            int *version, int *err, int len)
+{
+    char vname[256];
+
+    if (!fstrncpy(vname, group_name, (size_t) len, sizeof(vname))) {
+            uloga("'%s': failed, can not copy Fortran var of len %d.\n",
+                    __func__, len);
+            *err = -ENOMEM;
+    }
+
+    *err = common_dimes_put_sync_group(vname, *version);
+}
+
+void FC_FUNC(dimes_define_gdim, DIMES_DEFINE_GDIM)(const char *var_name,
+            int *ndim, uint64_t *gdim, int len)
+{
+    char vname[256];
+
+    if (!fstrncpy(vname, var_name, (size_t) len, sizeof(vname))) {
+            uloga("'%s': failed, can not copy Fortran var of len %d.\n",
+                    __func__, len);
+            return;
+    }
+
+    common_dimes_define_gdim(vname, *ndim, gdim);
+} 
 #endif

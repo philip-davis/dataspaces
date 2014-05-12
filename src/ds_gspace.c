@@ -1651,7 +1651,7 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 #ifdef DEBUG
 		char *str = 0;
 
-                asprintf(&str, "S%2d: obj_desc not found for ", DSG_ID); 
+        asprintf(&str, "S%2d: obj_desc not found for ", DSG_ID); 
 		str = str_append(str, obj_desc_sprint(&oh->u.o.odsc));
 
 		uloga("'%s()': %s\n", __func__, str);
