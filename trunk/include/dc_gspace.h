@@ -78,7 +78,7 @@ struct dcg_space {
         int                     versions[64];
 };
 
-struct dcg_space * dcg_alloc(int, int);
+struct dcg_space * dcg_alloc(int, int, void*);
 int dcg_barrier(struct dcg_space *);
 void dcg_free(struct dcg_space *);
 int dcg_obj_get(struct obj_data *);

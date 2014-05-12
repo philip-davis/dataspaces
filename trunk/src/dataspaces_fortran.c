@@ -76,9 +76,11 @@ char *fstrncpy(char *cstr, const char *fstr, size_t len, size_t maxlen)
    Fortran interface to DataSpaces.
 */
 
-void FC_FUNC(dspaces_init, DSPACES_INIT)(int *num_peers, int *appid, int *err)
+void FC_FUNC(dspaces_init, DSPACES_INIT)(int *num_peers, int *appid, void *comm, int *err)
 {
-	*err = common_dspaces_init(*num_peers, *appid, NULL);
+        MPI_Comm c_comm;
+        c_comm = MPI_Comm_f2c(*(MPI_Fint*)comm);
+	*err = common_dspaces_init(*num_peers, *appid, &c_comm, NULL);
 }
 
 void FC_FUNC(dspaces_set_storage_type, DSPACES_SET_STORAGE_TYPE) (int *fst)
