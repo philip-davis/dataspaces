@@ -1494,7 +1494,7 @@ static int dcgrpc_time_log(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
   Public API starts here.
 */
 
-struct dcg_space *dcg_alloc(int num_nodes, int appid)
+struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
 {
         struct dcg_space *dcg_l;
         int i, err = -ENOMEM;
@@ -1525,7 +1525,13 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid)
         /* Added for ccgrid demo. */
         rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);	
 
+#ifdef HAVE_INFINIBAND
+        dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
+#elif HAVE_PAMI
+        dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
+#else 
         dcg_l->dc = dc_alloc(num_nodes, appid, dcg_l);
+#endif
         if (!dcg_l->dc) {
                 free(dcg_l);
                 goto err_out;

@@ -142,7 +142,7 @@ static int announce_cp_completion_all(struct rpc_server *rpc_s, struct msg_buf *
 			pm = pm + 1;
 			continue;
 		}
-		//        printf("2X Client %d peer %d:  %s %d \n",rpc_s->ptlmap.id,peer->ptlmap.id, inet_ntoa(peer->ptlmap.address.sin_addr),ntohs(peer->ptlmap.address.sin_port));
+//		        printf("2X Client %d peer %d:  %s %d \n",rpc_s->ptlmap.id,peer->ptlmap.id, inet_ntoa(peer->ptlmap.address.sin_addr),ntohs(peer->ptlmap.address.sin_port));
 
 		INIT_LIST_HEAD(&peer->req_list);
 		peer->num_msg_at_peer = rpc_s->max_num_msg;
@@ -203,7 +203,10 @@ static int dcrpc_announce_cp_all(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	
 	int err = -ENOMEM;
 	dc->num_sp = hreg->num_sp;
 	dc->num_cp_all = hreg->num_cp;
-	peer = rpc_s->peer_tab;
+	peer = rpc_s->peer_tab + rpc_s->ptlmap.id%dc->num_sp;
+
+//	printf("RPCS %d sever %d\n", rpc_s->ptlmap.id,peer->ptlmap.id);	
+
 	msg = msg_buf_alloc(rpc_s, peer, 0);
 	if(!msg)
 		goto err_out;
@@ -418,6 +421,16 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 	INIT_LIST_HEAD(&dc->rpc_s->peer_tab[0].req_list);
 	free(peer);
 
+
+        int rc;
+        dc->rpc_s->thread_alive = 1;
+        rc = pthread_create(&(dc->rpc_s->comm_thread), NULL, dc_listen, (void *) dc);
+        if(rc) {
+                printf("ERROR; return code from pthread_create() is %d\n", rc);
+                exit(-1);
+        }
+
+
 	//Waiting for dissemination msg from master server;
 	while(dc->f_reg == 0) {
 		err = rpc_process_event_with_timeout(dc->rpc_s, 1);
@@ -425,7 +438,9 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 			goto err_out;
 	}
 
+        dc->rpc_s->cur_num_peer = dc->num_sp + dc->num_cp;
 
+/*
 	int rc;
 	dc->rpc_s->thread_alive = 1;
 	rc = pthread_create(&(dc->rpc_s->comm_thread), NULL, dc_listen, (void *) dc);
@@ -433,7 +448,7 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 		printf("ERROR; return code from pthread_create() is %d\n", rc);
 		exit(-1);
 	}
-
+*/
 	int n = log2_ceil(dc->num_cp);
 	int *check_cp = malloc(sizeof(int) * (dc->num_cp + dc->cp_min_rank));
 
@@ -487,7 +502,7 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 
 		int count = 0;
 		peer = dc_get_peer(dc, i);
-		if(i < dc->cp_min_rank) {
+		if(0&&i < dc->cp_min_rank) {
 			do {
 				err = rpc_connect(dc->rpc_s, peer);
 				count++;
@@ -657,6 +672,7 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 	}
 */
 
+//	dc->f_reg_all = 1;
 
 	while(dc->f_reg_all == 0) {
 		err = rpc_process_event_with_timeout(dc->rpc_s, 1);
@@ -681,7 +697,7 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 /*
   Public API starts here.
 */
-struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
+struct dart_client *dc_alloc(int num_peers, int appid, void* comm, void *dart_ref)
 {
 	struct dart_client *dc;
 

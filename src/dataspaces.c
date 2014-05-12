@@ -89,9 +89,9 @@ int get_topology_info(int *out_pmi_rank, int *out_nid,
    C interface for DataSpaces.
 */
 
-int dspaces_init(int num_peers, int appid, const char *parameters)
+int dspaces_init(int num_peers, int appid, void *comm, const char *parameters)
 {
-	return common_dspaces_init(num_peers, appid, parameters);
+	return common_dspaces_init(num_peers, appid, comm, parameters);
 }
 
 void dspaces_set_storage_type(int fst)

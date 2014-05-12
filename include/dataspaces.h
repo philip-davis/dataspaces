@@ -50,12 +50,13 @@
  * @brief Initialize dataspaces client library.
  *
  * @param[in] num_peers:    Number of peers in the client application.
- * @param[in] appid:        Unique id for client application. 
+ * @param[in] appid:        Unique id for client application.
+ * @param[in] comm:     Pointer to the MPI communicator.
  * @param[in] parameters:   A series of name=value pairs separated by ";", 
  *
  * @return  0 indicates success.
  */
-int dspaces_init(int num_peers, int appid, const char *parameters);
+int dspaces_init(int num_peers, int appid, void *comm, const char *parameters);
 
 /**
  * @brief Finalize dataspaces client library.

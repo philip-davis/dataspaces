@@ -80,7 +80,7 @@ do {								\
    Common interface for DataSpaces.
 */
 
-int common_dspaces_init(int num_peers, int appid, const char *parameters)
+int common_dspaces_init(int num_peers, int appid, void *comm, const char *parameters)
 {
 	int err = -ENOMEM;
 
@@ -89,14 +89,15 @@ int common_dspaces_init(int num_peers, int appid, const char *parameters)
 		return 0;
 	}
 
-    struct name_value_pair *params, *p;
-    params = text_to_nv_pairs(parameters);
-    p  = params;
-    while (p) {
-        p = p->next;
-    }
+	struct name_value_pair *params, *p;
+	params = text_to_nv_pairs(parameters);
+	p  = params;
+	while (p) {
+		p = p->next;
+	}
 
-	dcg = dcg_alloc(num_peers, appid);
+
+	dcg = dcg_alloc(num_peers, appid, comm);
 	if (!dcg) {
         uloga("'%s()': failed to initialize.\n", __func__);
 		return err;

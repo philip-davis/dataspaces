@@ -412,6 +412,7 @@ static int ds_disseminate(struct dart_server *ds)	//Done
 			goto err_out_free;
 	}
 
+
 	//send to clients info of all the servers + clients in the same APP
 	list_for_each_entry(app, &ds->app_list, struct app_info, app_entry) {
 		for(i = app->app_peer_tab[0].ptlmap.id; i < app->app_peer_tab[0].ptlmap.id + app->app_num_peers; i++) {
@@ -461,7 +462,7 @@ static int ds_disseminate_all(struct dart_server *ds)	//Done
 	struct msg_buf *msg;
 	struct hdr_register *hreg;
 	struct node_id *peer, *cpeer;
-	struct ptlid_map *pptlmap;
+//	struct ptlid_map *pptlmap;
 	struct app_info *app;
 	int i, k, err;
 	cpeer = ds->peer_tab;
@@ -470,6 +471,10 @@ static int ds_disseminate_all(struct dart_server *ds)	//Done
 		for(i = app->app_peer_tab[0].ptlmap.id; i < app->app_peer_tab[0].ptlmap.id + app->app_num_peers; i++) {
 			cpeer = ds->peer_tab;
 			peer = ds_get_peer(ds, i);
+		
+			if(peer->ptlmap.id%ds->size_sp!=ds->rpc_s->ptlmap.id)
+				continue;
+//			printf("Master %d send list to %d %d %d\n",ds->rpc_s->ptlmap.id, peer->ptlmap.id, ds->size_sp, ds->size_cp);
 
 			err = -ENOMEM;
 			msg = msg_buf_alloc(ds->rpc_s, peer, 1);
@@ -477,18 +482,25 @@ static int ds_disseminate_all(struct dart_server *ds)	//Done
 				goto err_out;
 			msg->cb = default_completion_with_data_callback;
 			msg->size = sizeof(struct ptlid_map) * (ds->size_sp + ds->size_cp);
+		        struct ptlid_map *pptlmap;
+
 			pptlmap = msg->msg_data = malloc(msg->size);
 			if(!msg->msg_data)
 				goto err_out_free;
 			for(k = 0; k < ds->size_sp + ds->size_cp; k++)
 				*pptlmap++ = (cpeer++)->ptlmap;
-			cpeer = ds->peer_tab;
+//			cpeer = ds->peer_tab;
 			msg->msg_rpc->cmd = sp_announce_cp_all;
 			msg->msg_rpc->id = ds->self->ptlmap.id;
 			hreg = (struct hdr_register *) msg->msg_rpc->pad;
-			hreg->pm_cp = cpeer->ptlmap;
+			hreg->pm_cp = ds->rpc_s->ptlmap;
 			hreg->num_cp = ds->size_cp;
 			hreg->num_sp = ds->size_sp;
+
+//			while(peer->rpc_conn.f_connected != 1){
+//				sleep(1);
+//			}
+
 			err = rpc_send(ds->rpc_s, peer, msg);
 			if(err < 0) {
 				free(msg->msg_data);
@@ -500,7 +512,7 @@ static int ds_disseminate_all(struct dart_server *ds)	//Done
 		}
 	}
 	return 0;
-      err_out_free:free(msg);
+      err_out_free:printf("wth\n");free(msg);
       err_out:printf("'%s()' failed with %d.\n", __func__, err);
 	return err;
 }
@@ -737,9 +749,9 @@ int ds_boot_master(struct dart_server *ds)	//Done
 
 	err = ds_disseminate(ds);
 
-	sleep(10);
+//	sleep(10);
 
-	err = ds_disseminate_all(ds);
+//	err = ds_disseminate_all(ds);
 
 	if(err != 0)
 		goto err_out;
@@ -1126,6 +1138,9 @@ static int ds_boot(struct dart_server *ds)	//Done
 		goto err_out;
 	}
 */
+
+	ds_disseminate_all(ds);
+	
 	ds->rpc_s->cur_num_peer = ds->rpc_s->num_rpc_per_buff;
 	close(fd);
 	remove(fil_lock);
