@@ -89,8 +89,8 @@ int common_dspaces_init(int num_peers, int appid, const char *parameters)
 		return 0;
 	}
 
-    PairStruct *params, *p;
-    params = text_to_name_value_pairs(parameters);
+    struct name_value_pair *params, *p;
+    params = text_to_nv_pairs(parameters);
     p  = params;
     while (p) {
         p = p->next;
@@ -117,8 +117,7 @@ int common_dspaces_init(int num_peers, int appid, const char *parameters)
     }
 #endif
 
-    free_name_value_pairs(params);
-
+    free_nv_pairs(params);
 #ifdef DS_SSD_HASH_V2
     // check if the number of servers is power of 2
 #endif    

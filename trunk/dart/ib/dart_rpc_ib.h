@@ -145,7 +145,8 @@ struct rpc_cmd {
 	__u32 id;
 	struct ibv_mr mr;
 	int qp_num;
-	__u8 pad[280];		// payload of the command
+    // payload of the command 
+    __u8 pad[280+(BBOX_MAX_NDIM-3)*24]; //TODO: fix this
 	uint64_t wr_id;
 };
 
