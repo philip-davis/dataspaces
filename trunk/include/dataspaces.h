@@ -65,6 +65,7 @@ int dspaces_init(int num_peers, int appid, void *comm, const char *parameters);
  */
 void dspaces_finalize (void);
 
+// TODO: remove this public API function
 /**
  * @brief Set types of memory layout for multi-dimensional matrix.
  *
