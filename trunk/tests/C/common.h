@@ -27,11 +27,12 @@
 /*
 *  Fan Zhang (2013)  TASSL Rutgers University
 *  zhangfan@cac.rutgers.edu
+*  Qian Sun (2014)  TASSL Rutgers University
+*  qiansun@cac.rutgers.edu
 */
 #ifndef __TEST_COMMON_H_
 #define __TEST_COMMON_H_
 
-#include "config.h"
 #include "debug.h"
 #include "timer.h"
 #include "dataspaces.h"
@@ -58,17 +59,17 @@ void common_unlock_on_read(const char *lock_name, void *gcomm);
 void common_lock_on_write(const char *lock_name, void *gcomm); 
 void common_unlock_on_write(const char *lock_name, void *gcomm); 
 int common_put (const char *var_name,
-        unsigned int ver, int ndim, int size,
-        uint64_t xl, uint64_t yl, uint64_t zl,
-        uint64_t xu, uint64_t yu, uint64_t zu,
-        void *data, enum transport_type type);
+        unsigned int ver, int size,
+	int ndim,
+        uint64_t *lb, uint64_t *ub,
+	void *data, enum transport_type type);
 int common_get (const char *var_name,
-        unsigned int ver, int ndim, int size,
-        uint64_t xl, uint64_t yl, uint64_t zl,
-        uint64_t xu, uint64_t yu, uint64_t zu, 
+        unsigned int ver, int size,
+	int ndim,
+	uint64_t *lb, uint64_t *ub,
         void *data, enum transport_type type); 
 int common_put_sync(enum transport_type type); 
-int common_run_server(int num_sp, int num_cp, enum transport_type type);
+int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gcomm);
 
 void check_data(const char *var_name, double *buf, int num_elem, int rank, int ts);
 

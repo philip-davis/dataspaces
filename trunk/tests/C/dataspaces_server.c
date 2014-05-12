@@ -27,6 +27,8 @@
 /*
 *  Fan Zhang (2013)  TASSL Rutgers University
 *  zhangfan@cac.rutgers.edu
+*  Qian Sun (2014) TASSL Rutgers University
+*  qiansun@cac.rutgers.edu
 */
 #include <stdio.h>
 #include <stdlib.h>
@@ -112,9 +114,9 @@ int main(int argc, char **argv)
 	MPI_Comm_split(MPI_COMM_WORLD, 0, rank, &gcomm);
 
 #ifdef DS_HAVE_DIMES
-	common_run_server(num_sp, num_cp, USE_DIMES);
+	common_run_server(num_sp, num_cp, USE_DIMES, &gcomm);
 #else
-	common_run_server(num_sp, num_cp, USE_DSPACES);
+	common_run_server(num_sp, num_cp, USE_DSPACES, &gcomm);
 #endif
 
 	MPI_Barrier(gcomm);
