@@ -110,7 +110,8 @@ struct rpc_cmd {
         DCMF_Memregion_t	mem_region; //DCMF memory region created for remote node
         size_t			mem_size; //Size for created DCMF memory region
 
-        __u8            pad[280];// payload of the command TODO-Q
+        // payload of the command
+        __u8            pad[280+(BBOX_MAX_NDIM-3)*24]; // TODO: fix this
 } __attribute__((__packed__));
 
 /*

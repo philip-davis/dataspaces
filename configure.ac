@@ -33,18 +33,12 @@ AM_CONDITIONAL([DIMES], [test "x$enable_dimes" == "xyes"])
 
 if test "x$enable_dimes" == "xyes"; then
         if test -z "${HAVE_UGNI_TRUE}"; then
-            dnl DSPACESLIB_CFLAGS+=" -DDS_HAVE_DIMES"
-            dnl DSPACESLIB_CPPFLAGS+=" -DDS_HAVE_DIMES"
             AC_DEFINE(DS_HAVE_DIMES, 1, [DIMES is enabled])
             echo "DIMES enabled!"
         elif test -z "${HAVE_DCMF_TRUE}"; then
-            dnl DSPACESLIB_CFLAGS+=" -DDS_HAVE_DIMES"
-            dnl DSPACESLIB_CPPFLAGS+=" -DDS_HAVE_DIMES"
             AC_DEFINE(DS_HAVE_DIMES, 1, [DIMES is enabled])
             echo "DIMES enabled!"
         elif test -z "${HAVE_INFINIBAND_TRUE}"; then
-            dnl DSPACESLIB_CFLAGS+="-DDS_HAVE_DIMES"
-            dnl DSPACESLIB_CPPFLAGS+="-DDS_HAVE_DIMES"
             AC_DEFINE(DS_HAVE_DIMES, 1, [DIMES is enabled])
             echo "DIMES enabled!"
         else
@@ -52,21 +46,7 @@ if test "x$enable_dimes" == "xyes"; then
         fi
 fi
 
-dnl Check if DIMES ack. is enabled
-dnl AC_ARG_ENABLE(dimes_ack,
-dnl    [AS_HELP_STRING([--enable-dimes-ack],
-dnl        [Include the dimes ack. mechanism. By default this is not enabled])])
-dnl AM_CONDITIONAL([DIMES_ACK], [test "x$enable_dimes_ack" == "xyes"])
-
-dnl if test "x$enable_dimes_ack" == "xyes"; then
-dnl         if test -z "${HAVE_UGNI_TRUE}"; then
-dnl                DSPACESLIB_CFLAGS+=" -DDS_HAVE_DIMES_ACK"
-dnl		DSPACESLIB_CPPFLAGS+=" -DDS_HAVE_DIMES_ACK"
-dnl        elif test -z "${HAVE_DCMF_TRUE}"; then
-dnl                DSPACESLIB_CFLAGS+=" -DDS_HAVE_DIMES_ACK"
-dnl		DSPACESLIB_CPPFLAGS+=" -DDS_HAVE_DIMES_ACK"
-dnl        fi
-dnl fi
+dnl Check the max array dimension
 
 if test -z "${HAVE_UGNI_TRUE}"; then
   DSPACESLIB_CPPFLAGS+=" ${PMI_CPPFLAGS}"

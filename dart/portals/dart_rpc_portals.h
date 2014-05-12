@@ -174,7 +174,7 @@ struct rpc_cmd {
         __u32           id;
 
         // payload of the command
-        __u8            pad[280];
+        __u8            pad[280+(BBOX_MAX_NDIM-3)*24]; //TODO: fix this
 } __attribute__((__packed__));
 
 /*

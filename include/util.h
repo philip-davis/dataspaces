@@ -1,5 +1,5 @@
-#ifndef __STRUTIL_H_
-#define __STRUTIL_H_
+#ifndef __DS_UTIL_H_
+#define __DS_UTIL_H_
 
 size_t str_len(const char *str);
 char *str_append_const(char *, const char *);
@@ -16,14 +16,13 @@ char *str_append(char *, char *);
    Also, simple "name" or "name=" patterns are processed and 
    returned with value=NULL. 
 */
-struct PairStruct {
+struct name_value_pair {
     char * name;
     char * value;
-    struct PairStruct * next;
+    struct name_value_pair* next;
 };
-typedef struct PairStruct PairStruct;
 
-PairStruct * text_to_name_value_pairs (const char * text);
-void free_name_value_pairs (PairStruct * pairs);
+struct name_value_pair* text_to_nv_pairs (const char * text);
+void free_nv_pairs (struct name_value_pair* pairs);
 
 #endif

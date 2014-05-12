@@ -138,7 +138,7 @@ static void splitnamevalue (const char * line, int linelen,  char **name, char *
     }
 }
 
-PairStruct * text_to_name_value_pairs (const char * text)
+struct name_value_pair* text_to_nv_pairs (const char * text)
 {
     /* Process a multi-line and/or ;-separated text and create a list
        of name=value pairs from each line which has a 
@@ -155,7 +155,7 @@ PairStruct * text_to_name_value_pairs (const char * text)
     char *item, *delim;
     int len;
     char line[256];
-    PairStruct *res = NULL, *last = NULL, *pair;
+    struct name_value_pair *res = NULL, *last = NULL, *pair;
 
     if (!text) return res;
 
@@ -173,7 +173,7 @@ PairStruct * text_to_name_value_pairs (const char * text)
         //printf ("    --Line=[%s]\n", line);
         splitnamevalue(line, len, &name, &value);
         if (name) {
-            pair = (PairStruct *) malloc (sizeof(PairStruct));
+            pair = (struct name_value_pair*) malloc (sizeof(struct name_value_pair));
             pair->name = name;
             pair->value = value;
             pair->next = NULL;
@@ -194,9 +194,9 @@ PairStruct * text_to_name_value_pairs (const char * text)
 }
 
 
-void free_name_value_pairs (PairStruct * pairs)
+void free_nv_pairs (struct name_value_pair* pairs)
 {
-    PairStruct *p;
+    struct name_value_pair *p;
     while (pairs) {
         free(pairs->name);
         free(pairs->value);
