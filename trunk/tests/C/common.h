@@ -48,7 +48,7 @@ enum transport_type {
 };
 
 // wrapper functions of DataSpaces/DIMES APIs
-int common_init(int num_peers, int appid);
+int common_init(int num_peers, int appid, void* comm, const char* parameters);
 void common_set_storage_type(int fst, enum transport_type type); 
 int common_rank(); 
 int common_peers();
