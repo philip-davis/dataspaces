@@ -325,8 +325,10 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
         return dsg_l->ssd;
     }
 
+#ifdef DEBUG
     uloga("%s(): add new shared space ndim= %d global dimension= %llu %llu %llu\n",
         __func__, gdim.ndim, gdim.sizes.c[0], gdim.sizes.c[1], gdim.sizes.c[2]);
+#endif
 
     list_add(&ssd_entry->entry, &dsg_l->sspace_list);
     return ssd_entry->ssd;
