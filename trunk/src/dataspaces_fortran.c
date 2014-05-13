@@ -48,7 +48,7 @@
 #include "dc_gspace.h"
 
 /* Name mangling for C functions to adapt Fortran compiler */
-#ifdef HAVE_DCMF
+#if defined(HAVE_DCMF) || defined(HAVE_PAMI) 
 #define FC_FUNC(name,NAME) name  
 #else
 #define FC_FUNC(name,NAME) name ## _

@@ -18,6 +18,9 @@ $ ./configure CC=mpicc FC=mpif90
 # DCMF for IBM BlueGene/P
 $ ./configure CC=mpixlc FC=mpixlf90 CFLAGS="-g -O0 -qarch=450 -qtune=450" --with-dcmf="/bgsys/drivers/ppcfloor"
 
+# PAMI for IBM BlueGene/Q
+$ ./configure CC=/bgsys/drivers/ppcfloor/comm/xl/bin/mpixlc_r FC=/bgsys/drivers/ppcfloor/comm/xl/bin/mpixlf90 CFLAGS="-O0 -g -qlanglvl=extc99 -O3 -qarch=qp -qtune=qp -qfullpath"
+
 # Portals for Cray XT series
 $ ./configure CC=cc FC=ftn
 

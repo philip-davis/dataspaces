@@ -30,6 +30,13 @@
 #include "dcmf/ds_base_dcmf.h"
 #include "dcmf/dart_rdma_dcmf.h"
 
+#elif HAVE_PAMI
+
+#include "pami/dart_rpc_pami.h"
+#include "pami/dc_base_pami.h"
+#include "pami/ds_base_pami.h"
+#include "pami/dart_rdma_pami.h"
+
 #endif
 
 #endif
