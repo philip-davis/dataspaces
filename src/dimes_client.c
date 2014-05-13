@@ -1015,6 +1015,29 @@ static int dimes_memory_obj_status(struct dimes_memory_obj *mem_obj)
 	return ret;
 }
 
+#ifdef HAVE_PAMI
+static int completion_dimes_obj_put(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+    if (msg) {
+        int *pflag = msg->private;
+        *pflag = 1;
+        free(msg);
+    }
+    return 0;
+}
+
+static int rpc_send_complete(const int *send_flags, int num_send)
+{
+    int i;
+    for (i = 0; i < num_send; i++) {
+        if (!send_flags[i])
+            return 0;
+    }
+
+    return 1;
+}
+#endif
+
 static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
 {
 	struct dht_entry *dht_nodes[dimes_c->dcg->ss_info.num_space_srv];
@@ -1033,6 +1056,12 @@ static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
 				__func__, num_dht_nodes);
 		goto err_out;
 	}
+
+#ifdef HAVE_PAMI
+    // TODO: do we need to do the same for all other platforms?
+    int *send_flags = (int*)malloc(sizeof(int)*num_dht_nodes);
+    memset(send_flags, 0, sizeof(int)*num_dht_nodes);
+#endif
 	
 	for (i = 0; i < num_dht_nodes; i++) {
 		// TODO(fan): There is assumption here that the space servers
@@ -1044,6 +1073,10 @@ static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
 
 		msg->msg_rpc->cmd = dimes_put_msg;
 		msg->msg_rpc->id = DIMES_CID;
+#ifdef HAVE_PAMI
+        msg->cb = completion_dimes_obj_put;
+        msg->private = &(send_flags[i]);
+#endif
 		dart_rdma_set_memregion_to_cmd(&mem_obj->rdma_handle, msg->msg_rpc);	
 
 		hdr = (struct hdr_dimes_put *)msg->msg_rpc->pad;
@@ -1057,6 +1090,20 @@ static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
 			goto err_out;
 		}
 	}
+
+#ifdef HAVE_PAMI
+    // block for all the rpc_send to complete
+    while (!rpc_send_complete(send_flags, num_dht_nodes))
+    {
+        err = rpc_process_event(RPC_S);
+        if (err < 0) {
+            free(send_flags);
+            goto err_out;
+        }
+    }
+    free(send_flags);
+#endif
+
 
 	storage_add_obj(mem_obj);
 	return 0;
@@ -1883,7 +1930,7 @@ static int dimes_put_sync_with_timeout(float timeout_sec, struct dimes_storage_g
 		list_for_each_entry_safe(p, t, &group->mem_obj_list,
 					 struct dimes_memory_obj, entry) {
 			// TODO: fix this part
-#ifdef HAVE_DCMF
+#if defined (HAVE_PAMI) || defined (HAVE_DCMF)
 			err = rpc_process_event(RPC_S);
 #else
 			err = rpc_process_event_with_timeout(RPC_S, 1);
