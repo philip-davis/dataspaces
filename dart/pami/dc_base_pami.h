@@ -32,11 +32,14 @@ struct dart_client{
         void    *dart_ref;
         int     num_posted;
 
-        //For testing DART DCMF performance
+        //For testing DART PAMI performance
         int     read_complete;
+
+	void* 	comm;	//MPI communicator for barrier
 };
 
-#define dc_barrier(dc) rpc_barrier(dc->rpc_s)
+//#define dc_barrier(dc) rpc_barrier(dc->rpc_s)
+#define dc_barrier(dc) rpc_barrier(dc->rpc_s, dc->comm)
 
 static inline struct node_id * dc_get_peer(struct dart_client *dc, int n)
 {
