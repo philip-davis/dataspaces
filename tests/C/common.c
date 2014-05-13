@@ -128,8 +128,8 @@ int parse_args(int argc, char** argv, enum transport_type *type, int *npapp,
 	return 0;
 }
 
-int common_init(int num_peers, int appid) {
-        return dspaces_init(num_peers, appid, NULL, NULL);
+int common_init(int num_peers, int appid, void* comm, const char* parameters) {
+        return dspaces_init(num_peers, appid, comm, parameters);
 }
 
 void common_set_storage_type(int fst, enum transport_type type) {

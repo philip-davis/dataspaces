@@ -181,7 +181,7 @@ int test_get_run(enum transport_type type, int npapp, int ndims, int* npdim, uin
 	int app_id = appid;
 	double tm_st, tm_end;
 	tm_st = timer_read(&timer_);
-	common_init(npapp_, app_id);
+	common_init(npapp_, app_id, gcomm_, NULL);
 	tm_end = timer_read(&timer_);
 	common_get_transport_type_str(type, transport_type_str_);
 
