@@ -335,7 +335,7 @@ void rpc_add_service(enum cmd_type, rpc_service);
 
 // int rpc_credits_return(struct rpc_server *, int, struct node_id *);
 
-int rpc_barrier(struct rpc_server *);
+int rpc_barrier(struct rpc_server *, void*);
 
 int rpc_send(struct rpc_server *, struct node_id *, struct msg_buf *); 
 int rpc_send_direct(struct rpc_server *, struct node_id *, struct msg_buf *);

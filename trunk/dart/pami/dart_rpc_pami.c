@@ -1,6 +1,6 @@
 #include "dart_rpc_pami.h"
 #include "debug.h"
-//#include "mpi.h"
+#include "mpi.h"
 
 #define ALIGNMENT 128
 typedef struct{
@@ -65,9 +65,12 @@ void * safemalloc(size_t n)
     return ptr;
 }
 
-int rpc_barrier(struct rpc_server *rpc_s)
+int rpc_barrier(struct rpc_server *rpc_s, void* comm)
 {
-	uloga("error: Not support dspaces_barrier on BGQ, please use MPI_Barrier instead.\n");
+	if(comm == NULL)
+		uloga("error: Not support dspaces_barrier on BGQ, please use MPI_Barrier instead.\n");
+	else
+		MPI_Barrier(*(MPI_Comm*)comm);
 	return 0;
 }
 

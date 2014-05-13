@@ -319,6 +319,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void* comm, void *dart_re
                 return NULL;
         dc->dart_ref = dart_ref;
         dc->cp_in_job = num_peers;
+	dc->comm = comm;
 
         //Register rpc msg handler functions
         rpc_add_service(cn_register, dcrpc_register);
