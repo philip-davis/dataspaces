@@ -39,7 +39,7 @@
 #include "ss_data.h"
 #include "queue.h"
 
-#ifdef TIMING_PERF
+#ifdef TIMING_SSD
 #include "timer.h"
 #endif
 
@@ -854,7 +854,7 @@ struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions
 {
     struct sspace *ss = NULL;
 
-#ifdef TIMING_PERF
+#ifdef TIMING_SSD
     struct timer tm;
     double tm_st, tm_end;
     timer_init(&tm, 1);
@@ -868,7 +868,7 @@ struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions
     ss = ssd_alloc_v1(bb_domain, num_nodes, max_versions);
 #endif
 
-#ifdef TIMING_PERF
+#ifdef TIMING_SSD 
     tm_end = timer_read(&tm);
     uloga("%s(): time %lf seconds\n", __func__, tm_end-tm_st);
 #endif
@@ -897,7 +897,7 @@ void ssd_free(struct sspace *ss)
 */
 int ssd_hash(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[])
 {
-#ifdef TIMING_PERF
+#ifdef TIMING_SSD
     struct timer tm;
     double tm_st, tm_end;
     timer_init(&tm, 1);
@@ -919,7 +919,7 @@ int ssd_hash(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[
         break;
     }
 
-#ifdef TIMING_PERF
+#ifdef TIMING_SSD
     tm_end = timer_read(&tm);
     uloga("%s(): time %lf seconds\n", __func__, tm_end-tm_st);
 #endif
