@@ -43,7 +43,7 @@
 #include "config.h"
 
 int common_dspaces_init(int num_peers, int appid, void *comm, const char *parameters);
-void common_dspaces_set_storage_type (int fst);
+//void common_dspaces_set_storage_type (int fst);
 int common_dspaces_rank(void);
 int common_dspaces_peers(void);
 void common_dspaces_barrier(void);
@@ -73,7 +73,7 @@ int common_dspaces_collect_timing(double, double *);
 int common_dspaces_num_space_srv(void);
 
 #ifdef DS_HAVE_DIMES
-void common_dimes_set_storage_type(int fst);
+//void common_dimes_set_storage_type(int fst);
 void common_dimes_define_gdim(const char *var_name, int ndim, uint64_t *gdim);
 int common_dimes_get(const char *var_name,
         unsigned int ver, int size,

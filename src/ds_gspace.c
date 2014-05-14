@@ -1987,11 +1987,16 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
 
         err = parse_conf(conf_name);
         if (err < 0) {
-		uloga("'%s()' error loading config file, starting "
-			"with defaults.\n", __func__);
+            uloga("%s(): ERROR failed to load config file '%s'.", __func__, conf_name);
+            goto err_out;
+        } else uloga("%s(): config file '%s' loaded.\n", __func__, conf_name);
+
+        if (ds_conf.ndim > BBOX_MAX_NDIM) {
+            uloga("%s(): ERROR maximum number of array dimension is %d but ndim is %d"
+                " in file '%s'\n", __func__, BBOX_MAX_NDIM, ds_conf.ndim, conf_name);
+            err = -ENOMEM;
+            goto err_out;
         }
-        else
-            uloga("'%s()' config file loaded.\n", __func__);
 
         struct bbox domain;
         memset(&domain, 0, sizeof(struct bbox));
@@ -2042,7 +2047,7 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
  err_free:
         free(dsg_l);
  err_out:
-        uloga("'%s()': failed with %d.", __func__, err);
+        uloga("'%s()': failed with %d.\n", __func__, err);
         dsg = 0;
         return NULL;
 }

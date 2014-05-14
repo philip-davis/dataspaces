@@ -94,11 +94,6 @@ int dspaces_init(int num_peers, int appid, void *comm, const char *parameters)
 	return common_dspaces_init(num_peers, appid, comm, parameters);
 }
 
-void dspaces_set_storage_type(int fst)
-{
-	common_dspaces_set_storage_type(fst);
-}
-
 int dspaces_rank(void)
 {
 	return common_dspaces_rank();
@@ -182,11 +177,6 @@ int dspaces_num_space_srv(void)
 }
 
 #ifdef DS_HAVE_DIMES
-void dimes_set_storage_type (int fst)
-{
-	common_dimes_set_storage_type(fst);
-}
-
 int dimes_put_sync_all(void)
 {
 	return common_dimes_put_sync_all();

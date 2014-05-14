@@ -54,14 +54,14 @@
 #include "dimes_client.h"
 #endif
 
-static struct dcg_space *dcg;
+static struct dcg_space *dcg = NULL;
 static struct timer timer;
 static int sync_op_id;
 static int cq_id = -1; // TODO: still support it?
 static enum storage_type st = column_major; // TODO: still need this?
 static int num_dims = 2; // TODO: remove it 
 #ifdef DS_HAVE_DIMES
-static struct dimes_client *dimes_c;
+static struct dimes_client *dimes_c = NULL;
 #endif
 
 static void lib_exit(void)
@@ -76,10 +76,37 @@ do {								\
 	lib_exit();						\
 } while (0)
 
+#ifdef DS_HAVE_DIMES
+static int is_dimes_lib_init()
+{
+    if (!dimes_c) {
+        uloga("ERROR: dimes library was not properly initialized!\n");
+        return 0;
+    }
+    return 1;
+}
+#endif
+
+static int is_dspaces_lib_init() { 
+    if (!dcg) {
+        uloga("ERROR: dspaces library was not properly initialized!\n");
+        return 0;
+    }
+    return 1;
+}
+
+static int is_ndim_within_bound(int ndim) {
+    if (ndim > BBOX_MAX_NDIM) {
+        uloga("ERROR: maximum number of array dimension supported is %d "
+            "but ndim is %d\n", BBOX_MAX_NDIM, ndim);
+        return 0;
+    }
+    return 1;
+}
+
 /* 
    Common interface for DataSpaces.
 */
-
 int common_dspaces_init(int num_peers, int appid, void *comm, const char *parameters)
 {
 	int err = -ENOMEM;
@@ -99,14 +126,13 @@ int common_dspaces_init(int num_peers, int appid, void *comm, const char *parame
 
 	dcg = dcg_alloc(num_peers, appid, comm);
 	if (!dcg) {
-        uloga("'%s()': failed to initialize.\n", __func__);
+        uloga("%s(): failed to initialize.\n", __func__);
 		return err;
 	}
 
 	err = dcg_ss_info(dcg, &num_dims); 
 	if (err < 0) {
-		uloga("'%s()': failed to obtain space info, err %d.\n", 
-			__func__, err);
+		uloga("%s(): failed to obtain space info.\n", __func__);
 		return err;
 	}
 
@@ -123,14 +149,6 @@ int common_dspaces_init(int num_peers, int appid, void *comm, const char *parame
     // check if the number of servers is power of 2
 #endif    
 	return 0;
-}
-
-void common_dspaces_set_storage_type(int fst)
-{
-	if (fst == 0)
-		st = row_major;
-	else if (fst == 1)
-		st = column_major;
 }
 
 int common_dspaces_rank(void)
@@ -156,81 +174,52 @@ int common_dspaces_get_num_space_peers(void)
 
 void common_dspaces_barrier(void)
 {
-	int err;
+    if (!is_dspaces_lib_init()) return;
 
-	if (!dcg) {
-		uloga("'%s()': library was not properly initialized!\n",
-			 __func__);
-		return;
-	}
-
-	err = dcg_barrier(dcg);
+	int err = dcg_barrier(dcg);
 	if (err < 0) 
 		ERROR_TRACE_AND_EXIT();
 }
 
 void common_dspaces_lock_on_read(const char *lock_name, void *comm)
 {
-	int err;
+    if (!is_dspaces_lib_init()) return;
 
-	if (!dcg) {
-		uloga("'%s()': library was not properly initialized!\n",
-			 __func__);
-		return;
-	}
-
-	err = dcg_lock_on_read(lock_name, comm);
+	int err = dcg_lock_on_read(lock_name, comm);
 	if (err < 0) 
 		ERROR_TRACE_AND_EXIT();
 }
 
 void common_dspaces_unlock_on_read(const char *lock_name, void *comm)
 {
-	int err;
+    if (!is_dspaces_lib_init()) return;
 
-	if (!dcg) {
-		uloga("'%s()': library was not properly initialized!\n",
-			 __func__);
-		return;
-	}
-
-	err = dcg_unlock_on_read(lock_name, comm);
+	int err = dcg_unlock_on_read(lock_name, comm);
 	if (err < 0) 
 		ERROR_TRACE_AND_EXIT();
 }
 
 void common_dspaces_lock_on_write(const char *lock_name, void *comm)
 {
-	int err;
+    if (!is_dspaces_lib_init()) return;
 
-	if (!dcg) {
-		uloga("'%s()': library was not properly initialized!\n",
-			 __func__);
-		return;
-	}
-
-	err = dcg_lock_on_write(lock_name, comm);
+	int err = dcg_lock_on_write(lock_name, comm);
 	if (err < 0)
 		ERROR_TRACE_AND_EXIT();
 }
 
 void common_dspaces_unlock_on_write(const char *lock_name, void *comm)
 {
-	int err;
+    if (!is_dspaces_lib_init()) return;
 
-	if (!dcg) {
-		uloga("'%s()': library was not properly initialized!\n",
-			 __func__);
-		return;
-	}
-
-	err = dcg_unlock_on_write(lock_name, comm);
+	int err = dcg_unlock_on_write(lock_name, comm);
 	if (err < 0)
 		ERROR_TRACE_AND_EXIT();
 }
 
 void common_dspaces_define_gdim(const char *var_name, int ndim, uint64_t *gdim)
 {
+    if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) return;
     update_gdim_list(&dcg->gdim_list, var_name, ndim, gdim);
 }
 
@@ -241,53 +230,53 @@ int common_dspaces_get(const char *var_name,
 	uint64_t *ub,
 	void *data)
 {
-        struct obj_descriptor odsc = {
-                .version = ver, .owner = -1, 
-                .st = st,
-                .size = size,
-                .bb = {.num_dims = ndim,}
-        };
-        memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
-        memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+    if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) {
+        return -EINVAL;
+    }
 
-        memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
-        memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
+    struct obj_descriptor odsc = {
+            .version = ver, .owner = -1, 
+            .st = st,
+            .size = size,
+            .bb = {.num_dims = ndim,}
+    };
+    memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+    memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
 
-        struct obj_data *od;
-        int err = -ENOMEM;
+    memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
+    memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
 
-        if (!dcg) {
-            uloga("'%s()': library was not properly initialized!\n",
-                 __func__);
-            return -EINVAL;
-        }
+    struct obj_data *od;
+    int err = -ENOMEM;
 
-        strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
-        odsc.name[sizeof(odsc.name)-1] = '\0';
+    strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
+    odsc.name[sizeof(odsc.name)-1] = '\0';
 
-        od = obj_data_alloc_no_data(&odsc, data);
-        if (!od) {
-            uloga("'%s()': failed, can not allocate data object.\n", 
-                __func__);
-                    return -ENOMEM;
-        }
+    od = obj_data_alloc_no_data(&odsc, data);
+    if (!od) {
+        uloga("'%s()': failed, can not allocate data object.\n", 
+            __func__);
+        return -ENOMEM;
+    }
 
-        // set global dimension
-        set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
-                             &od->gdim);
+    // set global dimension
+    set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
+                         &od->gdim);
 #ifdef DEBUG
-        uloga("%s(): %s default_gdim %llu %llu %llu od->gdim %llu %llu %llu\n",
-            __func__, var_name, dcg->default_gdim.sizes.c[0], dcg->default_gdim.sizes.c[1],
-            dcg->default_gdim.sizes.c[2], od->gdim.sizes.c[0], od->gdim.sizes.c[1],
-            od->gdim.sizes.c[2]);
+/*
+    uloga("%s(): %s default_gdim %llu %llu %llu od->gdim %llu %llu %llu\n",
+        __func__, var_name, dcg->default_gdim.sizes.c[0], dcg->default_gdim.sizes.c[1],
+        dcg->default_gdim.sizes.c[2], od->gdim.sizes.c[0], od->gdim.sizes.c[1],
+        od->gdim.sizes.c[2]);
+*/
 #endif
-        err = dcg_obj_get(od);
-        obj_data_free(od);
-        if (err < 0 && err != -EAGAIN) 
-            uloga("'%s()': failed with %d, can not get data object.\n",
-                __func__, err);
+    err = dcg_obj_get(od);
+    obj_data_free(od);
+    if (err < 0 && err != -EAGAIN) 
+        uloga("'%s()': failed with %d, can not get data object.\n",
+            __func__, err);
 
-        return err;
+    return err;
 }
 
 int common_dspaces_get_versions(int **p_versions)
@@ -302,6 +291,10 @@ int common_dspaces_put(const char *var_name,
         uint64_t *ub,
         void *data)
 {
+        if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) {
+            return -EINVAL;
+        }
+
         struct obj_descriptor odsc = {
                 .version = ver, .owner = -1, 
                 .st = st,
@@ -317,12 +310,6 @@ int common_dspaces_put(const char *var_name,
 
         struct obj_data *od;
         int err = -ENOMEM;
-
-        if (!dcg) {
-            uloga("'%s()': library was not properly initialized!\n",
-                 __func__);
-            return -EINVAL;
-        }
 
         strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
         odsc.name[sizeof(odsc.name)-1] = '\0';
@@ -338,10 +325,12 @@ int common_dspaces_put(const char *var_name,
         set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
                              &od->gdim); 
 #ifdef DEBUG
+/*
         uloga("%s(): %s default_gdim %llu %llu %llu od->gdim %llu %llu %llu\n",
             __func__, var_name, dcg->default_gdim.sizes.c[0], dcg->default_gdim.sizes.c[1],
             dcg->default_gdim.sizes.c[2], od->gdim.sizes.c[0], od->gdim.sizes.c[1],
             od->gdim.sizes.c[2]);
+*/
 #endif
         err = dcg_obj_put(od);
         if (err < 0) {
@@ -355,6 +344,7 @@ int common_dspaces_put(const char *var_name,
         return 0;
 }
 
+/*
 int common_dspaces_select(char *var_name, unsigned int vers,
 	int ndim,
     uint64_t *lb, //int xl, int yl, int zl,
@@ -475,23 +465,20 @@ int common_dspaces_cq_update(void)
 
 	return err;
 }
+*/
 
 int common_dspaces_put_sync(void)
 {
-        int err;
-
-	if (!dcg) {
-		uloga("'%s()': library was not properly initialized!\n",
-			 __func__);
+	if (!is_dspaces_lib_init()) {
 		return -EINVAL;
 	}
 
-        err = dcg_obj_sync(sync_op_id);
-        if (err < 0)
-	        uloga("'%s()': failed with %d, can not complete put_sync.\n", 
+    int err = dcg_obj_sync(sync_op_id);
+    if (err < 0)
+        uloga("'%s()': failed with %d, can not complete put_sync.\n", 
 			__func__, err);
 
-        return err;
+    return err;
 }
 
 #ifdef DS_HAVE_ACTIVESPACE
@@ -536,9 +523,7 @@ int common_dspaces_code_load(void *fnaddr, // int off, int size_code,
 
 void common_dspaces_finalize(void)
 {
-	if (!dcg) {
-		uloga("'%s()': library was not properly initialized!\n",
-			 __func__);
+	if (!is_dspaces_lib_init()) {
 		return;
 	}
 
@@ -553,9 +538,7 @@ void common_dspaces_finalize(void)
 int common_dspaces_collect_timing(double time, double *sum_ptr)
 {
 
-	if (!dcg) {
-		uloga("'%s()': library was not properly initialized!\n",
-			 __func__);
+	if (!is_dspaces_lib_init()) {
 		return -EINVAL;
 	}
 
@@ -564,9 +547,7 @@ int common_dspaces_collect_timing(double time, double *sum_ptr)
 
 int common_dspaces_num_space_srv(void)
 {
-	if (!dcg) {
-		uloga("'%s()': library was not properly initialized!\n",
-			 __func__);
+	if (!is_dspaces_lib_init()) {
 		return -EINVAL;
 	}
 
@@ -574,13 +555,9 @@ int common_dspaces_num_space_srv(void)
 }
 
 #ifdef DS_HAVE_DIMES
-void common_dimes_set_storage_type(int fst)
-{
-    return dimes_client_set_storage_type(fst);
-}
-
 void common_dimes_define_gdim(const char *var_name, int ndim, uint64_t *gdim)
 {
+    if (!is_dimes_lib_init() || !is_ndim_within_bound(ndim)) return;
     return update_gdim_list(&dimes_c->gdim_list, var_name, ndim, gdim);
 }
 
@@ -591,6 +568,10 @@ int common_dimes_get(const char *var_name,
         uint64_t *ub,
         void *data)
 {
+    if (!is_dimes_lib_init() || !is_ndim_within_bound(ndim)) {
+        return -EINVAL;
+    }
+
     return dimes_client_get(var_name, ver, size,
                 ndim, lb, ub, data);
 }
@@ -602,27 +583,35 @@ int common_dimes_put(const char *var_name,
         uint64_t *ub,
         void *data)
 {
+    if (!is_dimes_lib_init() || !is_ndim_within_bound(ndim)) {
+        return -EINVAL;
+    }
+
     return dimes_client_put(var_name, ver, size,
                 ndim, lb, ub, data);
 }
 
 int common_dimes_put_sync_all(void)
 {
+    if (!is_dimes_lib_init()) return -EINVAL;
     return dimes_client_put_sync_all();
 }
 
 int common_dimes_put_set_group(const char *group_name, int step)
 {
+    if (!is_dimes_lib_init()) return -EINVAL;
     return dimes_client_put_set_group(group_name, step);
 }
 
 int common_dimes_put_unset_group()
 {
+    if (!is_dimes_lib_init()) return -EINVAL;
     return dimes_client_put_unset_group();
 }
 
 int common_dimes_put_sync_group(const char *group_name, int step)
 {
+    if (!is_dimes_lib_init()) return -EINVAL;
     return dimes_client_put_sync_group(group_name, step);
 }
 #endif
