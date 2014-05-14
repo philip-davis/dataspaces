@@ -1907,12 +1907,6 @@ static int dcgrpc_dimes_get_ack(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 static int dimes_put_sync_with_timeout(float timeout_sec, struct dimes_storage_group *group)
 {
 	int err;
-	if (!dimes_c) {
-		uloga("%s(): ERROR library was not properly initialized!\n",
-				 __func__);
-		return -EINVAL;
-	}
-
 	int stay_in_poll_loop = 1;
 	struct timer tm;
 	double t1, t2;
@@ -1979,12 +1973,6 @@ static int dimes_put_sync_with_timeout(float timeout_sec, struct dimes_storage_g
 static int dimes_put_free_group(struct dimes_storage_group *group)
 {
     int err;
-    if (!dimes_c) {
-        uloga("%s(): ERROR library was not properly initialized!\n",
-                 __func__);
-        return -EINVAL;
-    }
-
     struct dimes_memory_obj *p, *t;
     list_for_each_entry_safe(p, t, &group->mem_obj_list,
                 struct dimes_memory_obj, entry) {
@@ -2054,21 +2042,6 @@ struct dimes_client* dimes_client_alloc(void * ptr)
     dimes_memory_init();
     init_gdim_list(&dimes_c->gdim_list);
 
-/*
-    uloga("sizeof(struct fetch_entry) %u bytes\n", sizeof(struct fetch_entry));
-    uloga("sizeof(struct dart_rdma_tran) %u bytes\n", sizeof(struct dart_rdma_tran));
-    uloga("sizeof(struct dart_rdma_op) %u bytes\n", sizeof(struct dart_rdma_op));
-    uloga("sizeof(struct rpc_cmd) %u bytes\n", sizeof(struct rpc_cmd));
-    uloga("sizeof(struct hdr_ss_info) %u bytes\n", sizeof(struct hdr_ss_info));
-    uloga("sizeof(struct hdr_obj_get) %u bytes\n", sizeof(struct hdr_obj_get));
-    uloga("sizeof(struct hdr_obj_put) %u bytes\n", sizeof(struct hdr_obj_put));
-    uloga("sizeof(struct hdr_dimes_put) %u bytes\n", sizeof(struct hdr_dimes_put));
-    uloga("sizeof(struct hdr_dimes_get) %u bytes\n", sizeof(struct hdr_dimes_get));
-    uloga("sizeof(struct hdr_dimes_get_ack) %u bytes\n", sizeof(struct hdr_dimes_get_ack));
-    uloga("sizeof(struct hdr_register) %u bytes\n", sizeof(struct hdr_register));
-    uloga("sizeof(struct bbox) %u bytes\n", sizeof(struct bbox));
-*/
-
 #ifdef TIMING_PERF
     timer_init(&tm_perf, 1);
     timer_start(&tm_perf);
@@ -2081,12 +2054,6 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 }
 
 void dimes_client_free(void) {
-	if (!dimes_c) {
-		uloga("%s(): ERROR library was not properly initialized!\n",
-				 __func__);
-		return;
-	}
-
     free_gdim_list(&dimes_c->gdim_list);
     free_sspace_dimes(dimes_c);
 	free(dimes_c);
@@ -2126,12 +2093,6 @@ int dimes_client_get(const char *var_name,
 
 	struct obj_data *od;
 	int err = -ENOMEM;
-
-	if (!dimes_c->dcg) {
-		uloga("%s(): ERROR library was not properly initialized!\n", __func__);
-		err =  -EINVAL;
-		goto err_out;
-	}
 
 	strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
 	odsc.name[sizeof(odsc.name)-1] = '\0';
@@ -2176,12 +2137,6 @@ int dimes_client_put(const char *var_name,
     memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
 
 	int err = -ENOMEM;
-	if (!dimes_c->dcg) {
-		uloga("%s(): ERROR library was not properly initialized!\n", __func__);
-		err = -EINVAL;
-		goto err_out;
-	}
-
 	strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
 	odsc.name[sizeof(odsc.name)-1] = '\0';
 

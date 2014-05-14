@@ -50,20 +50,6 @@ extern "C" {
  */
 
 /**
- * @brief Set types of memory layout for multi-dimensional matrix.
- *
- * Type of memory layout needs to be properly set before calling put/get APIs.
- * 
- * The following enum type defines the types of memory layout:
- * enum storage_type {row_major, column_major};
- *
- * @param[in] fst:  Type of memory layout for the matrix.
- *
- * @return: Void.
- */
-//void dimes_set_storage_type (int fst);
-
-/**
  * @brief Query the space to insert data specified by a geometric
  *    descriptor.
  * 

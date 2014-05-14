@@ -48,15 +48,15 @@ int main(int argc, char **argv)
 	int nprocs, rank;
 	MPI_Comm gcomm;
 
-    // Usage: ./test_reader type npapp npx npy npz spx spy spz timestep dims elem_size num_vars
+    // Usage: ./test_reader type npapp dims np[0] ... np[dims-1] sp[0] ... sp[dims-1] timestep appid elem_size num_vars
     // Command line arguments
     enum transport_type type; // DATASPACES or DIMES
     int npapp; // number of application processes
     int np[10] = {0};    //number of processes in each dimension
     uint64_t sp[10] = {0}; //block size per process in each dimesion
     int timestep; // number of iterations
-    int appid;
-    int dims; // number of dimensions: 2 or 3.
+    int appid; // application id
+    int dims; // number of dimensions
     size_t elem_size; // Optional: size of one element in the global array. Default value is 8 (bytes).
     int num_vars; // Optional: number of variables to be shared in the testing. Default value is 1.
 

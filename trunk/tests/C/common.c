@@ -132,18 +132,6 @@ int common_init(int num_peers, int appid, void* comm, const char* parameters) {
         return dspaces_init(num_peers, appid, comm, parameters);
 }
 
-void common_set_storage_type(int fst, enum transport_type type) {
-        if ( type == USE_DSPACES ) {
-            dspaces_set_storage_type(fst);
-        } else if (type == USE_DIMES) {
-#ifdef DS_HAVE_DIMES
-            dimes_set_storage_type(fst);
-#else
-            uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
-#endif
-        }
-}
-
 int common_rank() {
         return dspaces_rank();
 }

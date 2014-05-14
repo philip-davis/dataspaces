@@ -108,11 +108,11 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
 
 #ifdef DEBUG
 	char str_lb[100]="", str_ub[100]="";
-        for(i = 0; i < dims; i++){
-                sprintf(str_lb+strlen(str_lb), "%llu,", lb[i]);
-                sprintf(str_ub+strlen(str_ub), "%llu,", ub[i]);
-        }
-        uloga("Timestep=%u, %d read mnd (%s),(%s) from space\n", ts, rank_, str_lb, str_ub);
+    for(i = 0; i < dims; i++){
+        sprintf(str_lb+strlen(str_lb), "%llu,", lb[i]);
+        sprintf(str_ub+strlen(str_ub), "%llu,", ub[i]);
+    }
+    uloga("Timestep=%u, %d read mnd (%s),(%s) from space\n", ts, rank_, str_lb, str_ub);
 #endif
 
 	//allocate data
@@ -128,7 +128,7 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
 	}
 
 	MPI_Barrier(gcomm_);
-        tm_st = timer_read(&timer_);
+    tm_st = timer_read(&timer_);
 
 	for(i = 0; i < num_vars; i++){
 		sprintf(var_name, "mnd_%d", i);
@@ -146,22 +146,22 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
 	uloga("TIMING_PERF get_data ts %u peer %d time %lf\n",
             ts, common_rank(), tm_diff);
 #endif
-        if (rank_ == root) {
-                uloga("TS= %u TRANSPORT_TYPE= %s read MAX time= %lf\n",
-                        ts, transport_type_str_, tm_max);
-        }
+    if (rank_ == root) {
+        uloga("TS= %u TRANSPORT_TYPE= %s read MAX time= %lf\n",
+                ts, transport_type_str_, tm_max);
+    }
 
 	for (i = 0; i < num_vars; i++) {
 		sprintf(var_name, "mnd_%d", i);
 		check_data(var_name, data_tab[i],dims_size*elem_size_/sizeof(double),
 			rank_, ts);
-        	if (data_tab[i]) {
-            		free(data_tab[i]);
-        	}
-    	}
-    	free(data_tab);
+        if (data_tab[i]) {
+            free(data_tab[i]);
+        }
+    }
+    free(data_tab);
 
-        return 0;
+    return 0;
 }
 
 int test_get_run(enum transport_type type, int npapp, int ndims, int* npdim, uint64_t* spdim, int timestep, int appid, size_t elem_size, int num_vars, MPI_Comm gcomm)
@@ -173,12 +173,12 @@ int test_get_run(enum transport_type type, int npapp, int ndims, int* npdim, uin
 	
 	int i;
 	for(i = 0; i < ndims; i++){
-                np[i] = npdim[i];
+        np[i] = npdim[i];
 		sp[i] = spdim[i];
 	}
 
 	timer_init(&timer_, 1);
-        timer_start(&timer_);
+    timer_start(&timer_);
 
 	int app_id = appid;
 	double tm_st, tm_end;
@@ -188,7 +188,7 @@ int test_get_run(enum transport_type type, int npapp, int ndims, int* npdim, uin
 	common_get_transport_type_str(type, transport_type_str_);
 
 	MPI_Comm_rank(gcomm_, &rank_);
-        MPI_Comm_size(gcomm_, &nproc_);
+    MPI_Comm_size(gcomm_, &nproc_);
 
 #ifdef TIMING_PERF
 	uloga("TIMING_PERF init_dspaces peer %d time %lf\n", common_rank(), tm_end-tm_st);
@@ -213,5 +213,5 @@ int test_get_run(enum transport_type type, int npapp, int ndims, int* npdim, uin
 	uloga("TIMING_PERF fini_dspaces peer %d time= %lf\n", ds_rank, tm_end-tm_st);
 #endif
 
-        return 0;
+    return 0;
 }

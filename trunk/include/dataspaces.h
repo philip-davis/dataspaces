@@ -65,21 +65,6 @@ int dspaces_init(int num_peers, int appid, void *comm, const char *parameters);
  */
 void dspaces_finalize (void);
 
-// TODO: remove this public API function
-/**
- * @brief Set types of memory layout for multi-dimensional matrix.
- *
- * Type of memory layout needs to be properly set before calling put/get APIs.
- * 
- * The following enum type defines the types of memory layout:
- * enum storage_type {row_major, column_major};
- *
- * @param[in] fst:  Type of memory layout for the matrix.
- *
- * @return: Void.
- */
-//void dspaces_set_storage_type (int fst);
-
 /**
  * @brief Return the rank for current process.
  *

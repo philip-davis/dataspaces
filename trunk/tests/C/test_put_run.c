@@ -86,16 +86,16 @@ static void set_offset_nd(int rank, int dims)
 
 static int generate_nd(double *mnd, unsigned int ts, int dims)
 {
-        //double value = 1.0*(rank_) + 0.0001*ts;
+    //double value = 1.0*(rank_) + 0.0001*ts;
 	double value = ts;
-        int i;
+    int i;
 	uint64_t mnd_size = 1;
-        for(i = 0; i < dims; i++)
-                mnd_size *= sp[i];
+    for(i = 0; i < dims; i++)
+        mnd_size *= sp[i];
 	mnd_size = mnd_size * elem_size_ / sizeof(double);
-        for(i = 0; i < mnd_size; i++)
-                *(mnd+i) = value;
-        return 0;
+    for(i = 0; i < mnd_size; i++)
+        *(mnd+i) = value;
+    return 0;
 }
 
 static int couple_write_nd(unsigned int ts, int num_vars, enum transport_type type, int dims)
@@ -128,7 +128,7 @@ static int couple_write_nd(unsigned int ts, int num_vars, enum transport_type ty
 		sprintf(str_lb+strlen(str_lb), "%llu,", lb[i]);
 		sprintf(str_ub+strlen(str_ub), "%llu,", ub[i]);
 	}
-        uloga("Timestep=%u, %d write mnd (%s),(%s) into space\n", ts, rank_, str_lb, str_ub);
+    uloga("Timestep=%u, %d write mnd (%s),(%s) into space\n", ts, rank_, str_lb, str_ub);
 #endif
 
 	//allocate data
@@ -137,7 +137,7 @@ static int couple_write_nd(unsigned int ts, int num_vars, enum transport_type ty
 		data = allocate_nd(dims);
 		if(data == NULL){
 			uloga("%s(): allocate_nd() failed.\n", __func__);
-            		return -1; // TODO: free buffers
+            return -1; // TODO: free buffers
 		}
 		
 		generate_nd(data, ts, dims);
@@ -145,7 +145,7 @@ static int couple_write_nd(unsigned int ts, int num_vars, enum transport_type ty
 	}
 
 	MPI_Barrier(gcomm_);
-        tm_st = timer_read(&timer_);
+    tm_st = timer_read(&timer_);
 
 	for(i = 0; i < num_vars; i++){
 		sprintf(var_name, "mnd_%d", i);
@@ -157,7 +157,7 @@ static int couple_write_nd(unsigned int ts, int num_vars, enum transport_type ty
 	}
 	tm_end = timer_read(&timer_);
 
-	sleep(2);
+	sleep(1);
 	common_unlock_on_write("mnd_lock", &gcomm_);
 	//common_unlock_on_write("mnd_lock", NULL);	//Test dspaces_barrier
 
@@ -168,19 +168,19 @@ static int couple_write_nd(unsigned int ts, int num_vars, enum transport_type ty
 	uloga("TIMING_PERF put_data ts %u peer %d time %lf\n",
             ts, common_rank(), tm_diff);
 #endif
-        if (rank_ == root) {
-                uloga("TS= %u TRANSPORT_TYPE= %s write MAX time= %lf\n",
-                        ts, transport_type_str_, tm_max);
-        }
+    if (rank_ == root) {
+        uloga("TS= %u TRANSPORT_TYPE= %s write MAX time= %lf\n",
+                ts, transport_type_str_, tm_max);
+    }
 
 	for (i = 0; i < num_vars; i++) {
-        	if (data_tab[i]) {
-            		free(data_tab[i]);
-        	}
-    	}
-    	free(data_tab);
+        if (data_tab[i]) {
+            free(data_tab[i]);
+        }
+    }
+    free(data_tab);
 
-        return 0;
+    return 0;
 }
 
 int test_put_run(enum transport_type type, int npapp, int ndims, int* npdim, 
@@ -194,8 +194,8 @@ int test_put_run(enum transport_type type, int npapp, int ndims, int* npdim,
 
 	int i;
 	for(i = 0; i < ndims; i++){
-                np[i] = npdim[i];
-		sp[i] = spdim[i];
+        np[i] = npdim[i];
+        sp[i] = spdim[i];
 	}
 
 	timer_init(&timer_, 1);
