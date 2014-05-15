@@ -132,10 +132,11 @@ struct dht {
 };
 
 enum sspace_hash_version {
-    ssd_hash_version_v1 = 0, // (default) decompose the global data domain
+    ssd_hash_version_v1 = 1, // (default) decompose the global data domain
                              //  using hilbert SFC
     ssd_hash_version_v2, // decompose the global data domain using
                          // recursive bisection of the longest dimension   
+    _ssd_hash_version_count,
 };
 
 /*
@@ -167,6 +168,7 @@ struct hdr_ss_info {
     int     num_dims;
     struct  coord dims;
     int     num_space_srv;
+    unsigned char hash_version;
 } __attribute__ ((__packed__));
 
 /* Header structure for obj_get requests. */
@@ -226,7 +228,7 @@ struct hdr_bin_result {
 	unsigned char		pad[210]; // max is sizeof(struct rpc_cmd.pad == 218)
 } __attribute__((__packed__));
 
-struct sspace* ssd_alloc(struct bbox *, int, int);
+struct sspace* ssd_alloc(struct bbox *, int, int, enum sspace_hash_version);
 int ssd_init(struct sspace *, int);
 void ssd_free(struct sspace *);
 void ssd_add_entry(struct dht_entry *, struct obj_descriptor *);

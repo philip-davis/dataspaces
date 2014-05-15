@@ -84,9 +84,9 @@ enum lock_action {
 };
 
 struct dsg_lock {
-	struct list_head	lk_entry;
+        struct list_head	lk_entry;
 
-	char			lk_name[LOCK_NAME_SIZE];
+        char			lk_name[LOCK_NAME_SIZE];
 
         int                     rd_notify_cnt; 
         int                     wr_notify_cnt;
@@ -119,6 +119,7 @@ static struct {
         int max_versions;
         int max_readers;
         int lock_type;		/* 1 - generic, 2 - custom */
+        int hash_version;   /* 1 - ssd_hash_version_v1, 2 - ssd_hash_version_v2 */
 } ds_conf;
 
 static struct {
@@ -126,10 +127,11 @@ static struct {
         int             *pval;
 } options[] = {
         {"ndim",                &ds_conf.ndim},
-        {"dims",		&ds_conf.dims},
+        {"dims",                &ds_conf.dims},
         {"max_versions",        &ds_conf.max_versions},
         {"max_readers",         &ds_conf.max_readers},
-        {"lock_type",		&ds_conf.lock_type}
+        {"lock_type",           &ds_conf.lock_type},
+        {"hash_version",        &ds_conf.hash_version}, 
 };
 
 static void eat_spaces(char *line)
@@ -231,15 +233,14 @@ static inline struct ds_gspace * dsg_ref_from_rpc(struct rpc_server *rpc_s)
 static int init_sspace(struct bbox *default_domain, struct ds_gspace *dsg_l)
 {
     int err = -ENOMEM;
-    dsg_l->ssd = ssd_alloc(default_domain, dsg_l->ds->num_sp, ds_conf.max_versions);
+    dsg_l->ssd = ssd_alloc(default_domain, dsg_l->ds->num_sp,
+                            ds_conf.max_versions, ds_conf.hash_version);
     if (!dsg_l->ssd)
-        /* Yes, I don't free resources here, but we should
-           fail anyway. */
-        return err;
+        goto err_out;
 
     err = ssd_init(dsg_l->ssd, ds_get_rank(dsg_l->ds));
     if (err < 0)
-        return err;
+        goto err_out;
 
     dsg_l->default_gdim.ndim = ds_conf.ndim;
     int i;
@@ -249,6 +250,9 @@ static int init_sspace(struct bbox *default_domain, struct ds_gspace *dsg_l)
 
     INIT_LIST_HEAD(&dsg_l->sspace_list);
     return 0;
+ err_out:
+    uloga("%s(): ERROR failed\n", __func__);
+    return err;
 }
 
 static int free_sspace(struct ds_gspace *dsg_l)
@@ -313,7 +317,8 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
 
     ssd_entry = malloc(sizeof(struct sspace_list_entry));
     memcpy(&ssd_entry->gdim, &gdim, sizeof(struct global_dimension));
-    ssd_entry->ssd = ssd_alloc(&domain, dsg_l->ds->num_sp, ds_conf.max_versions);     
+    ssd_entry->ssd = ssd_alloc(&domain, dsg_l->ds->num_sp, ds_conf.max_versions,
+                            ds_conf.hash_version);     
     if (!ssd_entry->ssd) {
         uloga("%s(): ssd_alloc failed\n", __func__);
         return dsg_l->ssd;
@@ -326,8 +331,10 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
     }
 
 #ifdef DEBUG
+/*
     uloga("%s(): add new shared space ndim= %d global dimension= %llu %llu %llu\n",
         __func__, gdim.ndim, gdim.sizes.c[0], gdim.sizes.c[1], gdim.sizes.c[2]);
+*/
 #endif
 
     list_add(&ssd_entry->entry, &dsg_l->sspace_list);
@@ -1959,6 +1966,7 @@ static int dsgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         hsi->dims.c[i] = ds_conf.dims.c[i]; 
     }
 	hsi->num_space_srv = dsg->ds->size_sp;
+    hsi->hash_version = ds_conf.hash_version;
 
 	err = rpc_send(rpc_s, peer, msg);
 	if (err == 0)
@@ -1984,16 +1992,27 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         ds_conf.max_versions = 1;
         ds_conf.max_readers = 1;
         ds_conf.lock_type = 1;
+        ds_conf.hash_version = ssd_hash_version_v1;
 
         err = parse_conf(conf_name);
         if (err < 0) {
             uloga("%s(): ERROR failed to load config file '%s'.", __func__, conf_name);
             goto err_out;
-        } else uloga("%s(): config file '%s' loaded.\n", __func__, conf_name);
+        }
 
+        // Check number of dimension
         if (ds_conf.ndim > BBOX_MAX_NDIM) {
             uloga("%s(): ERROR maximum number of array dimension is %d but ndim is %d"
                 " in file '%s'\n", __func__, BBOX_MAX_NDIM, ds_conf.ndim, conf_name);
+            err = -ENOMEM;
+            goto err_out;
+        }
+
+        // Check hash version
+        if ((ds_conf.hash_version < ssd_hash_version_v1) ||
+            (ds_conf.hash_version >= _ssd_hash_version_count)) {
+            uloga("%s(): ERROR unknown hash version %d in file '%s'\n",
+                __func__, ds_conf.hash_version, conf_name);
             err = -ENOMEM;
             goto err_out;
         }
