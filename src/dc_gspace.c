@@ -1454,6 +1454,7 @@ static int dcgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	dcg->ss_info.num_space_srv = hsi->num_space_srv;
     dcg->ss_domain.num_dims = hsi->num_dims;
     dcg->default_gdim.ndim = hsi->num_dims;
+    dcg->hash_version = hsi->hash_version;
 	int i;
 	for(i = 0; i < hsi->num_dims; i++){
 		dcg->ss_domain.lb.c[i] = 0;
@@ -1539,8 +1540,8 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
 
         INIT_LIST_HEAD(&dcg_l->locks_list);
         init_gdim_list(&dcg_l->gdim_list);    
-
         qc_init(&dcg_l->qc);
+        dcg_l->hash_version = ssd_hash_version_v1; // set default hash version
 
 #ifdef TIMING_PERF
         timer_init(&tm_perf, 1);

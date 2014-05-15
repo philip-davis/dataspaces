@@ -785,6 +785,7 @@ struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max
             free(bb);
         }
 
+/*
         for (i = 0; i < ssd->dht->num_entries; i++) {
             printf("dht entry %d size_bb_tab= %d num_bbox= %d\n", i,
                 ssd->dht->ent_tab[i]->size_bb_tab,
@@ -794,6 +795,7 @@ struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max
             }        
             printf("\n");
         }
+*/
 
         ssd->hash_version = ssd_hash_version_v2;        
         return ssd;
@@ -850,7 +852,8 @@ int ssd_hash_v2(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_t
 /*
   Allocate the shared space structure.
 */
-struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions)
+struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions,
+    enum sspace_hash_version hash_version)
 {
     struct sspace *ss = NULL;
 
@@ -862,15 +865,22 @@ struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions
     tm_st = timer_read(&tm);
 #endif
 
-#ifdef DS_SSD_HASH_V2
-    ss = ssd_alloc_v2(bb_domain, num_nodes, max_versions);
-#else
-    ss = ssd_alloc_v1(bb_domain, num_nodes, max_versions);
-#endif
+    switch (hash_version) {
+    case ssd_hash_version_v1:
+        ss = ssd_alloc_v1(bb_domain, num_nodes, max_versions);
+        break;
+    case ssd_hash_version_v2:
+        ss = ssd_alloc_v2(bb_domain, num_nodes, max_versions);
+        break;
+    default:
+        uloga("%s(): ERROR unknown shared space hash version %u\n",
+            __func__, hash_version);
+        break;
+    }
 
 #ifdef TIMING_SSD 
     tm_end = timer_read(&tm);
-    uloga("%s(): time %lf seconds\n", __func__, tm_end-tm_st);
+    uloga("%s(): hash_version v%u time %lf seconds\n", __func__, hash_version, tm_end-tm_st);
 #endif
 
     return ss;
@@ -886,7 +896,8 @@ void ssd_free(struct sspace *ss)
         ssd_free_v2(ss);
         break;
     default:
-        uloga("%s(): ERROR unknown ss->hash_version\n", __func__);
+        uloga("%s(): ERROR unknown shared space hash version %u\n",
+            __func__, ss->hash_version);
         break;
     }
 }
@@ -914,14 +925,15 @@ int ssd_hash(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[
         ret = ssd_hash_v2(ss, bb, de_tab);
         break;
     default:
-        uloga("%s(): ERROR unknown ss->hash_version\n", __func__);
+        uloga("%s(): ERROR unknown shared space hash version %u\n",
+            __func__, ss->hash_version);
         ret = 0;
         break;
     }
 
 #ifdef TIMING_SSD
     tm_end = timer_read(&tm);
-    uloga("%s(): time %lf seconds\n", __func__, tm_end-tm_st);
+    uloga("%s(): hash_version v%u time %lf seconds\n", __func__, ss->hash_version, tm_end-tm_st);
 #endif
     return ret;
 }

@@ -54,15 +54,19 @@ static struct timer tm_perf;
 
 static int init_sspace_dimes(struct dimes_client *d)
 {
+    int err = -ENOMEM;
     int max_versions = 1;
-    d->ssd = ssd_alloc(&d->domain, d->dcg->ss_info.num_space_srv, max_versions);
+    d->ssd = ssd_alloc(&d->domain, d->dcg->ss_info.num_space_srv, max_versions,
+                    d->dcg->hash_version);
     if (!d->ssd) {
-        uloga("%s(): ERROR ssd_alloc() failed!\n", __func__);
-        return -1;
+        goto err_out;
     }
 
     INIT_LIST_HEAD(&d->sspace_list);
     return 0;
+ err_out:
+    uloga("%s(): ERROR failed\n", __func__);
+    return err;
 }
 
 static int free_sspace_dimes(struct dimes_client *d)
@@ -129,15 +133,18 @@ static struct sspace* lookup_sspace_dimes(struct dimes_client *d, const char* va
     ssd_entry = malloc(sizeof(struct sspace_list_entry));
     memcpy(&ssd_entry->gdim, &gdim, sizeof(struct global_dimension));
     int max_versions = 1;
-    ssd_entry->ssd = ssd_alloc(&domain, d->dcg->ss_info.num_space_srv, max_versions);
+    ssd_entry->ssd = ssd_alloc(&domain, d->dcg->ss_info.num_space_srv, max_versions,
+                            d->dcg->hash_version);
     if (!ssd_entry->ssd) {
         uloga("%s(): ERROR ssd_alloc() failed\n", __func__);
         return d->ssd;
     }
 
 #ifdef DEBUG
+/*
     uloga("%s(): add new shared space ndim= %d global dimension= %llu %llu %llu\n",
      __func__, gdim.ndim, gdim.sizes.c[0], gdim.sizes.c[1], gdim.sizes.c[2]);
+*/
 #endif
 
     list_add(&ssd_entry->entry, &d->sspace_list);
@@ -156,12 +163,6 @@ struct dimes_client_option {
     int max_num_concurrent_rdma_read_op;
 };
 static struct dimes_client_option options;
-
-static void lib_exit_d(void)
-{
-	dcg_free(dimes_c->dcg);
-	exit(EXIT_FAILURE);
-}
 
 #define DIMES_WAIT_COMPLETION(x)				\
 	do {							\
@@ -969,11 +970,6 @@ static int dimes_ss_info(int *ndim)
     }
 	
 	*ndim = dimes_c->dcg->ss_info.num_dims;
-    err = init_sspace_dimes(dimes_c);
-    if (err < 0) {
-        goto err_out;
-    }
-
 	return 0;
 err_out:
 	ERROR_TRACE();
@@ -2019,8 +2015,7 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 	dimes_c = calloc(1, sizeof(*dimes_c));
 	dimes_c->dcg = (struct dcg_space*)ptr;
 	if (!dimes_c->dcg) {
-		uloga("%s(): ERROR failed to initialize.\n", __func__);
-		return NULL; 
+        goto err_free;
 	}
 
     syncop_init();
@@ -2034,8 +2029,13 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 	err = dimes_ss_info(&num_dims);
 	if (err < 0) {
 		uloga("%s(): ERROR failed to obtain space info\n", __func__);
-		return NULL;
+        goto err_free;
 	}
+
+    err = init_sspace_dimes(dimes_c);
+    if (err < 0) {
+        goto err_free;
+    }
 
 	storage_init();
 	dart_rdma_init(RPC_S);
@@ -2051,6 +2051,10 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 	uloga("%s(): OK.\n", __func__);
 #endif
 	return dimes_c;
+ err_free:
+    if (dimes_c) free(dimes_c);
+    dimes_c = NULL;
+    return NULL;
 }
 
 void dimes_client_free(void) {
