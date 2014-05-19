@@ -13,6 +13,7 @@ extern "C" {
 #include <errno.h>
 
 #include <pami.h>
+#include "mpi.h"
 
 #include "config.h"
 #include "list.h"
