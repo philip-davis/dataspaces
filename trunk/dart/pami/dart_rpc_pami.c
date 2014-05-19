@@ -1,6 +1,6 @@
 #include "dart_rpc_pami.h"
 #include "debug.h"
-#include "mpi.h"
+//#include "mpi.h"
 
 #define ALIGNMENT 128
 typedef struct{

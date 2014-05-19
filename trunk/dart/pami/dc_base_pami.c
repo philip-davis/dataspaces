@@ -313,13 +313,16 @@ struct dart_client *dc_alloc(int num_peers, int appid, void* comm, void *dart_re
         struct dart_client *dc;
         size_t size;
         int err;
+	MPI_Comm *dc_comm = malloc(sizeof(MPI_Comm));
 
         dc = calloc(1, sizeof(*dc));
         if(!dc)
                 return NULL;
         dc->dart_ref = dart_ref;
         dc->cp_in_job = num_peers;
-	dc->comm = comm;
+	
+	MPI_Comm_dup(*(MPI_Comm*)comm, dc_comm);
+	dc->comm = dc_comm;
 
         //Register rpc msg handler functions
         rpc_add_service(cn_register, dcrpc_register);
