@@ -29,9 +29,10 @@ struct dart_client {
 	void *dart_ref;
 
 	int num_posted;
+	void *comm;
 };				// //
 
-#define dc_barrier(dc)          rpc_barrier(dc->rpc_s)
+//#define dc_barrier(dc)          rpc_barrier(dc->rpc_s)
 
 static inline struct node_id *dc_get_peer(struct dart_client *dc, int n)
 {
