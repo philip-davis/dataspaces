@@ -162,7 +162,7 @@ int common_dspaces_peers(void)
 	else return -1;
 }
 
-int common_dspaces_get_num_space_peers(void)
+int common_dspaces_get_num_space_server(void)
 {
 	if (dcg)
 		return dcg_get_num_space_peers(dcg);
@@ -274,11 +274,6 @@ int common_dspaces_get(const char *var_name,
             __func__, err);
 
     return err;
-}
-
-int common_dspaces_get_versions(int **p_versions)
-{
-	return dcg_get_versions(p_versions);
 }
 
 int common_dspaces_put(const char *var_name, 
@@ -530,25 +525,6 @@ void common_dspaces_finalize(void)
     
     dcg_free(dcg);
     dcg = 0;
-}
-
-int common_dspaces_collect_timing(double time, double *sum_ptr)
-{
-
-	if (!is_dspaces_lib_init()) {
-		return -EINVAL;
-	}
-
-	return dcg_collect_timing(time, sum_ptr);
-}
-
-int common_dspaces_num_space_srv(void)
-{
-	if (!is_dspaces_lib_init()) {
-		return -EINVAL;
-	}
-
-	return dcg_get_num_space_srv(dcg);	
 }
 
 #ifdef DS_HAVE_DIMES
