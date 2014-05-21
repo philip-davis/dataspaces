@@ -43,7 +43,6 @@
 #include "config.h"
 
 int common_dspaces_init(int num_peers, int appid, void *comm, const char *parameters);
-//void common_dspaces_set_storage_type (int fst);
 int common_dspaces_rank(void);
 int common_dspaces_peers(void);
 void common_dspaces_barrier(void);
@@ -58,7 +57,6 @@ int common_dspaces_get (const char *var_name,
         uint64_t *lb, 
         uint64_t *ub,
         void *data);
-int common_dspaces_get_versions(int **);
 int common_dspaces_put (const char *var_name, 
         unsigned int ver, int size,
         int ndim,
@@ -67,13 +65,9 @@ int common_dspaces_put (const char *var_name,
         void *data);
 int common_dspaces_put_sync(void);
 void common_dspaces_finalize (void);
-
-/* CCGrid'11 demo */
-int common_dspaces_collect_timing(double, double *);
-int common_dspaces_num_space_srv(void);
+int common_dspaces_get_num_space_server(void);
 
 #ifdef DS_HAVE_DIMES
-//void common_dimes_set_storage_type(int fst);
 void common_dimes_define_gdim(const char *var_name, int ndim, uint64_t *gdim);
 int common_dimes_get(const char *var_name,
         unsigned int ver, int size,

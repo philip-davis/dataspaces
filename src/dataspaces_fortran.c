@@ -84,14 +84,6 @@ void FC_FUNC(dspaces_init, DSPACES_INIT)(int *num_peers, int *appid, void *comm,
 	*err = common_dspaces_init(*num_peers, *appid, &c_comm, NULL);
 }
 
-// TODO: remove it
-/*
-void FC_FUNC(dspaces_set_storage_type, DSPACES_SET_STORAGE_TYPE) (int *fst)
-{
-	common_dspaces_set_storage_type(*fst);
-}
-*/
-
 void FC_FUNC(dspaces_rank, DSPACES_RANK)(int *rank)
 {
 	*rank = common_dspaces_rank();
@@ -102,9 +94,9 @@ void FC_FUNC(dspaces_peers, DSPACES_PEERS)(int *peers)
 	*peers = common_dspaces_peers();
 }
 
-void FC_FUNC(dspaces_get_num_space_peers, DSPACES_GET_NUM_SPACE_PEERS)(int *peers)
+void FC_FUNC(dspaces_get_num_space_server, DSPACES_GET_NUM_SPACE_SERVER)(int *peers)
 {
-	*peers = common_dspaces_get_num_space_peers();
+	*peers = common_dspaces_get_num_space_server();
 }
 
 void FC_FUNC(dspaces_barrier, DSPACES_BARRIER)(void)

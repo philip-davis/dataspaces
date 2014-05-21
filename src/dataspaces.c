@@ -104,9 +104,9 @@ int dspaces_peers(void)
 	return common_dspaces_peers();
 }
 
-int dspaces_get_num_space_peers(void)
+int dspaces_get_num_space_server(void)
 {
-	return common_dspaces_get_num_space_peers();
+	return common_dspaces_get_num_space_server();
 }
 
 void dspaces_barrier(void)
@@ -164,16 +164,6 @@ int dspaces_put_sync(void)
 void dspaces_finalize(void)
 {
 	common_dspaces_finalize();
-}
-
-int dspaces_collect_timing(double time, double *sum_ptr)
-{
-	return common_dspaces_collect_timing(time, sum_ptr);
-}
-
-int dspaces_num_space_srv(void)
-{
-	return common_dspaces_num_space_srv();
 }
 
 #ifdef DS_HAVE_DIMES
