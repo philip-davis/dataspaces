@@ -1483,13 +1483,19 @@ void init_gdim_list(struct list_head *gdim_list)
 
 void free_gdim_list(struct list_head *gdim_list) {
     if (!gdim_list) return;
+    int cnt = 0;
     struct gdim_list_entry *e, *t;
     list_for_each_entry_safe(e, t, gdim_list, struct gdim_list_entry, entry)
     {
         list_del(&e->entry);
         free(e->var_name);
         free(e);
+        cnt++;
     }
+
+#ifdef DEBUG
+    uloga("%s(): number of user-defined global dimension is %d\n", __func__, cnt);
+#endif
 } 
 
 struct gdim_list_entry* lookup_gdim_list(struct list_head *gdim_list,
