@@ -547,4 +547,21 @@ int dart_rdma_get_memregion_from_cmd(struct dart_rdma_mem_handle *mem_hndl,
 	return 0;
 }
 
+int dart_rdma_perform_reads_local(int tran_id)
+{
+    if (!drh) {
+        uloga("%s(): dart rdma not init!\n", __func__);
+        return -1;
+    }
+
+    struct dart_rdma_tran *tran = NULL;
+    tran = common_dart_rdma_find_tran(tran_id, dart_rdma_tran_type_read);
+    if (tran == NULL) {
+        return -1;
+    }    
+
+    dart_perform_local_copy(tran); 
+    return 0;
+}
+
 #endif

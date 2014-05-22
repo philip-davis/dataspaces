@@ -226,7 +226,11 @@ do {								\
 
 static int is_peer_on_same_core(struct node_id *peer)
 {
+#ifdef DS_HAVE_DIMES_SHMEM
+    return 0;
+#else
 	return (peer->ptlmap.id == DIMES_CID);
+#endif
 }
 
 #ifdef DS_HAVE_DIMES_SHMEM
@@ -1897,6 +1901,10 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
     list_for_each_entry(fetch, &qte->fetch_list, struct fetch_entry, entry)
     {
         if (is_peer_on_same_core(fetch->read_tran->remote_peer)) {
+#ifdef DEBUG
+            uloga("%s(): peer %d fetch from peer %d on local core\n", __func__,
+                DIMES_CID, fetch->read_tran->remote_peer->ptlmap.id);
+#endif
             // Data on local peer (itself), fetch directly
             struct dimes_memory_obj *mem_obj =
                                     storage_lookup_obj(fetch->remote_sync_id);
@@ -1923,9 +1931,11 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
         }
 #ifdef DS_HAVE_DIMES_SHMEM 
         else if (options.enable_shmem_buffer &&
-                   is_peer_on_same_node(fetch->read_tran->remote_peer)) {
-            printf("%s(): peer %d fetch from peer %d on local node\n", __func__,
+                 is_peer_on_same_node(fetch->read_tran->remote_peer)) {
+#ifdef DEBUG
+            uloga("%s(): peer %d fetch from peer %d on local node\n", __func__,
                 DIMES_CID, fetch->read_tran->remote_peer->ptlmap.id);
+#endif
 
             // Data on the same node, and is in the shared memory segment
             struct shared_memory_obj *shmem_obj =
@@ -2574,7 +2584,6 @@ int dimes_client_init_shmem(void *comm, size_t shmem_obj_size)
         // (1) create node-local shared memory segment
         // (2) divide shared memory segment into regions,
         // and assign regions to node-local peers
-        // TODO: make the size of shared memory obj configurable
         struct shared_memory_obj *shmem_obj =
                 create_shmem_obj(SHMEM_OBJ_PATH, shmem_obj_size); 
         if (!shmem_obj) {

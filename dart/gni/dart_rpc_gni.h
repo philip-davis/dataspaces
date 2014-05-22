@@ -494,4 +494,8 @@ struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *pe
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 
+void rpc_server_find_local_peer(struct rpc_server *rpc_s,
+    struct node_id **peer_tab, int *num_local_peer, int peer_tab_size);
+uint32_t rpc_server_get_nid(struct rpc_server *rpc_s);
+
 #endif
