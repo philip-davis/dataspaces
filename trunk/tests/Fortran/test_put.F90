@@ -68,7 +68,7 @@ program test_put
   call MPI_COMM_SPLIT(MPI_COMM_WORLD, color, key, comm, err)
   call MPI_COMM_RANK(comm, mpi_rank, err)
 
-  call dspaces_init(npapp, 1, err)
+  call dspaces_init(npapp, 1,comm, err)
   call dspaces_rank(rank)
   call dspaces_peers(nproc)
   call ftimer_init()
@@ -236,6 +236,9 @@ subroutine couple_write_3d(comm)
   integer :: M = -3, N = 5
   integer :: err
   integer :: comm
+  integer (KIND=8) lbb(3)
+  integer (KIND=8) ubb(3)
+
 
   m3d(spy,spx,spz) = -m3d(spy,spx,spz)
 
@@ -253,10 +256,25 @@ subroutine couple_write_3d(comm)
   !! Version number is forced to 0 (saves some memory space).
   call ftimer_read(tm_start)
 
+!!  call dspaces_put("/m3d_with_path_and_some_more_chars/value", ts-ts, 8, &
+!!       off_x, off_y, off_z, &
+!!       off_x+spx-1, off_y+spy-1, off_z+spz-1, &
+!!       m3d, err)
+
+  
+  lbb(1) = off_x
+  lbb(2) = off_y
+  lbb(3) = off_z
+
+  ubb(1) = off_x+spx-1
+  ubb(2) = off_y+spy-1
+  ubb(3) = off_z+spz-1
+
   call dspaces_put("/m3d_with_path_and_some_more_chars/value", ts-ts, 8, &
-       off_x, off_y, off_z, &
-       off_x+spx-1, off_y+spy-1, off_z+spz-1, &
+       3, lbb, ubb, &
        m3d, err)
+
+
 
   call ftimer_read(tm_end)
   tm_tab(1) = tm_end - tm_start
