@@ -2651,6 +2651,28 @@ int rpc_receivev(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf 
 	return 0;
 }
 
+uint32_t rpc_server_get_nid(struct rpc_server *rpc_s)
+{
+    return rpc_s->ptlmap.nid;
+}
+
+void rpc_server_find_local_peers(struct rpc_server *rpc_s,
+    struct node_id **peer_tab, int *num_local_peer, int peer_tab_size)
+{
+    // find all peers (include current peer itself) that reside on the
+    // same compute node as current peer
+    int i, j;
+    for (i = 0, j = 0; i < rpc_s->num_peers; i++) {
+        //printf("%s(): num_peers %d local dart_id %d local nid %u remote dart_id %d remote nid %u\n",
+        //    __func__, rpc_s->num_peers, rpc_s->ptlmap.id, rpc_s->ptlmap.nid, rpc_s->peer_tab[i].ptlmap.id,
+        //    rpc_s->peer_tab[i].ptlmap.nid); 
+        if (rpc_s->ptlmap.nid == rpc_s->peer_tab[i].ptlmap.nid) {
+            peer_tab[j++] = &(rpc_s->peer_tab[i]);
+        }
+    } 
+    *num_local_peer = j;
+}
+
 // for debug:
 void rpc_smsg_check(struct rpc_server *rpc_s){
   printf("Rank %d: rpc_s->local_smsg_attr[type(%d),maxcredit(%d),maxsize(%d),buffer(%d),buff_size(%d), mem_hndl(%ld,%ld), offset(%d)]\n", rpc_s->ptlmap.id, rpc_s->local_smsg_attr.msg_type, rpc_s->local_smsg_attr.mbox_maxcredit, rpc_s->local_smsg_attr.msg_maxsize, rpc_s->local_smsg_attr.msg_buffer, rpc_s->local_smsg_attr.buff_size, rpc_s->local_smsg_attr.mem_hndl.qword1, rpc_s->local_smsg_attr.mem_hndl.qword2, rpc_s->local_smsg_attr.mbox_offset);
