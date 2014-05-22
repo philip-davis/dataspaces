@@ -552,8 +552,11 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 */
 
 
-dc_barrier(struct dart_client *dc){
-        MPI_Barrier(*(MPI_Comm *)dc->comm);
+int dc_barrier(struct dart_client *dc){
+	if(dc->comm!=NULL)
+	        MPI_Barrier(dc->comm);
+	else
+		rpc_barrier(dc->rpc_s);
 }
 
 
@@ -586,12 +589,12 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *comm, void *dart_re
 
 //	dc->comm = comm;
 	MPI_Comm dup_comm;
-	err = MPI_Comm_dup(*(MPI_Comm *)comm, &dup_comm);
+	err = MPI_Comm_dup(*(MPI_Comm *)comm, &dc->comm);
 	if(err<0){
 		printf("MPI_Comm_dup failed\n");	
 		goto err_out;
 	}
-        dc->comm = &dup_comm;
+//        dc->comm = &dup_comm;
 
 
 	dc->rpc_s = rpc_server_init(0, NULL, 0, 10, num_peers, dc, DART_CLIENT);

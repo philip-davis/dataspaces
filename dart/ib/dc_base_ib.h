@@ -2,6 +2,7 @@
 #define __DC_BASE_IB_H_
 
 #include "dart_rpc_ib.h"
+#include "mpi.h"
 
 struct dart_client {
 	struct rpc_server *rpc_s;
@@ -29,7 +30,7 @@ struct dart_client {
 	void *dart_ref;
 
 	int num_posted;
-	void *comm;
+	MPI_Comm comm;
 };				// //
 
 //#define dc_barrier(dc)          rpc_barrier(dc->rpc_s)
