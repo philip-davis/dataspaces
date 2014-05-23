@@ -10,6 +10,7 @@ have_max_num_array_dimension=no
 have_dimes_rdma_buffer_size=no
 have_dimes_rdma_max_num_concurrent_read=no
 cond_configure_options=yes
+have_build_for_stampede=no
 
 AC_ARG_WITH(max-num-array-dimension,
 	[AS_HELP_STRING([--with-max-num-array-dimension=integer value],
@@ -29,6 +30,13 @@ AC_ARG_WITH(dimes-rdma-max-num-concurrent-read,
 	[have_dimes_rdma_max_num_concurrent_read=yes;
 	 DIMES_RDMA_MAX_NUM_CONCURRENT_READ="$withval";])
 
+AC_ARG_WITH(build-for-stampede,
+        [AS_HELP_STRING([--with-build-for-stampede=integer value],
+                [This option is used to configure DataSpaces for Stampede cluster. Users must Set this value to 1 while configure. The default vaule is 0.])],
+        [have_build_for_stampede=yes;
+         BUILD_FOR_STAMPEDE="$withval";])
+
+
 if test "x$have_max_num_array_dimension" = "xyes"; then
     AC_DEFINE_UNQUOTED(BBOX_MAX_NDIM,$MAX_NUM_ARRAY_DIMENSION,[Maximum number of array dimension])
 else
@@ -40,6 +48,13 @@ if test "x$have_dimes_rdma_buffer_size" = "xyes"; then
 else
     AC_DEFINE_UNQUOTED(DIMES_RDMA_BUFFER_SIZE,64,[Size of rdma memory that can be used for data writes/reads in DIMES])
 fi
+
+if test "x$have_build_for_stampede" = "xyes"; then
+    AC_DEFINE_UNQUOTED(BUILD_FOR_STAMPEDE,$BUILD_FOR_STAMPEDE,[Build for Stampede option])
+else
+    AC_DEFINE_UNQUOTED(BUILD_FOR_STAMPEDE,3,[Build for Stampede option])
+fi
+
 
 if test "x$have_dimes_rdma_max_num_concurrent_read" = "xyes"; then
     AC_DEFINE_UNQUOTED(DIMES_RDMA_MAX_NUM_CONCURRENT_READ,$DIMES_RDMA_MAX_NUM_CONCURRENT_READ,[Max number of concurrent rdma read operations that can be issued by DIMES in the data fetching process])

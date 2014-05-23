@@ -862,7 +862,11 @@ char *ip_search(void)
 	intr = ifc.ifc_len / sizeof(struct ifreq);
 	while(intr-- > 0 && ioctl(sfd, SIOCGIFADDR, (char *) &buf[intr]));
 	close(sfd);
-	return inet_ntoa(((struct sockaddr_in *) (&buf[intr].ifr_addr))->sin_addr);
+	if(BUILD_FOR_STAMPEDE)
+		return inet_ntoa(((struct sockaddr_in *) (&buf[intr-1].ifr_addr))->sin_addr);
+	else
+                return inet_ntoa(((struct sockaddr_in *) (&buf[intr].ifr_addr))->sin_addr);
+
 }
 
 // Check if the format of IP address is correct. (done)
