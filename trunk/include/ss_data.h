@@ -231,7 +231,6 @@ struct hdr_bin_result {
 struct sspace* ssd_alloc(struct bbox *, int, int, enum sspace_hash_version);
 int ssd_init(struct sspace *, int);
 void ssd_free(struct sspace *);
-void ssd_add_entry(struct dht_entry *, struct obj_descriptor *);
 int ssd_copy(struct obj_data *, struct obj_data *);
 // TODO: ssd_copyv is not supported yet
 int ssd_copyv(struct obj_data *, struct obj_data *);

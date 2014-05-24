@@ -209,7 +209,7 @@ int test_put_run(enum transport_type type, int npapp, int ndims, int* npdim,
 	common_get_transport_type_str(type, transport_type_str_);
 
 	MPI_Comm_rank(gcomm_, &rank_);
-        MPI_Comm_size(gcomm_, &nproc_);
+    MPI_Comm_size(gcomm_, &nproc_);
 
 #ifdef TIMING_PERF
 	uloga("TIMING_PERF init_dspaces peer %d time %lf\n", common_rank(), tm_end-tm_st);

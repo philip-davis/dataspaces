@@ -55,7 +55,7 @@ static struct timer tm_perf;
 static int init_sspace_dimes(struct dimes_client *d)
 {
     int err = -ENOMEM;
-    int max_versions = 1;
+    const int max_versions = 1;
     d->ssd = ssd_alloc(&d->domain, d->dcg->ss_info.num_space_srv, max_versions,
                     d->dcg->hash_version);
     if (!d->ssd) {
@@ -132,7 +132,7 @@ static struct sspace* lookup_sspace_dimes(struct dimes_client *d, const char* va
 
     ssd_entry = malloc(sizeof(struct sspace_list_entry));
     memcpy(&ssd_entry->gdim, &gdim, sizeof(struct global_dimension));
-    int max_versions = 1;
+    const int max_versions = 1;
     ssd_entry->ssd = ssd_alloc(&domain, d->dcg->ss_info.num_space_srv, max_versions,
                             d->dcg->hash_version);
     if (!ssd_entry->ssd) {
