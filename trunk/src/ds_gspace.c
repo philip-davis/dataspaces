@@ -233,7 +233,7 @@ static inline struct ds_gspace * dsg_ref_from_rpc(struct rpc_server *rpc_s)
 static int init_sspace(struct bbox *default_domain, struct ds_gspace *dsg_l)
 {
     int err = -ENOMEM;
-    dsg_l->ssd = ssd_alloc(default_domain, dsg_l->ds->num_sp,
+    dsg_l->ssd = ssd_alloc(default_domain, dsg_l->ds->size_sp,
                             ds_conf.max_versions, ds_conf.hash_version);
     if (!dsg_l->ssd)
         goto err_out;
@@ -317,8 +317,8 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
 
     ssd_entry = malloc(sizeof(struct sspace_list_entry));
     memcpy(&ssd_entry->gdim, &gdim, sizeof(struct global_dimension));
-    ssd_entry->ssd = ssd_alloc(&domain, dsg_l->ds->num_sp, ds_conf.max_versions,
-                            ds_conf.hash_version);     
+    ssd_entry->ssd = ssd_alloc(&domain, dsg_l->ds->size_sp, 
+                            ds_conf.max_versions, ds_conf.hash_version);     
     if (!ssd_entry->ssd) {
         uloga("%s(): ssd_alloc failed\n", __func__);
         return dsg_l->ssd;
