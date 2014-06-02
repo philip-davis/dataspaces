@@ -57,7 +57,7 @@ program test_gss
   call MPI_COMM_SPLIT(MPI_COMM_WORLD, color, key, comm, err)
   call MPI_COMM_RANK(comm, mpi_rank, err)
 
-  call dspaces_init(npapp, 2, comm, err)
+  call dspaces_init(npapp, appid, comm, err)
   call dspaces_rank(rank)
   call dspaces_peers(nproc)
 
@@ -268,7 +268,7 @@ subroutine couple_read_3d(comm)
   ubb(3) = off_z+spz-1
 
   call dspaces_get("/m3d_with_path_and_some_more_chars/value", ts-ts, 8, &
-       3, lbb, ubb, &
+       ndim, lbb, ubb, &
        m3d, err)
 
 

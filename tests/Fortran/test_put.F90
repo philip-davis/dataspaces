@@ -271,7 +271,7 @@ subroutine couple_write_3d(comm)
   ubb(3) = off_z+spz-1
 
   call dspaces_put("/m3d_with_path_and_some_more_chars/value", ts-ts, 8, &
-       3, lbb, ubb, &
+       ndim, lbb, ubb, &
        m3d, err)
 
 
