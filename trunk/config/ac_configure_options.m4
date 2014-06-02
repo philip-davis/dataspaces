@@ -52,7 +52,7 @@ fi
 if test "x$have_build_for_stampede" = "xyes"; then
     AC_DEFINE_UNQUOTED(BUILD_FOR_STAMPEDE,$BUILD_FOR_STAMPEDE,[Build for Stampede option])
 else
-    AC_DEFINE_UNQUOTED(BUILD_FOR_STAMPEDE,3,[Build for Stampede option])
+    AC_DEFINE_UNQUOTED(BUILD_FOR_STAMPEDE,0,[Build for Stampede option])
 fi
 
 
