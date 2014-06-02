@@ -8,6 +8,11 @@ extern "C" {
 #include "list.h"
 #include "bbox.h"
 
+#ifdef HAVE_UGNI
+#include <pmi.h>
+#include <rca_lib.h>
+#endif
+
 #define NAME_MAXLEN 128
 #define MAX_VAR_NAME_LEN 32
 #define MAX_NUM_TASKS 512 
@@ -62,6 +67,18 @@ enum hstaging_placement_hint {
 	hint_none
 };
 
+#ifdef HAVE_UGNI
+struct executor_topology_info {
+    uint32_t nid;
+    rca_mesh_coord_t mesh_coord; 
+} __attribute__((__packed__));
+
+struct node_topology_info {
+    uint32_t nid;
+    rca_mesh_coord_t mesh_coord;
+};
+#endif
+
 /*
  *  Message headers 
  */
@@ -69,6 +86,7 @@ struct hdr_register_resource {
     int pool_id;
     int num_bucket;
     int mpi_rank;
+    struct executor_topology_info topo_info;
 } __attribute__((__packed__));
 
 struct hdr_update_var {
@@ -101,6 +119,10 @@ struct hdr_finish_dag {
     double dag_execution_time;
 } __attribute__((__packed__));
    
+struct hdr_build_staging {
+    int pool_id;
+    char staging_conf_file[MAX_VAR_NAME_LEN];
+} __attribute__((__packed__));
 
 static char* var_type_name[] =
 {

@@ -31,8 +31,9 @@ struct bucket_info {
 
 	/* flags */
 	int f_get_task;
-	int f_done; //flag indicates that all insitu work is done
+	int f_stop_executor; //flag indicates that current executor can exit 
 	int f_init_dspaces;
+    int f_build_staging_done;
 
 	/* track data get time */
 	double tm_st, tm_end;
@@ -40,15 +41,26 @@ struct bucket_info {
 	enum hstaging_pe_type pe_type;
     // enum hstaging_location_type location_type;
     int pool_id, mpi_rank, num_bucket;
+    struct executor_topology_info topo_info;
 };
 static struct bucket_info bk_info;
 
-
 struct dag_info {
     char dag_conf_file[MAX_VAR_NAME_LEN];
-    int f_done; //flag indicates that all tasks of the dag is done
+    int f_dag_execution_done; //flag indicates that all tasks of the dag is done
 };
 static struct dag_info current_dag;
+
+struct client_rpc_send_state {
+    int f_done;
+};
+
+static int client_rpc_send_completion_callback(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+    struct client_rpc_send_state *p = (struct client_rpc_send_state *)msg->private;
+    p->f_done = 1;
+    return 0;
+}
 
 #ifdef HAVE_UGNI
 static int process_event(struct dcg_space *dcg)
@@ -75,6 +87,43 @@ static int process_event(struct dcg_space *dcg)
 	return 0;
 err_out:
 	ERROR_TRACE();
+}
+#endif
+
+#ifdef HAVE_UGNI 
+int get_topology_information(struct executor_topology_info *topo_info)
+{
+  int rc;
+  int pmi_rank, size;
+
+  PMI_BOOL initialized;
+  rc = PMI_Initialized(&initialized);
+  if (rc!=PMI_SUCCESS)
+    PMI_Abort(rc,"PMI_Initialized failed");
+
+  if (initialized!=PMI_TRUE)
+  {
+    int spawned;
+    rc = PMI_Init(&spawned);
+    if (rc!=PMI_SUCCESS)
+      PMI_Abort(rc,"PMI_Init failed");
+  }
+
+  rc = PMI_Get_rank(&pmi_rank);
+  if (rc!=PMI_SUCCESS)
+    PMI_Abort(rc,"PMI_Get_rank failed");
+
+  rc = PMI_Get_size(&size);
+  if (rc!=PMI_SUCCESS)
+    PMI_Abort(rc,"PMI_Get_size failed");
+
+  int nid;
+  rc = PMI_Get_nid(pmi_rank, &topo_info->nid);
+  if (rc!=PMI_SUCCESS)
+    PMI_Abort(rc,"PMI_Get_nid failed");
+
+  rca_get_meshcoord( (uint16_t) topo_info->nid, &topo_info->mesh_coord);
+  return 0;
 }
 #endif
 
@@ -149,7 +198,7 @@ static int callback_hs_finish_dag(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     struct hdr_finish_dag *hdr = (struct hdr_finish_dag*)cmd->pad;
     uloga("%s(): dag execution time %.6f\n", __func__, hdr->dag_execution_time);
-    current_dag.f_done = 1;
+    current_dag.f_dag_execution_done = 1;
 
     return 0;
 }
@@ -159,8 +208,14 @@ static int callback_hs_stop_executor(struct rpc_server *rpc_s, struct rpc_cmd *c
 	uloga("%s(): rank= %d get msg from %d\n",
 		__func__, rpc_s->ptlmap.id, cmd->id);
 
-	bk_info.f_done = 1;
+	bk_info.f_stop_executor = 1;
 	return 0;
+}
+
+static int callback_hs_build_staging_done(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+    bk_info.f_build_staging_done = 1;    
+    return 0;
 }
 
 /*
@@ -176,7 +231,7 @@ int hstaging_init(int num_peers, int appid, enum hstaging_pe_type pe_type)
 
 	/* Init the bk_info */
 	bk_info.pe_type = pe_type;
-	bk_info.f_done = 0;
+	bk_info.f_stop_executor = 0;
 	bk_info.f_init_dspaces = 0;
 
 	if (dcg) {
@@ -187,6 +242,7 @@ int hstaging_init(int num_peers, int appid, enum hstaging_pe_type pe_type)
 	rpc_add_service(hs_stop_executor_msg, callback_hs_stop_executor);
 	rpc_add_service(hs_exec_task_msg, callback_hs_exec_task);
     rpc_add_service(hs_finish_dag_msg, callback_hs_finish_dag);
+    rpc_add_service(hs_build_staging_done_msg, callback_hs_build_staging_done);
 
 	err = dspaces_init(num_peers, appid);
 	if (err < 0) {
@@ -292,14 +348,13 @@ err_out:
 
 int hstaging_update_var(struct var_descriptor *var_desc, enum hstaging_update_var_op op)
 {
+    struct client_rpc_send_state send_state;
 	struct msg_buf *msg;
 	struct node_id *peer;
 	struct hdr_update_var *hdr;
 	int peer_id, err = -ENOMEM;
 
-	peer_id = 0; // all update info is sent to master srv
-	peer = dc_get_peer(dc, peer_id);
-
+	peer = dc_get_peer(dc, 0); //master srv has dart id as 0
 	msg = msg_buf_alloc(dc->rpc_s, peer, 1);
 	if (!msg)
 		goto err_out;
@@ -313,13 +368,26 @@ int hstaging_update_var(struct var_descriptor *var_desc, enum hstaging_update_va
 	hdr->bb = var_desc->bb;
 	hdr->op = op;
 
+    send_state.f_done = 0;
+    msg->cb = client_rpc_send_completion_callback;
+    msg->private = &send_state;
+
 	err = rpc_send(dc->rpc_s, peer, msg);
 	if (err < 0) {
-		free(msg);
-		goto err_out;
+		goto err_out_free;
 	}
 
+    // Wait/block for the message delivery 
+    while (!send_state.f_done) {
+        err = process_event(dcg);
+        if (err < 0) {
+            goto err_out_free;
+        }
+    }
+
 	return 0;
+ err_out_free:
+    if (msg) free(msg);
  err_out:
 	ERROR_TRACE();
 }
@@ -332,14 +400,14 @@ int hstaging_request_task(struct task_descriptor *t)
 	bk_info.f_get_task = 0;
 	bk_info.current_task = t;
 
-	while (!bk_info.f_get_task && !bk_info.f_done) {
+	while (!bk_info.f_get_task && !bk_info.f_stop_executor) {
 		err = process_event(dcg);
 		if (err < 0) {
 			return err;
 		}
 	}	
 
-	if (bk_info.f_done) {
+	if (bk_info.f_stop_executor) {
 		return -1;
 	}	
 
@@ -349,9 +417,16 @@ int hstaging_request_task(struct task_descriptor *t)
 
 int hstaging_register_executor(int pool_id, int num_bucket, int mpi_rank)
 {
+    struct client_rpc_send_state send_state;
     struct msg_buf *msg;
     struct node_id *peer;
+    struct hdr_register_resource *hdr;
     int err = -ENOMEM;   
+
+    bk_info.pool_id = pool_id;
+    bk_info.num_bucket = num_bucket;
+    bk_info.mpi_rank = mpi_rank;
+    get_topology_information(&bk_info.topo_info);
 
     peer = dc_get_peer(dc, 0); //master srv has dart id as 0
     msg = msg_buf_alloc(dc->rpc_s, peer, 1);
@@ -360,31 +435,42 @@ int hstaging_register_executor(int pool_id, int num_bucket, int mpi_rank)
 
     msg->msg_rpc->cmd = hs_reg_resource_msg;
     msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
-    struct hdr_register_resource *hdr = (struct hdr_register_resource *)
-            msg->msg_rpc->pad;
-    hdr->pool_id = pool_id;
-    hdr->num_bucket = num_bucket;
-    hdr->mpi_rank = mpi_rank;
+    hdr = (struct hdr_register_resource *)msg->msg_rpc->pad;
+    hdr->pool_id = bk_info.pool_id;
+    hdr->num_bucket = bk_info.num_bucket;
+    hdr->mpi_rank = bk_info.mpi_rank;
+    hdr->topo_info = bk_info.topo_info;
 
-    bk_info.pool_id = pool_id;
-    bk_info.num_bucket = num_bucket;
-    bk_info.mpi_rank = mpi_rank;
+    send_state.f_done = 0;
+    msg->cb = client_rpc_send_completion_callback;
+    msg->private = &send_state;
 
     err = rpc_send(dc->rpc_s, peer, msg);
     if (err < 0) {
-        free(msg);
-        goto err_out;
+        goto err_out_free;
+    }
+
+    // Wait/block for the message delivery 
+    while (!send_state.f_done) {
+        err = process_event(dcg);
+        if (err < 0) {
+            goto err_out_free;
+        }
     }
 
     return 0;
-err_out:
+ err_out_free:
+    if (msg) free(msg);
+ err_out:
     ERROR_TRACE();     
 }
 
 int hstaging_set_task_done(struct task_descriptor *t)
 {
+    struct client_rpc_send_state send_state;
     struct msg_buf *msg;
     struct node_id *peer;
+    struct hdr_finish_task *hdr;
     int err = -ENOMEM;
 
     peer = dc_get_peer(dc, 0); //master srv has dart id as 0
@@ -394,19 +480,32 @@ int hstaging_set_task_done(struct task_descriptor *t)
 
     msg->msg_rpc->cmd = hs_finish_task_msg;
     msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
-    struct hdr_finish_task *hdr= (struct hdr_finish_task *)msg->msg_rpc->pad;
+    hdr= (struct hdr_finish_task *)msg->msg_rpc->pad;
     hdr->pool_id = bk_info.pool_id;
     hdr->tid = t->tid;
     hdr->step = t->step;
 
+    send_state.f_done = 0;
+    msg->cb = client_rpc_send_completion_callback;
+    msg->private = &send_state;
+
     err = rpc_send(dc->rpc_s, peer, msg);
     if (err < 0) {
-        free(msg);
-        goto err_out;
+        goto err_out_free;
+    }
+
+    // Wait/block for the message delivery 
+    while (!send_state.f_done) {
+        err = process_event(dcg);
+        if (err < 0) {
+            goto err_out_free;
+        }
     }
 
     return 0;
-err_out:
+ err_out_free:
+    if (msg) free(msg);
+ err_out:
     ERROR_TRACE();
 }
 
@@ -428,28 +527,82 @@ int hstaging_execute_dag(const char* conf_file)
 
     err = rpc_send(dc->rpc_s, peer, msg);
     if (err < 0) {
-        free(msg);
-        goto err_out;
+        goto err_out_free;
     }
 
     strcpy(current_dag.dag_conf_file, conf_file);
-    current_dag.f_done = 0;
+    current_dag.f_dag_execution_done = 0;
 
     // Wait/block for the dag execution to complete
-    while (!current_dag.f_done) {
+    while (!current_dag.f_dag_execution_done) {
         err = process_event(dcg);
         if (err < 0) {
-            return err;
+            goto err_out_free;
         }
     }    
 
     return 0;
-err_out:
+ err_out_free:
+    if (msg) free(msg);
+ err_out:
     ERROR_TRACE();        
+}
+
+int hstaging_build_staging(int pool_id, const char *conf_file)
+{
+    struct client_rpc_send_state send_state;
+    struct msg_buf *msg;
+    struct node_id *peer;
+    struct hdr_build_staging *hdr;
+    int err = -ENOMEM;
+
+    peer = dc_get_peer(dc, 0); //master srv has dart id as 0
+    msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+    if (!msg)
+        goto err_out;
+
+    msg->msg_rpc->cmd = hs_build_staging_msg;
+    msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
+    hdr= (struct hdr_build_staging *)msg->msg_rpc->pad;
+    hdr->pool_id = pool_id;
+    strcpy(hdr->staging_conf_file, conf_file);
+
+    send_state.f_done = 0;
+    msg->cb = client_rpc_send_completion_callback;
+    msg->private = &send_state;
+
+    bk_info.f_build_staging_done = 0;    
+    err = rpc_send(dc->rpc_s, peer, msg);
+    if (err < 0) {
+        goto err_out_free;
+    }
+
+    // Wait/block for the message delivery 
+    while (!send_state.f_done) {
+        err = process_event(dcg);
+        if (err < 0) {
+            goto err_out_free;
+        }
+    }
+
+    // Wait for the reply from master
+    while (!bk_info.f_build_staging_done) {
+        err = process_event(dcg);
+        if (err < 0) {
+            goto err_out;
+        }
+    }
+
+    return 0;
+err_out_free:
+    if (msg) free(msg);
+err_out:
+    ERROR_TRACE();
 }
 
 int hstaging_set_workflow_finished()
 {
+    struct client_rpc_send_state send_state;
     struct msg_buf *msg;
     struct node_id *peer;
     int err = -ENOMEM;
@@ -462,13 +615,26 @@ int hstaging_set_workflow_finished()
     msg->msg_rpc->cmd = hs_finish_workflow_msg;
     msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
 
+    send_state.f_done = 0;
+    msg->cb = client_rpc_send_completion_callback;
+    msg->private = &send_state;
+
     err = rpc_send(dc->rpc_s, peer, msg);
     if (err < 0) {
-        free(msg);
-        goto err_out;
+        goto err_out_free;
+    }
+
+    // Wait/block for the message delivery 
+    while (!send_state.f_done) {
+        err = process_event(dcg);
+        if (err < 0) {
+            goto err_out_free;
+        }
     }
 
     return 0;
+ err_out_free:
+    if (msg) free(msg);
  err_out:
     ERROR_TRACE();
 }

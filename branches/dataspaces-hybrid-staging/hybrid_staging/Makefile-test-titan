@@ -34,55 +34,36 @@ LIBS= -L./ -lhstaging \
     -L$(MEMQ_DIR) -lmemq \
     -L$(FASTBIT_DIR)/lib -Wl,-rpath=$(FASTBIT_DIR)/lib -lfastbit -lrt -lm
 
-CFLAGS= -g ${UGNI_CFLAGS} ${PMI_CLFASG} -DDEBUG -DDS_HAVE_DIMES -DDS_HAVE_HYBRID_STAGING
+CFLAGS= -g ${UGNI_CFLAGS} ${PMI_CLFASG} -DDEBUG -DHAVE_UGNI -DDS_HAVE_DIMES -DDS_HAVE_HYBRID_STAGING
 
 SRC = common.c hstaging_partition.c dummy_simulation_worker.c dummy_workflow_task.c
-SRC2 = scheduler_driver.c
-SRC4 = simulation_driver.c
-SRC5 = insitu_staging_driver.c 
-SRC6 = intransit_staging_driver.c 
-SRC7 = dag_executor.c
-SRC8 = dag_submitter.c
+SRC1 = scheduler_driver.c
+SRC2 = dag_executor.c
+SRC3 = dag_submitter.c
 
 OBJ = $(SRC:.c=.o)
+OBJ1 = $(SRC1:.c=.o)
 OBJ2 = $(SRC2:.c=.o)
-OBJ4 = $(SRC4:.c=.o)
-OBJ5 = $(SRC5:.c=.o)
-OBJ6 = $(SRC6:.c=.o)
-OBJ7 = $(SRC7:.c=.o)
-OBJ8 = $(SRC8:.c=.o)
+OBJ3 = $(SRC3:.c=.o)
 
-OUT2 = ./scheduler_driver
-OUT4 = ./simulation_driver
-OUT5 = ./insitu_staging_driver
-OUT6 = ./intransit_staging_driver
-OUT7 = ./dag_executor
-OUT8 = ./dag_submitter
+OUT1 = ./scheduler_driver
+OUT2 = ./dag_executor
+OUT3 = ./dag_submitter
 
-default: $(OUT2) $(OUT7) $(OUT8)
+default: $(OUT1) $(OUT2) $(OUT3)
 
 .c.o:
 	$(CC) $(INCLUDES) $(CFLAGS) -c $< -o $@
 
+$(OUT1): $(OBJ1) $(OBJ)
+	$(CXX) $(CFLAGS) $(INCLUDES) $(OBJ1) $(OBJ) -o $(OUT1) $(LIBS)
+
 $(OUT2): $(OBJ2) $(OBJ)
 	$(CXX) $(CFLAGS) $(INCLUDES) $(OBJ2) $(OBJ) -o $(OUT2) $(LIBS)
 
-$(OUT4): $(OBJ4) $(OBJ)
-	$(CXX) $(CFLAGS) $(INCLUDES) $(OBJ4) $(OBJ) -o $(OUT4) $(LIBS)
+$(OUT3): $(OBJ3) $(OBJ)
+	$(CXX) $(CFLAGS) $(INCLUDES) $(OBJ3) $(OBJ) -o $(OUT3) $(LIBS)
 
-$(OUT5): $(OBJ5) $(OBJ)
-	$(CXX) $(CFLAGS) $(INCLUDES) $(OBJ5) $(OBJ) -o $(OUT5) $(LIBS)
-
-$(OUT6): $(OBJ6) $(OBJ)
-	$(CXX) $(CFLAGS) $(INCLUDES) $(OBJ6) $(OBJ) -o $(OUT6) $(LIBS)
-
-$(OUT7): $(OBJ7) $(OBJ)
-	$(CXX) $(CFLAGS) $(INCLUDES) $(OBJ7) $(OBJ) -o $(OUT7) $(LIBS)
-
-$(OUT8): $(OBJ8) $(OBJ)
-	$(CXX) $(CFLAGS) $(INCLUDES) $(OBJ8) $(OBJ) -o $(OUT8) $(LIBS)
 
 clean:
-	rm -f $(OBJ) $(OBJ2) $(OBJ4) $(OBJ5) $(OBJ6) $(OBJ7) $(OBJ8) $(OUT2) $(OUT4) $(OUT5) $(OUT6) $(OUT7) $(OUT8)
-
-
+	rm -f $(OBJ) $(OBJ1) $(OBJ2) $(OBJ3) $(OUT1) $(OUT2) $(OUT3)

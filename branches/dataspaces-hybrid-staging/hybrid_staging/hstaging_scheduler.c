@@ -63,16 +63,27 @@ struct bucket {
     int pool_id; // indicate which resource pool the bucket is from
     int origin_mpi_rank;
     enum bucket_status status;
-    struct job_id current_jid;    
+    struct job_id current_jid; // TODO: do we still need this? 
+    struct executor_topology_info topo_info;
+};
+
+#define MAX_NUM_BK_PER_NODE 32
+struct compute_node {
+    struct node_topology_info topo_info; 
+    int num_bucket;
+    int bk_idx_tab[MAX_NUM_BK_PER_NODE];
 };
 
 struct bucket_pool {
     struct list_head entry;
-    // enum hstaging_location_type location_type;
     int pool_id;
     int num_bucket;
     int bk_tab_size;
     struct bucket *bk_tab;
+    int num_node;
+    struct compute_node *node_tab;
+    int f_bk_reg_done;
+    int f_node_tab_done;
 };
 
 struct workflow_state {
@@ -80,9 +91,15 @@ struct workflow_state {
 	unsigned int f_send_exit_msg;
 };
 
+struct pending_msg {
+    struct list_head entry;
+    struct rpc_cmd cmd;
+};
+
 static struct list_head bk_pool_list;
 static struct list_head jobq;
 static struct workflow_state state;
+static struct list_head pending_msg_list;
 
 static inline int equal_jid(struct job_id *l, struct job_id *r)
 {
@@ -120,6 +137,9 @@ static struct bucket_pool* bk_pool_create_new(int pool_id, int num_bucket)
     bp->num_bucket = 0;
     bp->bk_tab_size = num_bucket;
     bp->bk_tab = malloc(sizeof(struct bucket) * num_bucket);
+    bp->node_tab = NULL;
+    bp->f_bk_reg_done = 0;
+    bp->f_node_tab_done = 0;
 
     // Add to the list
     list_add_tail(&bp->entry, &bk_pool_list);
@@ -128,7 +148,7 @@ static struct bucket_pool* bk_pool_create_new(int pool_id, int num_bucket)
 }
 
 static int bk_pool_add_bucket(struct bucket_pool *bp, int origin_mpi_rank, int dart_id,
-                        int pool_id)
+                    int pool_id, struct executor_topology_info *topo_info)
 {
     if (origin_mpi_rank < 0 || origin_mpi_rank >= bp->bk_tab_size) {
         uloga("ERROR %s(): origin_mpi_rank out of range\n", __func__);
@@ -140,6 +160,7 @@ static int bk_pool_add_bucket(struct bucket_pool *bp, int origin_mpi_rank, int d
     bk->pool_id = pool_id;
     bk->origin_mpi_rank = origin_mpi_rank;
     bk->status = bk_none;
+    if (topo_info) bk->topo_info = *topo_info; 
 
     bp->num_bucket++;
     return 0;
@@ -208,8 +229,69 @@ static void bk_pool_set_bucket_idle(struct bucket_pool *bp)
         bp->bk_tab[i].status = bk_idle;
     }
 
+    bp->f_bk_reg_done = 1;
     uloga("%s(): bucket resource pool %d is ready, num_bucket %d\n",
         __func__, bp->pool_id, bp->bk_tab_size);
+}
+
+int compare_bk_ptr(const void *p1, const void *p2)
+{
+    return (*(const struct bucket**)p1)->topo_info.nid -
+           (*(const struct bucket**)p2)->topo_info.nid;
+}
+
+static void bk_pool_build_node_tab(struct bucket_pool *bp)
+{
+    struct bucket ** bk_ptr_tab = (struct bucket **)malloc(sizeof(struct bucket*)
+                                    *bp->bk_tab_size);
+    int i, j, k;
+    // copy pointers
+    for (i = 0; i < bp->bk_tab_size; i++) {
+        bk_ptr_tab[i] = &bp->bk_tab[i];
+    }
+
+    // sort bk_ptr_tab by bk_ptr_tab[i]->topo_info.nid
+    qsort(bk_ptr_tab, bp->bk_tab_size, sizeof(struct bucket *), compare_bk_ptr);
+
+    bp->num_node = 0;
+    uint32_t cur_nid = ~0; // assume node id can not be ~0.... 
+    for (i = 0; i < bp->bk_tab_size; i++) {
+        if (cur_nid != bk_ptr_tab[i]->topo_info.nid) {
+            cur_nid = bk_ptr_tab[i]->topo_info.nid;
+            bp->num_node++;
+        }
+    }    
+        
+    bp->node_tab = malloc(sizeof(struct compute_node)*bp->num_node);
+    cur_nid = ~0;
+    for (i = 0, j = -1, k = 0; i < bp->bk_tab_size; i++) {
+        if (cur_nid != bk_ptr_tab[i]->topo_info.nid) {
+            j++; 
+            k = 0;
+            cur_nid = bk_ptr_tab[i]->topo_info.nid;
+            bp->node_tab[j].bk_idx_tab[k++] = bk_ptr_tab[i]->origin_mpi_rank;
+            bp->node_tab[j].num_bucket = 1;
+        } else {
+            bp->node_tab[j].bk_idx_tab[k++] = bk_ptr_tab[i]->origin_mpi_rank;
+            bp->node_tab[j].num_bucket += 1;
+        }
+    } 
+
+    bp->f_node_tab_done = 1;
+
+    // print it out
+    uloga("bp->num_node= %d\n", bp->num_node);
+    for (i = 0; i < bp->num_node; i++) {
+        uloga("compute node id %u num_bucket %d:\n", bp->node_tab[i].topo_info.nid,
+                bp->node_tab[i].num_bucket);
+        for (k = 0; k < bp->node_tab[i].num_bucket; k++) {
+            struct bucket *p = &(bp->bk_tab[bp->node_tab[i].bk_idx_tab[k]]);
+            uloga("bucket dart_id %d pool_id %d origin_mpi_rank %d check nid %u\n",
+                p->dart_id, p->pool_id, p->origin_mpi_rank, p->topo_info.nid);
+        }
+    }
+
+    return;
 }
 
 static void free_bk_pool_list()
@@ -219,8 +301,27 @@ static void free_bk_pool_list()
     {
         list_del(&bp->entry);
         if (bp->bk_tab) free(bp->bk_tab);
+        if (bp->node_tab) free(bp->node_tab);
         free(bp);
     }
+}
+
+static void init_pending_msg_list()
+{
+    INIT_LIST_HEAD(&pending_msg_list);
+}
+
+static void free_pending_msg_list()
+{
+    int msg_cnt = 0;
+    struct pending_msg *p, *t;
+    list_for_each_entry_safe(p, t, &pending_msg_list, struct pending_msg, entry)
+    {
+        list_del(&p->entry);
+        free(p);
+        msg_cnt++;
+    }
+    uloga("%s(): msg_cnt= %d\n", __func__, msg_cnt);
 }
 
 /* operations on the jobq */
@@ -536,6 +637,74 @@ static int process_workflow_state()
 	ERROR_TRACE();
 }
 
+static int process_hs_build_staging(struct pending_msg *p)
+{
+    int err;
+    int submitter_dart_id = p->cmd.id;
+    struct hdr_build_staging *hdr = (struct hdr_build_staging*)p->cmd.pad;
+    int pool_id = hdr->pool_id;
+  
+    struct bucket_pool *bp = bk_pool_lookup(pool_id);
+    if (!bp) { 
+        return -1;
+    }
+    if (!bp->f_bk_reg_done || !bp->f_node_tab_done) {
+        return -1;
+    }
+
+    uloga("%s(): build multi-level staging for bucket pool %d based on config file '%s'\n",
+        __func__, pool_id, hdr->staging_conf_file);
+
+    // TODO: build multi-level staging 
+
+    // reply to the submitter of the dag
+    struct msg_buf *msg;
+    struct node_id *peer;
+
+    peer = ds_get_peer(ds, submitter_dart_id);
+    msg = msg_buf_alloc(ds->rpc_s, peer, 1);
+    if (!msg)
+        goto err_out;
+
+    msg->msg_rpc->cmd = hs_build_staging_done_msg;
+    msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
+    err = rpc_send(ds->rpc_s, peer, msg);
+    if (err < 0) {
+        free(msg);
+        goto err_out;
+    }
+
+    return 0;
+ err_out:
+    err = -1;
+    ERROR_TRACE();
+}
+
+static int process_pending_msg()
+{
+    // process one msg at a time
+    struct pending_msg *p, *t;
+    int err;
+    list_for_each_entry_safe(p, t, &pending_msg_list, struct pending_msg, entry)
+    {
+        switch (p->cmd.cmd) {
+        case hs_build_staging_msg:
+            err = process_hs_build_staging(p);
+            if (0 == err) {
+                // remove msg from list
+                list_del(&p->entry);
+                free(p);
+            }
+            break;
+        default:
+            uloga("%s(): unknown message type\n", __func__);
+            break;
+        }
+    }
+
+    return 0;
+}
+
 /*
 */
 static int process_jobq()
@@ -586,14 +755,14 @@ static int callback_hs_finish_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd
         return 0;
     }
 
-    uloga("%s(): finish task tid= %d step= %d\n",
-        __func__, hdr->tid, hdr->step);
-
     struct job_id jid;
     jid.tid = hdr->tid;
     jid.step = hdr->step;
     struct job *j = jobq_lookup(&jid);
     if (j) {
+        uloga("%s(): finish job (%d,%d) timestamp %lf\n",
+            __func__, hdr->tid, hdr->step, timer_read(&tm)-tm_st);
+
         // mark job as done
         job_done(j);
         // free bucket allocation
@@ -616,8 +785,13 @@ static int callback_hs_reg_resource(struct rpc_server *rpc_s, struct rpc_cmd *cm
     int mpi_rank = hdr->mpi_rank;
     int dart_id = cmd->id; // TODO: do we need to store dart id explicitly in hdr?
 
-    uloga("%s(): get msg from peer #%d mpi_rank %d num_bucket %d pool_id %d\n",
-            __func__, dart_id, mpi_rank, num_bucket, pool_id);
+#ifdef HAVE_UGNI
+    uloga("%s(): get msg from peer #%d mpi_rank %d num_bucket %d pool_id %d nid %u "
+            "mesh_coord (%u,%u,%u)\n",
+            __func__, dart_id, mpi_rank, num_bucket, pool_id,
+            hdr->topo_info.nid, hdr->topo_info.mesh_coord.mesh_x,
+            hdr->topo_info.mesh_coord.mesh_y, hdr->topo_info.mesh_coord.mesh_z);
+#endif
 
     struct bucket_pool *bp = bk_pool_lookup(pool_id);
     if (bp == NULL) {
@@ -628,10 +802,11 @@ static int callback_hs_reg_resource(struct rpc_server *rpc_s, struct rpc_cmd *cm
         }
     }
 
-    bk_pool_add_bucket(bp, mpi_rank, dart_id, pool_id);
+    bk_pool_add_bucket(bp, mpi_rank, dart_id, pool_id, &hdr->topo_info);
     // Check if all peers of the resource pool have registered
     if (bp->num_bucket == bp->bk_tab_size) {
         bk_pool_set_bucket_idle(bp);
+        bk_pool_build_node_tab(bp);
     }
 
     return 0;
@@ -689,6 +864,18 @@ static int callback_hs_exec_dag(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
     return 0;
 }
 
+static int callback_hs_build_staging(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+    uloga("%s(): get request from peer #%d\n", __func__, cmd->id);
+
+    // copy message to the application-level message list 
+    struct pending_msg *p = malloc(sizeof(*p));
+    memcpy(&p->cmd, cmd, sizeof(struct rpc_cmd));        
+    list_add_tail(&p->entry, &pending_msg_list);
+
+    return 0;
+}
+
 int hstaging_scheduler_init()
 {
 	rpc_add_service(hs_finish_workflow_msg, callback_hs_finish_workflow);
@@ -696,6 +883,7 @@ int hstaging_scheduler_init()
     rpc_add_service(hs_reg_resource_msg, callback_hs_reg_resource);
     rpc_add_service(hs_finish_task_msg, callback_hs_finish_task);
     rpc_add_service(hs_exec_dag_msg, callback_hs_exec_dag);
+    rpc_add_service(hs_build_staging_msg, callback_hs_build_staging);
 
 	dimes_s = dimes_server_alloc(num_sp, num_cp, conf);
 	if (!dimes_s) {
@@ -708,6 +896,7 @@ int hstaging_scheduler_init()
 	// Init
 	jobq_init();
     init_bk_pool_list();
+    init_pending_msg_list();
 
 	state.f_done = 0;
 	state.f_send_exit_msg = 0;
@@ -737,11 +926,13 @@ int hstaging_scheduler_run()
 			return err;
 		}
 
+        process_pending_msg();
         process_jobq();
         process_dag_state();
         process_workflow_state();
 	}
 
+    free_pending_msg_list();
     free_bk_pool_list();
 	jobq_free();
 

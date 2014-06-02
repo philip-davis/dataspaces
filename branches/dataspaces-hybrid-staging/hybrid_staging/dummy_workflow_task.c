@@ -101,10 +101,14 @@ static int exec_task_function(struct task_descriptor *t)
 	int i, err;
 	for (i = 0; i < num_tasks; i++) {
 		if (t->tid == ptasks[i].tid) {
+            double t1, t2;
+            t1 = MPI_Wtime();
             struct parallel_communicator *comm = create_parallel_comm(t);	
             err = (ptasks[i].func_ptr)(t, comm);
             task_done(t, comm); 
             free_parallel_comm(comm); 
+            t2 = MPI_Wtime();
+            uloga("%s(): task %d execution time %lf\n", __func__, t->tid, t2-t1);
 
             if (t->bk_mpi_rank_tab) {
                 free(t->bk_mpi_rank_tab);
@@ -328,10 +332,12 @@ int dag_task(struct task_descriptor *t, struct parallel_communicator *comm)
 static int sml_mstep = 10;
 int xgc1_task(struct task_descriptor *t, struct parallel_communicator *comm)
 {
+    double t1, t2;
     int comm_size, comm_rank;
     MPI_Barrier(comm->comm);
     MPI_Comm_size(comm->comm, &comm_size);
     MPI_Comm_rank(comm->comm, &comm_rank);
+    t1 = MPI_Wtime();
 
     // print input variable information
     if (t->rank == 0) {
@@ -370,20 +376,26 @@ int xgc1_task(struct task_descriptor *t, struct parallel_communicator *comm)
     }
 
     MPI_Barrier(comm->comm);
+    t2 = MPI_Wtime();
 
     if (t->rank == 0) {
         update_var_nodata("xgc1_output", t->step);
     }
 
+    if (t->rank == 0) {
+        uloga("%s(): execution time %lf\n", __func__, t2-t1);
+    }
     return 0;
 }
 
 int xgca_task(struct task_descriptor *t, struct parallel_communicator *comm)
 {
+    double t1, t2;
     int comm_size, comm_rank;
     MPI_Barrier(comm->comm);
     MPI_Comm_size(comm->comm, &comm_size);
     MPI_Comm_rank(comm->comm, &comm_rank);
+    t1 = MPI_Wtime();
 
     // print input variable information
     if (t->rank == 0) {
@@ -399,7 +411,6 @@ int xgca_task(struct task_descriptor *t, struct parallel_communicator *comm)
                 t->input_vars[i].step, t->input_vars[i].size);
         }
     }
-
 
     // read particle data
     if (comm_rank == 0) {
@@ -423,21 +434,26 @@ int xgca_task(struct task_descriptor *t, struct parallel_communicator *comm)
     }
 
     MPI_Barrier(comm->comm);
+    t2 = MPI_Wtime();
 
     if (t->rank == 0) {
         update_var_nodata("xgca_output", t->step);
     }
-
+    if (t->rank == 0) {
+        uloga("%s(): execution time %lf\n", __func__, t2-t1);
+    }
     return 0;
 }
 
-static s3d_nstep = 20;
+static s3d_nstep = 10;
 int s3d_task(struct task_descriptor *t, struct parallel_communicator *comm)
 {
+    double t1, t2;
     int comm_size, comm_rank;
     MPI_Barrier(comm->comm);
     MPI_Comm_size(comm->comm, &comm_size);
     MPI_Comm_rank(comm->comm, &comm_rank);
+    t1 = MPI_Wtime();
 
     // print input variable information
     if (t->rank == 0) {
@@ -466,16 +482,23 @@ int s3d_task(struct task_descriptor *t, struct parallel_communicator *comm)
     }
 
     MPI_Barrier(comm->comm);
+    t2 = MPI_Wtime();
+    if (comm_rank == 0) {
+        uloga("%s(): execution time %lf\n", __func__, t2-t1);
+    }
+
     return 0;
 }
 
 int s3d_insitu_analysis_task(struct task_descriptor *t,
     struct parallel_communicator *comm)
 {
+    double t1, t2;
     int comm_size, comm_rank;
     MPI_Barrier(comm->comm);
     MPI_Comm_size(comm->comm, &comm_size);
     MPI_Comm_rank(comm->comm, &comm_rank);
+    t1 = MPI_Wtime();
 
     // print input variable information
     if (t->rank == 0) {
@@ -504,16 +527,22 @@ int s3d_insitu_analysis_task(struct task_descriptor *t,
     }
 
     MPI_Barrier(comm->comm);
+    t2 = MPI_Wtime();
+    if (comm_rank == 0) {
+        uloga("%s(): execution time %lf\n", __func__, t2-t1);
+    }
     return 0;
 }
 
 int s3d_intransit_analysis_task(struct task_descriptor *t,
     struct parallel_communicator *comm)
 {
+    double t1, t2;
     int comm_size, comm_rank;
     MPI_Barrier(comm->comm);
     MPI_Comm_size(comm->comm, &comm_size);
     MPI_Comm_rank(comm->comm, &comm_rank);
+    t1 = MPI_Wtime();
     
     // print input variable information
     if (t->rank == 0) {
@@ -542,6 +571,10 @@ int s3d_intransit_analysis_task(struct task_descriptor *t,
     }
 
     MPI_Barrier(comm->comm);
+    t2 = MPI_Wtime();
+    if (comm_rank == 0) {
+        uloga("%s(): execution time %lf\n", __func__, t2-t1);
+    }
     return 0;
 }
 

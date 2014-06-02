@@ -54,7 +54,7 @@ int main(int argc, char **argv)
 	int appid, rank, nproc;
     MPI_Comm comm;
 
-	appid = 5;
+	appid = 2;
 	MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_split(MPI_COMM_WORLD, appid, rank, &comm);
@@ -65,6 +65,7 @@ int main(int argc, char **argv)
     }
 	err = hstaging_init(nproc, appid, hs_submitter); 
 
+    hstaging_build_staging(1, "staging.conf");
     run_iterative_dag(comm);
 
 	hstaging_finalize();
