@@ -18,7 +18,7 @@ UGNI_LIBS = $(shell pkg-config --libs cray-ugni)
 LIBS=${PMI_LIBS} ${UGNI_LIBS} \
         -L/opt/cray/rca/default/lib64 -lrca
 
-CFLAGS= -g ${UGNI_CFLAGS} ${PMI_CLFASG} -DDS_HAVE_DIMES -DDS_HAVE_HYBRID_STAGING
+CFLAGS= -g ${UGNI_CFLAGS} ${PMI_CLFASG} -DHAVE_UGNI -DDS_HAVE_DIMES -DDS_HAVE_HYBRID_STAGING
 
 SRC1 =  hstaging_api.c \
 		hstaging_strutil.c \

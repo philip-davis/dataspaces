@@ -47,7 +47,7 @@ int main(int argc, char **argv)
 	int appid, rank, nproc;
     MPI_Comm comm;
 
-	appid = 4;
+	appid = 1;
 	MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_split(MPI_COMM_WORLD, appid, rank, &comm);
@@ -58,9 +58,9 @@ int main(int argc, char **argv)
     }
 	err = hstaging_init(nproc, appid, hs_executor); 
 
-	//err = dummy_epsi_coupling_workflow(comm);
+	err = dummy_epsi_coupling_workflow(comm);
     //err = dummy_sample_dag_workflow(comm);
-    err = dummy_s3d_analysis_workflow(comm);
+    //err = dummy_s3d_analysis_workflow(comm);
 	if (err < 0)
 		goto err_out;
 
