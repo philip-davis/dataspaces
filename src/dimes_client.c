@@ -96,16 +96,6 @@ static struct sspace* lookup_sspace_dimes(struct dimes_client *d, const char* va
         return d->ssd;
     }
 
-    // TODO: hard coding for 'dpot' variable in EPSI application
-    int pos;
-    size_t len = strlen(var_name);
-    if (len >= strlen("dpot")) {
-        pos = len - strlen("dpot");
-        if (0 == strcmp(var_name+pos, "dpot")) {
-            gdim.sizes.c[1] = 1;
-        }
-    }
-
     // Otherwise, search for shared space based on the
     // global data domain specified by application in put()/get().
     struct sspace_list_entry *ssd_entry = NULL;
