@@ -11,6 +11,7 @@ have_dimes_rdma_buffer_size=no
 have_dimes_rdma_max_num_concurrent_read=no
 cond_configure_options=yes
 have_build_for_stampede=no
+have_infiniband_msg_queue_size=no
 
 AC_ARG_WITH(max-num-array-dimension,
 	[AS_HELP_STRING([--with-max-num-array-dimension=integer value],
@@ -36,6 +37,12 @@ AC_ARG_WITH(build-for-stampede,
         [have_build_for_stampede=yes;
          BUILD_FOR_STAMPEDE="$withval";])
 
+AC_ARG_WITH(infiniband-msg-queue-size,                                                                                                [AS_HELP_STRING([--with-infiniband-msg-queue-size=integer value],
+                [This option is used to specify the size of messaging queue for DataSpaces servers in infiniband
+        Default value is set as 32.])],
+        [have_infiniband_msg_queue_size=yes;
+         INFINIBAND_MSG_QUEUE_SIZE="$withval";])
+
 
 if test "x$have_max_num_array_dimension" = "xyes"; then
     AC_DEFINE_UNQUOTED(BBOX_MAX_NDIM,$MAX_NUM_ARRAY_DIMENSION,[Maximum number of array dimension])
@@ -53,6 +60,12 @@ if test "x$have_build_for_stampede" = "xyes"; then
     AC_DEFINE_UNQUOTED(BUILD_FOR_STAMPEDE,$BUILD_FOR_STAMPEDE,[Build for Stampede option])
 else
     AC_DEFINE_UNQUOTED(BUILD_FOR_STAMPEDE,0,[Build for Stampede option])
+fi
+
+if test "x$have_infiniband_msg_queue_size" = "xyes"; then
+    AC_DEFINE_UNQUOTED(INFINIBAND_MSG_QUEUE_SIZE,$INFINIBAND_MSG_QUEUE_SIZE,[Max message queue size for infiniband DataSpaces server])
+else
+    AC_DEFINE_UNQUOTED(INFINIBAND_MSG_QUEUE_SIZE,32,[Max message queue size for infiniband DataSpaces server])
 fi
 
 
