@@ -52,7 +52,11 @@
  * @param[in] num_peers:    Number of peers in the client application.
  * @param[in] appid:        Unique id for client application.
  * @param[in] comm:     Pointer to the MPI communicator.
- * @param[in] parameters:   A series of name=value pairs separated by ";", 
+ * @param[in] parameters:   A series of name=value pairs separated by ";". 
+ *
+ * Note: current implementation does NOT have any user-provided parameters, and 
+ * 'parameters' is reserved for future use. User application can just pass NULL
+ * for 'parameters'. 
  *
  * @return  0 indicates success.
  */
@@ -257,8 +261,6 @@ int dspaces_put_sync(void);
  * @return Number of space server.
  */
 int dspaces_get_num_space_server(void);
-
-void dspaces_set_mpi_rank(int rank);
 
 #endif
 

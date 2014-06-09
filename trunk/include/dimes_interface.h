@@ -135,17 +135,12 @@ void dimes_define_gdim (const char *var_name,
         int ndim, uint64_t *gdim);
 
 /**
- * @brief When configure option "enable_dimes_ack" is set, this function
- * will block till all in-memory data inserted by dimes_put() operations
- * have been retrieved by remote reading application, then free the data
- * buffers allocated for dimes_put(). 
- *
- * When configure option "enable_dimes_ack" is not set, this function is
- * non-blocking, and will just free all data buffers allocated for
- * dimes_put() since last call to dimes_put_sync_all(). In this case, the
- * users are responsible to coordinate (e.g. using our lock/unlock APIs in 
- * dspaces.h) between the coupled applications to make sure that data is 
- * fetched by the reading appication before freed.
+ * @brief This function is non-blocking, and will just free all data buffers 
+ * allocated for dimes_put() since last call to dimes_put_sync_all(). 
+ * In this case, the users are responsible to coordinate 
+ * (e.g. using our lock/unlock APIs in dataspaces.h) between the coupled 
+ * applications to make sure that data is fetched by the reader appication 
+ * before freed.
  *
  * @return  0 indicates success.
  */
@@ -164,7 +159,9 @@ int dimes_put_set_group(const char *group_name, int version);
 /**
  * @brief End the scope of a group. Variables written (by dimes_put()) inside
  * a matching pair of dimes_put_set_group() and dimes_put_unset_group() are
- * associated with group 'group_name'. Note: the scopes of different groups can
+ * associated with group 'group_name'.
+ *
+ * Note: the scopes of different groups can
  * not be interleaved or nested, and need to be non-overlapping.
  *
  * @return  0 indicates success.
