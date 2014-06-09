@@ -46,7 +46,7 @@ if test "x$enable_dimes" == "xyes"; then
             AC_DEFINE(DS_HAVE_DIMES, 1, [DIMES is enabled])
             echo "DIMES enabled!"
         else
-            echo "DIMES only supported on Cray UGNI, Infiniband, IBM DCMF"
+            echo "DIMES only supported on Cray UGNI, IBM PAMI, IBM DCMF"
         fi
 fi
 
