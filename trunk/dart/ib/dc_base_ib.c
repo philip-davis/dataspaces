@@ -131,7 +131,7 @@ static int announce_cp_completion_all(struct rpc_server *rpc_s, struct msg_buf *
 	pm = (struct ptlid_map *) msg->msg_data;
 	dc->peer_tab = rpc_s->peer_tab;
 	dc->cn_peers = dc_get_peer(dc, rpc_s->app_minid);
-	peer = dc->peer_tab;
+	peer = rpc_s->peer_tab + (rpc_s->ptlmap.id % dc->num_sp);
 
 	peer++;
 	pm++;
@@ -203,9 +203,10 @@ static int dcrpc_announce_cp_all(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	
 	struct node_id *peer;
 	struct msg_buf *msg;
 	int err = -ENOMEM;
-	dc->num_sp = hreg->num_sp;
+//      dc->num_sp = hreg->num_sp;
 	dc->num_cp_all = hreg->num_cp;
-	peer = rpc_s->peer_tab;
+	peer = rpc_s->peer_tab + (rpc_s->ptlmap.id % dc->num_sp);
+
 	msg = msg_buf_alloc(rpc_s, peer, 0);
 	if(!msg)
 		goto err_out;
@@ -290,24 +291,6 @@ static int data_transfer_completion(struct rpc_server *rpc_s, struct msg_buf *ms
         return 0;
 }
 
-int log2_ceil2(int n)		//Done
-{
-	unsigned int i;
-	int k = -1;
-
-	i = ~(~0U >> 1);
-	while(i && !(i & n))
-		i = i >> 1;
-	if(i != n)
-		i = i << 1;
-
-	while(i) {
-		k++;
-		i = i >> 1;
-	}
-
-	return k;
-}
 */
 
 static void *dc_listen(void *client)
@@ -413,7 +396,7 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 		goto err_out;
 	}
 
-        int rank;
+	int rank;
 
 //        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
@@ -432,7 +415,29 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 	}
 
 //        MPI_Barrier(*(MPI_Comm *)dc->comm);
-	
+
+	for(i = 1; i < dc->num_sp; i++) {
+		int count = 0;
+		peer = dc_get_peer(dc, i);
+		do {
+			err = rpc_connect(dc->rpc_s, peer);
+			count++;
+		} while(count < 3 && err != 0);
+		if(err != 0) {
+			printf("rpc_connect err %d in %s.\n", err, __func__);
+			goto err_out;
+		}
+		dc->rpc_s->cur_num_peer++;
+
+	}
+
+	while(dc->f_reg_all == 0) {
+		err = rpc_process_event_with_timeout(dc->rpc_s, 1);
+		if(err != 0 && err != -ETIME)
+			goto err_out;
+	}
+
+
 
 	int rc;
 	dc->rpc_s->thread_alive = 1;
@@ -494,7 +499,7 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 			continue;
 
 		int count = 0;
-		peer = dc_get_peer(dc, i);
+/*		peer = dc_get_peer(dc, i);
 		if(i < dc->cp_min_rank) {
 			do {
 				err = rpc_connect(dc->rpc_s, peer);
@@ -506,7 +511,8 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 			}
 
 		}
-		if(check_cp[peer->ptlmap.id] == 1 && dc->comm==NULL) {
+*/
+		if(check_cp[peer->ptlmap.id] == 1 && dc->comm == NULL) {
 			count = 0;
 			do {
 //                              printf("SYS connect %d %d\n",dc->rpc_s->ptlmap.id,peer->ptlmap.id);
@@ -525,13 +531,13 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 	//Function: connect to all other nodes except MS_Server.
 
 
-
+/*
 	while(dc->f_reg_all == 0) {
 		err = rpc_process_event_with_timeout(dc->rpc_s, 1);
 		if(err != 0 && err != -ETIME)
 			goto err_out;
 	}
-
+*/
 //        MPI_Barrier(*(MPI_Comm *)dc->comm);
 
 	dc->rpc_s->cur_num_peer = dc->num_sp + dc->num_cp_all;
@@ -552,9 +558,10 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 */
 
 
-int dc_barrier(struct dart_client *dc){
-	if(dc->comm!=NULL)
-	        MPI_Barrier(dc->comm);
+int dc_barrier(struct dart_client *dc)
+{
+	if(dc->comm != NULL)
+		MPI_Barrier(dc->comm);
 	else
 		rpc_barrier(dc->rpc_s);
 }
@@ -582,19 +589,12 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *comm, void *dart_re
 	rpc_add_service(sp_announce_cp_all, dcrpc_announce_cp_all);
 
 
-//	int myrank;
-//	MPI_Comm_rank(*(MPI_Comm *)comm, &myrank);
-
-//        printf("Rank: %d %d\n", myrank, comm);
-
-//	dc->comm = comm;
 	MPI_Comm dup_comm;
-	err = MPI_Comm_dup(*(MPI_Comm *)comm, &dc->comm);
-	if(err<0){
-		printf("MPI_Comm_dup failed\n");	
+	err = MPI_Comm_dup(*(MPI_Comm *) comm, &dc->comm);
+	if(err < 0) {
+		printf("MPI_Comm_dup failed\n");
 		goto err_out;
 	}
-//        dc->comm = &dup_comm;
 
 
 	dc->rpc_s = rpc_server_init(0, NULL, 0, 10, num_peers, dc, DART_CLIENT);

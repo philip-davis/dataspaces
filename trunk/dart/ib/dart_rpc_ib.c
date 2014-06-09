@@ -65,6 +65,14 @@ static int sys_send(struct rpc_server *rpc_s, struct node_id *to, struct hdr_sys
 	Public APIs
  =====================================================*/
 
+double gettime()
+{
+	struct timeval tm;
+	gettimeofday(&tm, NULL);
+	return ((double) tm.tv_sec * 1000000 + (double) tm.tv_usec) / 1000000.0;
+}
+
+
 static struct node_id *rpc_get_peer(struct rpc_server *rpc_s, int peer_id);
 /* -------------------------------------------------------------------
   System barrier implementation.
@@ -863,9 +871,9 @@ char *ip_search(void)
 	while(intr-- > 0 && ioctl(sfd, SIOCGIFADDR, (char *) &buf[intr]));
 	close(sfd);
 	if(BUILD_FOR_STAMPEDE)
-		return inet_ntoa(((struct sockaddr_in *) (&buf[intr-1].ifr_addr))->sin_addr);
+		return inet_ntoa(((struct sockaddr_in *) (&buf[intr - 1].ifr_addr))->sin_addr);
 	else
-                return inet_ntoa(((struct sockaddr_in *) (&buf[intr].ifr_addr))->sin_addr);
+		return inet_ntoa(((struct sockaddr_in *) (&buf[intr].ifr_addr))->sin_addr);
 
 }
 

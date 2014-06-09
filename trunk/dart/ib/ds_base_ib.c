@@ -470,6 +470,11 @@ static int ds_disseminate_all(struct dart_server *ds)	//Done
 		for(i = app->app_peer_tab[0].ptlmap.id; i < app->app_peer_tab[0].ptlmap.id + app->app_num_peers; i++) {
 			cpeer = ds->peer_tab;
 			peer = ds_get_peer(ds, i);
+			if(peer->ptlmap.id % ds->size_sp != ds->rpc_s->ptlmap.id)
+				continue;
+			while(peer->rpc_conn.f_connected != 1) {
+				pthread_yield();
+			}
 
 			err = -ENOMEM;
 			msg = msg_buf_alloc(ds->rpc_s, peer, 1);
@@ -486,7 +491,7 @@ static int ds_disseminate_all(struct dart_server *ds)	//Done
 			msg->msg_rpc->cmd = sp_announce_cp_all;
 			msg->msg_rpc->id = ds->self->ptlmap.id;
 			hreg = (struct hdr_register *) msg->msg_rpc->pad;
-			hreg->pm_cp = cpeer->ptlmap;
+			hreg->pm_cp = ds->rpc_s->ptlmap;
 			hreg->num_cp = ds->size_cp;
 			hreg->num_sp = ds->size_sp;
 			err = rpc_send(ds->rpc_s, peer, msg);
@@ -611,6 +616,8 @@ int ds_boot_master(struct dart_server *ds)	//Done
 	struct hdr_register hdr;
 	struct node_id *peer;
 	struct connection *conn;
+
+
 	while(rdma_get_cm_event(ds->rpc_s->rpc_ec, &event) == 0) {
 		struct con_param conpara;
 		struct rdma_cm_event event_copy;
@@ -719,13 +726,15 @@ int ds_boot_master(struct dart_server *ds)	//Done
 			err = event_copy.status;
 			goto err_out;
 		}
-		if(connected == 2 * (ds->peer_size - 1) - ds->size_cp)
+		if(connected == ds->peer_size - 1)
 			break;
 	}
 
 
 	//printf("prepare to check.\n");
-	if(connected != 2 * (ds->peer_size - 1) - ds->size_cp || connected != connect_count) {
+//      if(connected != 2 * (ds->peer_size - 1) - ds->size_cp || connected != connect_count) {
+	if(connected != (ds->peer_size - 1) || connected != connect_count) {
+
 		printf("Connected number doesn't match needed.\n");
 		err = -1;
 		goto err_out;
@@ -737,7 +746,7 @@ int ds_boot_master(struct dart_server *ds)	//Done
 
 	err = ds_disseminate(ds);
 
-//	sleep(30);
+//      sleep(30);
 
 	err = ds_disseminate_all(ds);
 
@@ -867,11 +876,7 @@ int ds_boot_slave(struct dart_server *ds)	//Done
 		printf("rpc_connect err %d in %s.\n", err, __func__);
 		goto err_out;
 	}
-	err = sys_connect(ds->rpc_s, peer);
-	if(err != 0) {
-		printf("sys_connect err %d in %s.\n", err, __func__);
-		goto err_out;
-	}
+
 	ds->rpc_s->peer_tab[ds->rpc_s->ptlmap.id].ptlmap = ds->rpc_s->ptlmap;
 	ds->rpc_s->peer_tab[1].ptlmap = ds->rpc_s->ptlmap;	//diff
 
@@ -880,54 +885,6 @@ int ds_boot_slave(struct dart_server *ds)	//Done
 		err = rpc_process_event_with_timeout(ds->rpc_s, 1);
 		if(err != 0 && err != -ETIME)
 			goto err_out;
-	}
-
-//printf("howdy 0.\n");
-	//Connect to all other nodes except MS_Server. All the peer info have been stored in peer_tab already.
-	// id will connect actively to 1 ~ id-1; get connect request from id+1 ~ id[MAX]
-	int n = log2_ceil(ds->num_sp);
-	int *check_sp = malloc(sizeof(int) * (ds->num_sp));
-
-	int j;
-
-	for(j = 0; j < ds->num_sp; j++)
-		check_sp[j] = 0;
-
-	int *a = malloc(sizeof(int) * n);
-
-
-
-	int k;
-	int smaller_cid = 0;
-	int greater_cid = 0;
-
-	for(k = 0; k < ds->num_sp; k++) {
-
-		a[0] = 1;
-		for(j = 1; j < n; j++) {
-			a[j] = a[j - 1] * 2;
-		}
-
-		for(j = 0; j < n; j++) {
-			a[j] = (a[j] + k);
-			if(a[j] > ds->num_sp - 1)
-				a[j] = a[j] % ds->num_sp;
-
-			if(k == ds->rpc_s->ptlmap.id) {
-				check_sp[a[j]] = 1;
-			}
-			if(a[j] == ds->rpc_s->ptlmap.id) {
-				check_sp[k] = 1;
-			}
-		}
-	}
-	for(k = 1; k < ds->num_sp; k++) {
-		if(check_sp[k] == 1) {
-			if(k < ds->rpc_s->ptlmap.id)
-				smaller_cid++;
-			else
-				greater_cid++;
-		}
 	}
 
 
@@ -939,6 +896,14 @@ int ds_boot_slave(struct dart_server *ds)	//Done
 		exit(-1);
 	}
 
+
+	err = ds_disseminate_all(ds);
+
+	if(err != 0)
+		goto err_out;
+
+
+	//Connect to all other nodes except MS_Server. All the peer info have been stored in peer_tab already.
 
 	int count;
 	for(i = 1; i < ds->rpc_s->ptlmap.id; i++) {
@@ -954,106 +919,7 @@ int ds_boot_slave(struct dart_server *ds)	//Done
 				goto err_out;
 			}
 		}
-		if(check_sp[peer->ptlmap.id] == 1) {
-			count = 0;
-			do {
-				err = sys_connect(ds->rpc_s, peer);
-				count++;
-			} while(count < 3 && err != 0);
-			if(err != 0) {
-				printf("sys_connect err %d in %s.\n", err, __func__);
-				goto err_out;
-			}
-		}
 	}
-/*
-	if(i == ds->rpc_s->ptlmap.id) {
-		peer = NULL;
-		while(rdma_get_cm_event(ds->rpc_s->rpc_ec, &event) == 0) {
-			struct rdma_cm_event event_copy;
-			memcpy(&event_copy, event, sizeof(*event));
-			rdma_ack_cm_event(event);
-			// printf("Server %d %d \n",ds->rpc_s->ptlmap.id,connected);
-			if(event_copy.event == RDMA_CM_EVENT_CONNECT_REQUEST)
-			 {
-				conpara = *(struct con_param *) event_copy.param.conn.private_data;
-				peer = ds_get_peer(ds, conpara.pm_cp.id);
-				if(conpara.type == 0)
-					con = &peer->sys_conn;
-				
-				else
-					con = &peer->rpc_conn;
-				build_context(event_copy.id->verbs, con);
-				build_qp_attr(&con->qp_attr, con, ds->rpc_s);
-				err = rdma_create_qp(event_copy.id, con->pd, &con->qp_attr);
-				if(err != 0) {
-                                printf("Peer %d couldnot connect to peer %d. Current number of qp is  %d\n rdma_create_qp %d in %s %s.\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id, ds->rpc_s->num_qp, err, __func__, strerror(errno));
-					goto err_out;
-				}
-				ds->rpc_s->num_qp++;
-				event_copy.id->context = con;
-				con->id = event_copy.id;
-				con->qp = event_copy.id->qp;
-				if(conpara.type == 0) {
-					err = sys_post_recv(ds->rpc_s, peer);
-					if(err != 0)
-						goto err_out;
-				}
-				
-				else {
-					err = rpc_post_recv(ds->rpc_s, peer);
-					if(err != 0)
-						goto err_out;
-				}
-				memset(&cm_params, 0, sizeof(struct rdma_conn_param));
-				cm_params.private_data = &peer->ptlmap.id;
-				cm_params.private_data_len = sizeof(int);
-				cm_params.initiator_depth = cm_params.responder_resources = 1;
-				cm_params.retry_count = 7;
-				cm_params.rnr_retry_count = 7;	//infinite retry
-				err = rdma_accept(event_copy.id, &cm_params);
-				if(err != 0) {
-					printf("rdma_accept %d in %s.\n", err, __func__);
-					goto err_out;
-				}
-				con->f_connected = 1;
-				connect_count++;
-			}
-			
-			else if(event_copy.event == RDMA_CM_EVENT_ESTABLISHED){
-				connected++;
-			}
-			else {
-	                        rpc_print_connection_err(ds->rpc_s,peer,event_copy);
-				printf("event is %d with status %d.\n", event_copy.event, event_copy.status);
-				err = event_copy.status;
-				goto err_out;
-			}
-			//if(connected == ds->num_cp + greater_cid){
-			if(connected == (ds->peer_size - ds->rpc_s->ptlmap.id - 1) + greater_cid) {
-			//if(connected == (2*(ds->peer_size-ds->rpc_s->ptlmap.id-1))-ds->num_cp){
-			//if(connected == (2*(ds->peer_size-ds->rpc_s->ptlmap.id-1))){
-			// printf("Server %d %d \n",ds->rpc_s->ptlmap.id,connected);
-				break;
-			}
-		}
-
-//		if(connected != connect_count){
-//			printf("Connected number doesn't match needed.\n");
-//			err = -1;
-//			goto err_out;
-//		}
- 
-	}
-
-        int rc;
-        ds->rpc_s->thread_alive = 1;
-        rc = pthread_create(&(ds->rpc_s->comm_thread), NULL, ds_listen, (void *) ds);
-        if (rc){
-                printf("ERROR; return code from pthread_create() is %d\n", rc);
-                exit(-1);
-        }
-*/
 
 	return 0;
       err_out:
@@ -1166,7 +1032,7 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref)
 	ds->num_cp = num_cp;
 	INIT_LIST_HEAD(&ds->app_list);
 	cp_rank_cnt = num_sp;
-	ds->rpc_s = rpc_server_init(0, NULL, 0, 10, ds->peer_size, ds, DART_SERVER);
+	ds->rpc_s = rpc_server_init(0, NULL, 0, INFINIBAND_MSG_QUEUE_SIZE, ds->peer_size, ds, DART_SERVER);
 	if(!ds->rpc_s)
 		goto err_free_dsrv;
 	rpc_server_set_peer_ref(ds->rpc_s, ds->peer_tab, ds->peer_size);
