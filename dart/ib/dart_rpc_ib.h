@@ -128,7 +128,7 @@ struct lockhdr {
 	int rc;
 	int id;
 	int lock_num;
-	char name[LOCK_NAME_SIZE];		/* lock name */
+	char name[LOCK_NAME_SIZE];	/* lock name */
 } __attribute__ ((__packed__));
 
 /* Header for data kernel function remote deployment. */
@@ -147,8 +147,8 @@ struct rpc_cmd {
 	__u32 id;
 	struct ibv_mr mr;
 	int qp_num;
-    // payload of the command 
-    __u8 pad[280+(BBOX_MAX_NDIM-3)*24]; //TODO: fix this
+	// payload of the command 
+	__u8 pad[280 + (BBOX_MAX_NDIM - 3) * 24];	//TODO: fix this
 	uint64_t wr_id;
 };
 
@@ -399,10 +399,10 @@ enum cmd_type {
 	ss_code_put,
 	ss_code_reply,
 #ifdef DS_HAVE_DIMES
-    dimes_ss_info_msg,
-    dimes_locate_data_msg,
-    dimes_put_msg,
-    dimes_get_ack_msg,
+	dimes_ss_info_msg,
+	dimes_locate_data_msg,
+	dimes_put_msg,
+	dimes_get_ack_msg,
 #endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,
@@ -441,7 +441,7 @@ static int default_completion_with_data_callback(struct rpc_server *rpc_s, struc
 Functions
 */
 int log2_ceil(int n);
-
+double gettime();
 void build_context(struct ibv_context *verbs, struct connection *conn);	//new in IB TODO:try to encapsulate these 2 func in dart_rpc
 void build_qp_attr(struct ibv_qp_init_attr *qp_attr, struct connection *conn, struct rpc_server *rpc_s);	//new in IB
 int rpc_post_recv(struct rpc_server *rpc_s, struct node_id *peer);	//new in IB
@@ -475,8 +475,7 @@ int rpc_receivev(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf 
 
 void rpc_report_md_usage(struct rpc_server *rpc_s);
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
-void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg,
-                        struct rpc_cmd *cmd);
+void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *peer, int num_rpcs);
 
 void rpc_print_connection_err(struct rpc_server *rpc_s, struct node_id *peer, struct rdma_cm_event event);
