@@ -82,7 +82,8 @@ test code, user needs to copy the staging server executable (dataspaces_server
 
 User need to create a configuration file dataspaces.conf under C or Fortran
 test directory. dataspaces.conf file should be edited according to the specific
-requirements of the applications.
+requirements of the applications. A sample configuration file is included under
+scripts/dataspaces.conf.
 
 Please read the FAQ section on how to set the configuration parameters for
 dataspaces.conf file.
@@ -228,17 +229,17 @@ order:
 
 Running DataSpaces requires users to specify the number of servers.
 
-(1) Set the number of servers for DataSpaces transport method
+(1) Set the number of servers for DataSpaces transport method:
 When DataSpaces transport method (e.g. dspaces_put()/dspaces_get()) is used,
 application data is cached in the memory of DataSpaces server processes.
 Two major factors need to be considered when choosing the number
 of servers.
 
 First, estimated total size of application data. Because all the application data
-is cached in the DRAM of server processes, total data size would affect the
-choice. For example, the workflow applications write a total of 16GB
+is cached in the DRAM of server processes, total data size would have to fit in
+severs' memory aggregation. For example, the workflow applications write a total of 16GB
 data in a single time step, and the max_version is set as 10. DataSpaces servers
-need to cache a estimated size of 160GB data in memory. Assuming we run a single
+need to cache an estimated size of 160GB data in memory. Assuming we run a single
 DataSpaces server on one physical compute node (of HPC cluster), and each compute
 nodes has about 8GB DRAM. As a result, we need to execute at least 10 DataSpaces
 servers for this workflow.
@@ -251,9 +252,9 @@ to also increase the number of DataSpaces servers, which would help reduce the
 messaging and data communications load on individual server. For example, if you
 run 8 servers for 1024 application processes, it is better to run 128 servers
 for 16384 application processes instead of keeping the number of servers
-unchanged.
+unchanged even if the total data size is fixed.
 
-(2) Set the number of servers for DIMES transport method
+(2) Set the number of servers for DIMES transport method:
 When DIMES transport methods (e.g. dimes_put()/dimes_get()) is used, application
 data is directly cached in the application memory. DataSpaces server is used to
 index the cached data objects, and locate data objects for application's
