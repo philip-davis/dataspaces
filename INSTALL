@@ -22,7 +22,7 @@ $ ./configure CC=mpixlc FC=mpixlf90 CFLAGS="-g -O0 -qarch=450 -qtune=450" --with
 $ ./configure CC=/bgsys/drivers/ppcfloor/comm/xl/bin/mpixlc_r FC=/bgsys/drivers/ppcfloor/comm/xl/bin/mpixlf90 CFLAGS="-O0 -g -qlanglvl=extc99 -O3 -qarch=qp -qtune=qp -qfullpath"
 
 2. Some of the useful configure options
- --preifx=/install/path
+ --prefix=/install/path
    Set the directory where DataSpaces will be installed.
 
  --with-max-num-array-dimension=integer value

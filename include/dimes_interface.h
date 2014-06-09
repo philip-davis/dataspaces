@@ -27,6 +27,8 @@
 /*
 *  Fan Zhang (2012)  TASSL Rutgers University
 *  zhangfan@cac.rutgers.edu
+*  Qian Sun (2014) TASSL Rutgers University
+*  qiansun@cac.rutgers.edu
 */
 #ifndef __DIMES_H__
 #define __DIMES_H__
