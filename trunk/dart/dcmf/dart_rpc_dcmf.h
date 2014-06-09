@@ -44,6 +44,7 @@ extern "C" {
 
 #include "dcmf.h"
 
+#include "config.h"
 #include "list.h"
 
 #define ALIGN_ADDR_QUAD_BYTES(a)                                \
