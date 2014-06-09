@@ -21,13 +21,14 @@ AC_ARG_WITH(max-num-array-dimension,
 
 AC_ARG_WITH(dimes-rdma-buffer-size,
 	[AS_HELP_STRING([--with-dimes-rdma-buffer-size=integer value for megabytes],
-		[This option is used to specify the size of rdma memory that can be used for data writes/reads in DIMES. Must be used with --enable-dimes. Default value is set as 64MB.])],
+		[This option specifies the maximum amount of RDMA memory buffer that can be used by DIMES in each application process. DIMES RDMA memory buffer is used to locally cache the data written by dimes_put, and is also used by dimes_get to fetch data in remote memory buffer. Must be used with --enable-dimes option. Default value is set as 64MB.])],
 	[have_dimes_rdma_buffer_size=yes;
 	 DIMES_RDMA_BUFFER_SIZE="$withval";])
 
 AC_ARG_WITH(dimes-rdma-max-num-concurrent-read,
 	[AS_HELP_STRING([--with-dimes-rdma-max-num-concurrent-read=integer value],
-		[This option is used to specify the max number of concurrent RDMA read operations DIMES can issue for data fetching process. Must be used with --enable-dimes. Default value is set as 4.])],
+		[This option is used to specify the max number of concurrent RDMA GET
+network operations DIMES can issue for data fetching process. Must be used with --enable-dimes. Default value is set as 4.])],
 	[have_dimes_rdma_max_num_concurrent_read=yes;
 	 DIMES_RDMA_MAX_NUM_CONCURRENT_READ="$withval";])
 
