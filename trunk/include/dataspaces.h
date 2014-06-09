@@ -33,6 +33,8 @@
 *  hbui@cac.rutgers.edu
 *  Fan Zhang (2013) TASSL Rutgers University
 *  zhangfan@cac.rutgers.edu
+*  Qian Sun (2014) TASSL Rutgers University
+*  qiansun@cac.rutgers.edu
 *
 */
 
@@ -56,7 +58,7 @@
  *
  * Note: current implementation does NOT have any user-provided parameters, and 
  * 'parameters' is reserved for future use. User application can just pass NULL
- * for 'parameters'. 
+ * for 'parameters'. The input communicator 'comm' is optional. 
  *
  * @return  0 indicates success.
  */
