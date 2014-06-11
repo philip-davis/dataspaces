@@ -531,7 +531,7 @@ void common_dspaces_finalize(void)
 void common_dimes_define_gdim(const char *var_name, int ndim, uint64_t *gdim)
 {
     if (!is_dimes_lib_init() || !is_ndim_within_bound(ndim)) return;
-    return update_gdim_list(&dimes_c->gdim_list, var_name, ndim, gdim);
+    update_gdim_list(&dimes_c->gdim_list, var_name, ndim, gdim);
 }
 
 int common_dimes_get(const char *var_name,

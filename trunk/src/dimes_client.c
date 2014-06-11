@@ -445,7 +445,7 @@ static int dimes_memory_finalize()
         }
 
         dimes_buffer_finalize();
-        free(options.pre_allocated_rdma_handle.base_addr);
+        free((void*)options.pre_allocated_rdma_handle.base_addr);
     }
 
     return 0;
@@ -486,7 +486,7 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl, size_t siz
                 goto err_out_malloc;
             }
 
-            err = dart_rdma_register_mem(rdma_hndl, buf, size);
+            err = dart_rdma_register_mem(rdma_hndl, (void*)buf, size);
             if (err < 0) {
                 uloga("%s(): ERROR peer #%d failed to register rdma memory\n",
                     __func__, DIMES_CID);
@@ -513,7 +513,7 @@ static int dimes_memory_free(struct dart_rdma_mem_handle *rdma_hndl, enum dimes_
 
     switch (type) {
     case dimes_memory_non_rdma:
-        free(rdma_hndl->base_addr);
+        free((void*)rdma_hndl->base_addr);
         break;
     case dimes_memory_rdma:
         if (options.enable_pre_allocated_rdma_buffer) {
@@ -526,7 +526,7 @@ static int dimes_memory_free(struct dart_rdma_mem_handle *rdma_hndl, enum dimes_
                 goto err_out; 
             }
 
-            free(rdma_hndl->base_addr);
+            free((void*)rdma_hndl->base_addr);
         }
         break;
     default:
@@ -747,7 +747,7 @@ static int obj_assemble(struct fetch_entry *fetch, struct obj_data *od)
 {
     int err;
     struct obj_data *from = obj_data_alloc_no_data(&fetch->dst_odsc,
-                                  fetch->read_tran->dst.base_addr);
+                                  (void*)fetch->read_tran->dst.base_addr);
     err = ssd_copy(od, from);
     if (err == 0) {
         obj_data_free(from);
@@ -877,33 +877,6 @@ static int dcgrpc_dimes_locate_data(struct rpc_server *rpc_s,
 	free(msg);
 err_out:
 	ERROR_TRACE();
-}
-
-static int location_peers_table_clear(struct query_tran_entry_d *qte)
-{
-	qte->qh->qh_num_peer = 0;
-	qte->qh->qh_peerid_tab[0] = -1;
-}
-
-static int location_peers_table_insert(struct query_tran_entry_d *qte,
-				 struct obj_descriptor *podsc)
-{
-	int i;
-	for (i = 0; i < qte->qh->qh_num_peer; i++) {
-		if (qte->qh->qh_peerid_tab[i] == podsc->owner ||
-		    podsc->owner < 0) {
-#ifdef DEBUG
-			uloga("%s(): duplicate or wrong peer id %d\n",
-			__func__, podsc->owner);
-#endif
-			return 0;
-		}
-	}
-
-	// Insert new peer id
-	qte->qh->qh_peerid_tab[qte->qh->qh_num_peer++] = podsc->owner;
-	qte->qh->qh_peerid_tab[qte->qh->qh_num_peer] = -1;
-	return 0;
 }
 
 static int dcgrpc_dimes_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
@@ -2159,7 +2132,7 @@ int dimes_client_put(const char *var_name,
         goto err_out;
     }
     // Copy user data
-    memcpy(mem_obj->rdma_handle.base_addr, data, data_size);
+    memcpy((void*)mem_obj->rdma_handle.base_addr, data, data_size);
 
     set_global_dimension(&dimes_c->gdim_list, var_name,
             &dimes_c->dcg->default_gdim, &mem_obj->gdim);
