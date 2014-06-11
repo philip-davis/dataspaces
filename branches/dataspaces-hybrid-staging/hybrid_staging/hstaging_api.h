@@ -1,5 +1,5 @@
-#ifndef __DATASPACES_API_H__
-#define __DATASPACES_API_H__
+#ifndef __HSTAGING_API_H__
+#define __HSTAGING_API_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,20 +29,17 @@ int hstaging_get_var(const char *var_name, unsigned int ver, int size,
 	int xu, int yu, int zu,
 	void *data, MPI_Comm *comm);
 
-int hstaging_update_var(struct var_descriptor *var_desc,
-    enum hstaging_update_var_op op);
-
+int hstaging_register_executor(int pool_id, int num_executor, int mpi_rank);
 int hstaging_request_task(struct task_descriptor *t);
-
+int hstaging_update_var(struct hstaging_var *var, enum hstaging_update_var_op op);
 int hstaging_set_task_finished(struct task_descriptor *t);
 
-int hstaging_set_workflow_finished();
-
-int hstaging_register_executor(int pool_id, int num_executor, int mpi_rank);
-
-int hstaging_execute_dag(const char* conf_file);
+int hstaging_submit_task(uint32_t wid, uint32_t tid, const char* conf_file);
+//int hstaging_submit_task_nb(uint32_t wid, uint32_t tid, const char* conf_file);
+int hstaging_set_workflow_finished(uint32_t wid);
 
 int hstaging_build_staging(int pool_id, const char *conf_file);
+int hstaging_stop_framework();
 
 #ifdef __cplusplus
 }

@@ -37,22 +37,54 @@
 
 #include "hstaging_api.h"
 
-void run_iterative_dag(MPI_Comm comm)
+void epsi_coupling_workflow_driver(uint32_t wid, MPI_Comm comm)
 {
-    int ts;
-    for (ts = 0; ts < 5; ts++) {
-        hstaging_execute_dag("dag.conf");
+    uint32_t tid = 1; 
+    int num_coupling_step = 5;
+    int i;
+    for (i = 0; i < num_coupling_step; i++) {
+        hstaging_submit_task(wid, tid++, "xgc1.conf");
+        hstaging_submit_task(wid, tid++, "xgca.conf");
+    }  
+
+    hstaging_set_workflow_finished(wid);
+    uloga("%s: finish workflow execution\n", __func__);
+}
+
+void sample_dag_workflow_driver(uint32_t wid, MPI_Comm comm)
+{
+    uint32_t tid = 1;
+    int num_ts = 5;
+    int i;
+    for (i = 0; i < num_ts; i++) {
+        hstaging_submit_task(wid, tid++, "dag.conf");
     }
 
-    hstaging_set_workflow_finished();
-    uloga("%s(): workflow finished\n", __func__);
-} 
+    hstaging_set_workflow_finished(wid);
+    uloga("%s: finish workflow execution\n", __func__);
+}
+
+void s3d_analysis_workflow_driver(uint32_t wid, MPI_Comm comm)
+{
+    uint32_t tid = 1;
+    hstaging_submit_task(wid, tid, "s3d.conf");
+    hstaging_set_workflow_finished(wid);
+
+    uloga("%s: finish workflow execution\n", __func__);
+}
 
 int main(int argc, char **argv)
 {
 	int err;
 	int appid, rank, nproc;
+    uint32_t example_workflow_id = 0;
     MPI_Comm comm;
+
+    if (argc != 2) {
+        uloga("%s: wrong number of arguments!\n", argv[0]);
+        return -1;
+    }
+    example_workflow_id = atol(argv[1]);
 
 	appid = 2;
 	MPI_Init(&argc, &argv);
@@ -61,18 +93,32 @@ int main(int argc, char **argv)
 	MPI_Comm_size(comm, &nproc);
 
     if (rank == 0) {
-        uloga("DAG submitter: num_submitter= %d\n", nproc);
+        uloga("DAG submitter: num_submitter= %d example_workflow_id= %u\n", nproc, example_workflow_id);
     }
 	err = hstaging_init(nproc, appid, hs_submitter); 
 
     hstaging_build_staging(1, "staging.conf");
-    run_iterative_dag(comm);
 
+    switch (example_workflow_id) {
+    case EPSI_WORKFLOW_ID:
+        epsi_coupling_workflow_driver(example_workflow_id, comm);
+        break;
+    case DAG_WORKFLOW_ID:
+        sample_dag_workflow_driver(example_workflow_id, comm);
+        break;
+    case S3D_WORKFLOW_ID:
+        s3d_analysis_workflow_driver(example_workflow_id, comm);
+        break;
+    default:
+        uloga("ERROR invalid workflow_id %u\n", example_workflow_id);
+        break;
+    }
+
+    hstaging_stop_framework();
 	hstaging_finalize();
 
 	MPI_Barrier(comm);
 	MPI_Finalize();
-
 	return 0;	
 err_out:
 	uloga("error out!\n");

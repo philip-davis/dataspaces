@@ -136,7 +136,7 @@ struct peer_attr_reg {
 
 // Registration header structure. 
 struct hdr_register {
-        struct ptlid_map	pm_sp;
+    struct ptlid_map	pm_sp;
 	struct ptlid_map	pm_cp; 
 	int			num_sp;
 	int			num_cp;
@@ -410,11 +410,14 @@ enum cmd_type {
     hs_update_var_msg,
     hs_req_task_msg,
     hs_exec_task_msg,
-    hs_exec_dag_msg,
+    hs_submit_task_msg,
     hs_finish_task_msg,
-    hs_finish_dag_msg,
+    hs_submitted_task_done_msg,
     hs_finish_workflow_msg,
     hs_stop_executor_msg,
+    hs_build_staging_msg,
+    hs_build_staging_done_msg,
+    hs_stop_framework_msg,
 #endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,
