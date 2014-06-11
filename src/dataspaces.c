@@ -137,7 +137,7 @@ void dspaces_unlock_on_write(const char *lock_name, void *comm)
 void dspaces_define_gdim (const char *var_name,
         int ndim, uint64_t *gdim)
 {
-    return common_dspaces_define_gdim(var_name, ndim, gdim);
+    common_dspaces_define_gdim(var_name, ndim, gdim);
 }
 
 int dspaces_put (const char *var_name,
@@ -175,7 +175,7 @@ int dimes_put_sync_all(void)
 void dimes_define_gdim (const char *var_name,
         int ndim, uint64_t *gdim)
 {
-    return common_dimes_define_gdim(var_name, ndim, gdim);
+    common_dimes_define_gdim(var_name, ndim, gdim);
 }
 
 int dimes_get (const char *var_name,

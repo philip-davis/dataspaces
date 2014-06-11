@@ -168,8 +168,8 @@ static int dart_perform_local_copy(struct dart_rdma_tran *tran)
 	struct dart_rdma_op *op, *t;
 	list_for_each_entry_safe(op, t, &tran->rdma_op_list,
 				struct dart_rdma_op, entry) {
-		memcpy(tran->dst.base_addr + op->dst_offset,
-			   tran->src.base_addr + op->src_offset,
+		memcpy((void *)(tran->dst.base_addr + op->dst_offset),
+			   (void *)(tran->src.base_addr + op->src_offset),
 			   op->bytes);
 		list_del(&op->entry);
 		free(op);
