@@ -41,6 +41,10 @@
 #ifndef __DATASPACES_H_
 #define __DATASPACES_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 
 /**
@@ -264,5 +268,8 @@ int dspaces_put_sync(void);
  */
 int dspaces_get_num_space_server(void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif
 
