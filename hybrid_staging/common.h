@@ -40,6 +40,12 @@
 #include "dimes_server.h"
 #endif
 
+#define EPSI_WORKFLOW_ID 1
+#define S3D_WORKFLOW_ID 2
+#define DAG_WORKFLOW_ID 3
+#define DNS_LES_WORKFLOW_ID 4
+#define STAGING_IO_WORKFLOW_ID 5
+
 enum transport_type {
 	USE_DSPACES = 0,
 	USE_DIMES

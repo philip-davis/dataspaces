@@ -18,14 +18,14 @@ static struct g_info g;
 static int update_var(const char *var_name, int ts)
 {
 	int err;
-	struct var_descriptor var_desc;
+	struct hstaging_var var_desc;
 	int *c = NULL;
 	size_t elem_size = sizeof(double);
 
-	strcpy(var_desc.var_name, var_name);		
-	var_desc.step = ts;
+	strcpy(var_desc.name, var_name);		
+	var_desc.version = ts;
 	var_desc.bb.num_dims = g.dims;
-	var_desc.size = elem_size;
+	var_desc.elem_size = elem_size;
 	c = var_desc.bb.lb.c;
 	c[0] = 0;
 	c[1] = 0;

@@ -5,6 +5,8 @@
 extern "C" {
 #endif
 
+#include <stdint.h>
+
 #include "list.h"
 #include "bbox.h"
 
@@ -17,8 +19,6 @@ extern "C" {
 #define MAX_VAR_NAME_LEN 32
 #define MAX_NUM_TASKS 512 
 #define MAX_NUM_VARS 48 
-
-//#define BK_GROUP_BASIC_SIZE 4 
 
 // TODO: change to lowercase, reasonable naming for the enum types below
 enum hstaging_var_type {
@@ -90,38 +90,47 @@ struct hdr_register_resource {
 } __attribute__((__packed__));
 
 struct hdr_update_var {
-	int op;
-	char var_name[MAX_VAR_NAME_LEN];
-	int step;
-	int size;
+	int op; // TODO: what is this needed for?
+	char name[MAX_VAR_NAME_LEN];
+	int version;
+	int elem_size;
 	struct bbox bb;
 } __attribute__((__packed__));
 
 struct hdr_exec_task {
-	int tid;
-	int step;
+    uint32_t wid;
+    uint32_t tid;
+    int appid;
 	int rank_hint;
 	int nproc_hint;
-	int num_input_vars;
+	int num_vars;
 } __attribute__((__packed__));
 
 struct hdr_finish_task {
     int pool_id;
-    int tid;
-    int step;
+    uint32_t wid;
+    uint32_t tid;
 } __attribute__((__packed__));
 
-struct hdr_exec_dag {
-    char dag_conf_file[MAX_VAR_NAME_LEN];
+struct hdr_submit_task {
+    uint32_t wid;
+    uint32_t tid;
+    char conf_file[NAME_MAXLEN];
 } __attribute__((__packed__));
 
-struct hdr_finish_dag {
-    double dag_execution_time;
+struct hdr_submitted_task_done {
+    uint32_t wid;
+    uint32_t tid;
+    double task_execution_time;
 } __attribute__((__packed__));
    
 struct hdr_build_staging {
     int pool_id;
-    char staging_conf_file[MAX_VAR_NAME_LEN];
+    char staging_conf_file[NAME_MAXLEN];
+} __attribute__((__packed__));
+
+struct hdr_finish_workflow {
+    uint32_t wid;
 } __attribute__((__packed__));
 
 static char* var_type_name[] =
@@ -129,78 +138,59 @@ static char* var_type_name[] =
 	"depend", "put", "get"
 };
 
-struct var_descriptor {
-	char var_name[MAX_VAR_NAME_LEN];
-	int step; // time step
-	struct bbox bb; // global domain
-	size_t size; // size of data element
+struct hstaging_var {
+	char name[MAX_VAR_NAME_LEN];
+	enum hstaging_var_type type;
+    enum hstaging_var_status status;
+    int version;
+    size_t elem_size;
+    struct bbox bb;
 };
 
 struct task_descriptor {
-	int tid;
-	int step;
+    uint32_t wid;
+	uint32_t tid;
+    int appid; // id of workflow component application/operation/executable
 	int rank;
 	int nproc;
-	int num_input_vars;
+	int num_vars;
     int *bk_mpi_rank_tab;
-	struct var_descriptor *input_vars;
-};
-
-struct var_instance {
-	struct list_head entry;
-	struct hstaging_var *var;
-	enum hstaging_var_status status;
-	size_t size;
-	struct bbox bb;
-};
-
-struct task_instance {
-	struct list_head entry;
-	int tid;
-	int step;
-	struct list_head input_vars_list;
-	enum hstaging_task_status status;
-    enum hstaging_placement_hint placement_hint; 
-    int size_hint;
-};
-
-struct hstaging_var {
-	char name[NAME_MAXLEN];
-	enum hstaging_var_type type;
+	struct hstaging_var *vars;
 };
 
 struct hstaging_task {
-	int tid;
-	enum hstaging_placement_hint placement_hint;
-    int size_hint; // number of processor cores
-	struct hstaging_var vars[MAX_NUM_VARS];	
-	int num_vars;
-	struct list_head instances_list;
-    int num_finished_ti;
+    struct list_head entry;
+    uint32_t wid; // TODO: why we need both wid and tid?
+    uint32_t tid;
+    int appid; // id of workflow component application/operation/executable 
+    enum hstaging_task_status status;
+    enum hstaging_placement_hint placement_hint;
+    int size_hint;
+    struct hstaging_var vars[MAX_NUM_VARS];
+    int num_vars;
+    int submitter_dart_id; // peer who submits the task execution
+};
+
+struct workflow_state {
+    unsigned char f_done;
 };
 
 struct hstaging_workflow {
-	struct hstaging_task tasks[MAX_NUM_TASKS];
+    struct list_head entry;
+    uint32_t wid;
+    struct workflow_state state;
+    struct list_head task_list;
 	int num_tasks;
-    int submitter_dart_id; // peer who submits the dag execution
 };
 
-struct hstaging_workflow* read_workflow_conf_file(const char *fname);
-int free_workflow(struct hstaging_workflow *wf);
+int parse_task_conf_file(struct hstaging_task *task, const char *fname);
+int evaluate_dataflow_by_available_var(struct hstaging_workflow *wf, const struct hstaging_var *var_desc);
+int get_ready_tasks(struct hstaging_workflow *wf, struct hstaging_task **tasks, int *num_ready_tasks);
+void update_task_status(struct hstaging_task *task, enum hstaging_task_status status);
+int is_task_finish(struct hstaging_task *task);
+int is_task_ready(struct hstaging_task *task);
 
-int evaluate_dataflow_by_available_var(struct hstaging_workflow *wf,
-    struct var_descriptor *var_desc);
-int get_ready_tasks(struct hstaging_workflow *wf, struct task_instance **tasks,
-    int *n);
-int clear_finished_tasks(struct hstaging_workflow *wf);
-void update_task_instance_status(struct task_instance *ti,
-    enum hstaging_task_status status);
-
-int is_workflow_finished(struct hstaging_workflow *wf);
-
-int read_emulated_vars_sequence(struct hstaging_workflow *wf, const char *fname);
 void print_workflow(struct hstaging_workflow *wf);
-
 
 #ifdef __cplusplus
 }

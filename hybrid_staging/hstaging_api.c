@@ -19,74 +19,36 @@ static enum storage_type st = row_major;
 // TODO: 'num_dims' is hardcoded to 2.
 static int num_dims = 2;
 
-struct parallel_job {
-	struct list_head entry;
-	int type;
-	int tstep;
-};
+#define MY_DART_ID dc->rpc_s->ptlmap.id 
 
-struct bucket_info {
-	/* keep basic info of current task */
-	struct task_descriptor *current_task;
-
-	/* flags */
-	int f_get_task;
-	int f_stop_executor; //flag indicates that current executor can exit 
-	int f_init_dspaces;
-    int f_build_staging_done;
-
-	/* track data get time */
-	double tm_st, tm_end;
-
-	enum hstaging_pe_type pe_type;
-    // enum hstaging_location_type location_type;
-    int pool_id, mpi_rank, num_bucket;
-    struct executor_topology_info topo_info;
-};
-static struct bucket_info bk_info;
-
-struct dag_info {
-    char dag_conf_file[MAX_VAR_NAME_LEN];
-    int f_dag_execution_done; //flag indicates that all tasks of the dag is done
-};
-static struct dag_info current_dag;
-
-struct client_rpc_send_state {
-    int f_done;
-};
-
-static int client_rpc_send_completion_callback(struct rpc_server *rpc_s, struct msg_buf *msg)
-{
-    struct client_rpc_send_state *p = (struct client_rpc_send_state *)msg->private;
-    p->f_done = 1;
-    return 0;
-}
-
+/**
+    Platform (system) dependent functions
+**/
 #ifdef HAVE_UGNI
 static int process_event(struct dcg_space *dcg)
 {
-	int err;
-	err = rpc_process_event_with_timeout(dcg->dc->rpc_s, 1);
-	if (err < 0)
-		goto err_out;
+    int err;
+    err = rpc_process_event_with_timeout(dcg->dc->rpc_s, 1);
+    if (err < 0)
+        goto err_out;
 
-	return 0;
+    return 0;
 err_out:
-	ERROR_TRACE();
+    ERROR_TRACE();
 }
 #endif
 
 #ifdef HAVE_DCMF
 static int process_event(struct dcg_space *dcg)
 {
-	int err;
-	err = rpc_process_event(dcg->dc->rpc_s);
-	if (err < 0)
-		goto err_out;
+    int err;
+    err = rpc_process_event(dcg->dc->rpc_s);
+    if (err < 0)
+        goto err_out;
 
-	return 0;
+    return 0;
 err_out:
-	ERROR_TRACE();
+    ERROR_TRACE();
 }
 #endif
 
@@ -127,20 +89,141 @@ int get_topology_information(struct executor_topology_info *topo_info)
 }
 #endif
 
+/**
+    Messaging
+**/
+struct client_rpc_send_state {
+    int f_done;
+};
+
+static int client_rpc_send_completion_callback(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+    struct client_rpc_send_state *p = (struct client_rpc_send_state *)msg->private;
+    p->f_done = 1;
+    return 0;
+}
+
+static int client_rpc_send(struct node_id *peer, struct msg_buf *msg, struct client_rpc_send_state *state)
+{
+    int err;
+    state->f_done = 0;
+    msg->cb = client_rpc_send_completion_callback;
+    msg->private = state;
+
+    err = rpc_send(dc->rpc_s, peer, msg);
+    if (err < 0) {
+        goto err_out;
+    }
+
+    // Wait/block for the message delivery 
+    while (!state->f_done) {
+        err = process_event(dcg);
+        if (err < 0) {
+            goto err_out;
+        }
+    }
+
+    return 0;
+ err_out:
+    uloga("ERROR %s: err= %d\n", __func__, err);
+    return err;
+}
+
+/**
+    Data structures: bucket (executor), task
+**/
+struct parallel_job {
+	struct list_head entry;
+	int type;
+	int tstep;
+};
+
+struct bucket_info {
+	/* keep basic info of current task */
+	struct task_descriptor *current_task;
+
+	/* flags */
+	int f_get_task;
+	int f_stop_executor; //flag indicates that current executor can exit 
+	int f_init_dspaces;
+    int f_build_staging_done;
+
+	/* track data get time */
+	double tm_st, tm_end;
+
+	enum hstaging_pe_type pe_type;
+    // enum hstaging_location_type location_type;
+    int pool_id, mpi_rank, num_bucket;
+    struct executor_topology_info topo_info;
+};
+static struct bucket_info bk_info;
+
+struct task_info {
+    struct list_head entry;
+    uint32_t wid;
+    uint32_t tid;
+    char conf_file[NAME_MAXLEN];
+    unsigned char f_task_execution_done;
+};
+static struct list_head submitted_task_list;
+
+void submitted_task_list_init()
+{
+    INIT_LIST_HEAD(&submitted_task_list);
+}
+
+struct task_info* create_submitted_task(uint32_t wid, uint32_t tid, const char *conf_file)
+{
+    struct task_info *t = malloc(sizeof(*t));
+    if (!t) {
+        uloga("ERROR %s: malloc() failed\n", __func__);
+        return NULL;
+    }
+    
+    t->wid = wid;
+    t->tid = tid;
+    strcpy(t->conf_file, conf_file);
+    t->f_task_execution_done = 0;
+
+    list_add_tail(&t->entry, &submitted_task_list);
+    return t; 
+}
+
+struct task_info* lookup_submitted_task(uint32_t wid, uint32_t tid)
+{
+    struct task_info *t;
+    list_for_each_entry(t, &submitted_task_list, struct task_info, entry) {
+        if (t->wid == wid && t->tid == tid) {
+            return t;
+        }
+    }
+
+    return NULL;
+}
+
+void free_submitted_task(struct task_info *t)
+{
+    if (!t) return;
+    list_del(&t->entry);
+    free(t);
+}
+
+inline int is_submitted_task_done(struct task_info* t) {
+    return t->f_task_execution_done;
+}
+
 static int fetch_task_info_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
     size_t mpi_rank_tab_size = bk_info.current_task->nproc*sizeof(int);
-    size_t input_var_tab_size =
-                bk_info.current_task->num_input_vars*sizeof(struct var_descriptor);
+    size_t var_tab_size = bk_info.current_task->num_vars*sizeof(struct hstaging_var);
 
     // copy origin mpi ranks for allocated bk
     bk_info.current_task->bk_mpi_rank_tab = malloc(mpi_rank_tab_size);
     memcpy(bk_info.current_task->bk_mpi_rank_tab, msg->msg_data, mpi_rank_tab_size);
 
-    // copy input vars
-    bk_info.current_task->input_vars = malloc(input_var_tab_size);
-    memcpy(bk_info.current_task->input_vars, msg->msg_data+mpi_rank_tab_size,
-            input_var_tab_size);
+    // copy vars
+    bk_info.current_task->vars = malloc(var_tab_size);
+    memcpy(bk_info.current_task->vars, msg->msg_data+mpi_rank_tab_size, var_tab_size);
 
 	bk_info.f_get_task = 1;
     free(msg->msg_data);
@@ -158,7 +241,7 @@ static int fetch_task_info(struct rpc_cmd *cmd)
 	if (!msg)
 		goto err_out;
 
-    msg->size = bk_info.current_task->num_input_vars*sizeof(struct var_descriptor)
+    msg->size = bk_info.current_task->num_vars*sizeof(struct hstaging_var)
                 + bk_info.current_task->nproc*sizeof(int);
     msg->msg_data = malloc(msg->size);
 	msg->cb = fetch_task_info_completion;
@@ -177,16 +260,17 @@ err_out:
 static int callback_hs_exec_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
 	struct hdr_exec_task *hdr = (struct hdr_exec_task *)cmd->pad;
+    bk_info.current_task->wid = hdr->wid;
 	bk_info.current_task->tid = hdr->tid;
-	bk_info.current_task->step = hdr->step;
+    bk_info.current_task->appid = hdr->appid;
 	bk_info.current_task->rank = hdr->rank_hint;
 	bk_info.current_task->nproc = hdr->nproc_hint;
-    bk_info.current_task->num_input_vars = hdr->num_input_vars;
-    bk_info.current_task->input_vars = NULL;
+    bk_info.current_task->num_vars = hdr->num_vars;
+    bk_info.current_task->vars = NULL;
 
     if (fetch_task_info(cmd) < 0) {
         uloga("ERROR %s(): failed to fetch info for task (%d,%d)\n",
-            __func__, hdr->tid, hdr->step);
+            __func__, hdr->wid, hdr->tid);
         bk_info.current_task = NULL;
         return -1;
     }
@@ -194,12 +278,20 @@ static int callback_hs_exec_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	return 0;
 }
 
-static int callback_hs_finish_dag(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_hs_submitted_task_done(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-    struct hdr_finish_dag *hdr = (struct hdr_finish_dag*)cmd->pad;
-    uloga("%s(): dag execution time %.6f\n", __func__, hdr->dag_execution_time);
-    current_dag.f_dag_execution_done = 1;
+    struct hdr_submitted_task_done *hdr = (struct hdr_submitted_task_done *)cmd->pad;
+    uloga("%s(): task wid= %u tid= %u execution time %.6f\n", __func__, 
+        hdr->wid, hdr->tid, hdr->task_execution_time);
 
+    struct task_info *t = lookup_submitted_task(hdr->wid, hdr->tid);
+    if (!t) {
+        uloga("ERROR %s: failed to find submitted task wid= %u tid= %u\n",
+            __func__, hdr->wid, hdr->tid);
+        return 0;
+    }
+    
+    t->f_task_execution_done = 1;
     return 0;
 }
 
@@ -224,6 +316,7 @@ static int callback_hs_build_staging_done(struct rpc_server *rpc_s, struct rpc_c
 *
 */
 
+// TODO: do we need to separate the init function for submitter/executor?
 /* Initialize the dataspaces library. */
 int hstaging_init(int num_peers, int appid, enum hstaging_pe_type pe_type)
 {
@@ -241,7 +334,7 @@ int hstaging_init(int num_peers, int appid, enum hstaging_pe_type pe_type)
 	// TODO: does it matter to place rpc_add_service after dspaces_init()?
 	rpc_add_service(hs_stop_executor_msg, callback_hs_stop_executor);
 	rpc_add_service(hs_exec_task_msg, callback_hs_exec_task);
-    rpc_add_service(hs_finish_dag_msg, callback_hs_finish_dag);
+    rpc_add_service(hs_submitted_task_done_msg, callback_hs_submitted_task_done);
     rpc_add_service(hs_build_staging_done_msg, callback_hs_build_staging_done);
 
 	err = dspaces_init(num_peers, appid);
@@ -264,6 +357,9 @@ int hstaging_init(int num_peers, int appid, enum hstaging_pe_type pe_type)
 
 	timer_init(&timer, 1);
 	timer_start(&timer);
+
+    // Init
+    submitted_task_list_init();    
 	
 	bk_info.f_init_dspaces = 1;
 	return 0;
@@ -346,7 +442,7 @@ err_out:
 	ERROR_TRACE();
 }
 
-int hstaging_update_var(struct var_descriptor *var_desc, enum hstaging_update_var_op op)
+int hstaging_update_var(struct hstaging_var *var, enum hstaging_update_var_op op)
 {
     struct client_rpc_send_state send_state;
 	struct msg_buf *msg;
@@ -362,27 +458,15 @@ int hstaging_update_var(struct var_descriptor *var_desc, enum hstaging_update_va
 	msg->msg_rpc->cmd = hs_update_var_msg;
 	msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
 	hdr = (struct hdr_update_var*) msg->msg_rpc->pad;
-	strcpy(hdr->var_name, var_desc->var_name);
-	hdr->step = var_desc->step;
-	hdr->size = var_desc->size;
-	hdr->bb = var_desc->bb;
+	strcpy(hdr->name, var->name);
+	hdr->version = var->version;
+	hdr->elem_size = var->elem_size;
+	hdr->bb = var->bb;
 	hdr->op = op;
 
-    send_state.f_done = 0;
-    msg->cb = client_rpc_send_completion_callback;
-    msg->private = &send_state;
-
-	err = rpc_send(dc->rpc_s, peer, msg);
-	if (err < 0) {
-		goto err_out_free;
-	}
-
-    // Wait/block for the message delivery 
-    while (!send_state.f_done) {
-        err = process_event(dcg);
-        if (err < 0) {
-            goto err_out_free;
-        }
+    err = client_rpc_send(peer, msg, &send_state);
+    if (err < 0) {
+        goto err_out_free;
     }
 
 	return 0;
@@ -441,21 +525,9 @@ int hstaging_register_executor(int pool_id, int num_bucket, int mpi_rank)
     hdr->mpi_rank = bk_info.mpi_rank;
     hdr->topo_info = bk_info.topo_info;
 
-    send_state.f_done = 0;
-    msg->cb = client_rpc_send_completion_callback;
-    msg->private = &send_state;
-
-    err = rpc_send(dc->rpc_s, peer, msg);
+    err = client_rpc_send(peer, msg, &send_state);
     if (err < 0) {
         goto err_out_free;
-    }
-
-    // Wait/block for the message delivery 
-    while (!send_state.f_done) {
-        err = process_event(dcg);
-        if (err < 0) {
-            goto err_out_free;
-        }
     }
 
     return 0;
@@ -465,7 +537,7 @@ int hstaging_register_executor(int pool_id, int num_bucket, int mpi_rank)
     ERROR_TRACE();     
 }
 
-int hstaging_set_task_done(struct task_descriptor *t)
+int hstaging_set_task_finished(struct task_descriptor *t)
 {
     struct client_rpc_send_state send_state;
     struct msg_buf *msg;
@@ -482,24 +554,12 @@ int hstaging_set_task_done(struct task_descriptor *t)
     msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
     hdr= (struct hdr_finish_task *)msg->msg_rpc->pad;
     hdr->pool_id = bk_info.pool_id;
+    hdr->wid = t->wid;
     hdr->tid = t->tid;
-    hdr->step = t->step;
 
-    send_state.f_done = 0;
-    msg->cb = client_rpc_send_completion_callback;
-    msg->private = &send_state;
-
-    err = rpc_send(dc->rpc_s, peer, msg);
+    err = client_rpc_send(peer, msg, &send_state);
     if (err < 0) {
         goto err_out_free;
-    }
-
-    // Wait/block for the message delivery 
-    while (!send_state.f_done) {
-        err = process_event(dcg);
-        if (err < 0) {
-            goto err_out_free;
-        }
     }
 
     return 0;
@@ -509,8 +569,9 @@ int hstaging_set_task_done(struct task_descriptor *t)
     ERROR_TRACE();
 }
 
-int hstaging_execute_dag(const char* conf_file)
+int hstaging_submit_task(uint32_t wid, uint32_t tid, const char* conf_file)
 {
+    struct client_rpc_send_state send_state;
     struct msg_buf *msg;
     struct node_id *peer;
     int err = -ENOMEM;
@@ -520,27 +581,29 @@ int hstaging_execute_dag(const char* conf_file)
     if (!msg)
         goto err_out;
 
-    msg->msg_rpc->cmd = hs_exec_dag_msg;
-    msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
-    struct hdr_exec_dag *hdr= (struct hdr_exec_dag*)msg->msg_rpc->pad;
-    strcpy(hdr->dag_conf_file, conf_file);
+    msg->msg_rpc->cmd = hs_submit_task_msg;
+    msg->msg_rpc->id = MY_DART_ID;
+    struct hdr_submit_task *hdr= (struct hdr_submit_task*)msg->msg_rpc->pad;
+    hdr->wid = wid;
+    hdr->tid = tid;
+    strcpy(hdr->conf_file, conf_file);
 
-    err = rpc_send(dc->rpc_s, peer, msg);
+    err = client_rpc_send(peer, msg, &send_state);
     if (err < 0) {
         goto err_out_free;
     }
 
-    strcpy(current_dag.dag_conf_file, conf_file);
-    current_dag.f_dag_execution_done = 0;
+    struct task_info *t = create_submitted_task(wid, tid, conf_file);
 
-    // Wait/block for the dag execution to complete
-    while (!current_dag.f_dag_execution_done) {
+    // Wait/block for the task execution to complete
+    while (!is_submitted_task_done(t)) {
         err = process_event(dcg);
         if (err < 0) {
             goto err_out_free;
         }
     }    
 
+    free_submitted_task(t);
     return 0;
  err_out_free:
     if (msg) free(msg);
@@ -567,22 +630,9 @@ int hstaging_build_staging(int pool_id, const char *conf_file)
     hdr->pool_id = pool_id;
     strcpy(hdr->staging_conf_file, conf_file);
 
-    send_state.f_done = 0;
-    msg->cb = client_rpc_send_completion_callback;
-    msg->private = &send_state;
-
-    bk_info.f_build_staging_done = 0;    
-    err = rpc_send(dc->rpc_s, peer, msg);
+    err = client_rpc_send(peer, msg, &send_state);
     if (err < 0) {
         goto err_out_free;
-    }
-
-    // Wait/block for the message delivery 
-    while (!send_state.f_done) {
-        err = process_event(dcg);
-        if (err < 0) {
-            goto err_out_free;
-        }
     }
 
     // Wait for the reply from master
@@ -600,11 +650,12 @@ err_out:
     ERROR_TRACE();
 }
 
-int hstaging_set_workflow_finished()
+int hstaging_set_workflow_finished(uint32_t wid)
 {
     struct client_rpc_send_state send_state;
     struct msg_buf *msg;
     struct node_id *peer;
+    struct hdr_finish_workflow *hdr;
     int err = -ENOMEM;
 
     peer = dc_get_peer(dc, 0); //master srv has dart id as 0
@@ -614,22 +665,12 @@ int hstaging_set_workflow_finished()
 
     msg->msg_rpc->cmd = hs_finish_workflow_msg;
     msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
+    hdr = (struct hdr_finish_workflow*) msg->msg_rpc->pad;
+    hdr->wid = wid;
 
-    send_state.f_done = 0;
-    msg->cb = client_rpc_send_completion_callback;
-    msg->private = &send_state;
-
-    err = rpc_send(dc->rpc_s, peer, msg);
+    err = client_rpc_send(peer, msg, &send_state);
     if (err < 0) {
         goto err_out_free;
-    }
-
-    // Wait/block for the message delivery 
-    while (!send_state.f_done) {
-        err = process_event(dcg);
-        if (err < 0) {
-            goto err_out_free;
-        }
     }
 
     return 0;
@@ -638,3 +679,32 @@ int hstaging_set_workflow_finished()
  err_out:
     ERROR_TRACE();
 }
+
+int hstaging_stop_framework()
+{
+    struct client_rpc_send_state send_state;
+    struct msg_buf *msg;
+    struct node_id *peer;
+    //struct hdr_stop_framework *hdr;
+    int err = -ENOMEM;
+
+    peer = dc_get_peer(dc, 0); //master srv has dart id as 0
+    msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+    if (!msg)
+        goto err_out;
+
+    msg->msg_rpc->cmd = hs_stop_framework_msg;
+    msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
+
+    err = client_rpc_send(peer, msg, &send_state);
+    if (err < 0) {
+        goto err_out_free;
+    }
+
+    return 0;
+ err_out_free:
+    if (msg) free(msg);
+ err_out:
+    ERROR_TRACE();
+}
+

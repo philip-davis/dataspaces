@@ -29,6 +29,7 @@
 *  zhangfan@cac.rutgers.edu
 */
 #include <stdio.h>
+#include <stdint.h>
 
 #include "debug.h"
 #include "common.h"
@@ -45,7 +46,14 @@ int main(int argc, char **argv)
 {
 	int err;
 	int appid, rank, nproc;
+    uint32_t example_workflow_id = 0;
     MPI_Comm comm;
+
+    if (argc != 2) {
+        uloga("%s: wrong number of arguments!\n", argv[0]);
+        return -1;
+    }
+    example_workflow_id = atol(argv[1]);
 
 	appid = 1;
 	MPI_Init(&argc, &argv);
@@ -54,13 +62,25 @@ int main(int argc, char **argv)
 	MPI_Comm_size(comm, &nproc);
 
     if (rank == 0) {
-        uloga("DAG execution: num_worker= %d\n", nproc);
+        uloga("DAG execution: workflow_id=%u num_worker= %d\n", example_workflow_id, nproc);
     }
 	err = hstaging_init(nproc, appid, hs_executor); 
 
-	err = dummy_epsi_coupling_workflow(comm);
-    //err = dummy_sample_dag_workflow(comm);
-    //err = dummy_s3d_analysis_workflow(comm);
+    switch (example_workflow_id) {
+    case EPSI_WORKFLOW_ID:
+        err = dummy_epsi_coupling_workflow(comm);
+        break;
+    case DAG_WORKFLOW_ID:
+        err = dummy_sample_dag_workflow(comm);
+        break;
+    case S3D_WORKFLOW_ID:
+        err = dummy_s3d_analysis_workflow(comm);
+        break;
+    default:
+        err = 0;
+        uloga("ERROR invalid workflow_id %u\n", example_workflow_id);
+        break;
+    }
 	if (err < 0)
 		goto err_out;
 
@@ -68,7 +88,6 @@ int main(int argc, char **argv)
 
 	MPI_Barrier(comm);
 	MPI_Finalize();
-
 	return 0;	
 err_out:
 	uloga("error out!\n");

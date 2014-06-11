@@ -28,23 +28,22 @@ static struct dimes_server *dimes_s = NULL;
 static struct dart_server *ds = NULL;
 static struct ds_gspace *dsg = NULL;
 
-static struct hstaging_workflow *wf = NULL;
 static struct timer tm; 
 static double tm_st;
-static double dag_tm_st, dag_tm_end;
+//static double dag_tm_st, dag_tm_end;
 
-struct job_id {
-	int tid;
-	int step;
+struct hstaging_framework_state {
+    unsigned char f_done;
+    unsigned char f_notify_executor_to_exit;
 };
+static struct hstaging_framework_state framework_state;
 
-struct job {
+struct runnable_task {
 	struct list_head entry;
-	struct task_instance *ti;
-	int num_input_vars;
-	struct job_id jid;
+	struct hstaging_task *task_ref;
+	// int num_input_vars;
     // enum hstaging_location_type location_type;
-    int bk_allocation_size; // number of buckets required for job execution
+    int bk_allocation_size; // number of buckets required for task execution
     int *bk_idx_tab; // array of idx to the buckets in bk_tab 
 };
 
@@ -63,7 +62,6 @@ struct bucket {
     int pool_id; // indicate which resource pool the bucket is from
     int origin_mpi_rank;
     enum bucket_status status;
-    struct job_id current_jid; // TODO: do we still need this? 
     struct executor_topology_info topo_info;
 };
 
@@ -86,34 +84,148 @@ struct bucket_pool {
     int f_node_tab_done;
 };
 
-struct workflow_state {
-	unsigned int f_done;
-	unsigned int f_send_exit_msg;
-};
-
 struct pending_msg {
     struct list_head entry;
     struct rpc_cmd cmd;
 };
 
 static struct list_head bk_pool_list;
-static struct list_head jobq;
-static struct workflow_state state;
+static struct list_head rtask_list; // runnable task list
 static struct list_head pending_msg_list;
+static struct list_head workflow_list;
 
-static inline int equal_jid(struct job_id *l, struct job_id *r)
+/**
+ Workflow & Tasks
+**/
+
+static void free_workflow(struct hstaging_workflow *wf)
 {
-	return (l->tid == r->tid) && (l->step == r->step);
+    if (!wf) return;
+    if (wf->num_tasks > 0) {
+        uloga("WARNING %s: wf->num_tasks= %d\n", __func__, wf->num_tasks);
+    }
+
+    struct hstaging_task *task, *temp;
+    list_for_each_entry_safe(task, temp, &wf->task_list, struct hstaging_task, entry) {
+        list_del(&task->entry);
+        free(task);
+    }
+
+    list_del(&wf->entry);
+    free(wf);
 }
 
-/*
-static inline int is_master()
+static struct hstaging_task* workflow_lookup_task(struct hstaging_workflow *wf, uint32_t tid)
 {
-	return ( 0 == ds->rpc_s->ptlmap.id );
-}
-*/
+    struct hstaging_task *task;
+    list_for_each_entry(task, &wf->task_list, struct hstaging_task, entry) {
+        if (task->tid == tid)
+            return task;
+    } 
 
-static inline void init_bk_pool_list()
+    return NULL;
+}
+
+static void workflow_add_task(struct hstaging_workflow *wf, struct hstaging_task *task)
+{
+    if (!task) return;
+    list_add_tail(&task->entry, &wf->task_list);
+    wf->num_tasks++;
+}
+
+static void workflow_clear_finished_tasks(struct hstaging_workflow *wf)
+{
+    struct hstaging_task *task, *temp;
+    list_for_each_entry_safe(task, temp, &wf->task_list, struct hstaging_task, entry) {
+        if (is_task_finish(task)) {
+            list_del(&task->entry);
+            free(task);
+            wf->num_tasks--;
+        }
+    }
+}
+
+static struct hstaging_task* create_new_task(uint32_t wid, uint32_t tid, const char* conf_file)
+{
+    struct hstaging_task *task = (struct hstaging_task*)malloc(sizeof(*task));
+    if (!task) {
+        goto err_out;
+    }
+    task->wid = wid;
+    task->tid = tid;
+    task->status = task_not_ready;   
+    task->appid = 0;
+    task->placement_hint = hint_none;
+    task->size_hint = 0;
+    task->num_vars = 0;
+    if (parse_task_conf_file(task, conf_file) < 0) {
+        goto err_out_free;
+    }
+
+    return task;
+ err_out_free:
+    free(task);
+ err_out:
+    uloga("ERROR %s: failed to create new task tid= %d conf_file %s\n",
+        __func__, tid, conf_file);
+    return NULL;
+}
+
+static inline void workflow_list_init()
+{
+    INIT_LIST_HEAD(&workflow_list);
+}
+
+static struct hstaging_workflow* workflow_list_lookup(uint32_t wid) {
+    struct hstaging_workflow *wf;
+    list_for_each_entry(wf, &workflow_list, struct hstaging_workflow, entry) {
+        if (wf->wid == wid)
+            return wf;
+    }
+
+    return NULL;
+}
+
+static struct hstaging_workflow* workflow_list_create_new(uint32_t wid) {
+    struct hstaging_workflow *wf;
+    wf = (struct hstaging_workflow*)malloc(sizeof(*wf));
+    wf->wid = wid;
+    wf->state.f_done = 0;
+    INIT_LIST_HEAD(&wf->task_list);
+    wf->num_tasks = 0;
+
+    list_add_tail(&wf->entry, &workflow_list);
+    return wf;
+}
+
+static void workflow_list_clear_finished_tasks()
+{
+    struct hstaging_workflow *wf;
+    list_for_each_entry(wf, &workflow_list, struct hstaging_workflow, entry) {
+        workflow_clear_finished_tasks(wf);
+    }
+}
+
+static void workflow_list_evaluate_dataflow(const struct hstaging_var *var_desc)
+{   
+    struct hstaging_workflow *wf;
+    list_for_each_entry(wf, &workflow_list, struct hstaging_workflow, entry) {
+       evaluate_dataflow_by_available_var(wf, var_desc);
+    }
+}
+
+static void workflow_list_free()
+{
+    struct hstaging_workflow *wf, *temp;
+    list_for_each_entry_safe(wf, temp, &workflow_list, struct hstaging_workflow, entry) {
+        free_workflow(wf);
+    }
+}
+
+/**
+    Workflow executors
+**/
+static inline void bk_pool_init()
 {
     INIT_LIST_HEAD(&bk_pool_list);
 }
@@ -141,9 +253,7 @@ static struct bucket_pool* bk_pool_create_new(int pool_id, int num_bucket)
     bp->f_bk_reg_done = 0;
     bp->f_node_tab_done = 0;
 
-    // Add to the list
     list_add_tail(&bp->entry, &bk_pool_list);
-
     return bp; 
 }
 
@@ -294,7 +404,7 @@ static void bk_pool_build_node_tab(struct bucket_pool *bp)
     return;
 }
 
-static void free_bk_pool_list()
+static void bk_pool_free()
 {
     struct bucket_pool *bp, *t;
     list_for_each_entry_safe(bp, t, &bk_pool_list, struct bucket_pool, entry)
@@ -306,12 +416,15 @@ static void free_bk_pool_list()
     }
 }
 
-static void init_pending_msg_list()
+/**
+    Pending messages
+**/
+static void pending_msg_list_init()
 {
     INIT_LIST_HEAD(&pending_msg_list);
 }
 
-static void free_pending_msg_list()
+static void pending_msg_list_free()
 {
     int msg_cnt = 0;
     struct pending_msg *p, *t;
@@ -324,93 +437,89 @@ static void free_pending_msg_list()
     uloga("%s(): msg_cnt= %d\n", __func__, msg_cnt);
 }
 
-/* operations on the jobq */
-static inline void jobq_init()
-{
-	INIT_LIST_HEAD(&jobq);
-}
-
 static int idle_bk_count()
 {
 	int cnt = 0;
-
 	return cnt;
 }
 
 static int busy_bk_count()
 {
 	int cnt = 0;
-
 	return cnt;
 }
 
-static int jobq_count()
+/**
+    Runnable tasks management    
+**/
+static inline void rtask_list_init()
+{
+	INIT_LIST_HEAD(&rtask_list);
+}
+
+static int rtask_list_count()
 {
 	int cnt = 0;
-	struct job *j;
-	list_for_each_entry(j, &jobq, struct job, entry) {
+	struct runnable_task *rtask;
+	list_for_each_entry(rtask, &rtask_list, struct runnable_task, entry) {
 		cnt++;
 	}
 
 	return cnt;
 }
 
-static struct job * jobq_lookup(struct job_id *jid)
+static struct runnable_task *rtask_list_lookup(uint32_t wid, uint32_t tid)
 {
-	struct job *j;
-	list_for_each_entry(j,&jobq,struct job,entry) {
-		if ( equal_jid(jid, &j->jid) )
-			return j;
+    struct runnable_task *rtask;
+	list_for_each_entry(rtask,&rtask_list,struct runnable_task, entry) {
+		if (rtask->task_ref->wid == wid &&
+            rtask->task_ref->tid == tid)
+			return rtask;
 	}
 
 	return NULL;
 }
 
-static struct job * jobq_create_job(struct task_instance *ti)
+static struct runnable_task *rtask_list_add_new(struct hstaging_task *t)
 {
-	struct job *j = malloc(sizeof(*j));
-	j->jid.tid = ti->tid;
-	j->jid.step = ti->step;
-	j->ti = ti;
-    j->num_input_vars = 0;
-    j->bk_allocation_size = j->ti->size_hint;
-    j->bk_idx_tab = NULL;
-	struct var_instance *vi;
-	list_for_each_entry(vi, &ti->input_vars_list, struct var_instance, entry) {
-		j->num_input_vars++;
-	}
+    struct runnable_task *rtask = malloc(sizeof(*rtask));
+    rtask->task_ref = t;
+    rtask->bk_allocation_size = t->size_hint;
+    rtask->bk_idx_tab = NULL;
 
-    update_task_instance_status(ti, task_pending);
-	list_add_tail(&j->entry, &jobq);	
-	return j;
+    update_task_status(t, task_pending);
+    list_add_tail(&rtask->entry, &rtask_list);
+    return rtask;
 }
 
-static inline int job_is_pending(struct job *j) {
-	return j->ti->status == task_pending;
+static inline int rtask_is_pending(struct runnable_task *rtask) {
+    return rtask->task_ref->status == task_pending;
 }
 
-static inline int job_is_running(struct job *j) {
-	return j->ti->status == task_running;
+static inline int rtask_is_running(struct runnable_task *rtask) {
+    return rtask->task_ref->status == task_running;
 }
 
-static inline int job_is_finish(struct job *j) {
-	return j->ti->status == task_finish;
+static inline int rtask_is_finish(struct runnable_task *rtask) {
+    return rtask->task_ref->status == task_finish;
 }
 
-static void job_done(struct job *j)
-{
-	if (j->ti->status == task_running) {
-        update_task_instance_status(j->ti, task_finish);
-	}
+static inline void rtask_set_finish(struct runnable_task *rtask) {
+    if (rtask->task_ref->status == task_running) {
+        update_task_status(rtask->task_ref, task_finish);
+    }
 }
 
-static void free_job(struct job *j) {
-    list_del(&j->entry);
-    if (j->bk_idx_tab) free(j->bk_idx_tab);
-    free(j);
+static void free_rtask(struct runnable_task *rtask) {
+    list_del(&rtask->entry);
+    if (rtask->bk_idx_tab) free(rtask->bk_idx_tab);
+    free(rtask);
 }
 
-static int job_notify_bk_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+/**
+
+**/
+static int notify_bk_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
 	if (msg->size > 0) {
 		free(msg->msg_data);
@@ -420,8 +529,8 @@ static int job_notify_bk_completion(struct rpc_server *rpc_s, struct msg_buf *ms
 	return 0;
 }
 
-static int job_notify_bk(struct job *j, struct bucket_pool *bp, struct bucket *bk,
-    int rank_hint, int nproc_hint)
+static int notify_bk(struct runnable_task *rtask, struct bucket_pool *bp, 
+    struct bucket *bk, int rank_hint, int nproc_hint)
 {
 	int err = -ENOMEM;
 	struct msg_buf *msg;
@@ -431,39 +540,36 @@ static int job_notify_bk(struct job *j, struct bucket_pool *bp, struct bucket *b
 	if (!msg)
 		goto err_out;
     
-    size_t mpi_rank_tab_size = j->bk_allocation_size*sizeof(int);
-    size_t input_var_tab_size = j->num_input_vars*sizeof(struct var_descriptor);
-    msg->size = mpi_rank_tab_size + input_var_tab_size;
+    struct hstaging_task *t = rtask->task_ref;
+    size_t mpi_rank_tab_size = rtask->bk_allocation_size*sizeof(int);
+    size_t var_tab_size = t->num_vars*sizeof(struct hstaging_var);
+    msg->size = mpi_rank_tab_size + var_tab_size;
     msg->msg_data = malloc(msg->size); 
-    msg->cb = job_notify_bk_completion;
+    msg->cb = notify_bk_completion;
 
     int i;
+    // copy mpi ranks of the bk allocation
     int *mpi_rank_tab = (int*)msg->msg_data;
-    for (i = 0; i < j->bk_allocation_size; i++) {
-        mpi_rank_tab[i] = bp->bk_tab[j->bk_idx_tab[i]].origin_mpi_rank; 
+    for (i = 0; i < rtask->bk_allocation_size; i++) {
+        mpi_rank_tab[i] = bp->bk_tab[rtask->bk_idx_tab[i]].origin_mpi_rank; 
     }
-    // Copy the input var information
-    struct var_descriptor *vars = (struct var_descriptor*)(msg->msg_data+mpi_rank_tab_size);
-    struct var_instance *vi;
-    i = 0;
-    list_for_each_entry(vi, &j->ti->input_vars_list, struct var_instance,
-            entry) {
-        strcpy(vars[i].var_name, vi->var->name);
-        vars[i].step = j->ti->step;
-        vars[i].bb = vi->bb;
-        vars[i].size = vi->size;
-        i++;
-    }	
+
+    // copy variable information
+    struct hstaging_var *vars = (struct hstaging_var*)(msg->msg_data+mpi_rank_tab_size);
+    for (i = 0; i < t->num_vars; i++) {
+        vars[i] = t->vars[i];
+    } 
 
 	msg->msg_rpc->cmd = hs_exec_task_msg;
 	msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
 	struct hdr_exec_task *hdr =
 		(struct hdr_exec_task *)msg->msg_rpc->pad;
-	hdr->tid = j->ti->tid;
-	hdr->step = j->ti->step;
+    hdr->wid = t->wid;
+	hdr->tid = t->tid;
+    hdr->appid = t->appid;
 	hdr->rank_hint = rank_hint; 
 	hdr->nproc_hint = nproc_hint;
-	hdr->num_input_vars = j->num_input_vars;
+	hdr->num_vars = t->num_vars;
 
 	err = rpc_send(ds->rpc_s, peer, msg);
 	if (err < 0) {
@@ -477,9 +583,9 @@ err_out:
 	ERROR_TRACE();
 }
 
-static int job_allocate_bk(struct job *j)
+static int runnable_task_allocate_bk(struct runnable_task *rtask)
 {
-	if (j->ti->status != task_pending) {
+	if (rtask->task_ref->status != task_pending) {
 		return 0;
 	}
 
@@ -506,39 +612,39 @@ static int job_allocate_bk(struct job *j)
     // try to allocate buckets in a simple first-fit manner
     struct bucket_pool *bp;
     list_for_each_entry(bp, &bk_pool_list, struct bucket_pool, entry) {
-        j->bk_idx_tab = bk_pool_request_bk_allocation(bp, j->bk_allocation_size);
-        if (j->bk_idx_tab) break;
+        rtask->bk_idx_tab = bk_pool_request_bk_allocation(bp, rtask->bk_allocation_size);
+        if (rtask->bk_idx_tab) break;
     }    
     
-    if (!j->bk_idx_tab) {
+    if (!rtask->bk_idx_tab) {
         return 0;
     }
 
     // notify the allocated buckets
     int i;
-    for (i = 0; i < j->bk_allocation_size; i++) {
-        struct bucket *bk = bk_pool_get_bucket(bp, j->bk_idx_tab[i]);
+    for (i = 0; i < rtask->bk_allocation_size; i++) {
+        struct bucket *bk = bk_pool_get_bucket(bp, rtask->bk_idx_tab[i]);
         int rank_hint = i;
-        int nproc_hint = j->bk_allocation_size;
-		if (job_notify_bk(j, bp, bk, rank_hint, nproc_hint) < 0) {
+        int nproc_hint = rtask->bk_allocation_size;
+		if (notify_bk(rtask, bp, bk, rank_hint, nproc_hint) < 0) {
 			return -1;
 		}
 	}
 
-	// Update job state
-    update_task_instance_status(j->ti, task_running);
+	// uppdate task state
+    update_task_status(rtask->task_ref, task_running);
 
-    uloga("%s(): assign job (%d,%d) to buckets timestamp %lf\n",
-        __func__, j->jid.tid, j->jid.step, timer_read(&tm)-tm_st);
+    uloga("%s(): assign task (%d,%d) to buckets timestamp %lf\n",
+        __func__, rtask->task_ref->wid, rtask->task_ref->tid, timer_read(&tm)-tm_st);
 	return 0;	
 }
 
-static int jobq_free()
+static void rtask_list_free()
 {
-	struct job *j, *t;
-	list_for_each_entry_safe(j,t,&jobq,struct job,entry) {
-		list_del(&j->entry);
-		free(j);
+	struct runnable_task *rtask, *temp;
+	list_for_each_entry_safe(rtask, temp, &rtask_list, struct runnable_task, entry) {
+		list_del(&rtask->entry);
+		free(rtask);
 	}
 }
 
@@ -546,45 +652,37 @@ static int jobq_free()
 static int timestamp_ = 0;
 static void print_rr_count()
 {
-	int num_job_in_queue = 0;
+	int num_runnable_task = 0;
 	int num_idle_bucket = 0;
 	int num_busy_bucket = 0;
 
-	num_job_in_queue = jobq_count();
+	num_runnable_task = rtask_list_count();
 	num_idle_bucket = idle_bk_count();
 	num_busy_bucket = busy_bk_count();
 
 	timestamp_++;
-	fprintf(stderr, "EVAL: %d num_job_in_queue= %d num_idle_bucket= %d num_busy_bucket= %d\n",
-		timestamp_, num_job_in_queue, num_idle_bucket, num_busy_bucket);
+	fprintf(stderr, "EVAL: %d num_runnable_task= %d num_idle_bucket= %d num_busy_bucket= %d\n",
+		timestamp_, num_runnable_task, num_idle_bucket, num_busy_bucket);
 }
 
-
-static int process_dag_state()
+static int notify_task_submitter(struct hstaging_task *task)
 {
-    if (wf == NULL) return 0;
-    if (!is_workflow_finished(wf)) return 0;
-
-    // reply to the submitter of the dag
     struct msg_buf *msg;
     struct node_id *peer;
     int err = -ENOMEM;
-    int dart_id = wf->submitter_dart_id;
+    int dart_id = task->submitter_dart_id;
 
-    // free workflow
-    free_workflow(wf);
-    wf = NULL;
-    dag_tm_end = timer_read(&tm);
-
-    peer = ds_get_peer(ds, dart_id); 
+    peer = ds_get_peer(ds, dart_id);
     msg = msg_buf_alloc(ds->rpc_s, peer, 1);
     if (!msg)
         goto err_out;
 
-    msg->msg_rpc->cmd = hs_finish_dag_msg;
+    msg->msg_rpc->cmd = hs_submitted_task_done_msg;
     msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
-    struct hdr_finish_dag *hdr= (struct hdr_finish_dag *)msg->msg_rpc->pad;
-    hdr->dag_execution_time = (dag_tm_end-dag_tm_st);
+    struct hdr_submitted_task_done *hdr= (struct hdr_submitted_task_done*)msg->msg_rpc->pad;
+    hdr->wid = task->wid;
+    hdr->tid = task->tid;
+    hdr->task_execution_time = 0;
 
     err = rpc_send(ds->rpc_s, peer, msg);
     if (err < 0) {
@@ -597,13 +695,54 @@ static int process_dag_state()
     ERROR_TRACE();
 }
 
+static int process_finished_task()
+{
+    struct runnable_task *rtask, *temp;
+    list_for_each_entry_safe(rtask, temp, &rtask_list, struct runnable_task, entry) {
+        if (rtask_is_finish(rtask)) {
+            uloga("WARNING %s: shuold not remove runnable task here...\n", __func__);
+            // remove runnable task from the list
+            list_del(&rtask->entry); 
+            free(rtask);
+        }
+    }
+
+    struct hstaging_workflow *wf;
+    list_for_each_entry(wf, &workflow_list, struct hstaging_workflow, entry) {
+        struct hstaging_task *task, *t;
+        list_for_each_entry_safe(task, t, &wf->task_list, struct hstaging_task, entry) {
+            if (is_task_finish(task)) {
+                notify_task_submitter(task);
+                // remove task from the workflow's task list 
+                list_del(&task->entry);
+                free(task);
+                wf->num_tasks--;
+            }
+        }
+    }    
+
+    return 0;
+}
+
 static int process_workflow_state()
 {
-	int err = -ENOMEM;
+    struct hstaging_workflow *wf, *temp;
+    list_for_each_entry_safe(wf, temp, &workflow_list, struct hstaging_workflow, entry) {
+        if (wf->state.f_done) {
+            uloga("%s: to free workflow wid= %u\n", __func__, wf->wid);
+            // TODO: 
+            free_workflow(wf);
+        }
+    }
 
-	if (state.f_send_exit_msg) return 0;
+    return 0;
+}
 
-	if (state.f_done && 0 == busy_bk_count()) {
+static int process_framework_state()
+{
+    int err = -ENOMEM;
+    if (framework_state.f_notify_executor_to_exit) return 0;
+    if (framework_state.f_done && 0 == busy_bk_count()) {
         struct msg_buf *msg;
         struct node_id *peer;
         struct bucket_pool *bp;
@@ -627,14 +766,14 @@ static int process_workflow_state()
                     goto err_out;
                 }
             }
-		}
+        }
 
-		state.f_send_exit_msg = 1;
-	}
+        framework_state.f_notify_executor_to_exit = 1;
+    }
 
-	return 0;
+    return 0;
  err_out:
-	ERROR_TRACE();
+    ERROR_TRACE();
 }
 
 static int process_hs_build_staging(struct pending_msg *p)
@@ -707,41 +846,31 @@ static int process_pending_msg()
 
 /*
 */
-static int process_jobq()
+static int process_runnable_task()
 {
-    if (wf == NULL) return 0;
-
-	struct job *j, *t;
+	struct runnable_task *rtask, *temp;
 	int err = -ENOMEM;
 
-	// 1. Add ready jobs (if any) in the queue
-	struct task_instance *tasks[MAX_NUM_TASKS];
-	int num_tasks;
-	get_ready_tasks(wf, tasks, &num_tasks);
-	if (num_tasks > 0) {
-		int i;
-		for (i = 0; i < num_tasks; i++) {
-			jobq_create_job(tasks[i]);
-		}
-	}
+	// 1. Add ready tasks (if any) 
+    struct hstaging_workflow *wf;
+    list_for_each_entry(wf, &workflow_list, struct hstaging_workflow, entry) {
+        struct hstaging_task *tasks[MAX_NUM_TASKS];
+        int num_tasks;
+        get_ready_tasks(wf, tasks, &num_tasks);
+        if (num_tasks > 0) {
+            int i;
+            for (i = 0; i < num_tasks; i++) {
+                rtask_list_add_new(tasks[i]);
+            }
+        }
+    }
 
-	// 2. process ready jobs (if any) in the queue
-	list_for_each_entry_safe(j, t, &jobq, struct job, entry) {
-		if (job_is_pending(j)) {
-			job_allocate_bk(j);
+	// 2. process runnable tasks (if any) 
+	list_for_each_entry_safe(rtask, temp, &rtask_list, struct runnable_task, entry) {
+		if (rtask_is_pending(rtask)) {
+			runnable_task_allocate_bk(rtask);
 		}
 	}	
-
-	// 3. process finish jobs (if any) in the queue
-	list_for_each_entry_safe(j, t, &jobq, struct job, entry) {
-		if (job_is_finish(j)) {
-			list_del(&j->entry);
-			free(j);
-		}
-	}
-
-    // 4. clear finished task instances
-    clear_finished_tasks(wf);
 
 	return 0;
 }
@@ -755,23 +884,17 @@ static int callback_hs_finish_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd
         return 0;
     }
 
-    struct job_id jid;
-    jid.tid = hdr->tid;
-    jid.step = hdr->step;
-    struct job *j = jobq_lookup(&jid);
-    if (j) {
-        uloga("%s(): finish job (%d,%d) timestamp %lf\n",
-            __func__, hdr->tid, hdr->step, timer_read(&tm)-tm_st);
+    struct runnable_task *rtask = rtask_list_lookup(hdr->wid, hdr->tid);
+    if (rtask) {
+        uloga("%s(): finish task (%u,%u) timestamp %lf\n",
+            __func__, hdr->wid, hdr->tid, timer_read(&tm)-tm_st);
 
-        // mark job as done
-        job_done(j);
-        // free bucket allocation
-        bk_pool_free_bk_allocation(bp, j->bk_idx_tab, j->bk_allocation_size);
-        // free job
-        free_job(j); 
+        rtask_set_finish(rtask);
+        bk_pool_free_bk_allocation(bp, rtask->bk_idx_tab, rtask->bk_allocation_size);
+        free_rtask(rtask); 
     } else {
-        uloga("ERROR %s(): failed to find job (%d,%d) in jobq\n",
-            __func__, jid.tid, jid.step);
+        uloga("ERROR %s: failed to find task (%u,%u)\n",
+            __func__, hdr->wid, hdr->tid);
     } 
 
     return 0;
@@ -812,54 +935,62 @@ static int callback_hs_reg_resource(struct rpc_server *rpc_s, struct rpc_cmd *cm
     return 0;
 }
 
-static int callback_hs_finish_workflow(struct rpc_server *rpc_s,
-    struct rpc_cmd *cmd)
+static int callback_hs_finish_workflow(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	state.f_done = 1;
+    struct hdr_finish_workflow *hdr = (struct hdr_finish_workflow*)cmd->pad;
+    struct hstaging_workflow *wf = workflow_list_lookup(hdr->wid);    
+    if (wf) {
+        wf->state.f_done = 1;
+    } else {
+        uloga("ERROR %s: failed to lookup workflow with wid= %u\n", __func__,
+            hdr->wid);
+    }
+
 	return 0;
 }
 
 static int callback_hs_update_var(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	struct hdr_update_var *hdr;
-	hdr = (struct hdr_update_var*)cmd->pad;
+	struct hdr_update_var *hdr = (struct hdr_update_var*)cmd->pad;
 
-	uloga("%s(): update variable '%s' step %d "
+	uloga("%s(): update variable '%s' version %d "
 		"dims %d bbox {(%d,%d,%d),(%d,%d,%d)}\n", 
-			__func__, hdr->var_name, hdr->step, hdr->bb.num_dims,
+			__func__, hdr->name, hdr->version, hdr->bb.num_dims,
 			hdr->bb.lb.c[0], hdr->bb.lb.c[1], hdr->bb.lb.c[2],
 			hdr->bb.ub.c[0], hdr->bb.ub.c[1], hdr->bb.ub.c[2]);
-	if (wf != NULL) {
-		struct var_descriptor var_desc;
-		strcpy(var_desc.var_name, hdr->var_name);
-		var_desc.step = hdr->step;
-		var_desc.bb = hdr->bb;
-		var_desc.size = hdr->size; 
-		evaluate_dataflow_by_available_var(wf, &var_desc);
-	}
+
+    struct hstaging_var var_desc;
+    strcpy(var_desc.name, hdr->name);
+    var_desc.version = hdr->version;
+    var_desc.elem_size = hdr->elem_size;
+    var_desc.bb = hdr->bb;
+    workflow_list_evaluate_dataflow(&var_desc);
 
 	return 0;
 }
 
-static int callback_hs_exec_dag(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_hs_submit_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-    struct hdr_exec_dag *hdr;
-    hdr = (struct hdr_exec_dag*)cmd->pad;
+    struct hdr_submit_task *hdr = (struct hdr_submit_task*)cmd->pad;
+    uloga("%s(): config file %s\n", __func__, hdr->conf_file);
 
-    uloga("%s(): dag config file %s\n", __func__, hdr->dag_conf_file);
+    struct hstaging_workflow *wf = workflow_list_lookup(hdr->wid);
+    if (!wf) {
+        wf = workflow_list_create_new(hdr->wid);
+    } else {
+        if (workflow_lookup_task(wf, hdr->tid)) {
+            uloga("ERROR %s: task tid= %d already exist\n", __func__, hdr->tid);
+            return 0;
+        }
+    }
 
-    wf = read_workflow_conf_file(hdr->dag_conf_file);
-    if (wf == NULL) {
-        uloga("ERROR %s(): failed to read workflow config file\n", __func__);
+    struct hstaging_task *task = create_new_task(hdr->wid, hdr->tid, hdr->conf_file);
+    if (!task) {
         return 0;
     }
-        
-    wf->submitter_dart_id = cmd->id;
-    state.f_done = 0;
-    state.f_send_exit_msg = 0;
 
-    print_workflow(wf);
-    dag_tm_st = timer_read(&tm);
+    task->submitter_dart_id = cmd->id;
+    workflow_add_task(wf, task);
 
     return 0;
 }
@@ -876,14 +1007,21 @@ static int callback_hs_build_staging(struct rpc_server *rpc_s, struct rpc_cmd *c
     return 0;
 }
 
+static int callback_hs_stop_framework(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+    framework_state.f_done = 1;    
+    return 0;
+}
+
 int hstaging_scheduler_init()
 {
 	rpc_add_service(hs_finish_workflow_msg, callback_hs_finish_workflow);
 	rpc_add_service(hs_update_var_msg, callback_hs_update_var); 
     rpc_add_service(hs_reg_resource_msg, callback_hs_reg_resource);
     rpc_add_service(hs_finish_task_msg, callback_hs_finish_task);
-    rpc_add_service(hs_exec_dag_msg, callback_hs_exec_dag);
+    rpc_add_service(hs_submit_task_msg, callback_hs_submit_task);
     rpc_add_service(hs_build_staging_msg, callback_hs_build_staging);
+    rpc_add_service(hs_stop_framework_msg, callback_hs_stop_framework);
 
 	dimes_s = dimes_server_alloc(num_sp, num_cp, conf);
 	if (!dimes_s) {
@@ -894,12 +1032,12 @@ int hstaging_scheduler_init()
 	ds = dimes_s->dsg->ds;
 
 	// Init
-	jobq_init();
-    init_bk_pool_list();
-    init_pending_msg_list();
-
-	state.f_done = 0;
-	state.f_send_exit_msg = 0;
+    pending_msg_list_init();
+    bk_pool_init();
+    workflow_list_init();
+	rtask_list_init();
+    framework_state.f_done = 0;
+    framework_state.f_notify_executor_to_exit = 0;
 
     timer_init(&tm, 1);
     timer_start(&tm);
@@ -927,14 +1065,16 @@ int hstaging_scheduler_run()
 		}
 
         process_pending_msg();
-        process_jobq();
-        process_dag_state();
+        process_runnable_task();
+        process_finished_task();
         process_workflow_state();
+        process_framework_state();
 	}
 
-    free_pending_msg_list();
-    free_bk_pool_list();
-	jobq_free();
+    pending_msg_list_free();
+    bk_pool_free();
+	rtask_list_free();
+    workflow_list_free();
 
 	return 0;
 }
