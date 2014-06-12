@@ -28,7 +28,6 @@ struct parallel_task {
 };
 static struct parallel_task ptasks[MAX_NUM_TASKS+1];
 static int num_tasks = 0;
-static struct g_info g;
 static MPI_Comm origin_mpi_comm; 
 
 static void viz_task_info_init(struct viz_task_info *p)
@@ -123,115 +122,33 @@ static int exec_task_function(struct task_descriptor *t)
 	uloga("%s(): unknown task appid= %d\n", __func__, t->appid);
 }
 
-static int update_var(const char *var_name, int version)
+// Note: called by the master process (or executor) of the task
+static int update_var(const char *var_name, int version, size_t elem_size,
+    int ndim, uint64_t *gdim)
 {
     int err;
     struct hstaging_var var_desc;
-    int *c = NULL;
-    size_t elem_size = sizeof(double);
-
-    strcpy(var_desc.name, var_name);
-    var_desc.version = version;
-    var_desc.bb.num_dims = g.dims;
-    var_desc.elem_size = elem_size;
-    c = var_desc.bb.lb.c;
-    c[0] = 0;
-    c[1] = 0;
-    c[2] = 0;
-    c = var_desc.bb.ub.c;
-    c[0] = (g.npx * g.spx) - 1;
-    c[1] = (g.npy * g.spy) - 1;
-    c[2] = (g.npz * g.spz) - 1;
+    // TODO: add filling var_desc
     err = hstaging_update_var(&var_desc, OP_PUT);
     return err;
-}
-
-static int update_var_nodata(const char *var_name, int version)
-{
-    int err;
-    struct hstaging_var var_desc;
-    int *c = NULL;
-    size_t elem_size = sizeof(double);
-
-    strcpy(var_desc.name, var_name);
-    var_desc.version = version;
-    var_desc.bb.num_dims = 3;
-    var_desc.elem_size = elem_size;
-    c = var_desc.bb.lb.c;
-    c[0] = 0;
-    c[1] = 0;
-    c[2] = 0;
-    c = var_desc.bb.ub.c;
-    c[0] = 0;
-    c[1] = 0;
-    c[2] = 0;
-    err = hstaging_update_var(&var_desc, OP_PUT);
-    return err;
-}
-
-static void set_data_decomposition(struct task_descriptor *t, struct hstaging_var *var_desc)
-{
-	g.rank = t->rank;
-	g.dims = var_desc->bb.num_dims;
-
-    int num_peer, dims, dimx, dimy, dimz;
-    char fname[128];
-    sprintf(fname, "task%d.conf", t->appid);
-    int err = read_task_info(fname, &num_peer, &g.npx, &g.npy, &g.npz,
-                        &dims, &dimx, &dimy, &dimz);
-    if (err < 0 ) {
-        uloga("Failed to read %s\n", fname);
-    }
-
-	if (g.dims == 2) {
-		g.spx = (var_desc->bb.ub.c[0]+1)/g.npx;
-		g.spy = (var_desc->bb.ub.c[1]+1)/g.npy;
-		g.spz = 0;
-	} else if (g.dims == 3) {
-		g.spx = (var_desc->bb.ub.c[0]+1)/g.npx;
-		g.spy = (var_desc->bb.ub.c[1]+1)/g.npy;
-		g.spz = (var_desc->bb.ub.c[2]+1)/g.npz;
-	}
-
-    /*
-	uloga("%s(): g.npx= %d g.npy= %d g.npz= %d g.spx= %d g.spy= %d g.spz= %d\n",
-		__func__,g.npx,g.npy,g.npz,g.spx,g.spy,g.spz);
-    */
-}
+}  
 
 static int read_input_data(struct task_descriptor *t)
 {
-	int i;
 	int err;
+    int i;
+    // input arguments for dimes_get()
+    int ndim, version;
+    size_t elem_size;
+    uint64_t lb[BBOX_MAX_NDIM], ub[BBOX_MAX_NDIM], gdim[BBOX_MAX_NDIM];
 
 	for (i = 0; i < t->num_vars; i++) {
-		double *databuf = NULL;
-		int xl, yl, zl, xu, yu, zu;
-		size_t elem_size = sizeof(double);
 		struct hstaging_var *var_desc = &(t->vars[i]);
         if (var_desc->type != var_type_depend) continue;
 
-		set_data_decomposition(t, var_desc);
-		if (var_desc->bb.num_dims == 2) {
-			databuf = allocate_data(g.spx*g.spy);					
-		} else if (var_desc->bb.num_dims == 3) {
-			databuf = allocate_data(g.spx*g.spy*g.spz);
-		}		
-		generate_bbox(&g, &xl, &yl, &zl, &xu, &yu, &zu);
-        err = hstaging_get_var(var_desc->name, var_desc->version, elem_size,
-                xl, yl, zl, xu, yu, zu, databuf, NULL);	
-		if (err < 0) {
-			uloga("%s(): failed to get var\n", __func__);
-			return -1;
-		}
-
-		if (var_desc->bb.num_dims == 2) {
-			compute_stats(var_desc->name, databuf, g.spx*g.spy, t->rank);
-		} else if (var_desc->bb.num_dims == 3) {
-			compute_stats(var_desc->name, databuf, g.spx*g.spy*g.spz,t->rank);
-		}
-
-		free(databuf);
+		double *data = NULL;
+    
+		if (data) free(data);
 	}
 
 	uloga("%s(): task wid= %u tid= %u appid= %d rank= %d nproc= %d "
@@ -243,51 +160,18 @@ static int read_input_data(struct task_descriptor *t)
 
 static int write_output_data(struct task_descriptor *t, const char *var_name, struct parallel_communicator *comm, int version)
 {
-	double *databuf = NULL;
-	int elem_size, num_elem, xl, yl, zl, xu, yu, zu;
-	int err;
+    int err;
+	double *data = NULL;
+    // input arguments for dimes_put()
+    int ndim;
+    size_t elem_size;
+    uint64_t lb[BBOX_MAX_NDIM], ub[BBOX_MAX_NDIM], gdim[BBOX_MAX_NDIM];
 
-	int num_peer, dimx, dimy, dimz;
-	char fname[128];
-	sprintf(fname, "task%d.conf", t->appid);
-	err = read_task_info(fname, &num_peer, &g.npx, &g.npy, &g.npz,
-						&g.dims, &dimx, &dimy, &dimz);
-	if (err < 0 ) {
-		uloga("Failed to read %s\n", fname);
-		return err;
-	}
-
-	if (t->nproc != num_peer) {
-		uloga("Warning: t->nproc= %d but num_peer= %d\n", t->nproc, num_peer);
-	}
-
-	if (g.dims == 2) {
-		g.spx = dimx / g.npx;
-		g.spy = dimy / g.npy;
-		num_elem = g.spx * g.spy;
-	} else if (g.dims == 3) {
-		g.spx = dimx / g.npx;
-		g.spy = dimy / g.npy;
-		g.spz = dimz / g.npz;
-		num_elem = g.spx * g.spy * g.spz;
-	}
-	databuf = allocate_data(num_elem);
-	generate_data(databuf, version, num_elem);
-	elem_size = sizeof(double);
-	generate_bbox(&g, &xl, &yl, &zl, &xu, &yu, &zu);
-
-	err = hstaging_put_var(var_name, version, elem_size,
-			xl, yl, zl, xu, yu, zu, databuf, &comm->comm);
-	if (err < 0) {
-		free(databuf);
-		return err;
-	}
-	
 	if (t->rank == 0) {
-		update_var(var_name, version);
+		update_var(var_name, version, elem_size, ndim, gdim);
 	}
 
-	free(databuf);
+	if (data) free(data);
 	return err;
 }
 
@@ -324,7 +208,6 @@ int dag_task(struct task_descriptor *t, struct parallel_communicator *comm)
     if (t->rank == 0) {
         char var_name[MAX_VAR_NAME_LEN];
         sprintf(var_name, "task%d_output_var", t->appid);
-        update_var_nodata(var_name, 0);
     }
         
     return 0;
@@ -370,10 +253,6 @@ int xgc1_task(struct task_descriptor *t, struct parallel_communicator *comm)
     t2 = MPI_Wtime();
 
     if (t->rank == 0) {
-        update_var_nodata("xgc1_output", 0);
-    }
-
-    if (t->rank == 0) {
         uloga("%s(): execution time %lf\n", __func__, t2-t1);
     }
     return 0;
@@ -417,9 +296,6 @@ int xgca_task(struct task_descriptor *t, struct parallel_communicator *comm)
     MPI_Barrier(comm->comm);
     t2 = MPI_Wtime();
 
-    if (t->rank == 0) {
-        update_var_nodata("xgca_output", 0);
-    }
     if (t->rank == 0) {
         uloga("%s(): execution time %lf\n", __func__, t2-t1);
     }
@@ -657,51 +533,6 @@ int les_task(struct task_descriptor *t,
     return 0;
 }
 
-int task1(struct task_descriptor *t, struct parallel_communicator *comm)
-{
-	read_input_data(t);
-	// Do some computation
-	write_output_data(t, "topology_var2", comm, 0);
-	return 0;
-}
-
-int task2(struct task_descriptor *t, struct parallel_communicator *comm)
-{
-	read_input_data(t);
-	// Do some computation
-	write_output_data(t, "stat_var2", comm, 0);
-	return 0;
-} 
-
-int task3(struct task_descriptor *t, struct parallel_communicator *comm)
-{
-	read_input_data(t);
-	// Do some computation
-	write_output_data(t, "viz_var2", comm, 0);
-	return 0;
-} 
-
-int task4(struct task_descriptor *t, struct parallel_communicator *comm)
-{
-	read_input_data(t);
-	// Do some computation
-	return 0;
-} 
-
-int task5(struct task_descriptor *t, struct parallel_communicator *comm)
-{
-	read_input_data(t);
-	// Do some computation
-	return 0;
-} 
-
-int task6(struct task_descriptor *t, struct parallel_communicator *comm)
-{
-	read_input_data(t);
-	// Do some computation
-	return 0;
-}
-
 #define RENDER_VAR 3
 float my_data_quantize(float value, int varname)
 {
@@ -738,6 +569,7 @@ float my_data_quantize(float value, int varname)
 }
 
 // TODO: this task routine is highly hard-coded...
+/*
 int task_viz_render(struct task_descriptor *t, struct parallel_communicator *comm)
 {
     int err;
@@ -815,8 +647,9 @@ int task_viz_render(struct task_descriptor *t, struct parallel_communicator *com
 
     return 0; 
 }
+*/
 
-// TODO: use read_input_data() to fetch input data buffers
+/*
 int task_fb_indexing(struct task_descriptor *t, struct parallel_communicator *comm)
 {
     int err;
@@ -850,9 +683,9 @@ int task_fb_indexing(struct task_descriptor *t, struct parallel_communicator *co
     char *colname = "var";
     int size_index = 0;
     cas = fb_build_index_double(data, num_double_elem, indopt, (void*)colname, &size_index); 
-
+*/
     // perform I/O
-/*
+/**
     char index_fname[256];
     sprintf(index_fname, "fb_index_process%d.dat", t->rank);
     FILE *f = fopen(index_fname, "a");
@@ -877,8 +710,8 @@ int task_fb_indexing(struct task_descriptor *t, struct parallel_communicator *co
         fclose(f); 
         free(data_buf);
     } 
-*/
-
+**/
+/*
     tm_end = MPI_Wtime();
     if (cas == 0) {
         uloga("%s(): fb_build_index_double failed\n", __func__);
@@ -895,57 +728,6 @@ int task_fb_indexing(struct task_descriptor *t, struct parallel_communicator *co
 
     free(data);
     return 0;
-}
-
-/*
-int dummy_s3d_staging_parallel_job(MPI_Comm comm, enum hstaging_location_type loc_type)
-{
-    int err;
-    int level, color;
-    int mpi_rank, mpi_nproc;
-    MPI_Comm_size(comm, &mpi_nproc);
-    MPI_Comm_rank(comm, &mpi_rank);
-    if ((mpi_nproc % BK_GROUP_BASIC_SIZE) != 0) {
-        uloga("%s(): error size needs to be multiply of %d\n",
-            __func__, BK_GROUP_BASIC_SIZE);
-        return -1;
-    }
-
-    communicator_init(comm);
-    level = 0;
-    color = 1;
-    comms[level].level = level;
-    comms[level].color = color;
-    comms[level].comm = comm;
-    recursive_split_mpi_comm(level, color);
-
-    register_task_function(1, task1);
-    register_task_function(2, task2);
-    register_task_function(3, task3);
-    register_task_function(4, task4);
-    register_task_function(5, task5);
-    register_task_function(6, task6);
-    register_task_function(7, task_viz_render);
-    register_task_function(8, task_fb_indexing);
-
-    hstaging_register_executor(mpi_nproc, mpi_rank);
-    MPI_Barrier(comm);
-
-	struct task_descriptor t;
-	while (!hstaging_request_task(&t)) {
-		hstaging_put_sync_all();
-		err = exec_task_function(&t);	
-		if (err < 0) {
-			return err;
-		}
-	}
-
-    hstaging_put_sync_all();
-    communicator_free();
-
-	return 0;
- err_out:
-	return -1;
 }
 */
 
@@ -1003,13 +785,11 @@ int dummy_epsi_coupling_workflow(MPI_Comm comm)
 
     struct task_descriptor t;
     while (!hstaging_request_task(&t)) {
-        hstaging_put_sync_all();
         err = exec_task_function(&t);
         if (err < 0) {
             return err;
         }
     }
-    hstaging_put_sync_all();
     communicator_free();
 
     return 0;
@@ -1036,13 +816,11 @@ int dummy_s3d_analysis_workflow(MPI_Comm comm)
 
     struct task_descriptor t;
     while (!hstaging_request_task(&t)) {
-        hstaging_put_sync_all();
         err = exec_task_function(&t);
         if (err < 0) {
             return err;
         }
     }
-    hstaging_put_sync_all();
     communicator_free();
 
     return 0;
@@ -1066,13 +844,11 @@ int dummy_dns_les_workflow(MPI_Comm comm)
 
     struct task_descriptor t;
     while (!hstaging_request_task(&t)) {
-        hstaging_put_sync_all();
         err = exec_task_function(&t);
         if (err < 0) {
             return err;
         }
     }
-    hstaging_put_sync_all();
     communicator_free();
 
     return 0;

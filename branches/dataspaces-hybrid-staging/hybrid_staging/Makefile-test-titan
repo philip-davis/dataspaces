@@ -36,7 +36,7 @@ LIBS= -L./ -lhstaging \
 
 CFLAGS= -g ${UGNI_CFLAGS} ${PMI_CLFASG} -DDEBUG -DHAVE_UGNI -DDS_HAVE_DIMES -DDS_HAVE_HYBRID_STAGING
 
-SRC = common.c hstaging_partition.c dummy_simulation_worker.c dummy_workflow_task.c
+SRC = common.c hstaging_partition.c dummy_workflow_task.c
 SRC1 = scheduler_driver.c
 SRC2 = dag_executor.c
 SRC3 = dag_submitter.c

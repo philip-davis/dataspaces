@@ -337,7 +337,7 @@ int hstaging_init(int num_peers, int appid, enum hstaging_pe_type pe_type)
     rpc_add_service(hs_submitted_task_done_msg, callback_hs_submitted_task_done);
     rpc_add_service(hs_build_staging_done_msg, callback_hs_build_staging_done);
 
-	err = dspaces_init(num_peers, appid);
+	err = dspaces_init(num_peers, appid, NULL, NULL);
 	if (err < 0) {
 		uloga("%s(): failed to initialize.\n", __func__);
 		return err;	
@@ -384,62 +384,6 @@ err_out:
 	dspaces_finalize();
 	dcg = 0;
 	return -1;
-}
-
-int hstaging_put_var(const char *var_name, unsigned int ver, int size,
-    int xl, int yl, int zl,
-    int xu, int yu, int zu,
-    void *data, MPI_Comm *comm)
-{
-	int err = -ENOMEM;
-
-	if (!bk_info.f_init_dspaces) {
-		uloga("%s(): library not init!\n", __func__);
-		goto err_out;
-	}
-
-	dspaces_lock_on_write(var_name, comm);
-	err = dimes_put(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
-	if (err < 0) {
-		goto err_out;
-	}
-	dspaces_unlock_on_write(var_name, comm);
-
-	return 0;
-err_out:
-	ERROR_TRACE();
-}
-
-int hstaging_put_sync_all()
-{
-	return dimes_put_sync_all();
-}
-
-int hstaging_get_var(const char *var_name, unsigned int ver, int size,
-    int xl, int yl, int zl,
-    int xu, int yu, int zu,
-    void *data, MPI_Comm *comm)
-{
-	int err = -ENOMEM;
-
-	if (!bk_info.f_init_dspaces) {
-		uloga("%s(): library not init!\n", __func__);
-		goto err_out;
-	}
-
-    if (comm) {
-        dspaces_lock_on_read(var_name, comm);
-    }
-	err = dimes_get(var_name, ver, size, xl, yl, zl, xu, yu, zu, data);
-	if (err < 0) {
-		goto err_out;
-	}
-    if (comm) {
-        dspaces_unlock_on_read(var_name, comm);
-    }
-	return 0;
-err_out:
-	ERROR_TRACE();
 }
 
 int hstaging_update_var(struct hstaging_var *var, enum hstaging_update_var_op op)
