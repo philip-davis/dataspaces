@@ -414,7 +414,7 @@ static int dimes_memory_init()
         err = dart_rdma_register_mem(&options.pre_allocated_rdma_handle,
                      data_buf, options.pre_allocated_rdma_buffer_size);
         if (err < 0) {
-            uloga("%s(): ERROR peer #%d failed to register rdma memory\n",
+            uloga("%s(): ERROR peer #%d failed to register RDMA memory\n",
                     __func__, DIMES_CID);
             goto err_out_free;
         }
@@ -439,7 +439,7 @@ static int dimes_memory_finalize()
         // Deregister the memory buffer
         err = dart_rdma_deregister_mem(&options.pre_allocated_rdma_handle);
         if (err < 0) {
-            uloga("%s(): ERROR peer #%d failed to deregister rdma memory\n",
+            uloga("%s(): ERROR peer #%d failed to deregister RDMA memory\n",
                 __func__, DIMES_CID);
             return err;
         }
@@ -488,7 +488,7 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl, size_t siz
 
             err = dart_rdma_register_mem(rdma_hndl, (void*)buf, size);
             if (err < 0) {
-                uloga("%s(): ERROR peer #%d failed to register rdma memory\n",
+                uloga("%s(): ERROR peer #%d failed to register RDMA memory\n",
                     __func__, DIMES_CID);
                 goto err_out;
             }
@@ -521,7 +521,7 @@ static int dimes_memory_free(struct dart_rdma_mem_handle *rdma_hndl, enum dimes_
         } else {
             err = dart_rdma_deregister_mem(rdma_hndl);
             if (err < 0) {
-                uloga("%s(): ERROR peer #%d failed to deregister rdma memory\n",
+                uloga("%s(): ERROR peer #%d failed to deregister RDMA memory\n",
                     __func__, DIMES_CID);
                 goto err_out; 
             }
@@ -1011,7 +1011,7 @@ static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
                                 &mem_obj->gdim);
 	num_dht_nodes = ssd_hash(ssd, &mem_obj->obj_desc.bb, dht_nodes);
 	if (num_dht_nodes <= 0) {
-		uloga("%s(): ERROR: ssd_hash() return %d\n",
+		uloga("%s(): ERROR: ssd_hash() return %d but the value should be > 0\n",
 				__func__, num_dht_nodes);
 		goto err_out;
 	}
@@ -1286,7 +1286,7 @@ static int schedule_rdma_reads(int tran_id,
 					dst_offset,
 					bytes);	
 		if (err < 0) {
-			uloga("%s(): ERROR failed with dart_rdma_schedule_read\n",
+			uloga("%s(): ERROR failed with dart_rdma_schedule_read()\n",
 				__func__);
 			goto err_out;
 		}
@@ -1300,7 +1300,7 @@ static int schedule_rdma_reads(int tran_id,
 				dst_odsc->size);
 		err = matrix_rdma_copy(&to, &from, tran_id);
 		if (err < 0) {
-			uloga("%s(): ERROR failed with matrix_rdma_copy\n", __func__);
+			uloga("%s(): ERROR failed with matrix_rdma_copy()\n", __func__);
             goto err_out;
 		}	
 	}	
@@ -1607,8 +1607,10 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
         // check the size of remote data object
         if (obj_data_size(&fetch->dst_odsc) > get_available_rdma_buffer_size())
         {
-            uloga("%s(): ERROR no sufficient rdma memory for fetching "
-                "remote data object size %u bytes\n",
+            uloga("%s(): ERROR no sufficient RDMA memory for fetching "
+                "remote data object with size %u bytes. Suggested fix: "
+                "increase the value of '--with-dimes-rdma-buffer-size' "
+                "at configuration.\n",
                 __func__, obj_data_size(&fetch->dst_odsc));
             print_rdma_buffer_usage();
             goto err_out_free;
@@ -1675,7 +1677,7 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
             struct dimes_memory_obj *mem_obj =
                                     storage_lookup_obj(fetch->remote_sync_id);
             if (mem_obj == NULL) {
-                uloga("%s(): ERROR failed to find memory object sync_id=%d\n",
+                uloga("%s(): ERROR failed to find memory object with sync_id=%d\n",
                     __func__, fetch->remote_sync_id);
                 goto err_out;
             }
@@ -1768,7 +1770,8 @@ static int dimes_obj_get(struct obj_data *od)
                                 &od->gdim);
 	num_dht_nodes = ssd_hash(ssd, &od->obj_desc.bb, dht_nodes);
 	if (num_dht_nodes <= 0) {
-		uloga("%s(): ERROR ssd_hash() return %d\n", __func__, num_dht_nodes);
+		uloga("%s(): ERROR ssd_hash() return %d but value should be > 0\n",
+            __func__, num_dht_nodes);
 		goto err_qt_free;
 	}
 
@@ -1841,7 +1844,7 @@ static int dcgrpc_dimes_get_ack(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 	struct dimes_memory_obj *mem_obj = storage_lookup_obj(sid);
 	if (mem_obj == NULL) {
-		uloga("%s(): ERROR failed to find memory object sync_id=%d\n", __func__, sid);
+		uloga("%s(): ERROR failed to find memory object with sync_id=%d\n", __func__, sid);
 		err = -1;
 		goto err_out;
 	}
@@ -1908,7 +1911,7 @@ static int dimes_put_sync_with_timeout(float timeout_sec, struct dimes_storage_g
 				// Continue to block and check...
 				break;
 			default:
-				uloga("%s(): ERROR shouldn't happen!\n", __func__);
+				uloga("%s(): ERROR unknown DIMES memory object status!\n", __func__);
 				break;
 			}
 		}
@@ -2110,7 +2113,9 @@ int dimes_client_put(const char *var_name,
     size_t data_size = obj_data_size(&odsc);
     // Check if there is sufficient rdma memory buffer
     if (data_size > get_available_rdma_buffer_size()) {
-        uloga("%s(): ERROR: no sufficient rdma memory for data %u bytes\n",
+        uloga("%s(): ERROR: no sufficient RDMA memory for caching data "
+            "with %u bytes. Suggested fix: increase the value of "
+            "'--with-dimes-rdma-buffer-size' at configuration.\n",
             __func__, data_size);
         print_rdma_buffer_usage();
         goto err_out;
