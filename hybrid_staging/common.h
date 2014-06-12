@@ -25,7 +25,7 @@
  */
 
 /*
-*  Fan Zhang (2013)  TASSL Rutgers University
+*  Fan Zhang (2013-2014)  TASSL Rutgers University
 *  zhangfan@cac.rutgers.edu
 */
 #ifndef __TEST_COMMON_H_
@@ -40,6 +40,8 @@
 #include "dimes_server.h"
 #endif
 
+#include "mpi.h"
+
 #define EPSI_WORKFLOW_ID 1
 #define S3D_WORKFLOW_ID 2
 #define DAG_WORKFLOW_ID 3
@@ -51,52 +53,32 @@ enum transport_type {
 	USE_DIMES
 };
 
-int common_init(int num_peers, int appid);
-void common_set_storage_type(int fst); 
-int common_rank(); 
+// wrapper functions of DataSpaces/DIMES APIs
+int common_init(int num_peers, int appid, void* comm, const char* parameters);
+int common_rank();
 int common_peers();
 void common_barrier();
-void common_finalize(); 
+void common_finalize();
 void common_lock_on_read(const char *lock_name, void *gcomm);
 void common_unlock_on_read(const char *lock_name, void *gcomm);
-void common_lock_on_write(const char *lock_name, void *gcomm); 
-void common_unlock_on_write(const char *lock_name, void *gcomm); 
+void common_lock_on_write(const char *lock_name, void *gcomm);
+void common_unlock_on_write(const char *lock_name, void *gcomm);
 int common_put (const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
+        int ndim,
+        uint64_t *lb, uint64_t *ub,
         void *data, enum transport_type type);
 int common_get (const char *var_name,
         unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
-        void *data, enum transport_type type); 
-int common_put_sync(enum transport_type type); 
-int common_run_server(int num_sp, int num_cp, enum transport_type type);
-void check_data(const char *var_name, double *buf, int num_elem, int rank, int ts);
-void compute_stats(const char *var_name, double *buf, int num_elem, int rank);
-int common_parse_args(int argc, char **argv, int *npapp, int *npx, int *npy, int *npz, int *spx, int *spy, int *spz, int *timestep);
+        int ndim,
+        uint64_t *lb, uint64_t *ub,
+        void *data, enum transport_type type);
+int common_put_sync(enum transport_type type);
+int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gcomm);
+int commom_get_transport_type_str(enum transport_type type, char* str);
 
-struct g_info {
-	//# of processors in x-y-z direction
-	int npx, npy, npz;
-	//block size per processor per direction
-	int spx, spy, spz;
-	int offx, offy, offz;
-	//# of iterations
-	int timestep;
-	//# of processors in the application
-	int nproc;
-	//# of dimensions
-	int dims;
-	int rank;
-};
-
-double* allocate_data(int num_elem);
-int generate_data(double *buf, unsigned int ts, int num_elem);
-int generate_bbox(struct g_info *g, int *xl, int *yl, int *zl, int *xu, int *yu, int *zu);
-
-int validate_data(void *buf, unsigned int ts, int num_elem);
+void check_data(const char *var_name, double *buf, int num_double, int rank, int ts);
+void compute_stats(const char *var_name, double *buf, int num_double, int rank);
 
 int read_task_info(const char *fname, int *num_peer, int *npx, int *npy, int *npz, int *dims, int *dim_x, int *dim_y, int *dim_z);
 

@@ -2349,3 +2349,11 @@ int common_dspaces_set_log_header(const char *str)
     return 0;
 }
 #endif
+
+#ifdef DS_HAVE_HYBRID_STAGING
+struct dcg_space* dcg_get_ref()
+{
+    if (!dcg) return NULL;
+    else return dcg;
+}
+#endif

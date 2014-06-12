@@ -411,6 +411,20 @@ enum cmd_type {
 	dimes_put_msg,
 	dimes_get_ack_msg,
 #endif
+#ifdef DS_HAVE_HYBRID_STAGING
+    hs_reg_resource_msg,
+    hs_update_var_msg,
+    hs_req_task_msg,
+    hs_exec_task_msg,
+    hs_submit_task_msg,
+    hs_finish_task_msg,
+    hs_submitted_task_done_msg,
+    hs_finish_workflow_msg,
+    hs_stop_executor_msg,
+    hs_build_staging_msg,
+    hs_build_staging_done_msg,
+    hs_stop_framework_msg,
+#endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,
 	_CMD_COUNT

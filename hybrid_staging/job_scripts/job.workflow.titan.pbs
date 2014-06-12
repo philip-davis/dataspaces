@@ -8,7 +8,18 @@
 
 cd $PBS_O_WORKDIR
 
-rm -f conf
+rm -f conf dataspaces.conf
+
+# Prepare config file for DataSpaces
+echo "## Config file for DataSpaces
+ndim = 3
+dims = 256,256,256
+max_versions = 1 
+max_readers = 1   
+lock_type = 2
+#hash_version = 2
+" > dataspaces.conf
+
 aprun -n 1 ./scheduler_driver -s 1 -c 49 &
 sleep 10
 
@@ -16,7 +27,7 @@ epsi_workflow_id=1
 s3d_workflow_id=2
 dns_les_workflow_id=4
 
-workflow_id=$dns_les_workflow_id
+workflow_id=$epsi_workflow_id
 aprun -n 48 ./dag_executor $workflow_id &
 aprun -n 1 ./dag_submitter $workflow_id &
 

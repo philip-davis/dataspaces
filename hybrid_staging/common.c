@@ -31,77 +31,101 @@
 #include <stdio.h>
 #include "common.h"
 
-int read_config_file(const char *fname,
-	int *num_sp, int *num_cp, int *iter,
-	int *num_writer, int *writer_x, int *writer_y, int *writer_z,
-	int *num_reader, int *reader_x, int *reader_y, int *reader_z,
-	int *dims, int *dim_x, int *dim_y, int *dim_z) {
-	// Read config file.
-	FILE *f = NULL;
-	f = fopen(fname,"rt");
-	if(!f){
-		goto err_out;
-	}
 
-	int num_items = 0;
-	num_items = fscanf(f, "num_sp=%d;num_cp=%d;iter=%d\n",
-			num_sp, num_cp, iter);
-	if(num_items != 3)
-		goto err_out;
-
-	num_items = fscanf(
-		f, "num_writer=%d;writer_x=%d;writer_y=%d;writer_z=%d\n",
-		num_writer, writer_x, writer_y, writer_z);
-	if(num_items != 4)
-		goto err_out;
-
-	num_items = fscanf(
-		f, "num_reader=%d;reader_x=%d;reader_y=%d;reader_z=%d\n",
-		num_reader, reader_x, reader_y, reader_z);
-	if(num_items != 4)
-		goto err_out;
-
-	num_items = fscanf(
-		f, "dims=%d;dim_x=%d;dim_y=%d;dim_z=%d\n",
-		dims, dim_x, dim_y, dim_z);
-	if(num_items != 4)
-		goto err_out;
-
-	fclose(f);
-	return 0;
-err_out:
-	if (f) {
-		fclose(f);
-	}
-	return -1;
-}
-
-int common_parse_args(int argc, char **argv, int *npapp, int *npx, int *npy, int *npz,
-	int *spx, int *spy, int *spz, int *timestep)
+int read_config_file(const char* fname,
+    int *num_sp, int *num_cp, int *iter,
+    int *num_writer, int *w,
+    int *num_reader, int *r,
+    int *dims, int *dim)
 {
-	if (argc < 9) {
-		uloga("Wrong number of arguments!\n");
-		return -1;
-	}
+    FILE *f = NULL;
+        f = fopen(fname,"rt");
+        if(!f){
+                goto err_out;
+        }
 
-	*npapp = atoi(argv[1]);
-	*npx = atoi(argv[2]);	
-	*npy = atoi(argv[3]);	
-	*npz = atoi(argv[4]);	
-	*spx = atoi(argv[5]);	
-	*spy = atoi(argv[6]);	
-	*spz = atoi(argv[7]);	
-	*timestep = atoi(argv[8]);	
+        int num_items = 0;
+        num_items = fscanf(f, "num_sp=%d;num_cp=%d;iter=%d\n",
+                        num_sp, num_cp, iter);
+        if(num_items != 3)
+                goto err_out;
 
-	return 0;
+        int i = 0;
+        num_items = fscanf(f, "dims=%d\n",dims);
+        if(num_items != 1)
+                goto err_out;
+        for(i = 0; i < *dims; i++)
+                fscanf(f, "%d", &dim[i]);
+        fscanf(f, "\n");
+
+        num_items = fscanf(f, "num_writer=%d\n", num_writer);
+        if(num_items != 1)
+                goto err_out;
+        for(i = 0; i < *dims; i++)
+                fscanf(f, "%d", &w[i]);
+        fscanf(f, "\n");
+
+        num_items = fscanf(f, "num_reader=%d\n", num_reader);
+        if(num_items != 1)
+                goto err_out;
+        for(i = 0; i < *dims; i++)
+                fscanf(f, "%d", &r[i]);
+
+        fclose(f);
+        return 0;
+err_out:
+        if (f) {
+                fclose(f);
+        }
+        return -1;
 }
 
-int common_init(int num_peers, int appid) {
-        return dspaces_init(num_peers, appid);
+int parse_args(int argc, char** argv, enum transport_type *type, int *npapp,
+    int *dims, int* npdim, uint64_t* spdim, int *timestep, int *appid,
+    size_t *elem_size, int *num_vars)
+{
+    int i = 0, j = 0, count = 0;
+    *type = USE_DSPACES;
+    if(0 == strcmp(argv[1], "DIMES")){
+        *type = USE_DIMES;
+    }
+    *npapp = atoi(argv[2]);
+    *dims = atoi(argv[3]);
+    count = 3;
+
+    if(argc < 3 + (*dims)*2 + 2 + 1){
+        uloga("Wrong number of arguments!\n");
+        return -1;
+    }
+
+    for(i = count + 1, j = 0; j < *dims; i++, j++){
+        *(npdim+j) = atoi(argv[i]);
+    }
+    count += *dims;
+
+    for(i = count + 1, j = 0; j < *dims; i++, j++){
+        *(spdim+j) = strtoull(argv[i], NULL, 10);
+    }
+    count += *dims;
+
+    *timestep = atoi(argv[++count]);
+    *appid = atoi(argv[++count]);
+
+    if(argc >= ++count + 1)
+        *elem_size = atoi(argv[count]);
+    else
+        *elem_size = sizeof(double);
+
+    if(argc >= ++count + 1)
+        *num_vars = atoi(argv[count]);
+    else
+        *num_vars = 1;
+
+    return 0;
 }
 
-void common_set_storage_type(int fst) {
-        dspaces_set_storage_type(fst);
+int common_init(int num_peers, int appid, void* comm, const char* parameters) {
+        return dspaces_init(num_peers, appid, comm, parameters);
 }
 
 int common_rank() {
@@ -136,49 +160,46 @@ void common_unlock_on_write(const char *lock_name, void *gcomm) {
         dspaces_unlock_on_write(lock_name, gcomm);
 }
 
-int common_put (const char *var_name,
-        unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
-        void *data, enum transport_type type) {
-        if ( type == USE_DSPACES ) {
-                return dspaces_put(var_name, ver, size,
-                        xl, yl, zl, xu, yu, zu,
-                        data);
-                //return dspaces_put_v1(var_name, ver, size,
-                //        xl, yl, zl, xu, yu, zu,
-                //        data);
-        } else if (type == USE_DIMES) {
+int common_put(const char *var_name,
+    unsigned int ver, int size,
+    int ndim,
+    uint64_t *lb, uint64_t *ub,
+    void *data, enum transport_type type)
+{
+    if ( type == USE_DSPACES ) {
+        return dspaces_put(var_name, ver, size,
+                        ndim,lb, ub,data);
+    } else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
-                return dimes_put(var_name, ver, size,
-                        xl, yl, zl, xu, yu, zu,
-                        data);
+        return dimes_put(var_name, ver, size,
+            ndim, lb, ub, data);
 #else
-                uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
-                return -1;
+        uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
+        return -1;
 #endif
-        }
+    }
+    return 0;
 }
 
-int common_get (const char *var_name,
-        unsigned int ver, int size,
-        int xl, int yl, int zl,
-        int xu, int yu, int zu,
-        void *data, enum transport_type type) {
-        if ( type == USE_DSPACES ) {
-                return dspaces_get(var_name, ver, size,
-                        xl, yl, zl, xu, yu, zu,
-                        data);
-        } else if (type == USE_DIMES) {
+int common_get(const char *var_name,
+    unsigned int ver, int size,
+    int ndim,
+    uint64_t *lb, uint64_t *ub,
+    void *data, enum transport_type type)
+{
+    if ( type == USE_DSPACES ) {
+        return dspaces_get(var_name, ver, size,
+                        ndim,lb, ub,data);
+    } else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
-                return dimes_get(var_name, ver, size,
-                        xl, yl, zl, xu, yu, zu,
-                        data);
+        return dimes_get(var_name, ver, size,
+            ndim, lb, ub, data);
 #else
-                uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
-                return -1;
+        uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
+        return -1;
 #endif
-        }
+    }
+    return 0;
 }
 
 int common_put_sync(enum transport_type type) {
@@ -192,89 +213,103 @@ int common_put_sync(enum transport_type type) {
                 return -1;
 #endif
         }
+        return 0;
 }
 
-int common_run_server(int num_sp, int num_cp, enum transport_type type) {
-	int err;
-	if (type == USE_DSPACES) {
-		struct ds_gspace *dsg;
-		dsg = dsg_alloc(num_sp, num_cp, "dataspaces.conf");
-		if (!dsg)
-			return -1;
+int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gcomm) {
+        int err;
+        if (type == USE_DSPACES) {
+                struct ds_gspace *dsg;
+                dsg = dsg_alloc(num_sp, num_cp, "dataspaces.conf");
+                if (!dsg)
+                        return -1;
 
-		while (!dsg_complete(dsg)){
-			err = dsg_process(dsg);
-			if(err<0)
-				break;
-		}
+                while (!dsg_complete(dsg)){
+                        err = dsg_process(dsg);
+                        if(err<0)
+                                break;
+                }
 
-		dsg_barrier(dsg);
-		dsg_free(dsg); 
+                //dsg_barrier(dsg);
+                MPI_Barrier(*(MPI_Comm*)gcomm);
+                dsg_free(dsg);
 
-		if (err == 0)
-			uloga("All ok.\n");
-		return 0;
-	} else if (type == USE_DIMES) {
+                if (err == 0)
+                        uloga("All ok.\n");
+                return 0;
+        } else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
-		struct dimes_server *dsg;
-		dsg = dimes_server_alloc(num_sp, num_cp, "dataspaces.conf");
-		if (!dsg)
-			return -1;
+                struct dimes_server *dsg;
+                dsg = dimes_server_alloc(num_sp, num_cp, "dataspaces.conf");
+                if (!dsg)
+                        return -1;
 
-		while (!dimes_server_complete(dsg)){
-			err = dimes_server_process(dsg);
-			if(err<0)
-				break;
-		}
+                while (!dimes_server_complete(dsg)){
+                        err = dimes_server_process(dsg);
+                        if(err<0)
+                                break;
+                }
 
-		dimes_server_barrier(dsg);
-		dimes_server_free(dsg); 
+                //dimes_server_barrier(dsg);
+                MPI_Barrier(*(MPI_Comm*)gcomm);
+                dimes_server_free(dsg);
 
-		if (err == 0)
-			uloga("All ok.\n");
-		return 0;
+                if (err == 0)
+                        uloga("All ok.\n");
+                return 0;
 #else
-		uloga("%s(): Dataspaces DIMES is not enabled!\n", __func__);
-		return -1;
+                uloga("%s(): Dataspaces DIMES is not enabled!\n", __func__);
+                return -1;
 #endif
-	}
+        }
+        return 0;
 }
 
 void check_data(const char *var_name, double *buf, int num_elem, int rank, int ts)
 {
-	double max, min, sum, avg;
-	int i;
-	int cnt = 0;
+        double max, min, sum, avg;
+        int i;
+        int cnt = 0;
 
-	if (num_elem <= 0) {
-		return;
-	}
+        if (num_elem <= 0) {
+                return;
+        }
 
-	max = min = sum = buf[0];
-	for (i = 1; i < num_elem; i++) {
-		if (max < buf[i])
-			max = buf[i];
-		if (min > buf [i])
-			min = buf[i];
-		sum += buf[i];
-		if (buf[i] != ts) {
-			cnt++;
-		}
-	}
-
-	avg = sum / num_elem;
+        max = min = sum = buf[0];
+        for (i = 1; i < num_elem; i++) {
+                if (max < buf[i])
+                        max = buf[i];
+                if (min > buf [i])
+                        min = buf[i];
+                sum += buf[i];
+                if (buf[i] != ts) {
+                        cnt++;
+                }
+        }
+        avg = sum / num_elem;
 #ifdef DEBUG
-	uloga("%s(): var= %s, rank= %d, max= %f, min= %f, avg= %f\n",
-			__func__, var_name, rank, max, min, avg);
+          uloga("%s(): var= %s, rank= %d, max= %f, min= %f, avg= %f\n",
+                          __func__, var_name, rank, max, min, avg);
 #endif
 
-	if (cnt > 0) {
-		uloga("%s(): var= %s, rank= %d, ts= %d, "
-			"error elem cnt= %d, total elem= %d\n",
-			__func__, var_name, rank, ts, cnt, num_elem);
-	}
-	
-	return;
+        if (cnt > 0) {
+                uloga("%s(): var= %s, rank= %d, ts= %d, "
+                "error elem cnt= %d, total elem= %d\n",
+                        __func__, var_name, rank, ts, cnt, num_elem);
+        }
+
+        return;
+}
+
+int common_get_transport_type_str(enum transport_type type, char* str)
+{
+    if (type == USE_DSPACES) {
+        sprintf(str, "DATASPACES");
+    } else if (type == USE_DIMES) {
+        sprintf(str, "DIMES");
+    } else sprintf(str, "UNKNOWN");
+
+    return 0;
 }
 
 void compute_stats(const char *var_name, double *buf, int num_elem, int rank)
@@ -302,37 +337,6 @@ void compute_stats(const char *var_name, double *buf, int num_elem, int rank)
                 __func__, var_name, rank, max, min, avg);
 #endif
         return;
-}
-
-double* allocate_data(int num_elem)
-{
-	double* tmp = NULL;
-	tmp = (double*)malloc(sizeof(double)*num_elem);
-	return tmp;
-}
-
-int generate_data(double *buf, unsigned int ts, int num_elem)
-{
-	double value = ts;
-	int i;
-	for (i = 0; i < num_elem; i++) {
-		buf[i] = value;
-	}
-
-	return 0;
-}
-
-int validate_data(void *buf, unsigned int ts, int num_elem)
-{
-	double value = ts;
-	double *tmp = (double *)buf;
-	int i, ret = 1;
-	for (i=0; i<num_elem; i++) {
-		if (tmp[i] != value)
-			ret = 0;
-	}
-
-	return ret;
 }
 
 int read_task_info(const char *fname, int *num_peer, int *npx, int *npy, int *npz, int *dims, int *dim_x, int *dim_y, int *dim_z) {
@@ -364,30 +368,3 @@ err_out:
 	return -1;
 }
 
-int generate_bbox(struct g_info *g, int *xl, int *yl, int *zl, int *xu, int *yu, int *zu)
-{
-	if (g->dims == 2) {
-		g->offx = (g->rank % g->npx) * g->spx;
-		g->offy = (g->rank / g->npx) * g->spy;
-
-		*xl = g->offx;
-		*yl = g->offy;
-		*zl = 0;
-		*xu = g->offx + g->spx - 1;
-		*yu = g->offy + g->spy - 1;
-		*zu = 0;
-	} else if (g->dims == 3) {
-		g->offx = (g->rank % g->npx) * g->spx;
-		g->offy = (g->rank / g->npx % g->npy) * g->spy;
-		g->offz = (g->rank / g->npx / g->npy) * g->spz;
-
-		*xl = g->offx;
-		*yl = g->offy;
-		*zl = g->offz;
-		*xu = g->offx + g->spx - 1;
-		*yu = g->offy + g->spy - 1;
-		*zu = g->offz + g->spz - 1;
-	}
-
-	return 0;
-}

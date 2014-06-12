@@ -109,4 +109,7 @@ int dcg_collect_timing(double, double *);
 int dcg_get_num_space_srv(struct dcg_space *);
 
 void dcg_set_mpi_rank(int rank);
+#ifdef DS_HAVE_HYBRID_STAGING
+struct dcg_space *dcg_get_ref();
+#endif
 #endif /* __DCG_SPACE_H_ */
