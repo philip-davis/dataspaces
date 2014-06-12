@@ -1,4 +1,0 @@
-1. Fix the unregistration process of the hybrid staging.
-2. It is not necessary to keep the following binding/association:
-	simulation workers --> appid = 1
-	staging workers --> appid = 2
