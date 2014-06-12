@@ -51,14 +51,14 @@ void epsi_coupling_workflow_driver(uint32_t wid, MPI_Comm comm)
     uloga("%s: finish workflow execution\n", __func__);
 }
 
-void sample_dag_workflow_driver(uint32_t wid, MPI_Comm comm)
+void dns_les_workflow_driver(uint32_t wid, MPI_Comm comm)
 {
-    uint32_t tid = 1;
-    int num_ts = 5;
-    int i;
-    for (i = 0; i < num_ts; i++) {
-        hstaging_submit_task(wid, tid++, "dag.conf");
-    }
+    uint32_t dns_tid = 1, les_tid = 2;
+    hstaging_submit_task_nb(wid, dns_tid, "dns.conf");
+    hstaging_submit_task_nb(wid, les_tid, "les.conf");
+    
+    hstaging_wait_submitted_task(wid, dns_tid);
+    hstaging_wait_submitted_task(wid, les_tid); 
 
     hstaging_set_workflow_finished(wid);
     uloga("%s: finish workflow execution\n", __func__);
@@ -103,8 +103,8 @@ int main(int argc, char **argv)
     case EPSI_WORKFLOW_ID:
         epsi_coupling_workflow_driver(example_workflow_id, comm);
         break;
-    case DAG_WORKFLOW_ID:
-        sample_dag_workflow_driver(example_workflow_id, comm);
+    case DNS_LES_WORKFLOW_ID:
+        dns_les_workflow_driver(example_workflow_id, comm);
         break;
     case S3D_WORKFLOW_ID:
         s3d_analysis_workflow_driver(example_workflow_id, comm);

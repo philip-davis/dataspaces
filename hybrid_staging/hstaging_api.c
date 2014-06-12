@@ -569,7 +569,7 @@ int hstaging_set_task_finished(struct task_descriptor *t)
     ERROR_TRACE();
 }
 
-int hstaging_submit_task(uint32_t wid, uint32_t tid, const char* conf_file)
+int hstaging_submit_task_nb(uint32_t wid, uint32_t tid, const char* conf_file)
 {
     struct client_rpc_send_state send_state;
     struct msg_buf *msg;
@@ -593,22 +593,52 @@ int hstaging_submit_task(uint32_t wid, uint32_t tid, const char* conf_file)
         goto err_out_free;
     }
 
-    struct task_info *t = create_submitted_task(wid, tid, conf_file);
+    struct task_info *t = create_submitted_task(wid, tid, conf_file);    
+    return 0;
+ err_out_free:
+    if (msg) free(msg);
+ err_out:
+    ERROR_TRACE();
+}
+
+int hstaging_wait_submitted_task(uint32_t wid, uint32_t tid)
+{
+    int err = -ENOMEM;
+    struct task_info *t = lookup_submitted_task(wid, tid);
+    if (!t) {
+        uloga("ERROR %s: failed to find submitted task wid= %u tid= %u\n",
+            __func__, wid, tid);
+        return err;
+    }
 
     // Wait/block for the task execution to complete
     while (!is_submitted_task_done(t)) {
         err = process_event(dcg);
         if (err < 0) {
-            goto err_out_free;
+            goto err_out;
         }
-    }    
+    }
 
     free_submitted_task(t);
     return 0;
- err_out_free:
-    if (msg) free(msg);
  err_out:
-    ERROR_TRACE();        
+    ERROR_TRACE();
+}
+
+int hstaging_submit_task(uint32_t wid, uint32_t tid, const char* conf_file)
+{
+    int err;
+    err = hstaging_submit_task_nb(wid, tid, conf_file);
+    if (err < 0) {
+        return err;
+    }
+
+    err = hstaging_wait_submitted_task(wid, tid);
+    if (err < 0) {
+        return err;
+    }
+
+    return 0;
 }
 
 int hstaging_build_staging(int pool_id, const char *conf_file)

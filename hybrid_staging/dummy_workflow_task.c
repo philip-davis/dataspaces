@@ -581,6 +581,82 @@ int s3d_indexing_task(struct task_descriptor *t,
     return 0;
 }
 
+static int dns_les_num_ts = 10;
+static int dns_les_num_sub_step = 6;
+int dns_task(struct task_descriptor *t,
+    struct parallel_communicator *comm)
+{
+    double t1, t2;
+    int comm_size, comm_rank;
+    MPI_Barrier(comm->comm);
+    MPI_Comm_size(comm->comm, &comm_size);
+    MPI_Comm_rank(comm->comm, &comm_rank);
+    t1 = MPI_Wtime();
+
+    // print input variable information
+    if (t->rank == 0) {
+        print_task_info(t);
+    }
+
+    // sleep for 1 second
+    unsigned int seconds = 1;
+    int ts;
+    for (ts = 1; ts <= dns_les_num_ts; ts++) {
+        int i;
+        for (i = 1; i <= dns_les_num_sub_step; i++) {
+            if (comm_rank == 0) {
+                uloga("%s(): step %d substep %d\n", __func__, ts, i);
+            }
+            sleep(seconds);
+        }
+        MPI_Barrier(comm->comm);
+    }
+
+    t2 = MPI_Wtime();
+    
+    if (t->rank == 0) {
+        uloga("%s(): execution time %lf\n", __func__, t2-t1);
+    }
+    return 0;
+}
+
+int les_task(struct task_descriptor *t,
+    struct parallel_communicator *comm)
+{
+    double t1, t2;
+    int comm_size, comm_rank;
+    MPI_Barrier(comm->comm);
+    MPI_Comm_size(comm->comm, &comm_size);
+    MPI_Comm_rank(comm->comm, &comm_rank);
+    t1 = MPI_Wtime();
+
+    // print input variable information
+    if (t->rank == 0) {
+        print_task_info(t);
+    }
+
+    // sleep for 1 second
+    unsigned int seconds = 1;
+    int ts;
+    for (ts = 1; ts <= dns_les_num_ts; ts++) {
+        int i;
+        for (i = 1; i <= dns_les_num_sub_step; i++) {
+            if (comm_rank == 0) {
+                uloga("%s(): step %d substep %d\n", __func__, ts, i);
+            }
+            sleep(seconds);
+        }
+        MPI_Barrier(comm->comm);
+    }
+
+    t2 = MPI_Wtime();
+
+    if (t->rank == 0) {
+        uloga("%s(): execution time %lf\n", __func__, t2-t1);
+    }
+    return 0;
+}
+
 int task1(struct task_descriptor *t, struct parallel_communicator *comm)
 {
 	read_input_data(t);
@@ -873,6 +949,7 @@ int dummy_s3d_staging_parallel_job(MPI_Comm comm, enum hstaging_location_type lo
 }
 */
 
+/*
 int dummy_sample_dag_workflow(MPI_Comm comm)
 {
     int err;
@@ -906,6 +983,7 @@ int dummy_sample_dag_workflow(MPI_Comm comm)
  err_out:
 	return -1;
 }
+*/
 
 int dummy_epsi_coupling_workflow(MPI_Comm comm)
 {
@@ -951,6 +1029,36 @@ int dummy_s3d_analysis_workflow(MPI_Comm comm)
     register_task_function(3, s3d_stat_task); 
     register_task_function(4, s3d_topo_task);
     register_task_function(5, s3d_indexing_task);
+
+    int pool_id = 1;
+    hstaging_register_executor(pool_id, mpi_nproc, mpi_rank);
+    MPI_Barrier(comm);
+
+    struct task_descriptor t;
+    while (!hstaging_request_task(&t)) {
+        hstaging_put_sync_all();
+        err = exec_task_function(&t);
+        if (err < 0) {
+            return err;
+        }
+    }
+    hstaging_put_sync_all();
+    communicator_free();
+
+    return 0;
+}
+
+int dummy_dns_les_workflow(MPI_Comm comm)
+{
+    int err;
+    int mpi_rank, mpi_nproc;
+    MPI_Comm_size(comm, &mpi_nproc);
+    MPI_Comm_rank(comm, &mpi_rank);
+
+    communicator_init(comm);
+
+    register_task_function(1, dns_task);
+    register_task_function(2, les_task);
 
     int pool_id = 1;
     hstaging_register_executor(pool_id, mpi_nproc, mpi_rank);
