@@ -1,0 +1,23 @@
+#!/bin/sh
+#PBS -N test-hybrid-staging 
+#PBS -A csc025ewk
+#PBS -q debug
+#PBS -j oe
+#PBS -l walltime=00:10:00
+#PBS -l nodes=5
+
+cd $PBS_O_WORKDIR
+
+rm -f conf
+aprun -n 1 ./scheduler_driver -s 1 -c 49 &
+sleep 10
+
+epsi_workflow_id=1
+s3d_workflow_id=2
+dns_les_workflow_id=4
+
+workflow_id=$dns_les_workflow_id
+aprun -n 48 ./dag_executor $workflow_id &
+aprun -n 1 ./dag_submitter $workflow_id &
+
+wait

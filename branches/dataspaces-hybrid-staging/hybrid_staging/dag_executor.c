@@ -39,8 +39,8 @@
 #include "hstaging_api.h"
 
 extern int dummy_epsi_coupling_workflow(MPI_Comm comm);
-extern int dummy_sample_dag_workflow(MPI_Comm comm);
 extern int dummy_s3d_analysis_workflow(MPI_Comm comm);
+extern int dummy_dns_les_workflow(MPI_Comm comm);
 
 int main(int argc, char **argv)
 {
@@ -70,8 +70,8 @@ int main(int argc, char **argv)
     case EPSI_WORKFLOW_ID:
         err = dummy_epsi_coupling_workflow(comm);
         break;
-    case DAG_WORKFLOW_ID:
-        err = dummy_sample_dag_workflow(comm);
+    case DNS_LES_WORKFLOW_ID:
+        err = dummy_dns_les_workflow(comm);
         break;
     case S3D_WORKFLOW_ID:
         err = dummy_s3d_analysis_workflow(comm);
