@@ -949,21 +949,24 @@ static int callback_hs_finish_workflow(struct rpc_server *rpc_s, struct rpc_cmd 
 	return 0;
 }
 
+// TODO: make the workflow evaluation asynchronous...
 static int callback_hs_update_var(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
 	struct hdr_update_var *hdr = (struct hdr_update_var*)cmd->pad;
 
+/*
 	uloga("%s(): update variable '%s' version %d "
 		"dims %d bbox {(%d,%d,%d),(%d,%d,%d)}\n", 
 			__func__, hdr->name, hdr->version, hdr->bb.num_dims,
 			hdr->bb.lb.c[0], hdr->bb.lb.c[1], hdr->bb.lb.c[2],
 			hdr->bb.ub.c[0], hdr->bb.ub.c[1], hdr->bb.ub.c[2]);
+*/
 
     struct hstaging_var var_desc;
     strcpy(var_desc.name, hdr->name);
     var_desc.version = hdr->version;
     var_desc.elem_size = hdr->elem_size;
-    var_desc.bb = hdr->bb;
+    var_desc.gdim = hdr->gdim;
     workflow_list_evaluate_dataflow(&var_desc);
 
 	return 0;
@@ -992,6 +995,7 @@ static int callback_hs_submit_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd
     task->submitter_dart_id = cmd->id;
     workflow_add_task(wf, task);
 
+    print_workflow(wf);
     return 0;
 }
 

@@ -177,14 +177,27 @@ static int write_output_data(struct task_descriptor *t, const char *var_name, st
 
 void print_task_info(const struct task_descriptor *t)
 {
-    uloga("%s(): task wid= %u tid= %u appid= %d rank= %d nproc= %d num_vars= %d\n", __func__,
-        t->wid, t->tid, t->appid, t->rank, t->nproc, t->num_vars);
+    uloga("%s(): task wid= %u tid= %u appid= %d rank= %d nproc= %d num_vars= %d\n",
+        __func__, t->wid, t->tid, t->appid, t->rank, t->nproc, t->num_vars);
 
-    int i;
+    uint64_t gdim[BBOX_MAX_NDIM], dist[BBOX_MAX_NDIM];
+    char gdim_str[256], dist_str[256];
+    int i, j;
     for (i = 0; i < t->num_vars; i++) {
-        uloga("%s(): task wid= %u tid= %u appid= %d var '%s' version %d elem_size %d\n",
+        for (j = 0; j < t->vars[i].gdim.ndim; j++) {
+            gdim[j] = t->vars[i].gdim.sizes.c[j];
+        }
+        for (j = 0; j < t->vars[i].distribution_hint.ndim; j++) {
+            dist[j] = t->vars[i].distribution_hint.sizes.c[j];
+        }
+        int64s_to_str(t->vars[i].gdim.ndim, gdim, gdim_str);
+        int64s_to_str(t->vars[i].distribution_hint.ndim, dist, dist_str);
+
+        uloga("%s(): task wid= %u tid= %u appid= %d var '%s' version %d elem_size %u "
+            "gdim (%s) distribution_hint= (%s)\n",
             __func__, t->wid, t->tid, t->appid, t->vars[i].name,
-            t->vars[i].version, t->vars[i].elem_size);
+            t->vars[i].version, t->vars[i].elem_size,
+            gdim_str, dist_str);
     } 
 }
 
