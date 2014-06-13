@@ -158,9 +158,9 @@ static struct hstaging_var* task_add_var(struct hstaging_task *task, const char 
     var->version = -1;
     var->elem_size = 0;
     memset(&var->gdim, 0, sizeof(struct global_dimension));
-    memset(&var->distribution_hint, 0, sizeof(struct block_distribution));
+    memset(&var->dist_hint, 0, sizeof(struct block_distribution));
     var->gdim.ndim = 0;
-    var->distribution_hint.ndim = 0;   
+    var->dist_hint.ndim = 0;   
  
 	task->num_vars++;
 	return var;
@@ -268,7 +268,7 @@ static int read_task_var_distribution(struct hstaging_task *task, char *fields[]
             var = task_add_var(task, fields[i]);
             if (!var) return -1;
         }
-        memcpy(&var->distribution_hint, &dist, sizeof(struct block_distribution));
+        memcpy(&var->dist_hint, &dist, sizeof(struct block_distribution));
         i++;
     }
 
@@ -421,13 +421,13 @@ void print_workflow(struct hstaging_workflow *wf)
             for (j = 0; j < task->vars[i].gdim.ndim; j++) {
                 gdim[j] = task->vars[i].gdim.sizes.c[j];
             }
-            for (j = 0; j < task->vars[i].distribution_hint.ndim; j++) {
-                dist[j] = task->vars[i].distribution_hint.sizes.c[j];
+            for (j = 0; j < task->vars[i].dist_hint.ndim; j++) {
+                dist[j] = task->vars[i].dist_hint.sizes.c[j];
             }
             int64s_to_str(task->vars[i].gdim.ndim, gdim, gdim_str);
-            int64s_to_str(task->vars[i].distribution_hint.ndim, dist, dist_str);
+            int64s_to_str(task->vars[i].dist_hint.ndim, dist, dist_str);
  
-			printf("task tid= %u appid= %d var= '%s': type= '%s' elem_size= %u gdim= (%s) distribution_hint= (%s)\n", 
+			printf("task tid= %u appid= %d var= '%s': type= '%s' elem_size= %u gdim= (%s) dist_hint= (%s)\n", 
                 task->tid, task->appid, task->vars[i].name, var_type_name[task->vars[i].type], task->vars[i].elem_size, gdim_str, dist_str);
 		}
 	}

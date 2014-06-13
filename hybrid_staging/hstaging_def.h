@@ -152,7 +152,7 @@ struct hstaging_var {
     int version;
     size_t elem_size;
     struct global_dimension gdim;
-    struct block_distribution distribution_hint;    
+    struct block_distribution dist_hint;    
 };
 
 struct task_descriptor {

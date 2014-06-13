@@ -133,49 +133,258 @@ static int update_var(const char *var_name, int version, size_t elem_size,
     return err;
 }  
 
-static int read_input_data(struct task_descriptor *t)
+static struct hstaging_var* lookup_task_var(struct task_descriptor *t, const char *var_name)
 {
-	int err;
     int i;
-    // input arguments for dimes_get()
-    int ndim, version;
-    size_t elem_size;
-    uint64_t lb[BBOX_MAX_NDIM], ub[BBOX_MAX_NDIM], gdim[BBOX_MAX_NDIM];
-
-	for (i = 0; i < t->num_vars; i++) {
-		struct hstaging_var *var_desc = &(t->vars[i]);
-        if (var_desc->type != var_type_depend) continue;
-
-		double *data = NULL;
-    
-		if (data) free(data);
-	}
-
-	uloga("%s(): task wid= %u tid= %u appid= %d rank= %d nproc= %d "
-		"num_vars= %d\n", __func__, t->wid, t->tid, t->appid, 
-        t->rank, t->nproc, t->num_vars);
-	
-	return 0;
+    for (i = 0; i < t->num_vars; i++) {
+        if (0 == strcmp(t->vars[i].name, var_name))
+            return &(t->vars[i]);
+    }
+    return NULL;
 }
 
-static int write_output_data(struct task_descriptor *t, const char *var_name, struct parallel_communicator *comm, int version)
+static int check_var_dimension(struct hstaging_var *var) {
+    if (!var) return -1;
+
+    if (var->gdim.ndim != var->dist_hint.ndim) {
+        uloga("ERROR %s: number of dimension mismatched for gdim and dist_hint!\n",
+            __func__);
+        return -1;
+    }
+
+    int ndim = var->gdim.ndim;
+    if (ndim > BBOX_MAX_NDIM || ndim < 0) {
+        uloga("ERROR %s: wrong ndim= %d\n", __func__, ndim);
+        return -1;
+    }
+    return 0;
+}
+
+static int generate_sp(struct hstaging_var *var, uint64_t *sp)
+{
+    if (check_var_dimension(var) < 0) return -1;
+
+    int i;
+    for (i = 0; i < var->gdim.ndim; i++) {
+        if (var->dist_hint.sizes.c[i] != 0) {
+            sp[i] = var->gdim.sizes.c[i]/var->dist_hint.sizes.c[i];
+        } else {
+            uloga("ERROR %s: var->dist_hint.sizes.c[%d]= %u\n", __func__,
+                i, var->dist_hint.sizes.c[i]);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int generate_np(struct hstaging_var *var, uint64_t *np)
+{
+    if (check_var_dimension(var) < 0) return -1;
+
+    int i;
+    for (i = 0; i < var->dist_hint.ndim; i++) {
+        np[i] = var->dist_hint.sizes.c[i];
+        if (np[i] == 0) {
+            uloga("ERROR %s: np[%d] is 0!\n", __func__, i);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static void* allocate_data(struct hstaging_var *var)
+{
+    void* buf = NULL;
+    uint64_t sp[BBOX_MAX_NDIM];
+    uint64_t num_elem = 1;
+    int i;
+
+    if (generate_sp(var, sp) < 0) return buf;
+    for (i = 0; i < var->gdim.ndim; i++) {
+        num_elem *= sp[i];
+    }
+    buf = malloc(var->elem_size * num_elem);
+    return buf;        
+}
+
+static int generate_data_value(struct hstaging_var *var, void *data, int version)
+{
+    double value = version;
+    int i;
+    uint64_t sp[BBOX_MAX_NDIM];
+    uint64_t num_elem = 1;
+
+    if (var->elem_size != sizeof(double)) {
+        uloga("ERROR %s: var->elem_size= %u should equal to sizeof(double)= %u\n",
+            __func__, var->elem_size, sizeof(double));
+        return -1;
+    } 
+    
+    if (generate_sp(var,sp) < 0) return -1;
+    for (i = 0; i < var->gdim.ndim; i++) {
+        num_elem *= sp[i];
+    }
+    double *array = (double*)data;
+    for (i = 0; i < num_elem; i++) {
+        array[i] = value;
+    } 
+    return 0;
+}
+
+static void set_ndim(struct hstaging_var *var, int *ndim) {
+    *ndim = var->gdim.ndim;
+}
+
+static void set_gdim(struct hstaging_var *var, uint64_t *gdim) {
+    int i;
+    for (i = 0; i < var->gdim.ndim; i++) {
+        gdim[i] = var->gdim.sizes.c[i];
+    }
+}
+
+static void set_bbox(struct task_descriptor *t, struct hstaging_var *var,
+    uint64_t *lb, uint64_t *ub)
+{
+    int i, j;
+    uint64_t np[BBOX_MAX_NDIM], sp[BBOX_MAX_NDIM], offset[BBOX_MAX_NDIM];
+    if (generate_sp(var, sp) < 0) return;
+    if (generate_np(var, np) < 0) return;
+
+    for (i = 0; i < var->gdim.ndim; i++) {
+        int temp = t->rank;
+        for (j = 0; j < i; j++)
+            temp /= np[j];
+        offset[i] = temp % np[i] * sp[i]; 
+    }
+    for (i = 0; i < var->gdim.ndim; i++) {
+        lb[i] = offset[i];
+        ub[i] = offset[i] + sp[i] - 1;
+    }
+}
+
+static int read_data(struct task_descriptor *t, struct hstaging_var *var, int version, struct parallel_communicator *comm, int use_lock)
 {
     int err;
-	double *data = NULL;
-    // input arguments for dimes_put()
+    double *data = NULL;
     int ndim;
     size_t elem_size;
     uint64_t lb[BBOX_MAX_NDIM], ub[BBOX_MAX_NDIM], gdim[BBOX_MAX_NDIM];
+    char lock_name[256], group_name[256];
+    sprintf(lock_name, "%s_lock", var->name);
+    if (t->rank == 0) {
+        uloga("%s: t->rank= %d lock_name= '%s'\n", __func__,
+            t->rank, lock_name, group_name);
+    }
 
-	if (t->rank == 0) {
-		update_var(var_name, version, elem_size, ndim, gdim);
-	}
+    ndim = var->gdim.ndim;
+    elem_size = var->elem_size;
+    // Allocates data
+    data = allocate_data(var);
+    if (!data) return -1;
+    set_ndim(var, &ndim);
+    set_gdim(var, gdim);
+    set_bbox(t, var, lb, ub);
 
-	if (data) free(data);
-	return err;
+    // Read data starts ...
+    if (use_lock) {
+        dspaces_lock_on_read(lock_name, &comm->comm);
+    }
+
+    char lb_str[256], ub_str[256], gdim_str[256];
+    int64s_to_str(ndim, lb, lb_str);
+    int64s_to_str(ndim, ub, ub_str);
+    int64s_to_str(ndim, gdim, gdim_str);
+    uloga("%s: t->rank= %d read var= '%s' ndim= %d elem_size= %u version= %d "
+        "lb= (%s) ub= (%s) gdim= (%s)\n", __func__, t->rank, var->name, ndim, elem_size,
+        version, lb_str, ub_str, gdim_str);
+
+    dimes_define_gdim(var->name, ndim, gdim);
+    err = dimes_get(var->name, version, elem_size, ndim, lb, ub, data);
+    if (err < 0) {
+        uloga("ERROR %s: dimes_get() failed!\n", __func__);
+        goto err_out;
+    }
+
+    if (use_lock) {
+        dspaces_unlock_on_read(lock_name, &comm->comm);
+    }
+    // Read data ends ...
+
+    if (data) free(data);
+    return err;
+ err_out:
+    if (data) free(data);
+    return err;
 }
 
-void print_task_info(const struct task_descriptor *t)
+static int write_data(struct task_descriptor *t, struct hstaging_var *var, int version, struct parallel_communicator *comm, int use_lock, int use_group) {
+    int err;
+    double *data = NULL;
+    int ndim;
+    size_t elem_size;
+    uint64_t lb[BBOX_MAX_NDIM], ub[BBOX_MAX_NDIM], gdim[BBOX_MAX_NDIM];
+    char lock_name[256], group_name[256];
+    sprintf(lock_name, "%s_lock", var->name);
+    sprintf(group_name, "%s_group", var->name);
+    if (t->rank == 0) {
+        uloga("%s: t->rank= %d lock_name= '%s' group_name= '%s'\n", __func__,
+            t->rank, lock_name, group_name);
+    }
+
+    ndim = var->gdim.ndim;
+    elem_size = var->elem_size;
+    // Allocates data
+    data = allocate_data(var);
+    if (!data) return -1;
+    generate_data_value(var, data, version);
+    set_ndim(var, &ndim);
+    set_gdim(var, gdim);
+    set_bbox(t, var, lb, ub);
+
+    // Write data starts ...
+    if (use_lock) {
+        dspaces_lock_on_write(lock_name, &comm->comm);
+    }
+
+    if (use_group) {
+        dimes_put_sync_group(group_name, version);
+        dimes_put_set_group(group_name, version);
+    } else {
+        dimes_put_sync_all();
+    }
+
+    char lb_str[256], ub_str[256], gdim_str[256];
+    int64s_to_str(ndim, lb, lb_str);
+    int64s_to_str(ndim, ub, ub_str);
+    int64s_to_str(ndim, gdim, gdim_str);
+    uloga("%s: t->rank= %d write var= '%s' ndim= %d elem_size= %u version= %d "
+        "lb= (%s) ub= (%s) gdim= (%s)\n", __func__, t->rank, var->name, ndim, elem_size,
+        version, lb_str, ub_str, gdim_str);
+
+    dimes_define_gdim(var->name, ndim, gdim);
+    err = dimes_put(var->name, version, elem_size, ndim, lb, ub, data);
+    if (err < 0) {
+        uloga("ERROR %s: dimes_put() failed!\n", __func__);
+        goto err_out;
+    }
+
+    if (use_group) {
+        dimes_put_unset_group(group_name, version);
+    }
+
+    if (use_lock) {
+        dspaces_unlock_on_write(lock_name, &comm->comm);
+    }
+    // Write data ends ...
+
+    if (data) free(data);
+    return err;
+ err_out:
+    if (data) free(data);
+    return err;
+} 
+
+static void print_task_info(const struct task_descriptor *t)
 {
     uloga("%s(): task wid= %u tid= %u appid= %d rank= %d nproc= %d num_vars= %d\n",
         __func__, t->wid, t->tid, t->appid, t->rank, t->nproc, t->num_vars);
@@ -187,14 +396,14 @@ void print_task_info(const struct task_descriptor *t)
         for (j = 0; j < t->vars[i].gdim.ndim; j++) {
             gdim[j] = t->vars[i].gdim.sizes.c[j];
         }
-        for (j = 0; j < t->vars[i].distribution_hint.ndim; j++) {
-            dist[j] = t->vars[i].distribution_hint.sizes.c[j];
+        for (j = 0; j < t->vars[i].dist_hint.ndim; j++) {
+            dist[j] = t->vars[i].dist_hint.sizes.c[j];
         }
         int64s_to_str(t->vars[i].gdim.ndim, gdim, gdim_str);
-        int64s_to_str(t->vars[i].distribution_hint.ndim, dist, dist_str);
+        int64s_to_str(t->vars[i].dist_hint.ndim, dist, dist_str);
 
         uloga("%s(): task wid= %u tid= %u appid= %d var '%s' version %d elem_size %u "
-            "gdim (%s) distribution_hint= (%s)\n",
+            "gdim (%s) dist_hint= (%s)\n",
             __func__, t->wid, t->tid, t->appid, t->vars[i].name,
             t->vars[i].version, t->vars[i].elem_size,
             gdim_str, dist_str);
@@ -489,13 +698,21 @@ int dns_task(struct task_descriptor *t,
 
     // sleep for 1 second
     unsigned int seconds = 1;
-    int ts;
+    int i, ts;
     for (ts = 1; ts <= dns_les_num_ts; ts++) {
-        int i;
         for (i = 1; i <= dns_les_num_sub_step; i++) {
             if (comm_rank == 0) {
                 uloga("%s(): step %d substep %d\n", __func__, ts, i);
             }
+
+            // write variable            
+            char var_name[256];
+            sprintf(var_name, "var%d", i);
+            struct hstaging_var *var = lookup_task_var(t, var_name);
+            if (var) {
+                write_data(t, var, ts, comm, 1, 1);
+            }
+
             sleep(seconds);
         }
         MPI_Barrier(comm->comm);
@@ -526,13 +743,21 @@ int les_task(struct task_descriptor *t,
 
     // sleep for 1 second
     unsigned int seconds = 1;
-    int ts;
+    int i, ts;
     for (ts = 1; ts <= dns_les_num_ts; ts++) {
-        int i;
         for (i = 1; i <= dns_les_num_sub_step; i++) {
             if (comm_rank == 0) {
                 uloga("%s(): step %d substep %d\n", __func__, ts, i);
             }
+
+            // read variable
+            char var_name[256];
+            sprintf(var_name, "var%d", i);
+            struct hstaging_var *var = lookup_task_var(t, var_name);
+            if (var) {
+                read_data(t, var, ts, comm, 1);
+            }
+
             sleep(seconds);
         }
         MPI_Barrier(comm->comm);
