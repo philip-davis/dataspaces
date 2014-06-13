@@ -121,7 +121,7 @@ static int evaluate_task_by_available_var(struct hstaging_task *task, const stru
     if (var) {
         var->status = var_available;
         var->elem_size = var_desc->elem_size;
-        var->bb = var_desc->bb;
+        var->gdim = var_desc->gdim;
     } 
 
 	return 0;
@@ -141,28 +141,32 @@ int evaluate_dataflow_by_available_var(struct hstaging_workflow *wf, const struc
 	return 0;
 }
 
-static void task_add_var(struct hstaging_task *task, const enum hstaging_var_type type, const char *name)
+static struct hstaging_var* task_add_var(struct hstaging_task *task, const char *name)
 {
 	if (task == NULL) {
 		fprintf(stderr, "%s(): task == NULL\n", __func__);
-		return;
+		return NULL;
 	}
 
 	if (task->num_vars >= MAX_NUM_VARS) {
 		fprintf(stderr, "%s(): exceeds MAX_NUM_VARS\n", __func__);
-		return;
+		return NULL;
 	}
 
-	// New var
 	struct hstaging_var *var = &task->vars[task->num_vars];
-	var->type = type;
 	strcpy(var->name, name);
-
+    var->version = -1;
+    var->elem_size = 0;
+    memset(&var->gdim, 0, sizeof(struct global_dimension));
+    memset(&var->distribution_hint, 0, sizeof(struct block_distribution));
+    var->gdim.ndim = 0;
+    var->distribution_hint.ndim = 0;   
+ 
 	task->num_vars++;
-	return;
+	return var;
 }
 
-static int read_task_var_info(struct hstaging_task *task, char *fields[], int num_fields)
+static int read_task_var_type(struct hstaging_task *task, char *fields[], int num_fields)
 {
 	int index_to_var_type = 3;
 	// Get var type
@@ -175,11 +179,100 @@ static int read_task_var_info(struct hstaging_task *task, char *fields[], int nu
 	int vars_start_at = 4;
 	int i = vars_start_at, j = 0;
 	while (i < num_fields) {
-		task_add_var(task, type, fields[i]);
+        struct hstaging_var *var = lookup_var(task, fields[i]);
+        if (!var) {
+            // add new var
+            var = task_add_var(task, fields[i]);
+            if (!var) return -1;
+        }
+        // set var type
+        var->type = type;
 		i++;
 	}
 
 	return 0;
+}
+
+static int read_task_var_dimension(struct hstaging_task *task, char *fields[], int num_fields)
+{
+    int index_to_var_dim = 3;
+    int ndim = atoi(fields[index_to_var_dim]);
+    if (ndim < 0 || ndim > BBOX_MAX_NDIM) {
+        uloga("ERROR %s: wrong value for ndim %s\n", __func__, fields[index_to_var_dim]);
+        return -1;
+    }
+
+    struct global_dimension gdim;
+    gdim.ndim = ndim;
+    int dims_start_at = 4;
+    int i = dims_start_at, j = 0;
+    while ((i < num_fields) && (j < gdim.ndim)) {
+        gdim.sizes.c[j++] = atoll(fields[i++]);
+    }
+    
+    if (j != gdim.ndim) {
+        uloga("ERROR %s: var dimension incomplete ndim is %d but only read %d values\n",
+            __func__, gdim.ndim, j);    
+        return -1;
+    }
+
+    size_t elem_size = atoi(fields[i++]);
+    while (i < num_fields) {
+        struct hstaging_var *var = lookup_var(task, fields[i]);
+        if (!var) {
+            // add new var
+            var = task_add_var(task, fields[i]);
+            if (!var) return -1;
+        }
+        var->elem_size = elem_size;
+        memcpy(&var->gdim, &gdim, sizeof(struct global_dimension));
+        i++;
+    }
+
+    return 0;
+}
+
+static int read_task_var_distribution(struct hstaging_task *task, char *fields[], int num_fields)
+{
+    int index_to_var_dist_type = 3;
+    if (0 != strcmp("block", fields[index_to_var_dist_type])) {
+        uloga("ERROR %s: we only support 'block' distribution\n", __func__);
+        return -1;
+    }
+
+    int index_to_var_dist_dim = 4;
+    int ndim = atoi(fields[index_to_var_dist_dim]);
+    if (ndim < 0 || ndim > BBOX_MAX_NDIM) {
+        uloga("ERROR %s: wrong value for ndim %s\n", __func__, fields[index_to_var_dist_dim]);
+        return -1;
+    }
+
+    struct block_distribution dist;
+    dist.ndim = ndim;
+    int dims_start_at = 5;
+    int i = dims_start_at, j = 0; 
+    while ((i < num_fields) && (j < dist.ndim)) {
+        dist.sizes.c[j++] = atoll(fields[i++]);
+    }
+
+    if (j != dist.ndim) {
+        uloga("ERROR %s: var distribution incomplete ndim is %d but only read %d values\n",
+            __func__, dist.ndim, j);
+        return -1;
+    }
+
+    while (i < num_fields) {
+        struct hstaging_var *var = lookup_var(task, fields[i]);
+        if (!var) {
+            // add new var
+            var = task_add_var(task, fields[i]);
+            if (!var) return -1;
+        }
+        memcpy(&var->distribution_hint, &dist, sizeof(struct block_distribution));
+        i++;
+    }
+
+    return 0;
 }
 
 static int read_task_placement_hint(struct hstaging_task *task, char *fields[], int num_fields)
@@ -216,22 +309,31 @@ static int read_workflow_task(struct hstaging_task *task, char *fields[], int nu
 		return -1;
 	}
 
+    // read application id for the task
 	int appid = atoi(fields[index_to_appid]);
     task->appid = appid;
 
 	char *t_desc = fields[index_to_desc];
-	if (0 == strcmp(t_desc, "variable_info")) {
-		if (read_task_var_info(task, fields, num_fields) < 0) {
+	if (0 == strcmp(t_desc, "def_var_type")) {
+		if (read_task_var_type(task, fields, num_fields) < 0) {
 			return -1;
 		}
 	} else if (0 == strcmp(t_desc, "placement_hint")) {
 		if (read_task_placement_hint(task, fields, num_fields) < 0) {
 			return -1;	
 		}
-	} else if (0 == strcmp(t_desc, "size_hint")) {
+	} else if (0 == strcmp(t_desc, "def_size_hint")) {
         if (read_task_size_hint(task, fields, num_fields) < 0 ) {
             return -1;
         } 
+    } else if (0 == strcmp(t_desc, "def_var_dimension")) {
+        if (read_task_var_dimension(task, fields, num_fields) < 0) {
+            return -1;
+        }
+    } else if (0 == strcmp(t_desc, "def_var_distribution")) {
+        if (read_task_var_distribution(task, fields, num_fields) < 0) {
+            return -1;
+        }
     }
 
 	return 0;
@@ -307,17 +409,27 @@ int parse_task_conf_file(struct hstaging_task *task, const char *fname)
 void print_workflow(struct hstaging_workflow *wf)
 {
     if (!wf) return;
-    printf("\nworkflow tasks:\n");
     struct hstaging_task *task;
+    uint64_t gdim[BBOX_MAX_NDIM], dist[BBOX_MAX_NDIM];
+    char gdim_str[256], dist_str[256];
+    int i, j;
+
     list_for_each_entry(task, &wf->task_list, struct hstaging_task, entry) {
-		printf("task tid= %u appid= %d size_hint= %d placement_hint= %d submitter_dart_id= %d ",
-			task->tid, task->appid, task->size_hint, task->placement_hint, task->submitter_dart_id);
-		int i;
+		printf("task tid= %u appid= %d size_hint= %d submitter_dart_id= %d\n",
+			task->tid, task->appid, task->size_hint, task->submitter_dart_id);
 		for (i = 0; i < task->num_vars; i++) {
-			printf("var '%s' type '%s' ", task->vars[i].name,
-				var_type_name[task->vars[i].type]);
+            for (j = 0; j < task->vars[i].gdim.ndim; j++) {
+                gdim[j] = task->vars[i].gdim.sizes.c[j];
+            }
+            for (j = 0; j < task->vars[i].distribution_hint.ndim; j++) {
+                dist[j] = task->vars[i].distribution_hint.sizes.c[j];
+            }
+            int64s_to_str(task->vars[i].gdim.ndim, gdim, gdim_str);
+            int64s_to_str(task->vars[i].distribution_hint.ndim, dist, dist_str);
+ 
+			printf("task tid= %u appid= %d var= '%s': type= '%s' elem_size= %u gdim= (%s) distribution_hint= (%s)\n", 
+                task->tid, task->appid, task->vars[i].name, var_type_name[task->vars[i].type], task->vars[i].elem_size, gdim_str, dist_str);
 		}
-        printf("\n");
 	}
 }
 

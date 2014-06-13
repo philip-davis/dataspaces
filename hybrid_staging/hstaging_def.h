@@ -7,8 +7,10 @@ extern "C" {
 
 #include <stdint.h>
 
+#include "debug.h"
 #include "list.h"
 #include "bbox.h"
+#include "ss_data.h"
 
 #ifdef HAVE_UGNI
 #include <pmi.h>
@@ -94,7 +96,7 @@ struct hdr_update_var {
 	char name[MAX_VAR_NAME_LEN];
 	int version;
 	int elem_size;
-	struct bbox bb;
+    struct global_dimension gdim;
 } __attribute__((__packed__));
 
 struct hdr_exec_task {
@@ -138,13 +140,19 @@ static char* var_type_name[] =
 	"depend", "put", "get"
 };
 
+struct block_distribution {
+    int ndim;
+    struct coord sizes;    
+};
+
 struct hstaging_var {
 	char name[MAX_VAR_NAME_LEN];
 	enum hstaging_var_type type;
     enum hstaging_var_status status;
     int version;
     size_t elem_size;
-    struct bbox bb;
+    struct global_dimension gdim;
+    struct block_distribution distribution_hint;    
 };
 
 struct task_descriptor {

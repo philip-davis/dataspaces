@@ -405,7 +405,7 @@ int hstaging_update_var(struct hstaging_var *var, enum hstaging_update_var_op op
 	strcpy(hdr->name, var->name);
 	hdr->version = var->version;
 	hdr->elem_size = var->elem_size;
-	hdr->bb = var->bb;
+	hdr->gdim = var->gdim;
 	hdr->op = op;
 
     err = client_rpc_send(peer, msg, &send_state);

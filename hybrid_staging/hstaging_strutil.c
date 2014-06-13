@@ -52,3 +52,19 @@ void trim(char *str, const char *delim)
 		str[j+1] = '\0';
 	}
 }
+
+void int64s_to_str(int ndim, uint64_t *values, char *s)
+{
+    int i;
+    char v[32];
+    if (!ndim) {
+        s[0] = '\0';
+        return;
+    }
+    sprintf(s,"%llu", values[0]);
+    for (i=1; i<ndim; i++)
+    {
+        sprintf (v,",%llu", values[i]);
+        strcat (s,v);
+    }
+}
