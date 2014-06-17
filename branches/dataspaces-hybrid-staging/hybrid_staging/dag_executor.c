@@ -38,9 +38,12 @@
 
 #include "hstaging_api.h"
 
+// dummy example workflows
 extern int dummy_epsi_coupling_workflow(MPI_Comm comm);
 extern int dummy_s3d_analysis_workflow(MPI_Comm comm);
 extern int dummy_dns_les_workflow(MPI_Comm comm);
+
+extern int s3d_analysis_workflow(MPI_Comm comm);
 
 int main(int argc, char **argv)
 {
@@ -75,6 +78,9 @@ int main(int argc, char **argv)
         break;
     case S3D_WORKFLOW_ID:
         err = dummy_s3d_analysis_workflow(comm);
+        break;
+    case S3D_ANALYSIS_WORKFLOW_ID:
+        err = s3d_analysis_workflow(comm);
         break;
     default:
         err = 0;

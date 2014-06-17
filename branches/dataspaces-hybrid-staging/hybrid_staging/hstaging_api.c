@@ -569,6 +569,33 @@ int hstaging_wait_submitted_task(uint32_t wid, uint32_t tid)
     ERROR_TRACE();
 }
 
+int hstaging_check_submitted_task(uint32_t wid, uint32_t tid)
+{
+    int err = -ENOMEM;
+    struct task_info *t = lookup_submitted_task(wid, tid);
+    if (!t) {
+        uloga("ERROR %s: failed to find submitted task wid= %u tid= %u\n",
+            __func__, wid, tid);
+        return err;
+    }
+
+    int check_loop_cnt = 2;
+    while (check_loop_cnt-- > 0) {
+        err = process_event(dcg);
+        if (err < 0) {
+            goto err_out;
+        }
+    }
+
+    if (is_submitted_task_done(t)) {
+        free_submitted_task(t);
+        return 1;
+    }
+    return 0;
+ err_out:
+    ERROR_TRACE();
+}
+
 int hstaging_submit_task(uint32_t wid, uint32_t tid, const char* conf_file)
 {
     int err;

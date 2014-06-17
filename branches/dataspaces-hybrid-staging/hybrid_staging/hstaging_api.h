@@ -28,6 +28,7 @@ int hstaging_set_task_finished(struct task_descriptor *t);
 int hstaging_submit_task(uint32_t wid, uint32_t tid, const char* conf_file);
 int hstaging_submit_task_nb(uint32_t wid, uint32_t tid, const char* conf_file);
 int hstaging_wait_submitted_task(uint32_t wid, uint32_t tid);
+int hstaging_check_submitted_task(uint32_t wid, uint32_t tid);
 int hstaging_set_workflow_finished(uint32_t wid);
 
 int hstaging_build_staging(int pool_id, const char *conf_file);
