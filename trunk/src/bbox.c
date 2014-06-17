@@ -517,3 +517,58 @@ __u64 intv_size(struct intv *intv)
 {
         return intv->ub - intv->lb + 1;
 }
+
+void coord_print(struct coord *c, int num_dims)
+{
+        switch (num_dims) {
+        case 3:
+                printf("{%llu, %llu, %llu}", c->c[0], c->c[1], c->c[2]);
+                break;
+        case 2:
+                printf("{%llu, %llu}", c->c[0], c->c[1]);
+                break;
+        case 1:
+                printf("{%llu}", c->c[0]);
+        }
+}
+
+/*
+  Routine to return a string representation of the 'coord' object.
+*/
+
+char * coord_sprint(const struct coord *c, int num_dims)
+{
+        char *str;
+        int i;
+        asprintf(&str, "{%d", c->c[0]);
+        for(i = 1; i < num_dims; i++){
+                char *tmp;
+                asprintf(&tmp, ", %llu", c->c[i]);
+                str = str_append(str, tmp);
+        }
+        str = str_append_const(str, "}");
+        return str;
+}
+
+
+void bbox_print(struct bbox *bb)
+{
+        printf("{lb = ");
+        coord_print(&bb->lb, bb->num_dims);
+        printf(", ub = ");
+        coord_print(&bb->ub, bb->num_dims);
+        printf("}");
+}
+
+char * bbox_sprint(const struct bbox *bb)
+{
+        char *str;
+
+        asprintf(&str, "{lb = ");
+        str = str_append(str, coord_sprint(&bb->lb, bb->num_dims));
+        str = str_append_const(str, ", ub = ");
+        str = str_append(str, coord_sprint(&bb->ub, bb->num_dims));
+        str = str_append_const(str, "}\n");
+
+        return str;
+}
