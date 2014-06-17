@@ -410,7 +410,7 @@ static void print_task_info(const struct task_descriptor *t)
     } 
 }
 
-int dag_task(struct task_descriptor *t, struct parallel_communicator *comm)
+int dummy_dag_task(struct task_descriptor *t, struct parallel_communicator *comm)
 {
     int comm_size, comm_rank;
     MPI_Barrier(comm->comm);
@@ -436,7 +436,7 @@ int dag_task(struct task_descriptor *t, struct parallel_communicator *comm)
 }
 
 static int sml_mstep = 10;
-int xgc1_task(struct task_descriptor *t, struct parallel_communicator *comm)
+int dummy_xgc1_task(struct task_descriptor *t, struct parallel_communicator *comm)
 {
     double t1, t2;
     int comm_size, comm_rank;
@@ -480,7 +480,7 @@ int xgc1_task(struct task_descriptor *t, struct parallel_communicator *comm)
     return 0;
 }
 
-int xgca_task(struct task_descriptor *t, struct parallel_communicator *comm)
+int dummy_xgca_task(struct task_descriptor *t, struct parallel_communicator *comm)
 {
     double t1, t2;
     int comm_size, comm_rank;
@@ -525,7 +525,7 @@ int xgca_task(struct task_descriptor *t, struct parallel_communicator *comm)
 }
 
 static int s3d_num_ts = 10;
-int s3d_task(struct task_descriptor *t,
+int dummy_s3d_task(struct task_descriptor *t,
     struct parallel_communicator *comm)
 {
     double t1, t2;
@@ -571,7 +571,7 @@ int s3d_task(struct task_descriptor *t,
     return 0;
 }
 
-int s3d_viz_task(struct task_descriptor *t,
+int dummy_s3d_viz_task(struct task_descriptor *t,
     struct parallel_communicator *comm)
 {
     double t1, t2;
@@ -598,7 +598,7 @@ int s3d_viz_task(struct task_descriptor *t,
     return 0;
 }
 
-int s3d_stat_task(struct task_descriptor *t,
+int dummy_s3d_stat_task(struct task_descriptor *t,
     struct parallel_communicator *comm)
 {
     double t1, t2;
@@ -625,7 +625,7 @@ int s3d_stat_task(struct task_descriptor *t,
     return 0;
 }
 
-int s3d_topo_task(struct task_descriptor *t,
+int dummy_s3d_topo_task(struct task_descriptor *t,
     struct parallel_communicator *comm)
 {
     double t1, t2;
@@ -652,7 +652,7 @@ int s3d_topo_task(struct task_descriptor *t,
     return 0;
 }
 
-int s3d_indexing_task(struct task_descriptor *t,
+int dummy_s3d_indexing_task(struct task_descriptor *t,
     struct parallel_communicator *comm)
 {
     double t1, t2;
@@ -681,7 +681,7 @@ int s3d_indexing_task(struct task_descriptor *t,
 
 static int dns_les_num_ts = 10;
 static int dns_les_num_sub_step = 6;
-int dns_task(struct task_descriptor *t,
+int dummy_dns_task(struct task_descriptor *t,
     struct parallel_communicator *comm)
 {
     double t1, t2;
@@ -726,7 +726,7 @@ int dns_task(struct task_descriptor *t,
     return 0;
 }
 
-int les_task(struct task_descriptor *t,
+int dummy_les_task(struct task_descriptor *t,
     struct parallel_communicator *comm)
 {
     double t1, t2;
@@ -1005,6 +1005,33 @@ int dummy_sample_dag_workflow(MPI_Comm comm)
 }
 */
 
+int s3d_viz_render_task(struct task_descriptor *t,
+    struct parallel_communicator *comm)
+{
+    double t1, t2;
+    int comm_size, comm_rank;
+    MPI_Barrier(comm->comm);
+    MPI_Comm_size(comm->comm, &comm_size);
+    MPI_Comm_rank(comm->comm, &comm_rank);
+    t1 = MPI_Wtime();
+
+    // print input variable information
+    if (t->rank == 0) {
+        print_task_info(t);
+    }
+
+    // sleep for 1 second
+    unsigned int seconds = 1;
+    sleep(seconds);
+
+    MPI_Barrier(comm->comm);
+    t2 = MPI_Wtime();
+    if (comm_rank == 0) {
+        uloga("%s(): execution time %lf\n", __func__, t2-t1);
+    }
+    return 0;
+}
+
 int dummy_epsi_coupling_workflow(MPI_Comm comm)
 {
     int err;
@@ -1014,8 +1041,8 @@ int dummy_epsi_coupling_workflow(MPI_Comm comm)
 
     communicator_init(comm);
 
-    register_task_function(1, xgc1_task);
-    register_task_function(2, xgca_task);
+    register_task_function(1, dummy_xgc1_task);
+    register_task_function(2, dummy_xgca_task);
 
     int pool_id = 1;
     hstaging_register_executor(pool_id, mpi_nproc, mpi_rank);
@@ -1042,11 +1069,11 @@ int dummy_s3d_analysis_workflow(MPI_Comm comm)
 
     communicator_init(comm);
 
-    register_task_function(1, s3d_task);
-    register_task_function(2, s3d_viz_task);
-    register_task_function(3, s3d_stat_task); 
-    register_task_function(4, s3d_topo_task);
-    register_task_function(5, s3d_indexing_task);
+    register_task_function(1, dummy_s3d_task);
+    register_task_function(2, dummy_s3d_viz_task);
+    register_task_function(3, dummy_s3d_stat_task); 
+    register_task_function(4, dummy_s3d_topo_task);
+    register_task_function(5, dummy_s3d_indexing_task);
 
     int pool_id = 1;
     hstaging_register_executor(pool_id, mpi_nproc, mpi_rank);
@@ -1073,8 +1100,36 @@ int dummy_dns_les_workflow(MPI_Comm comm)
 
     communicator_init(comm);
 
-    register_task_function(1, dns_task);
-    register_task_function(2, les_task);
+    register_task_function(1, dummy_dns_task);
+    register_task_function(2, dummy_les_task);
+
+    int pool_id = 1;
+    hstaging_register_executor(pool_id, mpi_nproc, mpi_rank);
+    MPI_Barrier(comm);
+
+    struct task_descriptor t;
+    while (!hstaging_request_task(&t)) {
+        err = exec_task_function(&t);
+        if (err < 0) {
+            return err;
+        }
+    }
+    communicator_free();
+
+    return 0;
+}
+
+int s3d_analysis_workflow(MPI_Comm comm)
+{
+    int err;
+    int mpi_rank, mpi_nproc;
+    MPI_Comm_size(comm, &mpi_nproc);
+    MPI_Comm_rank(comm, &mpi_rank);
+
+    communicator_init(comm);
+
+    register_task_function(1, s3d_viz_render_task);
+    //register_task_function(2, s3d_fb_indexing_task);
 
     int pool_id = 1;
     hstaging_register_executor(pool_id, mpi_nproc, mpi_rank);
