@@ -31,6 +31,8 @@
 #ifndef __TEST_COMMON_H_
 #define __TEST_COMMON_H_
 
+#include <stdint.h>
+
 #include "debug.h"
 #include "timer.h"
 #include "dataspaces.h"
@@ -71,8 +73,8 @@ int common_put_sync(enum transport_type type);
 int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gcomm);
 int commom_get_transport_type_str(enum transport_type type, char* str);
 
-void check_data(const char *var_name, double *buf, int num_double, int rank, int ts);
-void compute_stats(const char *var_name, double *buf, int num_double, int rank);
+void check_data(const char *var_name, double *buf, uint64_t num_double, int rank, int ts);
+void compute_stats(const char *var_name, double *buf, uint64_t num_double, int rank);
 
 int read_task_info(const char *fname, int *num_peer, int *npx, int *npy, int *npz, int *dims, int *dim_x, int *dim_y, int *dim_z);
 

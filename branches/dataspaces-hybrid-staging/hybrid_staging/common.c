@@ -265,7 +265,7 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
         return 0;
 }
 
-void check_data(const char *var_name, double *buf, int num_elem, int rank, int ts)
+void check_data(const char *var_name, double *buf, uint64_t num_elem, int rank, int ts)
 {
         double max, min, sum, avg;
         int i;
@@ -312,12 +312,12 @@ int common_get_transport_type_str(enum transport_type type, char* str)
     return 0;
 }
 
-void compute_stats(const char *var_name, double *buf, int num_elem, int rank)
+void compute_stats(const char *var_name, double *buf, uint64_t num_elem, int rank)
 {
         double max, min, sum, avg;
         int i;
 
-        if (num_elem <= 0) {
+        if (num_elem == 0) {
                 return;
         }
 
@@ -332,10 +332,8 @@ void compute_stats(const char *var_name, double *buf, int num_elem, int rank)
 
         avg = sum / num_elem;
 
-#ifdef DEBUG
         uloga("%s(): var= %s, rank= %d, max= %e, min= %e, avg= %e\n",
                 __func__, var_name, rank, max, min, avg);
-#endif
         return;
 }
 
