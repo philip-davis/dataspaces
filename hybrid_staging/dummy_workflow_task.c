@@ -9,6 +9,10 @@
 #include "hpgv.h"
 #include "carraysearch.h"
 
+// Forward declaration
+void log_write_var(int rank, const char *var_name, int ndim, int elem_size, int version, uint64_t *lb, uint64_t *ub, uint64_t *gdim);
+void log_read_var(int rank, const char *var_name, int ndim, int elem_size, int version, uint64_t *lb, uint64_t *ub, uint64_t *gdim);
+
 struct viz_task_info {
     int is_viz_init;
     double *viz_data;
@@ -290,13 +294,8 @@ static int read_data(struct task_descriptor *t, struct hstaging_var *var, int ve
         dspaces_lock_on_read(lock_name, &comm->comm);
     }
 
-    char lb_str[256], ub_str[256], gdim_str[256];
-    int64s_to_str(ndim, lb, lb_str);
-    int64s_to_str(ndim, ub, ub_str);
-    int64s_to_str(ndim, gdim, gdim_str);
-    uloga("%s: t->rank= %d read var= '%s' ndim= %d elem_size= %u version= %d "
-        "lb= (%s) ub= (%s) gdim= (%s)\n", __func__, t->rank, var->name, ndim, elem_size,
-        version, lb_str, ub_str, gdim_str);
+    log_read_var(t->rank, var->name, ndim, elem_size, version,
+                lb, ub, gdim);
 
     dimes_define_gdim(var->name, ndim, gdim);
     err = dimes_get(var->name, version, elem_size, ndim, lb, ub, data);
@@ -353,13 +352,8 @@ static int write_data(struct task_descriptor *t, struct hstaging_var *var, int v
         dimes_put_sync_all();
     }
 
-    char lb_str[256], ub_str[256], gdim_str[256];
-    int64s_to_str(ndim, lb, lb_str);
-    int64s_to_str(ndim, ub, ub_str);
-    int64s_to_str(ndim, gdim, gdim_str);
-    uloga("%s: t->rank= %d write var= '%s' ndim= %d elem_size= %u version= %d "
-        "lb= (%s) ub= (%s) gdim= (%s)\n", __func__, t->rank, var->name, ndim, elem_size,
-        version, lb_str, ub_str, gdim_str);
+    log_write_var(t->rank, var->name, ndim, elem_size, version,
+                lb, ub, gdim);
 
     dimes_define_gdim(var->name, ndim, gdim);
     err = dimes_put(var->name, version, elem_size, ndim, lb, ub, data);
@@ -408,6 +402,28 @@ static void print_task_info(const struct task_descriptor *t)
             t->vars[i].version, t->vars[i].elem_size,
             gdim_str, dist_str);
     } 
+}
+
+static void log_write_var(int rank, const char *var_name, int ndim, int elem_size, int version, uint64_t *lb, uint64_t *ub, uint64_t *gdim) {
+    char lb_str[256], ub_str[256], gdim_str[256];
+    int64s_to_str(ndim, lb, lb_str);
+    int64s_to_str(ndim, ub, ub_str);
+    int64s_to_str(ndim, gdim, gdim_str);
+    uloga("rank= %d write var= '%s' ndim= %d elem_size= %u version= %d "
+        "lb= (%s) ub= (%s) gdim= (%s)\n",
+        rank, var_name, ndim, elem_size,
+        version, lb_str, ub_str, gdim_str);
+}
+
+static void log_read_var(int rank, const char *var_name, int ndim, int elem_size, int version, uint64_t *lb, uint64_t *ub, uint64_t *gdim) {
+    char lb_str[256], ub_str[256], gdim_str[256];
+    int64s_to_str(ndim, lb, lb_str);
+    int64s_to_str(ndim, ub, ub_str);
+    int64s_to_str(ndim, gdim, gdim_str);
+    uloga("rank= %d read var= '%s' ndim= %d elem_size= %u version= %d "
+        "lb= (%s) ub= (%s) gdim= (%s)\n",
+        rank, var_name, ndim, elem_size,
+        version, lb_str, ub_str, gdim_str);
 }
 
 int dummy_dag_task(struct task_descriptor *t, struct parallel_communicator *comm)
@@ -1020,12 +1036,138 @@ int s3d_viz_render_task(struct task_descriptor *t,
         print_task_info(t);
     }
 
-    // sleep for 1 second
-    unsigned int seconds = 1;
-    sleep(seconds);
+    // lookup input data var
+    struct hstaging_var *var = lookup_task_var(t, "s3d_data_viz");
+    if (!var) {
+        uloga("ERROR %s: failed to lookup task var 's3d_data_viz'\n", __func__);
+        return 0;
+    }
+
+    // read input data
+    int err;
+    uint64_t lb[BBOX_MAX_NDIM], ub[BBOX_MAX_NDIM], gdim[BBOX_MAX_NDIM];
+    double *data = NULL;
+    int version = 0;
+    int ndim = var->gdim.ndim;    
+    size_t elem_size = var->elem_size;
+    char lock_name[256];
+    sprintf(lock_name, "%s_lock", var->name);
+    
+    data = allocate_data(var);
+    set_ndim(var, &ndim);
+    set_gdim(var, gdim);
+    set_bbox(t, var, lb, ub);
+
+    dspaces_lock_on_read(lock_name, &comm->comm);
+    log_read_var(t->rank, var->name, ndim, elem_size, version,
+            lb, ub, gdim); 
+    dimes_define_gdim(var->name, ndim, gdim);
+    err = dimes_get(var->name, version, elem_size, ndim, lb, ub, data);
+    if (err < 0) {
+        uloga("ERROR %s: dimes_get() failed\n", __func__);
+    }
+    dspaces_unlock_on_read(lock_name, &comm->comm);
+
+    // check data values
+    uint64_t sp[BBOX_MAX_NDIM];
+    uint64_t num_elem = 1;
+    int i;
+    generate_sp(var, sp);
+    for (i = 0; i < var->gdim.ndim; i++) {
+        num_elem *= sp[i];
+    }
+    compute_stats(var->name, data, (num_elem*var->elem_size)/sizeof(double), t->rank);
+    if (data) free(data);
 
     MPI_Barrier(comm->comm);
     t2 = MPI_Wtime();
+    if (comm_rank == 0) {
+        uloga("%s(): execution time %lf\n", __func__, t2-t1);
+    }
+    return 0;
+}
+
+int s3d_fb_indexing_task(struct task_descriptor *t,
+    struct parallel_communicator *comm)
+{
+    double t1, t2;
+    double read_data_time = 0, build_index_time = 0;
+    int comm_size, comm_rank;
+
+    t1 = MPI_Wtime();
+    read_data_time = t1;
+    MPI_Barrier(comm->comm);
+    MPI_Comm_size(comm->comm, &comm_size);
+    MPI_Comm_rank(comm->comm, &comm_rank);
+
+    // print input variable information
+    if (t->rank == 0) {
+        print_task_info(t);
+    }
+
+    // lookup input data var
+    struct hstaging_var *var = lookup_task_var(t, "s3d_data_fb");
+    if (!var) {
+        uloga("ERROR %s: failed to lookup task var 's3d_data_fb'\n", __func__);
+        return 0;
+    }
+
+    // read input data
+    int err;
+    uint64_t lb[BBOX_MAX_NDIM], ub[BBOX_MAX_NDIM], gdim[BBOX_MAX_NDIM];
+    double *data = NULL;
+    int version = 0;
+    int ndim = var->gdim.ndim;    
+    size_t elem_size = var->elem_size;
+    char lock_name[256];
+    sprintf(lock_name, "%s_lock", var->name);
+    
+    data = allocate_data(var);
+    set_ndim(var, &ndim);
+    set_gdim(var, gdim);
+    set_bbox(t, var, lb, ub);
+
+    dspaces_lock_on_read(lock_name, &comm->comm);
+    log_read_var(t->rank, var->name, ndim, elem_size, version,
+            lb, ub, gdim); 
+    dimes_define_gdim(var->name, ndim, gdim);
+    err = dimes_get(var->name, version, elem_size, ndim, lb, ub, data);
+    if (err < 0) {
+        uloga("ERROR %s: dimes_get() failed\n", __func__);
+    }
+    dspaces_unlock_on_read(lock_name, &comm->comm);
+    t2 = MPI_Wtime();
+    read_data_time = (t2-read_data_time);
+    build_index_time = t2;
+
+    // check data values
+    uint64_t sp[BBOX_MAX_NDIM];
+    uint64_t num_elem = 1;
+    int i;
+    generate_sp(var, sp);
+    for (i = 0; i < var->gdim.ndim; i++) {
+        num_elem *= sp[i];
+    }
+    //compute_stats(var->name, data, (num_elem*var->elem_size)/sizeof(double), t->rank);
+
+    // build fb indexing
+    void *cas;
+    const char *indopt = "<binning start=0 end=1000 nbins=100 scale=simple/>";
+    char *col_name = "var";
+    int num_double_elem = ((int)num_elem*var->elem_size)/sizeof(double);
+    int size_index = 0;
+    cas = fb_build_index_double(data, num_double_elem, indopt, (void*)col_name,
+            &size_index);
+    if (cas == 0) {
+        printf("%s failed\n", __func__);
+    }
+    build_index_time = (MPI_Wtime()-build_index_time);    
+
+    if (data) free(data);
+    MPI_Barrier(comm->comm);
+    t2 = MPI_Wtime();
+    uloga("%s(): rank %d read_data_time %lf\n", __func__, comm_rank, read_data_time);
+    uloga("%s(): rank %d build_index_time %lf\n", __func__, comm_rank, build_index_time);
     if (comm_rank == 0) {
         uloga("%s(): execution time %lf\n", __func__, t2-t1);
     }
@@ -1129,7 +1271,7 @@ int s3d_analysis_workflow(MPI_Comm comm)
     communicator_init(comm);
 
     register_task_function(1, s3d_viz_render_task);
-    //register_task_function(2, s3d_fb_indexing_task);
+    register_task_function(2, s3d_fb_indexing_task);
 
     int pool_id = 1;
     hstaging_register_executor(pool_id, mpi_nproc, mpi_rank);
