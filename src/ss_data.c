@@ -560,6 +560,14 @@ static struct sspace *ssd_alloc_v1(struct bbox *bb_domain, int num_nodes, int ma
 static void ssd_free_v1(struct sspace *ssd)
 {
         dht_free(ssd->dht);
+        free(ssd);
+        sh_free();
+}
+
+static int ssd_hash_v1(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[])
+{
+        struct intv *i_tab;
+        int i, k, n, num_nodes;
 
         num_nodes = sh_find(bb, de_tab);
         if (num_nodes > 0)
@@ -703,168 +711,6 @@ void ssd_free_v2(struct sspace *ssd)
         sh_free();
 }
 
-static int ssd_hash_v1(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[])
-{
-        struct intv *i_tab;
-        int i, k, n, num_nodes;
-
-        num_nodes = sh_find(bb, de_tab);
-        if (num_nodes > 0)
-                /* This is great, I hit the cache. */
-                return num_nodes;
-
-        num_nodes = 0;
-
-        // bbox_to_intv(bb, ss->max_dim, ss->bpd, &i_tab, &n);
-        bbox_to_intv2(bb, ss->max_dim, ss->bpd, &i_tab, &n);
-        //  printf("After bbox_to_intv2 num_intv = %d\n", n);
-        //  printf("ss->dht->num_entries = %d\n", ss->dht->num_entries);
-
-        for (k = 0; k < ss->dht->num_entries; k++){
-                for (i = 0; i < n; i++) {
-                        if (dht_intersect(ss->dht->ent_tab[k], &i_tab[i])) {
-                                de_tab[num_nodes++] = ss->dht->ent_tab[k];
-                                break;
-                        }
-                }
-        }
-
-        //  printf("num_nodes = %d\n", num_nodes);
-
-        /* Cache the results for later use. */
-        sh_add(bb, de_tab, num_nodes);
-
-        free(i_tab);
-        return num_nodes;
-}
-
-struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max_versions)
-{
-        struct sspace *ssd = NULL;
-        int err = -ENOMEM;
-        int i, j, k;
-        int dim;
-        int nbits_max_dim = 0;
-        uint64_t max_dim = 0;
-        get_bbox_max_dim(bb_domain, &max_dim, &dim);
-        max_dim = next_pow_2_v2(max_dim);
-        nbits_max_dim = compute_bits_v2(max_dim);
-
-        // decompose the global bbox       
-        int num_divide_iteration = compute_bits_v2(next_pow_2_v2(num_nodes));
-        struct bbox *bb, *b1, *b2;
-        struct queue q1, q2;
-        queue_init(&q1);
-        queue_init(&q2);
-
-        bb = malloc(sizeof(struct bbox));
-        memcpy(bb, bb_domain, sizeof(struct bbox));
-        queue_enqueue(&q1, bb);
-        for (i = 0; i < num_divide_iteration; i++) {
-            struct queue *src_q, *dst_q;
-            if (!queue_is_empty(&q1) && queue_is_empty(&q2)) {
-                src_q = &q1;
-                dst_q = &q2;
-            } else if (!queue_is_empty(&q2) && queue_is_empty(&q1)) {
-                src_q = &q2;
-                dst_q = &q1;
-            } else {
-                printf("%s(): error, both q1 and q2 is (non)empty.\n", __func__);
-            }
-            while (!queue_is_empty(src_q)) {
-                uint64_t max_dim_size;
-                struct bbox b_tab[2];
-
-                bb = queue_dequeue(src_q);
-                get_bbox_max_dim_size(bb, &max_dim_size, &dim);
-                bbox_divide_in2_ondim(bb, b_tab, dim);
-                free(bb); bb = NULL;
-                b1 = malloc(sizeof(struct bbox));
-                b2 = malloc(sizeof(struct bbox));
-                *b1 = b_tab[0];
-                *b2 = b_tab[1];
-                queue_enqueue(dst_q, b1);
-                queue_enqueue(dst_q, b2);
-            }
-        }
-
-        struct queue *q;
-        if (!queue_is_empty(&q1)) q = &q1;
-        else if (!queue_is_empty(&q2)) q = &q2;
-
-        ssd = malloc(sizeof(*ssd));
-        if (!ssd)
-                goto err_out;
-        memset(ssd, 0, sizeof(*ssd));
-
-        ssd->max_dim = max_dim;
-        ssd->bpd = nbits_max_dim;
-        ssd->storage = ls_alloc(max_versions);
-        if (!ssd->storage) {
-                free(ssd);
-                goto err_out;
-        }
-
-        ssd->total_num_bbox = queue_size(q);
-        ssd->dht = dht_alloc(ssd, bb_domain, num_nodes, max_versions);
-        if (!ssd->dht) {
-            // TODO: free storage 
-            free(ssd->storage);
-            free(ssd);
-            goto err_out;
-        }
-        for (i = 0; i < num_nodes; i++) {
-            ssd->dht->ent_tab[i]->rank = i;
-        }
-
-        int n = ceil(ssd->total_num_bbox*1.0 / ssd->dht->num_entries);
-        for (i = 0; i < ssd->dht->num_entries; i++) {
-            ssd->dht->ent_tab[i]->size_bb_tab = n;
-            ssd->dht->ent_tab[i]->bb_tab = malloc(sizeof(struct bbox)*n);
-        }
-        //printf("%s(): ssd->total_num_bbox= %d ssd->dht->num_entries= %d"
-        //    " max_num_bbox_per_dht_entry= %d\n",
-        //    __func__, ssd->total_num_bbox, ssd->dht->num_entries, n);
-
-        // simple round-robing mapping of decomposed bbox to dht entries
-        i = 0;
-        while (! queue_is_empty(q)) {
-            bb = queue_dequeue(q);
-            j = i++ % ssd->dht->num_entries;
-            k = ssd->dht->ent_tab[j]->num_bbox++;
-            ssd->dht->ent_tab[j]->bb_tab[k] = *bb;
-            free(bb);
-        }
-
-        /*
-        for (i = 0; i < ssd->dht->num_entries; i++) {
-            printf("dht entry %d size_bb_tab= %d num_bbox= %d\n", i,
-                ssd->dht->ent_tab[i]->size_bb_tab,
-                ssd->dht->ent_tab[i]->num_bbox);
-            for (j = 0; j < ssd->dht->ent_tab[i]->num_bbox; j++) {
-                bbox_print(&ssd->dht->ent_tab[i]->bb_tab[j]);
-            }        
-            printf("\n");
-        }
-        */
-
-        return ssd;
- err_out:
-        uloga("'%s()': failed with %d\n", __func__, err);
-        return NULL;
-}
-
-void ssd_free_v2(struct sspace *ssd)
-{
-        dht_free_v2(ssd->dht);
-
-        //TODO: do I need a ls_free() routine ?
-        free(ssd->storage);
-        free(ssd);
-
-        sh_free();
-}
-
 >>>>>>> 9da97de... merge main trunk revision r1556
 int ssd_hash_v2(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[])
 {
@@ -907,22 +753,54 @@ int ssd_hash_v2(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_t
 /*
   Allocate the shared space structure.
 */
-struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions)
+struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions,
+    enum sspace_hash_version hash_version)
 {
-#ifdef DS_SSD_HASH_V2
-    return ssd_alloc_v2(bb_domain, num_nodes, max_versions);
-#else
-    return ssd_alloc_v1(bb_domain, num_nodes, max_versions);
+    struct sspace *ss = NULL;
+
+#ifdef TIMING_SSD
+    struct timer tm;
+    double tm_st, tm_end;
+    timer_init(&tm, 1);
+    timer_start(&tm);
+    tm_st = timer_read(&tm);
 #endif
+
+    switch (hash_version) {
+    case ssd_hash_version_v1:
+        ss = ssd_alloc_v1(bb_domain, num_nodes, max_versions);
+        break;
+    case ssd_hash_version_v2:
+        ss = ssd_alloc_v2(bb_domain, num_nodes, max_versions);
+        break;
+    default:
+        uloga("%s(): ERROR unknown shared space hash version %u\n",
+            __func__, hash_version);
+        break;
+    }
+
+#ifdef TIMING_SSD 
+    tm_end = timer_read(&tm);
+    uloga("%s(): hash_version v%u time %lf seconds\n", __func__, hash_version, tm_end-tm_st);
+#endif
+
+    return ss;
 }
 
-void ssd_free(struct sspace *ssd)
+void ssd_free(struct sspace *ss)
 {
-#ifdef DS_SSD_HASH_V2
-    return ssd_free_v2(ssd);
-#else
-    return ssd_free_v1(ssd);
-#endif
+    switch (ss->hash_version) {
+    case ssd_hash_version_v1:
+        ssd_free_v1(ss);
+        break;
+    case ssd_hash_version_v2:
+        ssd_free_v2(ss);
+        break;
+    default:
+        uloga("%s(): ERROR unknown shared space hash version %u\n",
+            __func__, ss->hash_version);
+        break;
+    }
 }
 
 /*
@@ -931,13 +809,15 @@ void ssd_free(struct sspace *ssd)
 */
 int ssd_hash(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[])
 {
-#ifdef DS_SSD_HASH_V2
-    return ssd_hash_v2(ss, bb, de_tab);
-#else
-    return ssd_hash_v1(ss, bb, de_tab);
+#ifdef TIMING_SSD
+    struct timer tm;
+    double tm_st, tm_end;
+    timer_init(&tm, 1);
+    timer_start(&tm);
+    tm_st = timer_read(&tm);
 #endif
-}
 
+<<<<<<< HEAD
 /*
  ssd hashing function v1: uses Hilbert SFC to linearize the global data domain
     and bounding box passed by put()/get().
@@ -1231,11 +1111,6 @@ void ls_try_remove_free(struct ss_storage *ls, struct obj_data *od)
                 }
                 obj_data_free(od);
         }
-}
-
-static inline void ls_inc_num_objects(struct ss_storage *ls)
-{
-        ls->num_obj++;
 }
 
 /*
@@ -1563,7 +1438,7 @@ int obj_desc_by_name_intersect(const struct obj_descriptor *odsc1,
         return 0;
 }
 
-void set_global_dimension(struct global_dimension *l, int ndim,
+void copy_global_dimension(struct global_dimension *l, int ndim,
                         const uint64_t *gdim)
 {
     int i;
@@ -1572,4 +1447,78 @@ void set_global_dimension(struct global_dimension *l, int ndim,
     for (i = 0; i < ndim; i++) {
         l->sizes.c[i] = gdim[i];
     } 
+}
+
+void init_gdim_list(struct list_head *gdim_list)
+{
+    if (!gdim_list) return;
+    INIT_LIST_HEAD(gdim_list);
+}
+
+void free_gdim_list(struct list_head *gdim_list) {
+    if (!gdim_list) return;
+    int cnt = 0;
+    struct gdim_list_entry *e, *t;
+    list_for_each_entry_safe(e, t, gdim_list, struct gdim_list_entry, entry)
+    {
+        list_del(&e->entry);
+        free(e->var_name);
+        free(e);
+        cnt++;
+    }
+
+#ifdef DEBUG
+    uloga("%s(): number of user-defined global dimension is %d\n", __func__, cnt);
+#endif
+} 
+
+struct gdim_list_entry* lookup_gdim_list(struct list_head *gdim_list,
+        const char *var_name)
+{
+    if (!gdim_list) return NULL;
+    struct gdim_list_entry *e;
+    list_for_each_entry(e, gdim_list, struct gdim_list_entry, entry)
+    {
+        if (0==strcmp(e->var_name, var_name)) return e;
+    }
+    return NULL;
+}
+
+void update_gdim_list(struct list_head *gdim_list, const char *var_name,
+        int ndim, uint64_t *gdim)
+{
+    struct gdim_list_entry *e = lookup_gdim_list(gdim_list, var_name);
+    if (!e) {
+        // add new entry
+        e = (struct gdim_list_entry*)malloc(sizeof(*e));
+        e->var_name = malloc(strlen(var_name)+1);
+        strcpy(e->var_name, var_name);
+        list_add(&e->entry, gdim_list); 
+    }
+
+    // update entry
+    copy_global_dimension(&e->gdim, ndim, gdim);
+}
+
+void set_global_dimension(struct list_head *gdim_list, const char *var_name,
+            const struct global_dimension *default_gdim, struct global_dimension *gdim)
+{
+    struct gdim_list_entry *e = lookup_gdim_list(gdim_list, var_name);
+    if (e) {
+        memcpy(gdim, &e->gdim, sizeof(struct global_dimension));
+    } else {
+        memcpy(gdim, default_gdim, sizeof(struct global_dimension));
+    }
+}
+
+int global_dimension_equal(const struct global_dimension* gdim1,
+    const struct global_dimension* gdim2)
+{
+    int i;
+    for (i = 0; i < gdim1->ndim; i++) {
+        if (gdim1->sizes.c[i] != gdim2->sizes.c[i])
+            return 0;
+    }
+
+    return 1;
 }

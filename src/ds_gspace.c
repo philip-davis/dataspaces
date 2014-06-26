@@ -230,26 +230,29 @@ static inline struct ds_gspace * dsg_ref_from_rpc(struct rpc_server *rpc_s)
         return ds->dart_ref;
 }
 
-struct sspace_conf {
-    int ndims;
-    uint64_t dimx, dimy, dimz;
-};
-
 static int init_sspace(struct bbox *default_domain, struct ds_gspace *dsg_l)
 {
     int err = -ENOMEM;
-    dsg_l->ssd = ssd_alloc(default_domain, dsg_l->ds->num_sp, ds_conf.max_versions);
+    dsg_l->ssd = ssd_alloc(default_domain, dsg_l->ds->size_sp,
+                            ds_conf.max_versions, ds_conf.hash_version);
     if (!dsg_l->ssd)
-        /* Yes, I don't free resources here, but we should
-           fail anyway. */
-        return err;
+        goto err_out;
 
     err = ssd_init(dsg_l->ssd, ds_get_rank(dsg_l->ds));
     if (err < 0)
-        return err;
+        goto err_out;
+
+    dsg_l->default_gdim.ndim = ds_conf.ndim;
+    int i;
+    for (i = 0; i < ds_conf.ndim; i++) {
+        dsg_l->default_gdim.sizes.c[i] = ds_conf.dims.c[i];
+    }
 
     INIT_LIST_HEAD(&dsg_l->sspace_list);
     return 0;
+ err_out:
+    uloga("%s(): ERROR failed\n", __func__);
+    return err;
 }
 
 static int free_sspace(struct ds_gspace *dsg_l)
@@ -274,18 +277,8 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
 
     // Return the default shared space created based on
     // global data domain specified in dataspaces.conf 
-    if (global_dim_all_zero(&gdim)) {
+    if (global_dimension_equal(&gdim, &dsg_l->default_gdim )) {
         return dsg_l->ssd;
-    }
-
-    // TODO: hard coding for 'dpot' variable in EPSI application
-    int pos;
-    size_t len = strlen(var_name);
-    if (len >= strlen("dpot")) {
-        pos = len - strlen("dpot");
-        if (0 == strcmp(var_name+pos, "dpot")) {
-            gdim.sizes.c[1] = 1;
-        }
     }
 
     // Otherwise, search for shared space based on the
@@ -314,7 +307,8 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
 
     ssd_entry = malloc(sizeof(struct sspace_list_entry));
     memcpy(&ssd_entry->gdim, &gdim, sizeof(struct global_dimension));
-    ssd_entry->ssd = ssd_alloc(&domain, dsg_l->ds->num_sp, ds_conf.max_versions);     
+    ssd_entry->ssd = ssd_alloc(&domain, dsg_l->ds->size_sp, 
+                            ds_conf.max_versions, ds_conf.hash_version);     
     if (!ssd_entry->ssd) {
         uloga("%s(): ssd_alloc failed\n", __func__);
         return dsg_l->ssd;
@@ -326,8 +320,12 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
         return dsg_l->ssd;
     }
 
+#ifdef DEBUG
+/*
     uloga("%s(): add new shared space ndim= %d global dimension= %llu %llu %llu\n",
         __func__, gdim.ndim, gdim.sizes.c[0], gdim.sizes.c[1], gdim.sizes.c[2]);
+*/
+#endif
 
     list_add(&ssd_entry->entry, &dsg_l->sspace_list);
     return ssd_entry->ssd;
@@ -1245,8 +1243,7 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
     struct obj_data *od = msg->private;
-    struct sspace* ssd = lookup_sspace(dsg, od->obj_desc.name, &od->gdim);
-    ssd_add_obj(ssd, od);
+    ls_add_obj(dsg->ls, od);
 
     free(msg);
 #ifdef DEBUG
@@ -1862,7 +1859,6 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
  }
 #endif
 
-        struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name, &oh->gdim);
         // CRITICAL: use version here !!!
         from_obj = ls_find(dsg->ls, &oh->u.o.odsc);
         if (!from_obj) {
@@ -2082,14 +2078,16 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name, void *comm)
         if (!dsg_l->ds)
                 goto err_free;
 
-        tm_start = timer_read(&timer);
-
         err = init_sspace(&domain, dsg_l);
         if (err < 0) {
             goto err_free;
         }
 
-        tm_end = timer_read(&timer);
+        dsg_l->ls = ls_alloc(ds_conf.max_versions);
+        if (!dsg_l->ls) {
+            uloga("%s(): ERROR ls_alloc() failed\n", __func__);
+            goto err_free;
+        }
 
         return dsg_l;
  err_free:
@@ -2124,6 +2122,7 @@ void dsg_free(struct ds_gspace *dsg)
 {
         ds_free(dsg->ds);
         free_sspace(dsg);
+        ls_free(dsg->ls);
         free(dsg);
 }
 

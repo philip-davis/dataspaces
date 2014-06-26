@@ -57,9 +57,9 @@
 static struct dcg_space *dcg = NULL;
 static struct timer timer;
 static int sync_op_id;
-static int cq_id = -1;
-static enum storage_type st = column_major;
-static int num_dims = 2;
+static int cq_id = -1; // TODO: still support it?
+static enum storage_type st = column_major; // TODO: still need this?
+static int num_dims = 2; // TODO: remove it 
 #ifdef DS_HAVE_DIMES
 static struct dimes_client *dimes_c = NULL;
 #endif
@@ -116,6 +116,13 @@ int common_dspaces_init(int num_peers, int appid, void *comm, const char *parame
 		return 0;
 	}
 
+	struct name_value_pair *params, *p;
+	params = text_to_nv_pairs(parameters);
+	p  = params;
+	while (p) {
+		p = p->next;
+	}
+
 	dcg = dcg_alloc(num_peers, appid, comm);
 	if (!dcg) {
         uloga("%s(): failed to initialize.\n", __func__);
@@ -136,7 +143,7 @@ int common_dspaces_init(int num_peers, int appid, void *comm, const char *parame
     }
 #endif
 
-    /*free_nv_pairs(params);*/
+    free_nv_pairs(params);
 	return 0;
 }
 
@@ -259,7 +266,6 @@ int common_dspaces_get(const char *var_name,
     // set global dimension
     set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
                          &od->gdim);
-#endif
     err = dcg_obj_get(od);
     obj_data_free(od);
     if (err < 0 && err != -EAGAIN) 
@@ -274,9 +280,12 @@ int common_dspaces_put(const char *var_name,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
-        uint64_t *gdim,
         void *data)
 {
+        if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) {
+            return -EINVAL;
+        }
+
         struct obj_descriptor odsc = {
                 .version = ver, .owner = -1, 
                 .st = st,
@@ -303,8 +312,17 @@ int common_dspaces_put(const char *var_name,
                 return -ENOMEM;
         }
 
-        set_global_dimension(&od->gdim, ndim, gdim);
-
+        // set global dimension
+        set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
+                             &od->gdim); 
+#ifdef DEBUG
+/*
+        uloga("%s(): %s default_gdim %llu %llu %llu od->gdim %llu %llu %llu\n",
+            __func__, var_name, dcg->default_gdim.sizes.c[0], dcg->default_gdim.sizes.c[1],
+            dcg->default_gdim.sizes.c[2], od->gdim.sizes.c[0], od->gdim.sizes.c[1],
+            od->gdim.sizes.c[2]);
+*/
+#endif
         err = dcg_obj_put(od);
         if (err < 0) {
             obj_data_free(od);
@@ -316,19 +334,6 @@ int common_dspaces_put(const char *var_name,
 
         return 0;
 }
-
-
-int common_dspaces_remove (const char *var_name, unsigned int ver)
-{
-
-	if (!is_dspaces_lib_init()) return 0;
-
-        int err = dcg_remove(var_name, ver);
-        if (err < 0)
-                ERROR_TRACE_AND_EXIT();
-	return err;
-}
-
 
 int common_dspaces_put_sync(void)
 {
@@ -395,28 +400,6 @@ void common_dspaces_finalize(void)
 #endif
     dcg_free(dcg);
     dcg = 0;
-
-int common_dspaces_collect_timing(double time, double *sum_ptr)
-{
-
-	if (!dcg) {
-		uloga("'%s()': library was not properly initialized!\n",
-			 __func__);
-		return -EINVAL;
-	}
-
-	return dcg_collect_timing(time, sum_ptr);
-}
-
-int common_dspaces_num_space_srv(void)
-{
-	if (!dcg) {
-		uloga("'%s()': library was not properly initialized!\n",
-			 __func__);
-		return -EINVAL;
-	}
-
-	return dcg_get_num_space_srv(dcg);	
 }
 
 #ifdef DS_HAVE_DIMES
@@ -431,7 +414,6 @@ int common_dimes_get(const char *var_name,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
-        uint64_t *gdim,
         void *data)
 {
     if (!is_dimes_lib_init() || !is_ndim_within_bound(ndim)) {
@@ -439,7 +421,7 @@ int common_dimes_get(const char *var_name,
     }
 
     return dimes_client_get(var_name, ver, size,
-                ndim, lb, ub, gdim, data);
+                ndim, lb, ub, data);
 }
 
 int common_dimes_put(const char *var_name,
@@ -447,7 +429,6 @@ int common_dimes_put(const char *var_name,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
-        uint64_t *gdim,
         void *data)
 {
     if (!is_dimes_lib_init() || !is_ndim_within_bound(ndim)) {
@@ -455,7 +436,7 @@ int common_dimes_put(const char *var_name,
     }
 
     return dimes_client_put(var_name, ver, size,
-                ndim, lb, ub, gdim, data);
+                ndim, lb, ub, data);
 }
 
 int common_dimes_put_sync_all(void)

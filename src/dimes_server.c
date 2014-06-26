@@ -210,11 +210,11 @@ static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
     metadata_s_add_obj_location(dimes_s->meta_store, cmd);
 
 #ifdef DEBUG    
-	uloga("%s(): get cmd from peer #%d, "
-				"with has_rdma_data=%d, "
-				"name=%s, owner=%d, version=%d, data_size=%u.\n",
+	uloga("%s(): get request from peer #%d "
+				"has_rdma_data= %d "
+				"name= %s version= %d data_size= %u\n",
 					__func__, cmd->id, hdr->has_rdma_data,
-					odsc->name, odsc->owner, odsc->version, obj_data_size(odsc));
+					odsc->name, odsc->version, obj_data_size(odsc));
 #ifdef DS_HAVE_DIMES_SHMEM
     if (hdr->has_shmem_data) {
         uloga("%s(): #%d get update from peer #%d "

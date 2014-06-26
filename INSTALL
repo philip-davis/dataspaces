@@ -100,6 +100,26 @@ $ ./configure CC=[C_COMPILER_OPTION] FC=[Fortran_COMPILER_OPTION] --enable-dart-
    other applications in a data coupling workflow. Currently this feature is only 
    supported on Cray Gemini networks, Infiniband cluster and on IBM BG/P and BG/Q systems.
 
+ --with-dimes-rdma-buffer-size=integer value for megabytes
+   This option specifies the maximum amount of RDMA memory buffer that
+   can be used by DIMES in each application process. DIMES RDMA memory buffer is used
+   to locally cache the data written by dimes_put(), and is also used by
+   dimes_get() to fetch data in remote memory buffer. Must be used with
+   --enable-dimes option. Default value is set as 64MB.
+
+--with-build-for-stampede=integer
+  User set this value to 1 in order to configure and compile DataSpaces on Stampede cluster.
+
+--with-infiniband-msg-queue-size=integer value
+  User can use this option to change the size of the messaging queue on DataSpaces servers.
+  If you receive errors stating the messaging queue is full. You should use this option to
+  increase the size of the messaging queue.
+
+   For applications using DIMES, dimes_put_sync_all() or dimes_put_sync_group()
+   API functions (see dimes_interface.h for detailed documentation) should be
+   called periodically to free data objects cached in DIMES. Where there is not
+   sufficient memory space, dimes_put()/dimes_get() fails and return errors. 
+
 --enable-drc
   Build DataSpaces for Cray uGNI systems with Dynamic RDMA Credential (DRC) support. Note that using this method, users should not provide a ptag or cookie a priori.
 

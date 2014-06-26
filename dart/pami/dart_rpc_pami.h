@@ -25,13 +25,6 @@ extern "C" {
         _a = (_a + 7) & ~7;                                     \
         (a) = (void *) _a;
 
-/*
-typedef unsigned char   __u8;
-typedef unsigned int    __u32;
-typedef int             __s32;
-typedef uint64_t   	__u64;
-*/
-
 struct msg_buf;
 struct rpc_server;
 struct rpc_cmd;
@@ -265,9 +258,20 @@ enum cmd_type {
 	rpc_get_finish,
 	rpc_put_finish,
 #ifdef DS_HAVE_DIMES
-    dimes_ss_info_msg,
-    dimes_locate_data_msg,
-    dimes_put_msg,
+        dimes_ss_info_msg,
+        dimes_locate_data_msg,
+        dimes_locate_data_v2_msg,
+        dimes_locate_data_v3_msg,
+        dimes_put_msg,
+        dimes_put_v2_msg,
+        dimes_put_v2_1_msg,        
+        dimes_put_v3_msg,
+        dimes_update_dht_msg,      
+        dimes_get_dht_peers_msg,
+        dimes_get_location_peers_msg,
+        dimes_obj_get_msg,
+        dimes_obj_get_ack_v3_msg,
+	dimes_get_ack_msg,
 #endif
 	/* Added for CCGrid Demo. */
 	CN_TIMING_AVG,

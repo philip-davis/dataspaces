@@ -86,7 +86,6 @@ else
     AC_DEFINE_UNQUOTED(INFINIBAND_TIMEOUT,300,[Timeout for RDMA function in IB])
 fi
 
-
 if test "x$have_dimes_rdma_max_num_concurrent_read" = "xyes"; then
     AC_DEFINE_UNQUOTED(DIMES_RDMA_MAX_NUM_CONCURRENT_READ,$DIMES_RDMA_MAX_NUM_CONCURRENT_READ,[Max number of concurrent rdma read operations that can be issued by DIMES in the data fetching process])
 else

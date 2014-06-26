@@ -122,7 +122,7 @@ if test "x$enable_dimes" == "xyes"; then
             AM_CONDITIONAL(BUILD_DIMES, true)
             echo "DIMES enabled!"
         else
-            echo "DIMES only supported on Cray UGNI, IBM PAMI, IBM DCMF"
+            echo "DIMES only supported on Cray UGNI, IBM PAMI, IBM DCMF, and InfiniBand"
         fi
 else
         AM_CONDITIONAL(BUILD_DIMES, false)

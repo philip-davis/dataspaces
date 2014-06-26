@@ -49,7 +49,6 @@ enum bb_dim {
         bb_z = 2
 };
 
-#define BBOX_MAX_NDIM 3
 struct coord {
         uint64_t c[BBOX_MAX_NDIM];
 };
