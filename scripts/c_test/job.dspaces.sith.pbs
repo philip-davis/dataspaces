@@ -11,7 +11,6 @@ rm -f hostfile*
 rm -f conf* srv.lck* 
 rm -f dataspaces.conf
 
-#nodes=(`sort $PBS_NODEFILE | uniq`)
 nodes=(`cat $PBS_NODEFILE | uniq`)
 
 num_nodes_server=1
@@ -56,3 +55,4 @@ mpirun --hostfile hostfile-app1 --map-by ppr:32:node -n 64 test_writer DATASPACE
 mpirun --hostfile hostfile-app2 --map-by ppr:32:node -n 32 test_reader DATASPACES 32 3 2 4 4 128 64 64 20 2 >& reader.log &
 
 wait
+

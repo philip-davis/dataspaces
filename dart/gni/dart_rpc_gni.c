@@ -2626,7 +2626,7 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 
 #ifdef DART_UGNI_PREALLOC_RDMA
     if (rpc_s->cmp_type == DART_CLIENT) {
-        rpc_dart_mem_init(rpc_s, 16*1024*1024); // MB
+        rpc_dart_mem_init(rpc_s, 64*1024*1024); // MB
     }
 
     if (rpc_s->cmp_type == DART_SERVER) {
@@ -3104,6 +3104,7 @@ int rpc_receivev(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf 
 	return 0;
 }
 
+#ifdef DS_HAVE_DIMES_SHMEM
 uint32_t rpc_server_get_nid(struct rpc_server *rpc_s)
 {
     return rpc_s->ptlmap.nid;
@@ -3125,6 +3126,7 @@ void rpc_server_find_local_peers(struct rpc_server *rpc_s,
     } 
     *num_local_peer = j;
 }
+#endif
 
 // for debug:
 void rpc_smsg_check(struct rpc_server *rpc_s){

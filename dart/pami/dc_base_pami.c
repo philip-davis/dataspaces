@@ -309,7 +309,6 @@ static int dc_register_at_master(struct dart_client *dc, int appid)
 
 struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *comm)
 {
-	//printf("get into dc_alloc\n");
         struct dart_client *dc;
         size_t size;
         int err;

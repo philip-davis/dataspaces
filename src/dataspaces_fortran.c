@@ -319,10 +319,6 @@ void FC_FUNC(ftimer_sleep, FTIMER_SLEEP)(int *msec)
   Fortran interface to DIMES
 */
 #ifdef DS_HAVE_DIMES
-void FC_FUNC(dimes_set_storage_type, DIMES_SET_STORAGE_TYPE) (int *fst)
-{
-        common_dimes_set_storage_type(*fst);
-}
 
 void FC_FUNC(dimes_get, DIMES_GET) (const char *var_name,
         unsigned int *ver, int *size, int *ndim,

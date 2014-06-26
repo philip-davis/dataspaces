@@ -88,7 +88,6 @@ int get_topology_info(int *out_pmi_rank, int *out_nid,
 /* 
    C interface for DataSpaces.
 */
->>>>>>> 9da97de... merge main trunk revision r1556
 
 int get_topology_info(int *out_pmi_rank, int *out_nid, 
     rca_mesh_coord_t *out_xyz)
@@ -141,8 +140,7 @@ int dspaces_servers(void)
         return common_dspaces_servers();
 }
 
-
-int dspaces_get_num_space_peers(void)
+int dspaces_get_num_space_server(void)
 {
 	return common_dspaces_get_num_space_server();
 }
@@ -181,7 +179,7 @@ void dspaces_define_gdim (const char *var_name,
 int dspaces_put (const char *var_name,
         unsigned int ver, int size,
         int ndim, uint64_t *lb, uint64_t *ub,
-        const void *data)
+        void *data)
 {
     return common_dspaces_put(var_name, ver, size, ndim, lb, ub, data);
 }
@@ -192,12 +190,6 @@ int dspaces_get (const char *var_name,
         void *data)
 {
     return common_dspaces_get(var_name, ver, size, ndim, lb, ub, data);    
-}
-
-int dspaces_remove (const char *var_name,
-        unsigned int ver)
-{
-    return common_dspaces_remove(var_name, ver);
 }
 
 
@@ -258,7 +250,7 @@ int dimes_put_sync_group(const char *group_name, int step)
 #ifdef DS_HAVE_DIMES_SHMEM
 int dimes_init_shmem(void *comm, size_t shmem_obj_size)
 {
-    return common_dimes_init_shmem(comm, shmem_obj_size);        
+    return common_dimes_init_shmem(comm, shmem_obj_size);
 }
 
 int dimes_finalize_shmem()
@@ -266,7 +258,6 @@ int dimes_finalize_shmem()
     return common_dimes_finalize_shmem();
 }
 #endif
-
 #endif
 
 void dspaces_set_mpi_rank(int rank)

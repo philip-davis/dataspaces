@@ -860,7 +860,6 @@ int rpc_read_config(size_t *rank_pami, const char *fname)
                	uloga("%s(): failed.\n", __func__);
                 return -1;
 	}
-
 	char version[16];
 
         err = fscanf(f, "PAMIRANK=%llu\n%s\n",rank_pami, version);
@@ -878,13 +877,11 @@ int rpc_read_config(size_t *rank_pami, const char *fname)
 
 int rpc_write_config(struct rpc_server *rpc_s, const char *fname)
 {
-	//printf("get int rpc_write_config\n");
         FILE *f;
         int err;
 
 	char tmp_name[20];
 	sprintf(tmp_name, "%s.tmp", fname);
-	//printf("%s\n", tmp_name);
 	
         f = fopen(tmp_name, "wt");
         if (!f)

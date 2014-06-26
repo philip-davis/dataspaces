@@ -70,10 +70,6 @@ typedef int (*rpc_service)(struct rpc_server*, struct rpc_cmd*);
 */
 typedef int (*completion_callback)(struct rpc_server *, struct msg_buf *);
 
-struct coord2{
-    __u64 c[3];       //TODO-Q
-};
-
 struct ptlid_map {
 	size_t rank_dcmf; //ibm dcmf rank
 	int id;

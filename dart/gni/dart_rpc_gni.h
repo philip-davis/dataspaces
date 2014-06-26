@@ -86,10 +86,6 @@ typedef int (*async_callback)(struct rpc_server *rpc_s, struct rpc_request *rr);
 // Asynchronous callback function to be used when a transfer completes.
 typedef int (*completion_callback)(struct rpc_server *rpc_s, struct msg_buf *msg);
 
-struct coord2{
-	__u64 c[3];	//TODO-Q
-};
-
 typedef enum {
 	unset = 0,
 	set
@@ -172,13 +168,6 @@ struct lockhdr {
 	int		id;
 	int		lock_num;
     char	name[LOCK_NAME_SIZE];	// lock name
-};
-
-// Header for space info.
-struct hdr_ss_info {
-	int		num_dims;
-	struct  coord2	dims;
-	int		num_space_srv;
 };
 
 // Header for data kernel function remote deployment.
@@ -500,8 +489,10 @@ struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *pe
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 
+#ifdef DS_HAVE_DIMES_SHMEM
 void rpc_server_find_local_peer(struct rpc_server *rpc_s,
     struct node_id **peer_tab, int *num_local_peer, int peer_tab_size);
 uint32_t rpc_server_get_nid(struct rpc_server *rpc_s);
+#endif
 
 #endif

@@ -114,6 +114,7 @@ struct node_id *rpc_server_find(struct rpc_server *rpc_s, int nodeid)
         return 0;
 }
 
+#ifdef DS_HAVE_DIMES_SHMEM
 void rpc_server_find_local_peers(struct rpc_server *rpc_s,
     struct node_id **peer_tab, int *num_local_peer, int peer_tab_size)
 {
@@ -135,6 +136,7 @@ uint32_t rpc_server_get_nid(struct rpc_server *rpc_s)
 {
     return rpc_s->ptlmap.address.sin_addr.s_addr;
 } 
+#endif
 
 static int sys_bar_send(struct rpc_server *rpc_s, int peerid)	//Done
 {
@@ -827,6 +829,11 @@ char *ip_search(void)
 	close(sfd);
 
 	return inet_ntoa(((struct sockaddr_in *) (&buf[intr].ifr_addr))->sin_addr);
+	if(BUILD_FOR_STAMPEDE)
+		return inet_ntoa(((struct sockaddr_in *) (&buf[intr - 1].ifr_addr))->sin_addr);
+	else
+		return inet_ntoa(((struct sockaddr_in *) (&buf[intr].ifr_addr))->sin_addr);
+
 }
 
 // Check if the format of IP address is correct. (done)
