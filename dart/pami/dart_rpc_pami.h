@@ -1,48 +1,19 @@
-/*
- * Copyright (c) 2009, NSF Cloud and Autonomic Computing Center, Rutgers University
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without modification, are permitted provided
- * that the following conditions are met:
- *
- * - Redistributions of source code must retain the above copyright notice, this list of conditions and
- * the following disclaimer.
- * - Redistributions in binary form must reproduce the above copyright notice, this list of conditions and
- * the following disclaimer in the documentation and/or other materials provided with the distribution.
- * - Neither the name of the NSF Cloud and Autonomic Computing Center, Rutgers University, nor the names of its
- * contributors may be used to endorse or promote products derived from this software without specific prior
- * written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
- * PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- */
 
-/*
-*  Fan Zhang (2011) TASSL Rutgers University
-*  zhangfan@cac.rutgers.edu
-*/
-
-#ifndef __DART_RPC_DCMF_H__
-#define __DART_RPC_DCMF_H__
+#ifndef __DART_RPC_PAMI_H__
+#define __DART_RPC_PAMI_H__
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <stdio.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <errno.h>
 
-#include "dcmf.h"
+#include <pami.h>
+#include "mpi.h"
 
 #include "config.h"
 #include "list.h"
@@ -55,7 +26,7 @@ extern "C" {
 typedef unsigned char   __u8;
 typedef unsigned int    __u32;
 typedef int             __s32;
-typedef uint64_t __u64;
+typedef uint64_t   	__u64;
 
 struct msg_buf;
 struct rpc_server;
@@ -73,7 +44,7 @@ typedef int (*rpc_service)(struct rpc_server*, struct rpc_cmd*);
 typedef int (*completion_callback)(struct rpc_server *, struct msg_buf *);
 
 struct ptlid_map {
-	size_t rank_dcmf; //ibm dcmf rank
+	size_t rank_pami; //ibm pami rank
 	int id;
 	int appid;
 };
@@ -98,6 +69,7 @@ struct lockhdr {
 	char			name[LOCK_NAME_SIZE]; //lock name
 } __attribute__ ((__packed__));
 
+
 /* Rpc command structure. */
 struct rpc_cmd {
         __u8            cmd;            // type of command
@@ -108,11 +80,10 @@ struct rpc_cmd {
         __u8            num_msg;
         __u32           id; //Dart ID
 
-        DCMF_Memregion_t	mem_region; //DCMF memory region created for remote node
-        size_t			mem_size; //Size for created DCMF memory region
+        pami_memregion_t	mem_region; //PAMI memory region created for remote node
+        size_t			mem_size; //Size for created PAMI memory region
 
-        // payload of the command
-        __u8            pad[280+(BBOX_MAX_NDIM-3)*24]; // TODO: fix this
+        __u8            pad[280+(BBOX_MAX_NDIM-3)*24];// payload of the command
 } __attribute__((__packed__));
 
 /*
@@ -196,21 +167,11 @@ enum rpc_component {
 
 //RPC Server
 struct rpc_server{
-	//For RPC messages
-	DCMF_Send_Configuration_t rpc_send_config_dcmf;
-	DCMF_Protocol_t rpc_send_protocol_dcmf;
-	
-	//For SYS messages
-	DCMF_Send_Configuration_t sys_send_config_dcmf;
-	DCMF_Protocol_t sys_send_protocol_dcmf;
-	
-	//For GET data from remote memory
-	DCMF_Get_Configuration_t rpc_get_config_dcmf;
-	DCMF_Protocol_t rpc_get_protocol_dcmf;
-	
-	//For PUT data into remote memory
-	DCMF_Put_Configuration_t rpc_put_config_dcmf;
-	DCMF_Protocol_t rpc_put_protocol_dcmf;
+	/* FOR PAMI */
+	pami_client_t client;
+	pami_context_t *contexts;
+	size_t num_contexts;
+	int flag;
 	
 	struct ptlid_map	ptlmap;
 		
@@ -258,7 +219,8 @@ struct node_id {
 	int                     num_msg_ret;
 
 	/* Cached pointer value for remote memory region. */
-	DCMF_Memregion_t *	cached_remote_memregion;
+	//PAMI_Memregion_t *	cached_remote_memregion;
+	pami_memregion_t *	cached_remote_memregion;
 };
 
 enum cmd_type { 
@@ -294,15 +256,24 @@ enum cmd_type {
 	ss_code_put,
 	ss_code_reply,
 #endif
-  /* Newly Added for DCMF version */
+  /* Newly Added for PAMI version */
 	rpc_get_finish,
 	rpc_put_finish,
 #ifdef DS_HAVE_DIMES
-	dimes_ss_info_msg,
-	dimes_locate_data_msg,
-	dimes_put_msg,
+        dimes_ss_info_msg,
+        dimes_locate_data_msg,
+        dimes_locate_data_v2_msg,
+        dimes_locate_data_v3_msg,
+        dimes_put_msg,
+        dimes_put_v2_msg,
+        dimes_put_v2_1_msg,        
+        dimes_put_v3_msg,
+        dimes_update_dht_msg,      
+        dimes_get_dht_peers_msg,
+        dimes_get_location_peers_msg,
+        dimes_obj_get_msg,
+        dimes_obj_get_ack_v3_msg,
 	dimes_get_ack_msg,
-	dimes_obj_get_ack_v2_msg,
 #endif
 	/* Added for CCGrid Demo. */
 	CN_TIMING_AVG,
@@ -320,11 +291,13 @@ enum lock_type {
 static inline void rpc_server_inc_reply(struct rpc_server *rpc_s)
 {
         rpc_s->num_rep_posted++;
+	//printf("rank%d posted ++\n", rpc_s->ptlmap.rank_pami);
 }
 
 static inline void rpc_server_dec_reply(struct rpc_server *rpc_s)
 {
         rpc_s->num_rep_freed++;
+	//printf("rank%d freed ++\n", rpc_s->ptlmap.rank_pami);
 }
 
 /*
@@ -363,11 +336,12 @@ void rpc_add_service(enum cmd_type, rpc_service);
 
 // int rpc_credits_return(struct rpc_server *, int, struct node_id *);
 
-int rpc_barrier(struct rpc_server *);
+int rpc_barrier(struct rpc_server *, void*);
 
 int rpc_send(struct rpc_server *, struct node_id *, struct msg_buf *); 
-int rpc_send_direct(struct rpc_server *, const struct node_id *, struct msg_buf *);
-int rpc_send_directv(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg); // Not implemented in DCMF version!
+int rpc_send_direct(struct rpc_server *, struct node_id *, struct msg_buf *);
+//int rpc_send_direct(struct rpc_server *, struct node_id *, struct msg_buf *, pami_memregion_t *);
+int rpc_send_directv(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg); // Not implemented in PAMI version!
 int rpc_receive(struct rpc_server *, struct node_id *, struct msg_buf *);
 int rpc_receive_direct(struct rpc_server *, struct node_id *, struct msg_buf *);
 
@@ -375,9 +349,11 @@ void rpc_report_md_usage(struct rpc_server *);
 
 struct msg_buf* msg_buf_alloc(struct rpc_server *, const struct node_id *, int);
 
-void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg,
-			struct rpc_cmd *cmd);
-void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
+void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
+inline void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg,
+                        struct rpc_cmd *cmd) {
+	return;
+}
 
 #ifdef __cplusplus
 }

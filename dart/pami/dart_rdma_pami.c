@@ -25,13 +25,13 @@
  */
 
 /*
-*  Fan Zhang (2011) TASSL Rutgers University
-*  zhangfan@cac.rutgers.edu
+*  Qian Sun (2014) TASSL Rutgers University
+*  qiansun@cac.rutgers.edu
 */
-#include "dart_rdma_dcmf.h"
-
+#include "config.h"
 #ifdef DS_HAVE_DIMES
 
+#include "dart_rdma_pami.h"
 #include "debug.h"
 
 static struct dart_rdma_handle *drh = NULL;
@@ -49,7 +49,7 @@ dart_rdma_find_read_tran(int tran_id, struct list_head *tran_list) {
 	return NULL;
 }
 
-static void dart_rdma_cb_get_completion(void *clientdata, DCMF_Error_t *err_dcmf)
+static void dart_rdma_cb_get_completion(void *ctxt, void *clientdata, pami_result_t err)
 {
 	struct dart_rdma_op *read_op = (struct dart_rdma_op*)clientdata;
 	list_del(&read_op->entry);
@@ -62,8 +62,8 @@ static int dart_perform_local_reads(struct dart_rdma_tran *read_tran)
 	struct dart_rdma_op *read_op, *t;
 	list_for_each_entry_safe(read_op, t, &read_tran->read_ops_list,
 				struct dart_rdma_op, entry) {
-		memcpy(read_tran->dst.base_addr + read_op->dst_offset,
-			read_tran->src.base_addr + read_op->src_offset,
+		memcpy((void*)read_tran->dst.base_addr + read_op->dst_offset,
+			(void*)read_tran->src.base_addr + read_op->src_offset,
 			read_op->bytes);
 		list_del(&read_op->entry);
 		free(read_op);
@@ -73,33 +73,33 @@ static int dart_perform_local_reads(struct dart_rdma_tran *read_tran)
 }
 
 static int dart_rdma_get(struct dart_rdma_tran *read_tran,
-                         struct dart_rdma_op *read_op)
+			struct dart_rdma_op *read_op)
 {
 	int err = -ENOMEM;
-	DCMF_Request_t *request =
-			(DCMF_Request_t*)calloc(1, sizeof(DCMF_Request_t));
+	
+        pami_send_hint_t dart_rdma_send_hint;
+        memset(&dart_rdma_send_hint, 0, sizeof(dart_rdma_send_hint));
+        dart_rdma_send_hint.buffer_registered = PAMI_HINT_ENABLE;
+        dart_rdma_send_hint.use_rdma = PAMI_HINT_ENABLE;
 
-	// Get remote data
-	DCMF_Callback_t cb_get_done =
-			{dart_rdma_cb_get_completion, (void*)read_op};
-	DCMF_Result ret = DCMF_Get(&drh->dcmf_get_protocol,
-							request,
-							cb_get_done,
-							DCMF_MATCH_CONSISTENCY,
-							read_tran->remote_peer->ptlmap.rank_dcmf,
-							read_op->bytes,
-							&read_tran->src.memregion,
-							&read_tran->dst.memregion,
-							read_op->src_offset,
-							read_op->dst_offset);
-	if (ret != DCMF_SUCCESS) {
-		uloga("%s(): DCMF_Get failed with %d\n", __func__, ret);
-		goto err_out_free;
+	pami_rget_simple_t parameters;
+	parameters.rma.dest		= read_tran->remote_peer->ptlmap.rank_pami;
+	parameters.rma.hints		= dart_rdma_send_hint;
+	parameters.rma.bytes		= read_op->bytes;
+	parameters.rma.cookie		= (void*)read_op;
+	parameters.rma.done_fn		= dart_rdma_cb_get_completion;
+	parameters.rdma.local.mr	= &read_tran->dst.memregion;
+	parameters.rdma.local.offset	= read_op->dst_offset;
+	parameters.rdma.remote.mr	= &read_tran->src.memregion;
+	parameters.rdma.remote.offset	= read_op->src_offset;
+
+	pami_result_t ret = PAMI_Rget(drh->rpc_s->contexts[0], &parameters);
+	if(ret != PAMI_SUCCESS){
+		uloga("%s(): PAMI_Rget failed with %d\n", __func__, ret);
+		goto err_out;
 	}
-
+	
 	return 0;
-err_out_free:
-	free(request);
 err_out:
 	ERROR_TRACE();
 }
@@ -119,25 +119,7 @@ int dart_rdma_init(struct rpc_server *rpc_s)
 	drh->rpc_s = rpc_s;
 	INIT_LIST_HEAD(&drh->read_tran_list);
 
-	// Register the p2p get protocol implementation.
-	DCMF_Get_Configuration_t dcmf_get_config;
-	dcmf_get_config.protocol = DCMF_DEFAULT_GET_PROTOCOL;
-	dcmf_get_config.network = DCMF_DEFAULT_NETWORK;
-
-	DCMF_Result ret = DCMF_Get_register(&drh->dcmf_get_protocol,
-                                            &dcmf_get_config);
-	if (ret != DCMF_SUCCESS) {
-		uloga("%s(): DCMF_Get_register() failed with %d\n",
-				__func__, ret);
-		goto err_out_free;
-	}
-
 	return 0;
-err_out_free:
-	free(drh);
-	drh = NULL;
-err_out:
-	ERROR_TRACE();
 }
 
 int dart_rdma_finalize()
@@ -163,19 +145,18 @@ int dart_rdma_register_mem(struct dart_rdma_mem_handle *mem_hndl,
 
 	// Register the RDMA memory region
 	size_t bytes_out;
-	DCMF_Result ret = DCMF_Memregion_create(
-			&mem_hndl->memregion,
-			&bytes_out,
-			bytes,
-			data,
-			0);
-
-	if (ret != DCMF_SUCCESS) {
-		uloga("%s(): DCMF_Memregion_create() failed with %d\n",
+	pami_result_t ret = PAMI_Memregion_create(
+			drh->rpc_s->contexts[0], 
+			data, 
+			bytes, 
+			&bytes_out, 
+			&mem_hndl->memregion);
+	if(ret != PAMI_SUCCESS){
+		uloga("%s(): PAMI_Memregion_create() failed with %d\n",
 				__func__, ret);
 		goto err_out;
-	}
-
+	}	
+	
 	if (bytes_out != bytes) {
 		uloga("%s(): ERROR bytes_out=%u, bytes_in=%u\n",
 				__func__, bytes_out, bytes);
@@ -183,7 +164,7 @@ int dart_rdma_register_mem(struct dart_rdma_mem_handle *mem_hndl,
 	}
 
 	mem_hndl->size = bytes;
-	mem_hndl->base_addr = data;
+	mem_hndl->base_addr = (uint64_t)data;
 
 	return 0;
 err_out:
@@ -203,10 +184,12 @@ int dart_rdma_deregister_mem(struct dart_rdma_mem_handle *mem_hndl)
 	}
 
 	// Deregister the RDMA memory region
-	DCMF_Result ret = DCMF_Memregion_destroy(&mem_hndl->memregion);
-	if (ret != DCMF_SUCCESS) {
-		uloga("%s(): DCMF_Memregion_destroy() failed with %d\n",
-				__func__, ret);
+	pami_result_t ret = PAMI_Memregion_destroy(
+				drh->rpc_s->contexts[0],
+				&mem_hndl->memregion);
+	if(ret != PAMI_SUCCESS){
+		uloga("%s(): PAMI_Memregion_destroy() failed with %d\n",
+                                __func__, ret);
 		goto err_out;
 	}
 
@@ -273,8 +256,8 @@ int dart_rdma_perform_reads(int tran_id)
 	}
 
 	int cnt = 0;
-	struct dart_rdma_op *read_op;
-	list_for_each_entry(read_op, &read_tran->read_ops_list,
+	struct dart_rdma_op *read_op, *temp;
+	list_for_each_entry_safe(read_op, temp, &read_tran->read_ops_list,
 							struct dart_rdma_op, entry) {
 		err = dart_rdma_get(read_tran, read_op);
 		if (err < 0) {
@@ -284,7 +267,8 @@ int dart_rdma_perform_reads(int tran_id)
 	}
 
 #ifdef DEBUG
-	uloga("%s(): tran_id=%d num_read_ops=%d\n", __func__, tran_id, cnt);
+	uloga("%s(): #%d tran_id=%d num_read_ops=%d\n", __func__, drh->rpc_s->ptlmap.id,
+        read_tran->tran_id, cnt);
 #endif
 
 	return 0;
@@ -369,7 +353,7 @@ int dart_rdma_set_memregion_to_cmd(struct dart_rdma_mem_handle *mem_hndl,
                                    struct rpc_cmd *cmd)
 {
 	memcpy(&cmd->mem_region, &mem_hndl->memregion,
-		   sizeof(DCMF_Memregion_t));
+		   sizeof(pami_memregion_t));
 	cmd->mem_size = mem_hndl->size;
 	return 0;
 }
@@ -378,7 +362,7 @@ int dart_rdma_get_memregion_from_cmd(struct dart_rdma_mem_handle *mem_hndl,
                                      struct rpc_cmd *cmd)
 {
 	memcpy(&mem_hndl->memregion, &cmd->mem_region,
-		   sizeof(DCMF_Memregion_t));
+		   sizeof(pami_memregion_t));
 	mem_hndl->size = cmd->mem_size;
 	mem_hndl->base_addr = NULL; 
 	return 0;

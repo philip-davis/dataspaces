@@ -27,6 +27,8 @@
 /*
 *  Fan Zhang (2013)  TASSL Rutgers University
 *  zhangfan@cac.rutgers.edu
+*  Qian Sun (2014)  TASSL Rutgers University
+*  qiansun@cac.rutgers.edu
 */
 #include <stdio.h>
 #include <stdint.h>
@@ -36,7 +38,9 @@
 
 #include "mpi.h"
 
-extern int test_put_run(enum transport_type, int npapp, int npx, int npy, int npz, uint64_t spx, uint64_t spy, uint64_t spz, int timestep, int appid, int dims, size_t elem_size, int num_vars, MPI_Comm gcomm);
+extern int test_put_run(enum transport_type, int npapp, int dims, 
+	int* npdim, uint64_t *spdim, int timestep, int appid, 
+	size_t elem_size, int num_vars, MPI_Comm gcomm);
 
 int main(int argc, char **argv)
 {
@@ -44,20 +48,20 @@ int main(int argc, char **argv)
 	int nprocs, rank;
 	MPI_Comm gcomm;
 
-    // Usage: ./test_reader type npapp npx npy npz spx spy spz timestep dims elem_size num_vars
+    // Usage: ./test_writer type npapp dims np[0] ... np[dims-1] sp[0] ... sp[dims-1] timestep appid elem_size num_vars
     // Command line arguments
     enum transport_type type; // DATASPACES or DIMES
     int npapp; // number of application processes
-    int npx, npy, npz; // number of processes in x,y,z direction
-    uint64_t spx, spy, spz; // block size per process in x,y,z direction
+    int np[10] = {0};	//number of processes in each dimension
+    uint64_t sp[10] = {0}; //block size per process in each dimesion
     int timestep; // number of iterations
-    int appid;
-    int dims; // number of dimensions: 2 or 3.
+    int appid; // application id
+    int dims; // number of dimensions
     size_t elem_size; // Optional: size of one element in the global array. Default value is 8 (bytes).
     int num_vars; // Optional: number of variables to be shared in the testing. Default value is 1.
 
-	if (parse_args(argc, argv, &type, &npapp, &npx, &npy, &npz,
-    &spx, &spy, &spz, &timestep, &appid, &dims, &elem_size, &num_vars) != 0) {
+	if (parse_args(argc, argv, &type, &npapp, &dims, np, sp,
+    		&timestep, &appid, &elem_size, &num_vars) != 0) {
 		goto err_out;
 	}
 
@@ -72,8 +76,8 @@ int main(int argc, char **argv)
 	MPI_Comm_split(MPI_COMM_WORLD, color, rank, &gcomm);
 
 	// Run as data writer
-	test_put_run(type, npapp, npx, npy, npz,
-		spx, spy, spz, timestep, appid, dims, elem_size, num_vars, gcomm);
+	test_put_run(type, npapp, dims, np,
+		sp, timestep, appid, elem_size, num_vars, gcomm);
 
 	MPI_Barrier(gcomm);
 	MPI_Finalize();

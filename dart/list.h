@@ -23,13 +23,13 @@ struct list_head {
 #define LIST_HEAD(name) \
         struct list_head name = LIST_HEAD_INIT(name)
 
-static inline void __list_add(struct list_head *new, 
+static inline void __list_add(struct list_head *np, 
                               struct list_head *prev, struct list_head *next)
 {
-	new->next = next;
-	new->prev = prev;
-	prev->next = new;
-	next->prev = new;
+	np->next = next;
+	np->prev = prev;
+	prev->next = np;
+	next->prev = np;
 }
 
 static inline void INIT_LIST_HEAD(struct list_head *list)
@@ -38,22 +38,22 @@ static inline void INIT_LIST_HEAD(struct list_head *list)
 	list->prev = list;
 }
 
-/* Add element 'new' after element 'head'. */
-static inline void list_add(struct list_head *new, struct list_head *head)
+/* Add element 'np' after element 'head'. */
+static inline void list_add(struct list_head *np, struct list_head *head)
 {
-	__list_add(new, head, head->next);
+	__list_add(np, head, head->next);
 }
 
-/* Add element 'new' before element 'head'. */
-static inline void list_add_tail(struct list_head *new, struct list_head *head)
+/* Add element 'np' before element 'head'. */
+static inline void list_add_tail(struct list_head *np, struct list_head *head)
 {
-	__list_add(new, head->prev, head);
+	__list_add(np, head->prev, head);
 }
 
-/* Add element 'new' before element 'next'. */
-static inline void list_add_before_pos(struct list_head *new, struct list_head *next)
+/* Add element 'np' before element 'next'. */
+static inline void list_add_before_pos(struct list_head *np, struct list_head *next)
 {
-    __list_add(new, next->prev, next);
+    __list_add(np, next->prev, next);
 }
 
 /* Unlink element 'old' from the list it belongs. */

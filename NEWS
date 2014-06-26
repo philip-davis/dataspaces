@@ -1,3 +1,8 @@
+1.4.0 Released June 2014
+	- Added network support: PAMI for IBM BlueGene/Q
+	- Support for 64bit dimension sizes.
+	- Support for more than three dimensions.
+
 1.3.0 Released December 2013
 	- Optimized memory usage on server side for Gemini to overcome low RDMA memory constrains.
 	- Distributed client's registration process, changed file locking mechanism on IB to reduce boot-up time. 

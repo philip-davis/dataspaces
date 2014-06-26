@@ -37,7 +37,6 @@
 #include "bbox.h"
 #include "list.h"
 
-// #define MAX_VERSION_SIZE        10
 typedef struct {
 	void			*iov_base;
 	size_t			iov_len;
@@ -46,7 +45,7 @@ typedef struct {
 enum storage_type {row_major, column_major};
 
 struct obj_descriptor {
-        char                    name[154]; // 170
+        char                    name[154];
 
         enum storage_type       st;
 
@@ -66,6 +65,12 @@ struct global_dimension {
         int ndim;
         struct coord sizes;
 } __attribute__((__packed__));
+
+struct gdim_list_entry {
+        struct list_head    entry;
+        char *var_name;       
+        struct global_dimension gdim; 
+};
 
 struct obj_data {
         struct list_head        obj_entry;
@@ -110,12 +115,6 @@ struct dht_entry {
         int                     num_intv;
         struct intv             *i_tab;
 
-        /* Local  info: object  descriptors  that fall  into this  DHT
-           entry.
-        int                     size_objs, num_objs;
-        struct obj_descriptor   *od_tab;
-        */
-
         // for v2 
         int num_bbox;
         int size_bb_tab;
@@ -132,6 +131,14 @@ struct dht {
         struct dht_entry        *ent_tab[1];
 };
 
+enum sspace_hash_version {
+    ssd_hash_version_v1 = 1, // (default) decompose the global data domain
+                             //  using hilbert SFC
+    ssd_hash_version_v2, // decompose the global data domain using
+                         // recursive bisection of the longest dimension   
+    _ssd_hash_version_count,
+};
+
 /*
   Shared space structure.
 */
@@ -140,7 +147,6 @@ struct sspace {
         unsigned int            bpd;
 
         struct dht              *dht;
-        struct ss_storage       *storage;
 
         int                     rank;
         /* Pointer into "dht.ent_tab" corresponding to this node. */
@@ -148,6 +154,7 @@ struct sspace {
 
         // for v2 
         int total_num_bbox;
+        enum sspace_hash_version    hash_version;
 };
 
 struct sspace_list_entry {
@@ -155,6 +162,14 @@ struct sspace_list_entry {
         struct global_dimension gdim;
         struct sspace   *ssd;
 };
+
+// Header for space info.
+struct hdr_ss_info {
+    int     num_dims;
+    struct  coord dims;
+    int     num_space_srv;
+    unsigned char hash_version;
+} __attribute__ ((__packed__));
 
 /* Header structure for obj_get requests. */
 struct hdr_obj_get {
@@ -185,7 +200,6 @@ struct hdr_obj_put {
 /* Header structure for obj_filter requests. */
 struct hdr_obj_filter {
         int                     qid;
-        // int                     rank;
         int                     rc;
         double                  res;
         struct obj_descriptor   odsc;
@@ -214,20 +228,15 @@ struct hdr_bin_result {
 	unsigned char		pad[210]; // max is sizeof(struct rpc_cmd.pad == 218)
 } __attribute__((__packed__));
 
-struct sspace * ssd_alloc(struct bbox *, int, int);
+struct sspace* ssd_alloc(struct bbox *, int, int, enum sspace_hash_version);
 int ssd_init(struct sspace *, int);
 void ssd_free(struct sspace *);
-void ssd_add_obj(struct sspace *, struct obj_data *);
-void ssd_add_entry(struct dht_entry *, struct obj_descriptor *);
-// int ssd_copy(struct sspace *, struct obj_data *, struct bbox *);
 int ssd_copy(struct obj_data *, struct obj_data *);
+// TODO: ssd_copyv is not supported yet
 int ssd_copyv(struct obj_data *, struct obj_data *);
 int ssd_copy_list(struct obj_data *, struct list_head *);
 int ssd_filter(struct obj_data *, struct obj_descriptor *, double *);
 int ssd_hash(struct sspace *, const struct bbox *, struct dht_entry *[]);
-struct obj_data *ssd_lookup(struct sspace *, char *);
-void ssd_remove(struct sspace *, struct obj_data *);
-void ssd_try_remove_free(struct sspace *, struct obj_data *);
 
 int dht_add_entry(struct dht_entry *, const struct obj_descriptor *);
 const struct obj_descriptor * dht_find_entry(struct dht_entry *, const struct obj_descriptor *);
@@ -235,9 +244,14 @@ int dht_find_entry_all(struct dht_entry *, struct obj_descriptor *,
                        const struct obj_descriptor *[]);
 int dht_find_versions(struct dht_entry *, struct obj_descriptor *, int []);
 
+struct ss_storage *ls_alloc(int max_versions);
+void ls_free(struct ss_storage *);
+void ls_add_obj(struct ss_storage *, struct obj_data *);
+struct obj_data* ls_lookup(struct ss_storage *, char *);
+void ls_remove(struct ss_storage *, struct obj_data *);
+void ls_try_remove_free(struct ss_storage *, struct obj_data *);
 struct obj_data * ls_find(struct ss_storage *, const struct obj_descriptor *);
 struct obj_data * ls_find_no_version(struct ss_storage *, struct obj_descriptor *);
-
 
 struct obj_data *obj_data_alloc(struct obj_descriptor *);
 struct obj_data *obj_data_allocv(struct obj_descriptor *);
@@ -245,14 +259,6 @@ struct obj_data *obj_data_alloc_no_data(struct obj_descriptor *, void *);
 struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *, void *);
 
 void obj_data_free(struct obj_data *od);
-
-/*
-static inline void obj_data_free(struct obj_data *od)
-{
-        free(od);
-}
-*/
-
 void obj_data_free_with_data(struct obj_data *);
 __u64 obj_data_size(struct obj_descriptor *);
 __u64 obj_data_sizev(struct obj_descriptor *);
@@ -266,5 +272,14 @@ int obj_desc_equals_intersect(const struct obj_descriptor *odsc1,
 int obj_desc_by_name_intersect(const struct obj_descriptor *odsc1,
                 const struct obj_descriptor *odsc2);
 
-void set_global_dimension(struct global_dimension *l, int ndim, const uint64_t *gdim);
+void copy_global_dimension(struct global_dimension *l, int ndim, const uint64_t *gdim);
+int global_dimension_equal(const struct global_dimension* gdim1,
+                const struct global_dimension* gdim2);
+void init_gdim_list(struct list_head *gdim_list);
+void update_gdim_list(struct list_head *gdim_list,
+                const char *var_name, int ndim, uint64_t *gdim);
+struct gdim_list_entry* lookup_gdim_list(struct list_head *gdim_list, const char *var_name);
+void free_gdim_list(struct list_head *gdim_list);
+void set_global_dimension(struct list_head *gdim_list, const char *var_name,
+            const struct global_dimension *default_gdim, struct global_dimension *gdim);
 #endif /* __SS_DATA_H_ */

@@ -32,7 +32,6 @@
 #define __DART_RPC_GNI_H__
 
 #include <stdlib.h>
-#include "list.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <fcntl.h>
@@ -47,11 +46,15 @@
 #include <arpa/inet.h>
 #include <sys/utsname.h>
 #include <errno.h>
+
 #include "pmi.h"
 //#include "pmi_cray_ext.h"
 #include "gni_pub.h"
 #include "utility_functions.h"
 #include <sys/ioctl.h>
+
+#include "config.h"
+#include "list.h"
 
 #define ALIGN_ADDR_QUAD_BYTES(a)				\
 {								\
@@ -81,10 +84,6 @@ typedef int (*async_callback)(struct rpc_server *rpc_s, struct rpc_request *rr);
 
 // Asynchronous callback function to be used when a transfer completes.
 typedef int (*completion_callback)(struct rpc_server *rpc_s, struct msg_buf *msg);
-
-struct coord2{
-	__u64 c[3];	//TODO-Q
-};
 
 typedef enum {
 	unset = 0,
@@ -170,13 +169,6 @@ struct lockhdr {
     char	name[LOCK_NAME_SIZE];	// lock name
 };
 
-// Header for space info.
-struct hdr_ss_info {
-	int		num_dims;
-	struct  coord2	dims;
-	int		num_space_srv;
-};
-
 // Header for data kernel function remote deployment.
 struct hdr_fn_kernel {
 	int		fn_kernel_size;
@@ -228,7 +220,7 @@ struct rpc_cmd {
 	struct mdh_addr_t	mdh_addr;
 	__u32			id;
 	// payload of the command
-	__u8			pad[280];
+	__u8			pad[280+(BBOX_MAX_NDIM-3)*24]; // TODO: fix this
 };
 
 struct node_id {
@@ -494,8 +486,10 @@ struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *pe
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 
+#ifdef DS_HAVE_DIMES_SHMEM
 void rpc_server_find_local_peer(struct rpc_server *rpc_s,
     struct node_id **peer_tab, int *num_local_peer, int peer_tab_size);
 uint32_t rpc_server_get_nid(struct rpc_server *rpc_s);
+#endif
 
 #endif

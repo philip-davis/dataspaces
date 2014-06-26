@@ -25,21 +25,21 @@
  */
 
 /*
-*  Fan Zhang (2011) TASSL Rutgers University
-*  zhangfan@cac.rutgers.edu
+*  Qian Sun (2014) TASSL Rutgers University
+*  qiansun@cac.rutgers.edu
 */
 
-#ifndef __DART_RDMA_DCMF_H__
-#define __DART_RDMA_DCMF_H__
+#ifndef __DART_RDMA_PAMI_H__
+#define __DART_RDMA_PAMI_H__
 
 #include "config.h"
-
 #ifdef DS_HAVE_DIMES
-#include "dart_rpc_dcmf.h"
+#include "dart_rpc_pami.h"
 
 struct dart_rdma_mem_handle {
-	DCMF_Memregion_t memregion;
-	void *base_addr; // Only used for local data copy
+	pami_memregion_t memregion;
+	//void *base_addr; // Only used for local data copy
+	uint64_t base_addr; // Only used for local data copy
 	size_t size;
 };
 
@@ -63,7 +63,7 @@ struct dart_rdma_tran {
 
 struct dart_rdma_handle {
 	struct rpc_server *rpc_s;
-	DCMF_Protocol_t dcmf_get_protocol;
+	//DCMF_Protocol_t dcmf_get_protocol;
 	struct list_head read_tran_list;
 };
 

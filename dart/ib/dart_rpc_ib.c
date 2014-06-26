@@ -65,6 +65,14 @@ static int sys_send(struct rpc_server *rpc_s, struct node_id *to, struct hdr_sys
 	Public APIs
  =====================================================*/
 
+double gettime()
+{
+	struct timeval tm;
+	gettimeofday(&tm, NULL);
+	return ((double) tm.tv_sec * 1000000 + (double) tm.tv_usec) / 1000000.0;
+}
+
+
 static struct node_id *rpc_get_peer(struct rpc_server *rpc_s, int peer_id);
 /* -------------------------------------------------------------------
   System barrier implementation.
@@ -105,6 +113,7 @@ struct node_id *rpc_server_find(struct rpc_server *rpc_s, int nodeid)
 	return 0;
 }
 
+#ifdef DS_HAVE_DIMES_SHMEM
 void rpc_server_find_local_peers(struct rpc_server *rpc_s,
     struct node_id **peer_tab, int *num_local_peer, int peer_tab_size)
 {
@@ -126,6 +135,7 @@ uint32_t rpc_server_get_nid(struct rpc_server *rpc_s)
 {
     return rpc_s->ptlmap.address.sin_addr.s_addr;
 } 
+#endif
 
 static int sys_bar_send(struct rpc_server *rpc_s, int peerid)	//Done
 {
@@ -805,7 +815,11 @@ char *ip_search(void)
 	intr = ifc.ifc_len / sizeof(struct ifreq);
 	while(intr-- > 0 && ioctl(sfd, SIOCGIFADDR, (char *) &buf[intr]));
 	close(sfd);
-	return inet_ntoa(((struct sockaddr_in *) (&buf[intr].ifr_addr))->sin_addr);
+	if(BUILD_FOR_STAMPEDE)
+		return inet_ntoa(((struct sockaddr_in *) (&buf[intr - 1].ifr_addr))->sin_addr);
+	else
+		return inet_ntoa(((struct sockaddr_in *) (&buf[intr].ifr_addr))->sin_addr);
+
 }
 
 // Check if the format of IP address is correct. (done)
