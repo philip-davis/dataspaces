@@ -155,13 +155,6 @@ struct lockhdr {
         char			name[LOCK_NAME_SIZE];	/* lock name */
 } __attribute__ ((__packed__));
 
-/* Header for space info. */
-struct hdr_ss_info {
-	int			num_dims;
-	int			val_dims[3];
-	int			num_space_srv;
-} __attribute__((__packed__));
-
 /* Header for data kernel function remote deployment. */
 struct hdr_fn_kernel {
 	int		fn_kernel_size;
@@ -181,7 +174,7 @@ struct rpc_cmd {
         __u32           id;
 
         // payload of the command
-        __u8            pad[280];
+        __u8            pad[280+(BBOX_MAX_NDIM-3)*24]; //TODO: fix this
 } __attribute__((__packed__));
 
 /*

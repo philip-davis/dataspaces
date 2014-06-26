@@ -7,7 +7,7 @@ lib_LIBRARIES =  libdscommon.a libdspaces.a libdspacesf.a
 libdscommon_a_SOURCES = bbox.c \
 			ss_data.c \
 			timer.c \
-			strutil.c 
+			util.c 
 
 libdspaces_a_SOURCES =  dataspaces.c \
 			common_dataspaces.c \
@@ -36,7 +36,7 @@ noinst_HEADERS = ../include/sfc.h \
 		 ../include/dc_gspace.h \
 		 ../include/ss_data.h \
 		 ../include/bbox.h \
-		 ../include/strutil.h \
+		 ../include/util.h \
 		 ../include/dimes_data.h \
 		 ../include/dimes_server.h \
 		 ../include/dimes_client.h \

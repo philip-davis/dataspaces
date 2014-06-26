@@ -64,18 +64,22 @@ struct dcg_space {
         int                     f_ss_info;
         struct ss_info          ss_info;
         struct bbox             ss_domain;
+        struct global_dimension default_gdim;
 
         /* List of 'struct dcg_lock' */
         struct list_head        locks_list;
+        /* List of 'struct gdim_list_entry' */
+        struct list_head        gdim_list;
 
         int                     num_pending;
 
+        enum sspace_hash_version    hash_version;
         /* Version bookeeping for objects available in the space. */
         int                     num_vers;
         int                     versions[64];
 };
 
-struct dcg_space * dcg_alloc(int, int);
+struct dcg_space * dcg_alloc(int, int, void*);
 int dcg_barrier(struct dcg_space *);
 void dcg_free(struct dcg_space *);
 int dcg_obj_get(struct obj_data *);

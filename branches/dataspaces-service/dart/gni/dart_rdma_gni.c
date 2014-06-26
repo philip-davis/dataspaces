@@ -28,9 +28,10 @@
 *  Fan Zhang (2013) TASSL Rutgers University
 *  zhangfan@cac.rutgers.edu
 */
-#ifdef DS_HAVE_DIMES
 #include <stdint.h>
 #include "dart_rdma_gni.h"
+
+#ifdef DS_HAVE_DIMES
 
 #define MAX_NUM_RDMA_OP_POSTED 65536
 
@@ -167,8 +168,8 @@ static int dart_perform_local_copy(struct dart_rdma_tran *tran)
 	struct dart_rdma_op *op, *t;
 	list_for_each_entry_safe(op, t, &tran->rdma_op_list,
 				struct dart_rdma_op, entry) {
-		memcpy(tran->dst.base_addr + op->dst_offset,
-			   tran->src.base_addr + op->src_offset,
+		memcpy((void *)(tran->dst.base_addr + op->dst_offset),
+			   (void *)(tran->src.base_addr + op->src_offset),
 			   op->bytes);
 		list_del(&op->entry);
 		free(op);

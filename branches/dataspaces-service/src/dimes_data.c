@@ -28,7 +28,6 @@
 *  Fan Zhang (2012)  TASSL Rutgers University
 *  zhangfan@cac.rutgers.edu
 */
-#ifdef DS_HAVE_DIMES
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,10 +35,13 @@
 #include <errno.h>
 #include <stdint.h>
 
-#include "dimes_data.h"
+#include "config.h"
 #include "debug.h"
 #include "ss_data.h"
 #include "timer.h"
+
+#ifdef DS_HAVE_DIMES
+#include "dimes_data.h"
 
 static struct var_list_node* var_node_lookup(struct list_head *var_list,
                                     const char* var_name)
@@ -63,10 +65,8 @@ static struct var_list_node* var_node_lookup(struct list_head *var_list,
 static struct list_head* obj_location_list_lookup(struct metadata_storage *s,
                                     int version, const char* var_name)
 {
-    int index;
-    struct var_list *l;
-    index = version % s->max_versions;
-    l = &s->version_tab[index];
+    int index = version % s->max_versions;
+    struct list_head *l = &s->version_tab[index];
 
     struct var_list_node *var_node;
     var_node = var_node_lookup(l, var_name);

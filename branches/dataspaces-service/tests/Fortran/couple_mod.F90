@@ -36,6 +36,8 @@ module couple_comm
   integer :: spx, spy, spz  ! block size per processor per direction
   integer :: timesteps      ! # of coupling scenarios (iterations)
   integer :: npapp          ! # of processors in the application
+  integer :: ndim           ! # number of dimension
+  integer :: appid          ! appplication id number
 
   integer :: rank, nproc
 
@@ -63,7 +65,7 @@ subroutine parse_args()
   integer :: argc
 
   argc = iargc()
-  if (argc < 7) then
+  if (argc < 9) then
      print *, "Wrong number of arguments !"
      call exit(1)
   endif
@@ -71,29 +73,38 @@ subroutine parse_args()
   call getarg(1,buf)
   read (buf, '(i5)') npapp
 
-  call getarg(2, buf)
-  read (buf, '(i5)') npx
+  call getarg(2,buf)
+  read (buf, '(i5)') ndim
 
   call getarg(3, buf)
-  read (buf, '(i5)') npy
+  read (buf, '(i5)') npx
 
   call getarg(4, buf)
-  read (buf, '(i5)') npz
+  read (buf, '(i5)') npy
 
   call getarg(5, buf)
-  read (buf, '(i6)') spx
+  read (buf, '(i5)') npz
 
   call getarg(6, buf)
-  read (buf, '(i6)') spy
+  read (buf, '(i6)') spx
 
   call getarg(7, buf)
+  read (buf, '(i6)') spy
+
+  call getarg(8, buf)
   read (buf, '(i6)') spz
 
-  timesteps=1
-  if (argc > 7) then
-     call getarg(8, buf)
-     read (buf, '(i9)') timesteps
-  endif
+  call getarg(9, buf)
+  read (buf, '(i9)') timesteps
+
+  call getarg(10, buf)
+  read (buf, '(i6)') appid
+
+!  timesteps=1
+!  if (argc > 7) then
+!     call getarg(8, buf)
+!     read (buf, '(i9)') timesteps
+!  endif
 end subroutine ! parse_args
 
 

@@ -173,7 +173,7 @@ void bbox_intersect(struct bbox *b0, const struct bbox *b1, struct bbox *b2)
         int i;
 
         b2->num_dims = b0->num_dims;
-        for (i = 0; i < BBOX_MAX_NDIM; i++) {	//TODO 3 to 10
+        for (i = 0; i < b0->num_dims; i++) {
                 b2->lb.c[i] = max(b0->lb.c[i], b1->lb.c[i]);
                 b2->ub.c[i] = min(b0->ub.c[i], b1->ub.c[i]);
         }
@@ -290,7 +290,7 @@ static __u64 intv_compact(struct intv *i_tab, __u64 num_itv)
         }
 
 #ifdef DEBUG
-        printf("in intv_compact, num_itv=%llu, i=%llu\n", num_itv, i);
+        //printf("in intv_compact, num_itv=%llu, i=%llu\n", num_itv, i);
 #endif
         return (i+1);
 }
@@ -319,7 +319,7 @@ void bbox_to_intv(const struct bbox *bb, __u64 dim_virt, int bpd,
     bb_virt->num_dims = bb->num_dims;
 
 #ifdef DEBUG
-    printf("bbox_to_intv ndims=%d\n", bb->num_dims);
+    // printf("bbox_to_intv ndims=%d\n", bb->num_dims);
 #endif
 
     for(i = 0; i < bb->num_dims; i++){
@@ -462,7 +462,7 @@ void bbox_to_intv2(const struct bbox *bb, __u64 dim_virt, int bpd,
                 bb_head = (bb_head + 1) % bb_size;
     }
 #ifdef DEBUG
-	printf("============bb_size = %d, total_size=%d===========\n", bb_size, bb_size*sizeof(*bb_tab));
+	//printf("============bb_size = %d, total_size=%d===========\n", bb_size, bb_size*sizeof(*bb_tab));
 #endif
     free(bb_tab);
     // printf("I had to resize the interval array %d times.\n", i_resize);
@@ -516,4 +516,59 @@ int intv_do_intersect(struct intv *i0, struct intv *i1)
 __u64 intv_size(struct intv *intv)
 {
         return intv->ub - intv->lb + 1;
+}
+
+void coord_print(struct coord *c, int num_dims)
+{
+        switch (num_dims) {
+        case 3:
+                printf("{%llu, %llu, %llu}", c->c[0], c->c[1], c->c[2]);
+                break;
+        case 2:
+                printf("{%llu, %llu}", c->c[0], c->c[1]);
+                break;
+        case 1:
+                printf("{%llu}", c->c[0]);
+        }
+}
+
+/*
+  Routine to return a string representation of the 'coord' object.
+*/
+
+char * coord_sprint(const struct coord *c, int num_dims)
+{
+        char *str;
+        int i;
+        asprintf(&str, "{%d", c->c[0]);
+        for(i = 1; i < num_dims; i++){
+                char *tmp;
+                asprintf(&tmp, ", %llu", c->c[i]);
+                str = str_append(str, tmp);
+        }
+        str = str_append_const(str, "}");
+        return str;
+}
+
+
+void bbox_print(struct bbox *bb)
+{
+        printf("{lb = ");
+        coord_print(&bb->lb, bb->num_dims);
+        printf(", ub = ");
+        coord_print(&bb->ub, bb->num_dims);
+        printf("}");
+}
+
+char * bbox_sprint(const struct bbox *bb)
+{
+        char *str;
+
+        asprintf(&str, "{lb = ");
+        str = str_append(str, coord_sprint(&bb->lb, bb->num_dims));
+        str = str_append_const(str, ", ub = ");
+        str = str_append(str, coord_sprint(&bb->ub, bb->num_dims));
+        str = str_append_const(str, "}\n");
+
+        return str;
 }

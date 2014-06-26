@@ -29,18 +29,18 @@
 *  zhangfan@cac.rutgers.edu
 */
 
-#ifdef DS_HAVE_DIMES
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "config.h"
 #include "debug.h"
-
-#include "dimes_server.h"
 #include "dart.h"
 #include "ds_gspace.h"
 #include "ss_data.h"
+
+#ifdef DS_HAVE_DIMES
+#include "dimes_server.h"
 
 static struct dimes_server *dimes_s = NULL;
 
@@ -122,9 +122,9 @@ static int locate_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd,
 	INIT_LIST_HEAD(&obj_loc_wrapper_list);
 
 #ifdef DEBUG
-	uloga("%s(): get cmd from peer #%d, "
-	"with name=%s, owner=%d, version=%d, data_size=%u.\n",
-		__func__, cmd->id, hdr->odsc.name, hdr->odsc.owner,
+	uloga("%s(): get request from peer #%d "
+	"name= %s version= %d data_size= %u\n",
+		__func__, cmd->id, hdr->odsc.name,
 		hdr->odsc.version, obj_data_size(&hdr->odsc));
 #endif
 
@@ -196,10 +196,6 @@ err_out:
 static int dsgrpc_dimes_locate_data(struct rpc_server *rpc_s,
 				       struct rpc_cmd *cmd)
 {
-#ifdef DEBUG
-	uloga("%s(): #%d get request from #%d\n", __func__,
-		DIMES_SID, cmd->id);
-#endif
 	return locate_data(rpc_s, cmd, dimes_locate_data_msg);
 }
 
@@ -214,11 +210,11 @@ static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	}
 
 #ifdef DEBUG    
-	uloga("%s(): get cmd from peer #%d, "
-				"with has_rdma_data=%d, "
-				"name=%s, owner=%d, version=%d, data_size=%u.\n",
+	uloga("%s(): get request from peer #%d "
+				"has_rdma_data= %d "
+				"name= %s version= %d data_size= %u\n",
 					__func__, cmd->id, hdr->has_rdma_data,
-					odsc->name, odsc->owner, odsc->version, obj_data_size(odsc));
+					odsc->name, odsc->version, obj_data_size(odsc));
 #ifdef DS_HAVE_DIMES_SHMEM
     if (hdr->has_shmem_data) {
         uloga("%s(): #%d get update from peer #%d "
@@ -324,7 +320,7 @@ struct dimes_server *dimes_server_alloc(int num_sp, int num_cp, char *conf_name)
 	rpc_add_service(dimes_get_ack_msg, dsgrpc_dimes_get_ack);
 
 	dimes_s_l->meta_store =
-        metadata_s_alloc(dimes_s_l->dsg->ssd->storage->size_hash);
+        metadata_s_alloc(dimes_s_l->dsg->ls->size_hash);
 	if (!dimes_s_l->meta_store) {
 		free(dimes_s_l->dsg);
 		free(dimes_s_l);

@@ -1,8 +1,9 @@
+#include "dart_rdma_ib.h"
+
 #ifdef DS_HAVE_DIMES
 #include <stdint.h>
 #include <poll.h>
 
-#include "dart_rdma_ib.h"
 #include "debug.h"
 
 static struct dart_rdma_handle *drh = NULL;

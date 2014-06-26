@@ -5,32 +5,62 @@ Requirements
 
 Quick Installation Instructions
 ===============================
-The following steps are needed to configure, bulid and install DataSpaces.
+The following steps are needed to configure, build and install DataSpaces.
 
 1. Configure
 # Examples for the configure command on supported architectures and networks. Please customize it according to your specific system configurations and environments.
-# Gemini for Cray XE and XK series
+# Cray XE and XK series
 $ ./configure CC=cc FC=ftn
 
 # Infiniband cluster
 $ ./configure CC=mpicc FC=mpif90
 
-# DCMF for IBM BlueGene/P
+# IBM BlueGene/P
 $ ./configure CC=mpixlc FC=mpixlf90 CFLAGS="-g -O0 -qarch=450 -qtune=450" --with-dcmf="/bgsys/drivers/ppcfloor"
 
-# Portals for Cray XT series
-$ ./configure CC=cc FC=ftn
+# IBM BlueGene/Q
+$ ./configure CC=/bgsys/drivers/ppcfloor/comm/xl/bin/mpixlc_r FC=/bgsys/drivers/ppcfloor/comm/xl/bin/mpixlf90 CFLAGS="-O0 -g -qlanglvl=extc99 -O3 -qarch=qp -qtune=qp -qfullpath"
 
 2. Some of the useful configure options
- --preifx=/install/path - Set the directory where DataSpaces will be installed.
+ --prefix=/install/path
+   Set the directory where DataSpaces will be installed.
 
- --enable-dimes - Build DataSpaces with DIstributed MEmory Space (DIMES) support.
+ --with-max-num-array-dimension=integer value
+   This option is used to configure the maximum number
+   of array dimension that can be supported in
+   DataSpaces/DIMES. Default value is set as 3. Note:
+   the value can not be set larger than 10, or smaller than 3.
+
+ --enable-dimes
+   Build DataSpaces with DIstributed MEmory Space (DIMES) support.
    DIMES feature uses local RDMA memory buffers across application processes to build
    a virtual shared data space in-situ, which can be queried and directly accessed by 
    other applications in a data coupling workflow. Currently this feature is only 
-   supported on Cray Gemini and IBM DCMF networks. 
+   supported on Cray Gemini networks, on IBM BG/P and BG/Q systems. 
+
+ --with-dimes-rdma-buffer-size=integer value for megabytes
+   This option specifies the maximum amount of RDMA memory buffer that
+   can be used by DIMES in each application process. DIMES RDMA memory buffer is used
+   to locally cache the data written by dimes_put(), and is also used by
+   dimes_get() to fetch data in remote memory buffer. Must be used with
+   --enable-dimes option. Default value is set as 64MB.
+
+--with-build-for-stampede=integer
+  User set this value to 1 in order to configure and compile DataSpaces on Stampede cluster.
+
+--with-infiniband-msg-queue-size=integer value
+  User can use this option to change the size of the messaging queue on DataSpaces servers.
+  If you receive errors stating the messaging queue is full. You should use this option to
+  increase the size of the messaging queue.
+
+
+
+   For applications using DIMES, dimes_put_sync_all() or dimes_put_sync_group()
+   API functions (see dimes_interface.h for detailed documentation) should be
+   called periodically to free data objects cached in DIMES. Where there is no
+   sufficient memory space, dimes_put()/dimes_get() would fail and return errors. 
 
 3. Build & Install 
-# Under project top dir
+# Under project top directory
 $ make
 $ make install
