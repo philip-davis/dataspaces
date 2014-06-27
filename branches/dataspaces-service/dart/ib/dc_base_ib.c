@@ -1472,7 +1472,7 @@ dc_barrier(struct dart_client *dc){
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
-struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
+struct dart_client *dc_alloc(int num_peers, int appid, void *comm, void *dart_ref)
 {
 	struct dart_client *dc;
 
