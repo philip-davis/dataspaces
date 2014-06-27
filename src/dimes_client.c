@@ -191,11 +191,7 @@ static struct dimes_client_option options;
 
 static int is_peer_on_same_core(struct node_id *peer)
 {
-#ifdef DS_HAVE_DIMES_SHMEM
-    return 0;
-#else
     return (peer->ptlmap.id == DIMES_CID);
-#endif
 }
 
 #ifdef DS_HAVE_DIMES_SHMEM
@@ -1915,7 +1911,49 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
     // require sub-array reading, OR (2) resides on local core
     list_for_each_entry(fetch, &qte->fetch_list, struct fetch_entry, entry)
     {
+#ifdef DS_HAVE_DIMES_SHMEM 
+        if (options.enable_shmem_buffer &&
+                 is_peer_on_same_node(fetch->read_tran->remote_peer)) {
+#ifdef DEBUG
+            uloga("%s(): peer %d fetch from peer %d on local node\n", __func__,
+                DIMES_CID, fetch->read_tran->remote_peer->ptlmap.id);
+#endif
+
+            // Data on the same node, and is in the shared memory segment
+            struct shared_memory_obj *shmem_obj =
+                        find_shmem_obj(fetch->src_shmem_desc.shmem_obj_id);
+            struct shared_memory_region *shmem_region =
+                find_shmem_region(shmem_obj, fetch->src_shmem_desc.shmem_obj_region_id);
+            if (!shmem_obj || !shmem_region) {
+                uloga("%s(): failed to find shmem region obj_id %d region_id %d\n",
+                    __func__, fetch->src_shmem_desc.shmem_obj_id,
+                    fetch->src_shmem_desc.shmem_obj_region_id);
+                goto err_out;
+            }
+
+            // Update source memory region
+            fetch->read_tran->src.base_addr =
+                (shmem_obj->seg_ptr+shmem_region->offset+fetch->src_shmem_desc.offset);
+            fetch->read_tran->src.size = fetch->src_shmem_desc.size;
+
+            // Allocate receive buffer, schedule reads, perform reads
+            dimes_memory_alloc(&fetch->read_tran->dst,
+                                obj_data_size(&fetch->dst_odsc),
+                                dimes_memory_non_rdma);
+            schedule_rdma_reads(fetch->read_tran->tran_id,
+                                &fetch->src_odsc, &fetch->dst_odsc);
+            dart_rdma_perform_reads_local(fetch->read_tran->tran_id);
+            // Copy fetched data
+            obj_assemble(fetch, qte->data_ref);
+            dimes_memory_free(&fetch->read_tran->dst, dimes_memory_non_rdma);
+            continue;
+        }
+#endif
         if (is_peer_on_same_core(fetch->read_tran->remote_peer)) {
+#ifdef DEBUG
+            uloga("%s(): peer %d fetch from peer %d on same core\n", __func__,
+                DIMES_CID, fetch->read_tran->remote_peer->ptlmap.id);
+#endif
             // Data on local peer (itself), fetch directly
             struct dimes_memory_obj *mem_obj =
                                     storage_lookup_obj(fetch->remote_sync_id);
@@ -1940,43 +1978,6 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
             obj_assemble(fetch, qte->data_ref);
             dimes_memory_free(&fetch->read_tran->dst, dimes_memory_non_rdma);
         } 
-#ifdef DS_HAVE_DIMES_SHMEM 
-        else if (options.enable_shmem_buffer &&
-                 is_peer_on_same_node(fetch->read_tran->remote_peer)) {
-#ifdef DEBUG
-            uloga("%s(): peer %d fetch from peer %d on local node\n", __func__,
-                DIMES_CID, fetch->read_tran->remote_peer->ptlmap.id);
-#endif
-
-            // Data on the same node, and is in the shared memory segment
-            struct shared_memory_obj *shmem_obj =
-                        find_shmem_obj(fetch->src_shmem_desc.shmem_obj_id);
-            struct shared_memory_region *shmem_region = 
-                find_shmem_region(shmem_obj, fetch->src_shmem_desc.shmem_obj_region_id);
-            if (!shmem_obj || !shmem_region) {
-                uloga("%s(): failed to find shmem region obj_id %d region_id %d\n",
-                    __func__, fetch->src_shmem_desc.shmem_obj_id,
-                    fetch->src_shmem_desc.shmem_obj_region_id);
-                goto err_out;
-            } 
-
-            // Update source memory region
-            fetch->read_tran->src.base_addr = 
-                (shmem_obj->seg_ptr+shmem_region->offset+fetch->src_shmem_desc.offset);
-            fetch->read_tran->src.size = fetch->src_shmem_desc.size; 
-
-            // Allocate receive buffer, schedule reads, perform reads
-            dimes_memory_alloc(&fetch->read_tran->dst,
-                                obj_data_size(&fetch->dst_odsc),
-                                dimes_memory_non_rdma);
-            schedule_rdma_reads(fetch->read_tran->tran_id,
-                                &fetch->src_odsc, &fetch->dst_odsc);
-            dart_rdma_perform_reads_local(fetch->read_tran->tran_id);
-            // Copy fetched data
-            obj_assemble(fetch, qte->data_ref);
-            dimes_memory_free(&fetch->read_tran->dst, dimes_memory_non_rdma);
-        }
-#endif 
         else if (!is_remote_data_contiguous_in_memory(&fetch->src_odsc, &fetch->dst_odsc))
         {
             // Data on remote peer
