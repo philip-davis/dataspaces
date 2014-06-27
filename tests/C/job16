@@ -1,0 +1,29 @@
+#!/bin/bash
+#PBS -N test-sith
+#PBS -A csc025ewk
+#PBS -j oe
+#PBS -q batch
+#PBS -l nodes=12:ppn=8,walltime=00:15:00
+
+cd $PBS_O_WORKDIR
+
+rm -f conf* srv.lck*
+
+mpirun -npernode 2 -n 2 ./dataspaces_server -s 2 -c 0 & 
+sleep 2 
+
+
+
+
+for i in {1..10}
+do
+	mpirun -n 16 ./test_writer DATASPACES 16 3 4 2 2 32 64 64 1 2
+	#${i} 2 10
+	rm -f conf.2
+
+	mpirun -n 1 ./test_reader DATASPACES 1 3 1 1 1 128 128 128 1 3
+	#${i} 3 10
+	rm -f conf.3
+done
+
+
