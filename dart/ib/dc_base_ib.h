@@ -42,35 +42,11 @@ struct dart_client {
 	MPI_Comm comm;
 };				// //
 
-//#define dc_barrier(dc)          rpc_barrier(dc->rpc_s)
 
 static inline struct node_id *dc_get_peer(struct dart_client *dc, int n)
 {
-
 	return rpc_server_find(dc->rpc_s, n);
- 
-
-	/*
-	if(n < dc->num_sp || n>=dc->cp_min_rank + dc->num_cp)
-		return dc->peer_tab + n;
-	else if(n < dc->cp_min_rank + dc->num_cp && n >= dc->cp_min_rank)
-		return (dc->peer_tab + dc->num_sp) + (n - dc->cp_min_rank);
-	else
-		return (dc->peer_tab + dc->num_cp + n);
-	*/
-}				// //
-
-/*
-static inline struct node_id *dc_node_find(struct dart_client *dc, int nodeid)
-{
-         struct node_id *temp_peer;
-         list_for_each_entry(temp_peer, &dc->peer_list, struct node_id, peer_entry) {
-                if(temp_peer->ptlmap.id == nodeid)
-                         return temp_peer;
-         }
-         return 0;
 }
-*/
 
 static inline struct dart_client *dc_ref_from_rpc(struct rpc_server *rpc_s)
 {
