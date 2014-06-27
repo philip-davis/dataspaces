@@ -30,7 +30,6 @@
 
 #include "dart_rdma_ib.h"
 
-
 #define MB_SYS_MSG              0x03
 #define MB_RPC_MSG              0x04
 #define MB_MIN_RESERVED         0x07
@@ -49,14 +48,16 @@
 
 #define FPTR_DEF  void * _fptr[] = {&malloc, &free, &memset};
 
-struct coord2{
-  __u64 c[3]; //extend to 10d
-};
+typedef unsigned char __u8;
+typedef unsigned int __u32;
+typedef int __s32;
+typedef uint64_t __u64;
 
 struct msg_buf;
 struct rpc_server;
 struct rpc_cmd;
 struct node_id;
+
 
 /*
    Rpc prototype function, should be called in response to a remote rpc request. 
@@ -134,13 +135,6 @@ struct lockhdr {
 	int id;
 	int lock_num;
 	char name[LOCK_NAME_SIZE];	/* lock name */
-} __attribute__ ((__packed__));
-
-/* Header for space info. */
-struct hdr_ss_info {
-	int num_dims;
-    struct coord2 dims;
-	int num_space_srv;
 } __attribute__ ((__packed__));
 
 /* Header for data kernel function remote deployment. */
