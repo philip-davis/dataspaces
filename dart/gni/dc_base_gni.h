@@ -67,7 +67,7 @@ struct dart_client {
 // normally, n represents destination id .
 static inline struct node_id * dc_get_peer(struct dart_client *dc, int n)
 {
-		return dc->peer_tab + n;
+		return rpc_server_find(dc->rpc_s,n);
 }
 
 static inline struct dart_client *dc_ref_from_rpc(struct rpc_server *rpc_s)
