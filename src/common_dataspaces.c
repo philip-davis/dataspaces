@@ -596,6 +596,10 @@ int common_dimes_init_shmem(void *comm, size_t shmem_obj_size) {
 int common_dimes_finalize_shmem() {
     return dimes_client_finalize_shmem();
 }
+
+int common_dimes_storage_stat() {
+    return dimes_client_storage_stat();
+}
 #endif
 
 #endif

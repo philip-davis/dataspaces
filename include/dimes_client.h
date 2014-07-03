@@ -47,7 +47,7 @@ extern "C" {
 #include "mpi.h"
 #define MAX_NUM_PEER_PER_NODE 64
 #define PAGE_SIZE sysconf(_SC_PAGE_SIZE)
-#define SHMEM_OBJ_PATH "/dataspaces_shared_memory_segment"
+#define SHMEM_OBJ_PATH_PREFIX "/dataspaces_shared_memory_segment"
 #define SHMEM_OBJ_PATH_MAX_LEN 255
 #endif
 
@@ -57,23 +57,14 @@ struct query_tran_d {
 };
 
 #ifdef DS_HAVE_DIMES_SHMEM
-struct shared_memory_region {
-    int shmem_obj_id;
-    int shmem_obj_region_id;
-    size_t offset;
-    size_t size;
-    int owner_dart_id; 
-};
-
 struct shared_memory_obj {
     struct list_head    entry;
     int id;
+    int owner_dart_id; 
     char path[SHMEM_OBJ_PATH_MAX_LEN+1];
-    size_t seg_size;
-    void *seg_ptr;
-    int seg_fd;    
-    int num_region;
-    struct shared_memory_region *region_tab; 
+    size_t size;
+    void *ptr;
+    int fd;    
 };
 #endif
 

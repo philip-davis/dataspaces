@@ -424,114 +424,108 @@ static struct dimes_memory_obj* storage_lookup_obj(int sid)
 
 #ifdef DS_HAVE_DIMES_SHMEM
 static struct shared_memory_obj* create_shmem_obj(const char* shmem_obj_path,
-    const size_t shmem_obj_size)
+    const size_t shmem_obj_size, int owner_dart_id)
 {
-    int fd;
+    int seg_fd;
     void *seg_ptr = NULL;
 
-    if (DIMES_CID == dimes_c->node_master_dart_id) {
-        fd = shm_open(shmem_obj_path, O_CREAT | O_EXCL | O_RDWR,
-                        S_IRWXU | S_IRWXG);
-        if (fd < 0) {
-            uloga("%s(): failed with shm_obj_path %s\n",
-                __func__, shmem_obj_path);
-            perror("shm_open() failed");
-            return NULL;
-        }
+    seg_fd = shm_open(shmem_obj_path, O_CREAT | O_EXCL | O_RDWR,
+                    S_IRWXU | S_IRWXG);
+    if (seg_fd < 0) { 
+        uloga("%s(): failed with shm_obj_path %s\n",
+            __func__, shmem_obj_path);
+        perror("shm_open() failed");
+        return NULL;
+    }    
 
-        if (ftruncate(fd, shmem_obj_size) < 0) {
-            perror("ftruncate() failed");
-            return NULL;
-        }
+    if (ftruncate(seg_fd, shmem_obj_size) < 0) { 
+        perror("ftruncate() failed");
+        return NULL;
+    }    
 
-        seg_ptr = mmap(NULL, shmem_obj_size, PROT_READ | PROT_WRITE, MAP_SHARED,
-                        fd, 0);
-        if (seg_ptr == NULL) {
-            perror("mmap() failed");
-            return NULL;
-        }
+    seg_ptr = mmap(NULL, shmem_obj_size, PROT_READ | PROT_WRITE, MAP_SHARED,
+                    seg_fd, 0);
+    if (seg_ptr == NULL) {
+        perror("mmap() failed");
+        return NULL;
+    }    
 
-        printf("%s(): create shared memory obj %s "
-            "size %u bytes ptr %p\n", __func__, 
-            shmem_obj_path, shmem_obj_size, seg_ptr);
-    }
+    // debug print
+    printf("%s(): create shared memory obj %s "
+        "size %u bytes ptr %p\n", __func__, 
+        shmem_obj_path, shmem_obj_size, seg_ptr);
 
-    // synchronize node-local peers
-    MPI_Barrier(dimes_c->node_mpi_comm);   
- 
-    // open/mmap
-    if (DIMES_CID != dimes_c->node_master_dart_id) {
-        fd = shm_open(shmem_obj_path, O_RDWR, S_IRWXU | S_IRWXG);
-        if (fd < 0 ) {
-            perror("shm_open() failed");
-            return NULL;
-        }
-
-        seg_ptr = mmap(NULL, shmem_obj_size, PROT_READ | PROT_WRITE, MAP_SHARED,
-                        fd, 0);
-        if (seg_ptr == NULL) {
-            perror("mmap() failed");
-            return NULL;
-        }
-
-        printf("%s(): open shared memory obj %s "
-            "size %u bytes ptr %p\n", __func__,
-            shmem_obj_path, shmem_obj_size, seg_ptr);
-    }
-    
     struct shared_memory_obj *shmem_obj = (struct shared_memory_obj*)
                                             malloc(sizeof(*shmem_obj));
-    shmem_obj->id = 0; //TODO: hash obj_path to integer?
+    shmem_obj->id = DIMES_CID; //TODO: hash obj_path to integer?
     strcpy(shmem_obj->path, shmem_obj_path);
-    shmem_obj->seg_size = shmem_obj_size;
-    shmem_obj->seg_ptr = seg_ptr;
-    shmem_obj->seg_fd = fd;
-    
-    // TODO: create regions ... 
-    shmem_obj->num_region = dimes_c->num_local_peer;
-    shmem_obj->region_tab = (struct shared_memory_region*)
-            malloc(sizeof(struct shared_memory_region)*shmem_obj->num_region);
-    int i;
-    size_t region_size = shmem_obj->seg_size / shmem_obj->num_region;
-    for (i = 0; i < shmem_obj->num_region; i++) {
-        shmem_obj->region_tab[i].shmem_obj_id = shmem_obj->id;
-        shmem_obj->region_tab[i].shmem_obj_region_id = i;
-        shmem_obj->region_tab[i].offset = region_size * i; 
-        if (region_size*(i+1) > shmem_obj->seg_size) {
-            shmem_obj->region_tab[i].size =
-                shmem_obj->seg_size - region_size*(i+1);
-        } else shmem_obj->region_tab[i].size = region_size; 
-        shmem_obj->region_tab[i].owner_dart_id =
-                dimes_c->local_peer_tab[i]->ptlmap.id;
-    }    
+    shmem_obj->size = shmem_obj_size;
+    shmem_obj->ptr = seg_ptr;
+    shmem_obj->fd = seg_fd;
+    shmem_obj->owner_dart_id = owner_dart_id;
 
     return shmem_obj;
 }
 
-static void remove_shmem_obj(struct shared_memory_obj *shmem_obj)
+static struct shared_memory_obj* open_shmem_obj(const char* shmem_obj_path,
+    const size_t shmem_obj_size, int shmem_obj_id, int owner_dart_id)
 {
-    // unmap
-    if (munmap(shmem_obj->seg_ptr, shmem_obj->seg_size) < 0) {
-        perror("munmap() failed");
+    int seg_fd;
+    void *seg_ptr = NULL;
+
+    // open/mmap
+    seg_fd = shm_open(shmem_obj_path, O_RDWR, S_IRWXU | S_IRWXG);
+    if (seg_fd < 0 ) {
+        perror("shm_open() failed");
+        return NULL;
     }
 
-    // synchronize node-local peers
-    MPI_Barrier(dimes_c->node_mpi_comm);
+    seg_ptr = mmap(NULL, shmem_obj_size, PROT_READ | PROT_WRITE, MAP_SHARED,
+                    seg_fd, 0);
+    if (seg_ptr == NULL) {
+        perror("mmap() failed");
+        return NULL;
+    }
 
+    // debug print
+    printf("%s(): open shared memory obj %s "
+        "size %u bytes ptr %p\n", __func__,
+        shmem_obj_path, shmem_obj_size, seg_ptr);
+    
+    struct shared_memory_obj *shmem_obj = (struct shared_memory_obj*)
+                                            malloc(sizeof(*shmem_obj));
+    shmem_obj->id = shmem_obj_id;
+    strcpy(shmem_obj->path, shmem_obj_path);
+    shmem_obj->size = shmem_obj_size;
+    shmem_obj->ptr = seg_ptr;
+    shmem_obj->fd = seg_fd;
+    shmem_obj->owner_dart_id = owner_dart_id;
+    
+    return shmem_obj;
+}
+
+static void unmap_shmem_obj(struct shared_memory_obj *shmem_obj)
+{
+    // unmap
+    if (munmap(shmem_obj->ptr, shmem_obj->size) < 0) {
+        perror("munmap() failed");
+    }
+}
+
+static void remove_shmem_obj(struct shared_memory_obj *shmem_obj)
+{
     // unlink
-    if (DIMES_CID == dimes_c->node_master_dart_id) {
+    if (DIMES_CID == shmem_obj->owner_dart_id) {
         if (shm_unlink(shmem_obj->path) != 0) {
             perror("shm_unlink() failed");
         }
-        uloga("%s(): unlink shmem_obj %s\n", __func__, shmem_obj->path);
+        printf("%s(): #%d unlink shmem_obj %s\n", __func__,
+            DIMES_CID, shmem_obj->path);
     }
 
-    shmem_obj->seg_ptr = NULL;
-    shmem_obj->seg_size = 0;
+    shmem_obj->ptr = NULL;
+    shmem_obj->size = 0;
 
-    // free region_tab
-    if (shmem_obj->region_tab)
-        free(shmem_obj->region_tab);    
     free(shmem_obj);
 }
 
@@ -549,26 +543,14 @@ static struct shared_memory_obj* find_shmem_obj(int id)
     return NULL;
 }
 
-static struct shared_memory_region* find_shmem_region(struct shared_memory_obj *shmem_obj, int shmem_obj_region_id)
+static struct shared_memory_obj* find_my_shmem_obj()
 {
-    if (!shmem_obj) return NULL;
-    int i;
-    for (i = 0; i < shmem_obj->num_region; i++) {
-        if (shmem_obj->region_tab[i].shmem_obj_region_id == shmem_obj_region_id) {
-            return &(shmem_obj->region_tab[i]);
-        }
-    }
-    return NULL;
-}
-
-static struct shared_memory_region* find_my_shmem_region(struct shared_memory_obj *shmem_obj)
-{
-    if (!shmem_obj) return NULL;
-
-    int i;
-    for (i = 0; i < shmem_obj->num_region; i++) {
-        if (shmem_obj->region_tab[i].owner_dart_id == DIMES_CID) {
-            return &(shmem_obj->region_tab[i]);
+    struct shared_memory_obj* shmem_obj = NULL;
+    list_for_each_entry(shmem_obj, &dimes_c->shmem_obj_list,
+            struct shared_memory_obj, entry)
+    {
+        if (shmem_obj->owner_dart_id == DIMES_CID) {
+            return shmem_obj;
         }
     }
 
@@ -1914,26 +1896,21 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
 #ifdef DS_HAVE_DIMES_SHMEM 
         if (options.enable_shmem_buffer &&
                  is_peer_on_same_node(fetch->read_tran->remote_peer)) {
-#ifdef DEBUG
-            uloga("%s(): peer %d fetch from peer %d on local node\n", __func__,
+            printf("%s(): peer %d fetch from peer %d on local node\n", __func__,
                 DIMES_CID, fetch->read_tran->remote_peer->ptlmap.id);
-#endif
 
             // Data on the same node, and is in the shared memory segment
             struct shared_memory_obj *shmem_obj =
                         find_shmem_obj(fetch->src_shmem_desc.shmem_obj_id);
-            struct shared_memory_region *shmem_region =
-                find_shmem_region(shmem_obj, fetch->src_shmem_desc.shmem_obj_region_id);
-            if (!shmem_obj || !shmem_region) {
-                uloga("%s(): failed to find shmem region obj_id %d region_id %d\n",
-                    __func__, fetch->src_shmem_desc.shmem_obj_id,
-                    fetch->src_shmem_desc.shmem_obj_region_id);
+            if (!shmem_obj) {
+                uloga("%s(): failed to find shmem object obj_id %d\n",
+                    __func__, fetch->src_shmem_desc.shmem_obj_id);
                 goto err_out;
             }
 
             // Update source memory region
             fetch->read_tran->src.base_addr =
-                (shmem_obj->seg_ptr+shmem_region->offset+fetch->src_shmem_desc.offset);
+                (shmem_obj->ptr+fetch->src_shmem_desc.offset);
             fetch->read_tran->src.size = fetch->src_shmem_desc.size;
 
             // Allocate receive buffer, schedule reads, perform reads
@@ -2422,21 +2399,18 @@ int dimes_client_put(const char *var_name,
     memcpy((void*)mem_obj->rdma_handle.base_addr, data, data_size);
 #ifdef DS_HAVE_DIMES_SHMEM
     if (options.enable_shmem_buffer) {
-        // TODO: id hardcoded as 0 for now, and assume there is 
-        // only one shared mem obj
-        struct shared_memory_obj *shmem_obj = find_shmem_obj(0);
-        struct shared_memory_region *shmem_region = find_my_shmem_region(shmem_obj);
-        if (shmem_obj && shmem_region) {
+        // TODO: hardcoded for now, and assume there is 
+        // only one shared mem obj that belongs to me ...
+        struct shared_memory_obj *shmem_obj = find_my_shmem_obj();
+        if (shmem_obj) {
             mem_obj->shmem_desc.size = data_size;
             mem_obj->shmem_desc.offset =
                 mem_obj->rdma_handle.base_addr -
-                (uint64_t)shmem_obj->seg_ptr -
-                shmem_region->offset;      
-            mem_obj->shmem_desc.shmem_obj_id = 0;
-            mem_obj->shmem_desc.shmem_obj_region_id = shmem_region->shmem_obj_region_id;
-            mem_obj->shmem_desc.owner_dart_id = shmem_region->owner_dart_id;
+                (uint64_t)shmem_obj->ptr;
+            mem_obj->shmem_desc.shmem_obj_id = shmem_obj->id;
+            mem_obj->shmem_desc.owner_dart_id = shmem_obj->owner_dart_id;
         } else {
-            uloga("%s(): find_shmem_obj() or find_my_shmem_region() failed\n", __func__);
+            uloga("%s(): ERROR find_my_shmem_obj() failed\n", __func__);
         }
     }
 #endif
@@ -2528,89 +2502,130 @@ int dimes_client_init_shmem(void *comm, size_t shmem_obj_size)
     MPI_Comm *mpi_comm = (MPI_Comm*)comm;
     MPI_Barrier(*mpi_comm);
    
-    INIT_LIST_HEAD(&dimes_c->shmem_obj_list);
     options.enable_shmem_buffer = 1;
-    if (options.enable_shmem_buffer) {
-        int i;
-        rpc_server_find_local_peers(RPC_S, dimes_c->local_peer_tab,
-            &dimes_c->num_local_peer,
-            MAX_NUM_PEER_PER_NODE);
+    INIT_LIST_HEAD(&dimes_c->shmem_obj_list);
+    // build local peer tab
+    rpc_server_find_local_peers(RPC_S, dimes_c->local_peer_tab,
+        &dimes_c->num_local_peer,
+        MAX_NUM_PEER_PER_NODE);
 
-        // sort the node-local peers by dart id 
-        qsort(dimes_c->local_peer_tab, dimes_c->num_local_peer,
-            sizeof(struct node_id*), compare_peer_by_dart_id);
+    // sort the node-local peers by dart id 
+    qsort(dimes_c->local_peer_tab, dimes_c->num_local_peer,
+        sizeof(struct node_id*), compare_peer_by_dart_id);
 
-        // find the node-local master peer (which has the smallest dart id)
-        dimes_c->node_master_dart_id = dimes_c->local_peer_tab[0]->ptlmap.id;
-        dimes_c->node_id = rpc_server_get_nid(RPC_S);
+    // find the node-local master peer (which has the smallest dart id)
+    dimes_c->node_master_dart_id = dimes_c->local_peer_tab[0]->ptlmap.id;
+    dimes_c->node_id = rpc_server_get_nid(RPC_S);
 
-        printf("%s() nid %u dart_id %d node_master_peer %d num_local_peer %d:",
-             __func__, dimes_c->node_id, DIMES_CID,
-             dimes_c->node_master_dart_id, dimes_c->num_local_peer);
-        for (i = 0; i < dimes_c->num_local_peer; i++) {
-            printf(" %d ", dimes_c->local_peer_tab[i]->ptlmap.id);
-        }
-        printf("\n");
+    // debug print
+    printf("%s() nid %u dart_id %d node_master_peer %d num_local_peer %d:",
+         __func__, dimes_c->node_id, DIMES_CID,
+         dimes_c->node_master_dart_id, dimes_c->num_local_peer);
+    int i;
+    for (i = 0; i < dimes_c->num_local_peer; i++) {
+        printf(" %d ", dimes_c->local_peer_tab[i]->ptlmap.id);
+    }
+    printf("\n");
 
-        // create node-local mpi communicator for inter-process communication
-        int node_mpi_rank;
-        int node_color = dimes_c->node_master_dart_id;
-        ret = MPI_Comm_split(*mpi_comm, node_color,
-            DIMES_CID, &dimes_c->node_mpi_comm);
-        if (ret != MPI_SUCCESS) {
-            uloga("%s(): mpi_comm_split() failed with %d\n", __func__, ret);
-        }                
-        MPI_Barrier(dimes_c->node_mpi_comm);
-        MPI_Comm_rank(dimes_c->node_mpi_comm, &node_mpi_rank);
-        // printf("dart_id %d node_mpi_rank %d\n", DIMES_CID, node_mpi_rank);
+    // create node-local mpi communicator for inter-process communication
+    int node_mpi_rank;
+    int node_color = dimes_c->node_master_dart_id; //TODO: this is unsafe...
+    ret = MPI_Comm_split(*mpi_comm, node_color,
+        DIMES_CID, &dimes_c->node_mpi_comm);
+    if (ret != MPI_SUCCESS) {
+        uloga("%s(): mpi_comm_split() failed with %d\n", __func__, ret);
+    }                
+    MPI_Barrier(dimes_c->node_mpi_comm);
+    MPI_Comm_rank(dimes_c->node_mpi_comm, &node_mpi_rank);
+    printf("dart_id %d node_mpi_rank %d\n", DIMES_CID, node_mpi_rank);
 
-        // (1) create node-local shared memory segment
-        // (2) divide shared memory segment into regions,
-        // and assign regions to node-local peers
-        struct shared_memory_obj *shmem_obj =
-                create_shmem_obj(SHMEM_OBJ_PATH, shmem_obj_size); 
-        if (!shmem_obj) {
-            uloga("%s(): create_shmem_obj() failed\n", __func__);
-            return -1;
-        }
+    // each client creates a node-local shared memory segment
+    char path[SHMEM_OBJ_PATH_MAX_LEN+1];
+    sprintf(path, "%s_%d", SHMEM_OBJ_PATH_PREFIX, DIMES_CID);
+    struct shared_memory_obj *shmem_obj =
+            create_shmem_obj(path, shmem_obj_size, DIMES_CID);
+    if (!shmem_obj) {
+        uloga("%s(): create_shmem_obj() failed\n", __func__);
+        return -1;
+    }
+    list_add(&shmem_obj->entry, &dimes_c->shmem_obj_list);
 
-        list_add(&shmem_obj->entry, &dimes_c->shmem_obj_list);            
-
-        // init dimes buffer with my region
-        struct shared_memory_region *shmem_region = NULL;
-        for (i = 0; i < shmem_obj->num_region; i++) {
-            printf("%s() dart_id %d region %d obj_id %d obj_region_id %d "
-                "offset %u size %u owner_dart_id %d\n", __func__,
-            DIMES_CID, i, shmem_obj->region_tab[i].shmem_obj_id,
-            shmem_obj->region_tab[i].shmem_obj_region_id,
-            shmem_obj->region_tab[i].offset,
-            shmem_obj->region_tab[i].size,
-            shmem_obj->region_tab[i].owner_dart_id);
-            if (DIMES_CID == shmem_obj->region_tab[i].owner_dart_id) {
-                shmem_region = &shmem_obj->region_tab[i];
-            }
-        }
-
-        dimes_buffer_init(shmem_obj->seg_ptr+shmem_region->offset, shmem_region->size);                            
+    // gather/scatter node-local shared memory segments information
+    // from/to all node-local clients
+    int num_bytes = sizeof(struct shared_memory_obj);
+    struct shared_memory_obj *shmem_obj_tab = (struct shared_memory_obj*)
+            malloc(num_bytes*dimes_c->num_local_peer);
+    if (!shmem_obj_tab) {
+        uloga("%s: ERROR malloc() failed.\n", __func__);
+        return -1;
     }
 
+    MPI_Allgather(shmem_obj, num_bytes, MPI_BYTE, shmem_obj_tab,
+                    num_bytes, MPI_BYTE, dimes_c->node_mpi_comm);
+    for (i = 0; i < dimes_c->num_local_peer; i++) {
+        // debug print
+        //printf("%s: #%d shmem obj id %d owner_dart_id %d path %s size %u\n",
+        //    __func__, DIMES_CID, shmem_obj_tab[i].id,
+        //    shmem_obj_tab[i].owner_dart_id, shmem_obj_tab[i].path, shmem_obj_tab[i].size);
+        if (shmem_obj_tab[i].owner_dart_id != DIMES_CID) {
+            struct shared_memory_obj *o = open_shmem_obj(shmem_obj_tab[i].path,
+                        shmem_obj_tab[i].size, shmem_obj_tab[i].id,
+                        shmem_obj_tab[i].owner_dart_id);
+            if (!o) {
+                uloga("%s: ERROR open_shmem_obj() failed.\n", __func__);
+                return -1;
+            }
+            list_add(&o->entry, &dimes_c->shmem_obj_list);
+        }
+    }
+    free(shmem_obj_tab);
+
+    // init dimes buffer with my shared memory object
+    dimes_buffer_init(shmem_obj->ptr, shmem_obj->size);
     return 0;
 }
 
 int dimes_client_finalize_shmem()
 {
-    if (options.enable_shmem_buffer) {
-        dimes_buffer_finalize();
+    dimes_buffer_finalize();
 
-        struct shared_memory_obj *shmem_obj, *temp;
-        list_for_each_entry_safe(shmem_obj, temp, &dimes_c->shmem_obj_list,
-                                 struct shared_memory_obj, entry)
-        {
-            list_del(&shmem_obj->entry);
-            remove_shmem_obj(shmem_obj);
-        }
+    struct shared_memory_obj *shmem_obj, *temp;
+    // unmap
+    list_for_each_entry_safe(shmem_obj, temp, &dimes_c->shmem_obj_list,
+                             struct shared_memory_obj, entry)
+    {
+        unmap_shmem_obj(shmem_obj);
     }
 
+    // synchronize across node-local clients
+    MPI_Barrier(dimes_c->node_mpi_comm);
+
+    // remove
+    list_for_each_entry_safe(shmem_obj, temp, &dimes_c->shmem_obj_list,
+                             struct shared_memory_obj, entry)
+    {
+        list_del(&shmem_obj->entry);
+        remove_shmem_obj(shmem_obj);
+    }
+
+    return 0;
+}
+
+int dimes_client_storage_stat()
+{
+    size_t num_group = 0, num_obj = 0;
+    struct dimes_storage_group *g, *gt;
+    struct dimes_memory_obj *o, *ot;
+    list_for_each_entry_safe(g, gt, &storage, struct dimes_storage_group, entry)
+    {
+        num_group++;
+        list_for_each_entry_safe(o, ot, &g->mem_obj_list, struct dimes_memory_obj, entry)
+        {
+            num_obj++;
+        }
+    }
+    printf("%s: #%d num_group= %u num_obj= %u sizeof(struct dimes_shmem_obj_info)= %u bytes\n",
+        __func__, DIMES_CID, num_group, num_obj, sizeof(struct dimes_shmem_obj_info)); 
     return 0;
 }
 #endif // end of #ifdef DS_HAVE_DIMES_SHMEM

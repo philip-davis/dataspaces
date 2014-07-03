@@ -218,11 +218,9 @@ static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 #ifdef DS_HAVE_DIMES_SHMEM
     if (hdr->has_shmem_data) {
         uloga("%s(): #%d get update from peer #%d "
-            "shmem_desc: size= %u offset= %u shmem_obj_id= %d "
-            "shmem_obj_region_id= %d owner_dart_id= %d\n",
+            "shmem_desc: size= %u offset= %u shmem_obj_id= %d owner_dart_id= %d\n",
             __func__, DIMES_SID, cmd->id, hdr->shmem_desc.size, hdr->shmem_desc.offset,
-            hdr->shmem_desc.shmem_obj_id, hdr->shmem_desc.shmem_obj_region_id,
-            hdr->shmem_desc.owner_dart_id);
+            hdr->shmem_desc.shmem_obj_id, hdr->shmem_desc.owner_dart_id);
     }
 #endif
 
