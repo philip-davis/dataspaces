@@ -91,6 +91,7 @@ int common_dimes_put_sync_group(const char *group_name, int step);
 #ifdef DS_HAVE_DIMES_SHMEM
 int common_dimes_init_shmem(void *comm, size_t shmem_obj_size);
 int common_dimes_finalize_shmem();
+int common_dimes_storage_stat();
 #endif
 #endif
 

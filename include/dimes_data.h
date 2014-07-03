@@ -57,8 +57,13 @@ struct dimes_shmem_descriptor {
     size_t size;
     size_t offset;
     int shmem_obj_id;
-    int shmem_obj_region_id;
     int owner_dart_id;
+} __attribute__((__packed__));
+
+struct dimes_shmem_obj_info {
+    struct obj_descriptor obj_desc;
+    struct dimes_shmem_descriptor shmem_desc;
+    struct global_dimension gdim;
 } __attribute__((__packed__));
 #endif
 

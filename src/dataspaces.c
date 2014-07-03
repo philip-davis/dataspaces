@@ -257,6 +257,11 @@ int dimes_finalize_shmem()
 {
     return common_dimes_finalize_shmem();
 }
+
+int dimes_storage_stat()
+{
+    return common_dimes_storage_stat();
+}
 #endif
 #endif
 
