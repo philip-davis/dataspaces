@@ -234,6 +234,16 @@ int dimes_shmem_clear()
 {
     return common_dimes_shmem_clear();
 }
+
+int dimes_shmem_reset_server_state(int server_id)
+{
+    return common_dimes_shmem_reset_server_state(server_id);
+}
+
+int dimes_shmem_update_server_state()
+{
+    return common_dimes_shmem_update_server_state();
+}
 #endif
 #endif
 
