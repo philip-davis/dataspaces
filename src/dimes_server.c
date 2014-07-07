@@ -217,16 +217,99 @@ static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 					odsc->name, odsc->version, obj_data_size(odsc));
 #ifdef DS_HAVE_DIMES_SHMEM
     if (hdr->has_shmem_data) {
-        uloga("%s(): #%d get update from peer #%d "
-            "shmem_desc: size= %u offset= %u shmem_obj_id= %d owner_dart_id= %d\n",
-            __func__, DIMES_SID, cmd->id, hdr->shmem_desc.size, hdr->shmem_desc.offset,
-            hdr->shmem_desc.shmem_obj_id, hdr->shmem_desc.owner_dart_id);
+        uloga("%s(): #%d get update from peer #%d shmem_desc: size= %u "
+            "offset= %u shmem_obj_id= %d owner_node_rank= %d\n",
+            __func__, DIMES_SID, cmd->id, hdr->shmem_desc.size,
+            hdr->shmem_desc.offset, hdr->shmem_desc.shmem_obj_id,
+            hdr->shmem_desc.owner_node_rank);
     }
 #endif
 
 #endif
     
 	return 0;
+}
+
+#ifdef DS_HAVE_DIMES_SHMEM
+static int dsgrpc_dimes_shmem_reset_server(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+    metadata_s_free(dimes_s->meta_store);
+    dimes_s->meta_store = metadata_s_alloc(dimes_s->dsg->ls->size_hash);
+    
+    return 0;
+}
+
+static int dsgrpc_dimes_shmem_update_server(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+    struct hdr_dimes_put *hdr = (struct hdr_dimes_put*)cmd->pad;
+    if (hdr->has_rdma_data) {
+        metadata_s_add_obj_location(dimes_s->meta_store, cmd);
+    }
+    return 0;
+}
+#endif
+
+static int send_ack(struct dimes_sync_info *p)
+{
+	int err;
+	struct msg_buf *msg;
+	struct node_id *peer;
+	struct hdr_dimes_get_ack *oh;
+
+	peer = ds_get_peer(dimes_s->dsg->ds, p->dart_id);
+	msg = msg_buf_alloc(dimes_s->dsg->ds->rpc_s, peer, 1);
+	msg->msg_rpc->cmd = dimes_get_ack_msg;
+	msg->msg_rpc->id = DIMES_SID;
+
+	oh = (struct hdr_dimes_get_ack *)msg->msg_rpc->pad;
+	oh->qid = p->qid;
+	oh->sync_id = p->sync_id;
+	oh->odsc = p->odsc;
+	oh->bytes_read = obj_data_size(&p->odsc);
+	err = rpc_send(dimes_s->dsg->ds->rpc_s, peer, msg);
+	if (err < 0) {
+		free(msg);
+		goto err_out;
+	}
+
+	return 0;
+ err_out:
+	ERROR_TRACE();
+}
+
+static int dsgrpc_dimes_get_ack(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{ 
+	int err;
+	struct hdr_dimes_get_ack *oh = (struct hdr_dimes_get_ack*)cmd->pad;
+	int qid = oh->qid;
+	int sync_id = oh->sync_id;
+	int dart_id = oh->odsc.owner;
+	struct dimes_sync_info *p;
+
+	p = sync_info_list_find(&sync_info_list, sync_id, dart_id);	
+	if (p == NULL) {
+		p = (struct dimes_sync_info*)malloc(sizeof(*p));
+		p->qid = qid;
+		p->sync_id = sync_id;
+		p->dart_id = dart_id;	
+		p->odsc = oh->odsc;
+		p->bytes_read = 0;
+		list_add(&p->entry, &sync_info_list);
+	}
+	p->bytes_read += oh->bytes_read;
+	
+	if (obj_data_size(&p->odsc) == p->bytes_read) {
+		err = send_ack(p);
+		if (err < 0)
+			goto err_out;
+		// Delete
+		list_del(&p->entry);
+		free(p);
+	}
+
+	return 0;
+ err_out:
+	ERROR_TRACE();
 }
 
 /*
@@ -249,6 +332,11 @@ struct dimes_server *dimes_server_alloc(int num_sp, int num_cp, char *conf_name,
 
 	rpc_add_service(dimes_put_msg, dsgrpc_dimes_put);
 	rpc_add_service(dimes_locate_data_msg, dsgrpc_dimes_locate_data);
+	rpc_add_service(dimes_get_ack_msg, dsgrpc_dimes_get_ack);
+#ifdef DS_HAVE_DIMES_SHMEM
+    rpc_add_service(dimes_shmem_reset_server_msg, dsgrpc_dimes_shmem_reset_server);
+    rpc_add_service(dimes_shmem_update_server_msg, dsgrpc_dimes_shmem_update_server);
+#endif
 
 	dimes_s_l->meta_store =
         metadata_s_alloc(dimes_s_l->dsg->ls->size_hash);

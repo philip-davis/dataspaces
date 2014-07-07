@@ -94,6 +94,8 @@ int common_dimes_shmem_finalize(unsigned int unlink);
 int common_dimes_shmem_checkpoint();
 int common_dimes_shmem_restart(void *comm);
 int common_dimes_shmem_clear();
+int common_dimes_shmem_reset_server_state(int server_id);
+int common_dimes_shmem_update_server_state();
 #endif
 #endif
 

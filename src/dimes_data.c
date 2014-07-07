@@ -713,9 +713,9 @@ int dimes_client_shmem_restart_allocator(void *restart_buf, int dart_id)
         restart_allocator_insert_block(alloc_blk_info, &free_blocks_list);
         buf += sizeof(struct dimes_cr_allocator_block_info);
         // debug print
-        printf("%s: #%d size= %u offset= %u block_status= %u\n",
-            __func__, dart_id, alloc_blk_info->size,
-            alloc_blk_info->offset, alloc_blk_info->block_status);
+        //printf("%s: #%d size= %u offset= %u block_status= %u\n",
+        //    __func__, dart_id, alloc_blk_info->size,
+        //    alloc_blk_info->offset, alloc_blk_info->block_status);
     }
 
     for (i = 0; i < alloc_info->num_used_blocks; i++) {
@@ -723,9 +723,9 @@ int dimes_client_shmem_restart_allocator(void *restart_buf, int dart_id)
         restart_allocator_insert_block(alloc_blk_info, &used_blocks_list);
         buf += sizeof(struct dimes_cr_allocator_block_info);
         // debug print
-        printf("%s: #%d size= %u offset= %u block_status= %u\n",
-            __func__, dart_id, alloc_blk_info->size,
-            alloc_blk_info->offset, alloc_blk_info->block_status);
+        //printf("%s: #%d size= %u offset= %u block_status= %u\n",
+        //    __func__, dart_id, alloc_blk_info->size,
+        //    alloc_blk_info->offset, alloc_blk_info->block_status);
     }
 
     return 0;
