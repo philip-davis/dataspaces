@@ -589,16 +589,24 @@ int common_dimes_put_sync_group(const char *group_name, int step)
 }
 
 #ifdef DS_HAVE_DIMES_SHMEM
-int common_dimes_init_shmem(void *comm, size_t shmem_obj_size) {
-    return dimes_client_init_shmem(comm, shmem_obj_size);
+int common_dimes_shmem_init(void *comm, size_t shmem_obj_size) {
+    return dimes_client_shmem_init(comm, shmem_obj_size);
 }
 
-int common_dimes_finalize_shmem() {
-    return dimes_client_finalize_shmem();
+int common_dimes_shmem_finalize(unsigned int unlink) {
+    return dimes_client_shmem_finalize(unlink);
 }
 
-int common_dimes_storage_stat() {
-    return dimes_client_storage_stat();
+int common_dimes_shmem_checkpoint() {
+    return dimes_client_shmem_checkpoint();
+}
+
+int common_dimes_shmem_restart(void *comm) {
+    return dimes_client_shmem_restart(comm);
+}
+
+int common_dimes_shmem_clear() {
+    return dimes_client_shmem_clear_testing();
 }
 #endif
 

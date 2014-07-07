@@ -367,7 +367,7 @@ are sorted by block_size in ascending order.
 struct list_head used_blocks_list;
 
 enum mem_block_status {
-    free_block,
+    free_block = 0,
     used_block
 };
 
@@ -640,4 +640,115 @@ void print_used_blocks_list()
     }
 }
 
+#ifdef DS_HAVE_DIMES_SHMEM
+int dimes_client_shmem_checkpoint_allocator(int shmem_obj_id, void *restart_buf)
+{
+    struct dimes_cr_allocator_info *alloc_info;
+    struct dimes_cr_allocator_block_info *alloc_blk_info;
+    void *buf = restart_buf;
+    if (!buf) return -1;
+
+    alloc_info = buf;
+    buf += sizeof(struct dimes_cr_allocator_info);
+
+    uint32_t num_used_blocks = 0, num_free_blocks = 0;
+    struct dimes_buf_block *mb, *t;
+    list_for_each_entry_safe(mb, t, &free_blocks_list, struct dimes_buf_block,
+        mem_block_entry)
+    {
+        num_free_blocks++;
+        alloc_blk_info = buf;
+        alloc_blk_info->size = mb->block_size;
+        alloc_blk_info->offset = (mb->block_ptr-dimes_buffer_ptr); // TODO: safe?
+        alloc_blk_info->block_status = mb->block_status;
+        buf += sizeof(struct dimes_cr_allocator_block_info);
+    }
+    list_for_each_entry_safe(mb, t, &used_blocks_list, struct dimes_buf_block,
+        mem_block_entry)
+    {
+        num_used_blocks++;
+        alloc_blk_info = buf;
+        alloc_blk_info->size = mb->block_size;
+        alloc_blk_info->offset = (mb->block_ptr-dimes_buffer_ptr); // TODO: safe?
+        alloc_blk_info->block_status = mb->block_status;
+        buf += sizeof(struct dimes_cr_allocator_block_info);
+    }
+
+    alloc_info->num_free_blocks = num_free_blocks;
+    alloc_info->num_used_blocks = num_used_blocks;
+    alloc_info->shmem_obj_id = shmem_obj_id;
+
+    return 0;
+}
+
+static void restart_allocator_insert_block(struct dimes_cr_allocator_block_info *blk_info,
+        struct list_head *blocks_list)
+{
+    struct dimes_buf_block *mb = malloc(SIZE_DART_MEM_BLOCK);
+    mb->block_size = blk_info->size;
+    mb->block_ptr = dimes_buffer_ptr + blk_info->offset;
+    mb->block_status = (enum mem_block_status)blk_info->block_status;
+    list_add_tail(&mb->mem_block_entry, blocks_list); 
+}
+
+int dimes_client_shmem_restart_allocator(void *restart_buf, int dart_id)
+{
+    void *buf = restart_buf;
+    struct dimes_cr_allocator_info *alloc_info = buf;
+
+    printf("%s: #%d num_used_blocks= %u num_free_blocks= %u shmem_obj_id= %d\n",
+        __func__, dart_id, alloc_info->num_used_blocks, alloc_info->num_free_blocks,
+        alloc_info->shmem_obj_id);
+
+    buf += sizeof(struct dimes_cr_allocator_info);
+    struct dimes_cr_allocator_block_info *alloc_blk_info;
+    int i;
+    for (i = 0; i < alloc_info->num_free_blocks; i++) {
+        alloc_blk_info = buf;
+        restart_allocator_insert_block(alloc_blk_info, &free_blocks_list);
+        buf += sizeof(struct dimes_cr_allocator_block_info);
+        // debug print
+        printf("%s: #%d size= %u offset= %u block_status= %u\n",
+            __func__, dart_id, alloc_blk_info->size,
+            alloc_blk_info->offset, alloc_blk_info->block_status);
+    }
+
+    for (i = 0; i < alloc_info->num_used_blocks; i++) {
+        alloc_blk_info = buf;
+        restart_allocator_insert_block(alloc_blk_info, &used_blocks_list);
+        buf += sizeof(struct dimes_cr_allocator_block_info);
+        // debug print
+        printf("%s: #%d size= %u offset= %u block_status= %u\n",
+            __func__, dart_id, alloc_blk_info->size,
+            alloc_blk_info->offset, alloc_blk_info->block_status);
+    }
+
+    return 0;
+}
+
+size_t estimate_allocator_restart_buf_size(int dart_id)
+{
+    uint32_t num_used_blocks = 0, num_free_blocks = 0;
+    struct dimes_buf_block *mb, *t;
+    list_for_each_entry_safe(mb, t, &free_blocks_list, struct dimes_buf_block,
+        mem_block_entry)
+    {
+        num_free_blocks++;
+    }
+    list_for_each_entry_safe(mb, t, &used_blocks_list, struct dimes_buf_block,
+        mem_block_entry)
+    {
+        num_used_blocks++;
+    }
+
+    size_t bytes = sizeof(struct dimes_cr_allocator_info) +
+                    sizeof(struct dimes_cr_allocator_block_info) *
+                    (num_free_blocks+num_used_blocks);
+    size_t page_size = PAGE_SIZE;
+    bytes = (bytes/page_size+1)*page_size;
+
+    //printf("%s: #%d num_free_blocks= %u num_used_blocks= %u allocator_restart_buf num_page= %u size= %u bytes\n", __func__, dart_id, num_free_blocks, num_used_blocks, bytes/page_size, bytes);
+    return bytes;
+}
+#endif
 #endif // end of #ifdef DS_HAVE_DIMES
