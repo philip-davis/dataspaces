@@ -184,9 +184,11 @@ int dimes_put_sync_group(const char *group_name, int version);
 
 
 #ifdef DS_HAVE_DIMES_SHMEM
-int dimes_init_shmem(void *comm, size_t shmem_obj_size);
-int dimes_finalize_shmem();
-int dimes_storage_stat();
+int dimes_shmem_init(void *comm, size_t shmem_obj_size);
+int dimes_shmem_finalize(unsigned int unlink);
+int dimes_shmem_checkpoint();
+int dimes_shmem_restart(void *comm);
+int dimes_shmem_clear();
 #endif
 
 #ifdef __cplusplus
