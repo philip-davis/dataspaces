@@ -2680,6 +2680,8 @@ int dimes_client_shmem_clear_testing()
     free_gdim_list(&dimes_c->gdim_list);
     storage_free();
     dimes_memory_finalize();
+    options.rdma_buffer_write_usage = 0;
+    options.rdma_buffer_read_usage = 0;
 }
 
 int dimes_client_shmem_checkpoint()
@@ -2909,6 +2911,77 @@ int dimes_client_shmem_restart(void *comm)
     return -1; 
 }
 
+int dimes_client_shmem_update_server_state()
+{
+    int dht_update_stat[NUM_SP];
+    struct dht_entry *dht_nodes[NUM_SP];
+    struct hdr_dimes_put *hdr;
+    struct msg_buf *msg;
+    struct node_id *peer;
+    int i, num_dht_nodes;
+    int err = -ENOMEM;
+
+    for (i = 0; i < NUM_SP; i++)
+        dht_update_stat[i] = 0;
+
+    struct dimes_storage_group *p;
+    list_for_each_entry(p, &storage, struct dimes_storage_group, entry)
+    {
+        struct dimes_memory_obj *mem_obj;
+        list_for_each_entry(mem_obj, &p->mem_obj_list, struct dimes_memory_obj,
+                            entry)
+        {
+            struct sspace *ssd = lookup_sspace_dimes(dimes_c,
+                                    mem_obj->obj_desc.name, &mem_obj->gdim);
+            num_dht_nodes = ssd_hash(ssd, &mem_obj->obj_desc.bb, dht_nodes);
+            if (num_dht_nodes <= 0) {
+                uloga("%s(): ERROR ssd_hash() return %d but the value should "
+                        "be > 0.\n", __func__, num_dht_nodes);
+            }
+
+            for (i = 0; i < num_dht_nodes; i++) {
+                peer = dc_get_peer(DC, dht_nodes[i]->rank);
+                msg = msg_buf_alloc(RPC_S, peer, 1);
+                if (!msg)
+                    goto err_out;
+                msg->msg_rpc->cmd = dimes_shmem_update_server_msg;
+                msg->msg_rpc->id = DIMES_CID;
+                dart_rdma_set_memregion_to_cmd(&mem_obj->rdma_handle,
+                                                msg->msg_rpc);
+                hdr = (struct hdr_dimes_put*)msg->msg_rpc->pad;
+                hdr->odsc = mem_obj->obj_desc;
+                hdr->sync_id = mem_obj->sync_id;
+                hdr->has_rdma_data = 1;
+                hdr->has_shmem_data = 1;
+                hdr->shmem_desc = mem_obj->shmem_desc;
+
+                err = rpc_send(RPC_S, peer, msg);
+                if (err < 0) {
+                    free(msg);
+                    goto err_out;
+                }
+
+                // update dht_update_stat
+                dht_update_stat[dht_nodes[i]->rank]++; 
+            }
+
+            // update rdma buffer usage 
+            options.rdma_buffer_write_usage += mem_obj->shmem_desc.size;
+        }     
+    }    
+
+    for (i = 0; i < NUM_SP; i++) {
+        if (dht_update_stat[i] > 0) {
+            printf("%s: #%d update dht node %d with %d mem objs.\n",
+                __func__, DIMES_CID, i, dht_update_stat[i]);
+        }
+    }
+   
+    return 0;
+ err_out:
+    ERROR_TRACE(); 
+}
+
 int dimes_client_shmem_checkpoint_storage(int shmem_obj_id, void *restart_buf)
 {
     struct dimes_cr_storage_info *storage_info;
@@ -3012,13 +3085,37 @@ int dimes_client_shmem_restart_storage(void *restart_buf)
             restart_storage_insert_mem_obj(group_info->name,
                         storage_info->shmem_obj_id, obj_info);
             buf += sizeof(struct dimes_cr_mem_obj_info);
-            printf("%s: #%d obj name= %s size= %u offset= %u\n", __func__,
-                DIMES_CID, obj_info->obj_desc.name, obj_info->size,
-                obj_info->offset);
+            //printf("%s: #%d obj name= %s size= %u offset= %u\n", __func__,
+            //    DIMES_CID, obj_info->obj_desc.name, obj_info->size,
+            //    obj_info->offset);
         }
     }        
 
     return 0;
+}
+
+int dimes_client_shmem_reset_server_state(int dart_id)
+{
+    struct msg_buf *msg;
+    struct node_id *peer;
+    int err = -ENOMEM;
+
+    peer = dc_get_peer(DC, dart_id);
+    msg = msg_buf_alloc(RPC_S, peer, 1);
+    if (!msg)
+        goto err_out;
+    msg->msg_rpc->cmd = dimes_shmem_reset_server_msg;
+    msg->msg_rpc->id = DIMES_CID;
+    err = rpc_send(RPC_S, peer, msg);
+    if (err < 0) {
+        free(msg);
+        goto err_out;
+    }
+
+    printf("%s: #%d reset server #%d\n", __func__, DIMES_CID, dart_id);                                            
+    return 0;
+ err_out:
+    ERROR_TRACE();     
 }
 
 size_t estimate_node_shmem_restart_buf_size()
