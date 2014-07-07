@@ -97,6 +97,8 @@ int dimes_client_shmem_checkpoint();
 
 int dimes_client_shmem_restart(void *comm);
 int dimes_client_shmem_clear_testing();
+int dimes_client_shmem_reset_server_state(int server_id);
+int dimes_client_shmem_update_server_state();
 
 size_t estimate_storage_restart_buf_size();
 size_t estimate_node_shmem_restart_buf_size();

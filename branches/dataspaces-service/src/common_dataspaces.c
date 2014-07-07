@@ -608,6 +608,16 @@ int common_dimes_shmem_restart(void *comm) {
 int common_dimes_shmem_clear() {
     return dimes_client_shmem_clear_testing();
 }
+
+int common_dimes_shmem_reset_server_state(int server_id)
+{
+    return dimes_client_shmem_reset_server_state(server_id);
+}
+
+int common_dimes_shmem_update_server_state()
+{
+    return dimes_client_shmem_update_server_state();
+}
 #endif
 
 #endif
