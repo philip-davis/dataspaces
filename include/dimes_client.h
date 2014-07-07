@@ -43,30 +43,12 @@ extern "C" {
 #include "ss_data.h"
 #include "timer.h"
 
-#ifdef DS_HAVE_DIMES_SHMEM
-#include "mpi.h"
-#define MAX_NUM_PEER_PER_NODE 64
-#define PAGE_SIZE sysconf(_SC_PAGE_SIZE)
-#define SHMEM_OBJ_PATH_PREFIX "/dataspaces_shared_memory_segment"
-#define SHMEM_OBJ_PATH_MAX_LEN 255
-#endif
+#include "dimes_data.h"
 
 struct query_tran_d {
 	struct list_head        q_list;
 	int                     num_ent;
 };
-
-#ifdef DS_HAVE_DIMES_SHMEM
-struct shared_memory_obj {
-    struct list_head    entry;
-    int id;
-    int owner_dart_id; 
-    char path[SHMEM_OBJ_PATH_MAX_LEN+1];
-    size_t size;
-    void *ptr;
-    int fd;    
-};
-#endif
 
 struct dimes_client {
 	struct dcg_space *dcg;
@@ -83,6 +65,7 @@ struct dimes_client {
     int node_master_dart_id;
     uint32_t node_id;
     MPI_Comm node_mpi_comm;
+    int node_mpi_rank;
     // TODO: put struct list_head storage; into dimes_client
 #endif
 };
@@ -108,8 +91,18 @@ int dimes_client_put_unset_group();
 int dimes_client_put_sync_group(const char *group_name, int step);
 
 #ifdef DS_HAVE_DIMES_SHMEM
-int dimes_client_init_shmem(void *comm, size_t shmem_obj_size);
-int dimes_client_finalize_shmem();
+int dimes_client_shmem_init(void *comm, size_t shmem_obj_size);
+int dimes_client_shmem_finalize(unsigned int unlink);
+int dimes_client_shmem_checkpoint();
+
+int dimes_client_shmem_restart(void *comm);
+int dimes_client_shmem_clear_testing();
+
+size_t estimate_storage_restart_buf_size();
+size_t estimate_node_shmem_restart_buf_size();
+
+int dimes_client_shmem_checkpoint_storage(int shmem_obj_id, void *restart_buf);
+int dimes_client_shmem_restart_storage(void *restart_buf);
 #endif
 
 #ifdef __cplusplus
