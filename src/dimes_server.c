@@ -380,4 +380,11 @@ int dimes_server_barrier(struct dimes_server *dimes_s_l)
     return dsg_barrier(dimes_s_l->dsg);
 }
 
+#ifdef DART_UGNI_AS_SERVICE
+int dimes_server_reset(struct dimes_server *dimes_s_l, int num_cp)
+{
+    return dsg_reset(dimes_s_l->dsg, num_cp);
+}
+#endif
+
 #endif // end of #ifdef DS_HAVE_DIMES

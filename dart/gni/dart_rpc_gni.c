@@ -2577,7 +2577,7 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 	if (err != 0)
 		goto err_free;
 
-        INIT_LIST_HEAD(&rpc_s->peer_list);
+    INIT_LIST_HEAD(&rpc_s->peer_list);
 
 
 	rpc_s->peer_tab = gather_node_id(appid);
@@ -2592,7 +2592,7 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 	if(appid==0 && rpc_s->ptlmap.id==0){
 
 	for(int i =0;i<size;i++){
-		struct node_id *temp_peer = malloc(sizeof(struct node_id));
+		struct node_id *temp_peer = calloc(1, sizeof(struct node_id));
 		
 	        temp_peer->ptlmap.nid = rpc_s->peer_tab[i].ptlmap.nid;
 	        temp_peer->ptlmap.pid = rpc_s->peer_tab[i].ptlmap.pid;
@@ -2646,7 +2646,7 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 	if (err != 0)
 		goto err_free;
 
-
+    // TODO: do NOT need to allocate memory for bar_tab
 	rpc_s->bar_tab = malloc(sizeof(*rpc_s->bar_tab) * num_rpc_per_buff);
 	if (!rpc_s->bar_tab) {
 		err = -ENOMEM;
@@ -2743,7 +2743,6 @@ int rpc_server_free(struct rpc_server *rpc_s, void *comm)
 	    uloga("Fail: GNI_MemDeregister returned error. %d.\n", status);
 	    goto err_out;
 	  }	
-	
 	free(rpc_s->rpc_mem);
 	for(i=0; i < rpc_s->num_rpc_per_buff; i++)
 	{
@@ -2782,6 +2781,17 @@ int rpc_server_free(struct rpc_server *rpc_s, void *comm)
 	// Clean GNI related
         clean_gni(rpc_s);
 
+    // Free peer list
+    struct node_id *temp_peer;
+    list_for_each_entry_safe(peer, temp_peer, &rpc_s->peer_list, struct node_id,
+            peer_entry)
+    {
+        list_del(&peer->peer_entry);
+        free(peer);
+    }
+    // Free bar_tab
+    if (rpc_s->bar_tab) free(rpc_s->bar_tab);
+    // Free memory allocated for rpc server
         free(rpc_s);
 	if(comm) {
 	    err = MPI_Barrier(*(MPI_Comm *)comm);
@@ -2792,6 +2802,7 @@ int rpc_server_free(struct rpc_server *rpc_s, void *comm)
 
 	PMI_Finalize();
 
+    rpc_s_instance  = NULL;
 	return 0;
 
 err_out:
@@ -2896,6 +2907,12 @@ int rpc_barrier(struct rpc_server *rpc_s)
 //rpc operation
 void rpc_add_service(enum cmd_type rpc_cmd, rpc_service rpc_func)
 {
+    // check if the rpc callback function has been added
+    int i;
+    for (i = 0; i < num_service; i++) {
+        if (rpc_commands[i].rpc_cmd == rpc_cmd) return;
+    }
+
 	rpc_commands[num_service].rpc_cmd = rpc_cmd;
 	rpc_commands[num_service].rpc_func = rpc_func;
 	num_service++;

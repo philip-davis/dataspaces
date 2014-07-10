@@ -50,6 +50,9 @@ void dimes_server_free(struct dimes_server *dimes_s_l);
 int dimes_server_process(struct dimes_server *dimes_s_l);
 int dimes_server_complete(struct dimes_server *dimes_s_l);
 int dimes_server_barrier(struct dimes_server *dimes_s_l);
+#ifdef DART_UGNI_AS_SERVICE
+int dimes_server_reset(struct dimes_server *dimes_s_l, int num_cp);
+#endif
 
 #ifdef __cplusplus
 }
