@@ -3157,15 +3157,13 @@ void rpc_server_find_local_peers(struct rpc_server *rpc_s,
 {
     // find all peers (include current peer itself) that reside on the
     // same compute node as current peer
-    int i, j;
-    for (i = 0, j = 0; i < rpc_s->num_peers; i++) {
-        //printf("%s(): num_peers %d local dart_id %d local nid %u remote dart_id %d remote nid %u\n",
-        //    __func__, rpc_s->num_peers, rpc_s->ptlmap.id, rpc_s->ptlmap.nid, rpc_s->peer_tab[i].ptlmap.id,
-        //    rpc_s->peer_tab[i].ptlmap.nid); 
-        if (rpc_s->ptlmap.nid == rpc_s->peer_tab[i].ptlmap.nid) {
-            peer_tab[j++] = &(rpc_s->peer_tab[i]);
+    int j = 0;
+    struct node_id *peer;
+    list_for_each_entry(peer, &rpc_s->peer_list, struct node_id, peer_entry) {
+        if (rpc_s->ptlmap.nid == peer->ptlmap.nid) {
+            peer_tab[j++] = peer;
         }
-    } 
+    }
     *num_local_peer = j;
 }
 #endif
