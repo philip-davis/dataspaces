@@ -78,6 +78,7 @@ static struct app_info *app_find(struct dart_server *ds, int appid)
 /*
   RPC routine to unregister a compute peer.
 */
+static int num_unreg = 0;
 static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
 	struct dart_server *ds = ds_ref_from_rpc(rpc_s);
@@ -86,15 +87,16 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	struct node_id *peer;
 	int err = -ENOMEM;
 	int i;
-	static int num_unreg = 0;
 
-	if(ds->f_stop != 1) {
-	    num_unreg = num_unreg + hreg->num_cp;
+	if(ds->f_stop != 1)
+	  {
+	num_unreg = num_unreg + hreg->num_cp;
 
-	    if (num_unreg == ds->num_cp) {
-	        ds->f_stop = 1;
-         }
-	    // All compute peers  have unregistered. I should send one RPC but not respond to any.
+	if (num_unreg == ds->num_cp) {
+	  ds->f_stop = 1;
+      num_unreg = 0; // reset the value  
+    }
+	// All compute peers  have unregistered. I should send one RPC but not respond to any.
 	
 	    ds->f_nacc = 1;
 
@@ -400,7 +402,7 @@ static int ds_master_init(struct dart_server *ds)//testing
         for(j=0;j<info_size/sizeof(struct ptlid_map);j++){
 
 			
-                        struct node_id *temp_peer = malloc(sizeof(struct node_id));
+                        struct node_id *temp_peer = calloc(1, sizeof(struct node_id));
 
                         temp_peer->ptlmap.nid = dcreg->nid;
                         temp_peer->ptlmap.pid = dcreg->pid;
@@ -799,13 +801,19 @@ static int ds_boot_master(struct dart_server *ds)
 		goto err_out;
 	}
 
-	//uloga("PASS ds_master_init.\n");//debug
+#ifdef DART_UGNI_AS_SERVICE
+    // Delete 'conf' file
+    err = remove("conf");
+    if (err != 0) {
+        perror("Error deleting file");
+    }
+#endif
+	printf("PASS ds_master_init.\n");//debug
 
 	return 0;
-
- err_out:
-        uloga("'%s()': failed with %d.\n", __func__, err);
-        return err;		
+err_out:
+    uloga("'%s()': failed with %d.\n", __func__, err);
+    return err;		
 
 }
 
@@ -856,7 +864,7 @@ static int ds_boot_slave(struct dart_server *ds)
 	ptlmap = (struct ptlid_map *)recv_buffer;
 	for(j=0;j<ds->peer_size;j++){
 
-		                 struct node_id *temp_peer = malloc(sizeof(struct node_id));
+		                 struct node_id *temp_peer = calloc(1, sizeof(struct node_id));
 
                         temp_peer->ptlmap.nid = ptlmap->nid;
                         temp_peer->ptlmap.pid = ptlmap->pid;

@@ -113,10 +113,15 @@ int main(int argc, char **argv)
 	color = 0;
 	MPI_Comm_split(MPI_COMM_WORLD, 0, rank, &gcomm);
 
+    enum transport_type type = USE_DSPACES; // default value
 #ifdef DS_HAVE_DIMES
-	common_run_server(num_sp, num_cp, USE_DIMES, &gcomm);
+    type = USE_DIMES;
+#endif
+
+#ifdef DART_UGNI_AS_SERVICE
+	common_run_server_as_service(num_sp, num_cp, type, &gcomm);
 #else
-	common_run_server(num_sp, num_cp, USE_DSPACES, &gcomm);
+	common_run_server(num_sp, num_cp, type, &gcomm);
 #endif
 
 	MPI_Barrier(gcomm);

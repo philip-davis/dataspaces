@@ -338,7 +338,8 @@ struct rpc_server{
 	gni_cq_handle_t		dst_cq_hndl;
 
 	gni_smsg_attr_t		local_smsg_attr;
-	gni_smsg_attr_t		*remote_smsg_attr;
+    // TODO: following field is NOT used in the source code
+	//gni_smsg_attr_t		*remote_smsg_attr;
 
 	gni_cq_handle_t		sys_cq_hndl;		// completion queue for system message
 	gni_smsg_attr_t		sys_local_smsg_attr;	// local system message attributes
@@ -349,7 +350,8 @@ struct rpc_server{
 
     gni_mem_handle_t    dart_mem_mdh;
 
-	unsigned int		*all_nic_addresses;
+    // TODO: following field is NOT used in the source code
+	//unsigned int		*all_nic_addresses;
 
 	void			*sys_mem;
 	void			*rpc_mem;
