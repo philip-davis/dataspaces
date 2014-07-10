@@ -161,7 +161,7 @@ static int dc_unregister(struct dart_client *dc)
 			goto err_out;
 	}
 
-        return 0;
+    return 0;
  err_out_free:
 	free(msg);
  err_out:
@@ -335,7 +335,7 @@ static int dc_master_init(struct dart_client *dc) //working
 	for (i = 0; i < dc->peer_size; i++) 
 	{
 
-                struct node_id *temp_peer = malloc(sizeof(struct node_id));
+                struct node_id *temp_peer = calloc(1, sizeof(struct node_id));
 
                 temp_peer->ptlmap.nid = dcreg->nid;
                 temp_peer->ptlmap.pid = dcreg->pid;
@@ -739,7 +739,7 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 	peer = dc->peer_tab;
 	for (i = 0; i < dc->peer_size; i++) 
 	{
-                struct node_id *temp_peer = malloc(sizeof(struct node_id));
+                struct node_id *temp_peer = calloc(1, sizeof(struct node_id));
 
                 temp_peer->ptlmap.nid = dcreg->nid;
                 temp_peer->ptlmap.pid = dcreg->pid;
@@ -1098,9 +1098,6 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
 	assert(err == PMI_SUCCESS);
 
         printf("'%s(%d:%d:%d:%d)': init ok.\n", __func__, dc->self->ptlmap.id, dc->self->ptlmap.appid, dc->self->ptlmap.pid, dc->self->ptlmap.nid);//partial debug
-
-	sleep(10);
-
 
 #ifdef DEBUG
 	printf("'%s(%d:%d:%d:%d)': init ok.\n", __func__, dc->self->ptlmap.id, dc->self->ptlmap.appid, dc->self->ptlmap.pid, dc->self->ptlmap.nid);//partial debug
