@@ -570,7 +570,7 @@ static struct shared_memory_obj* create_shmem_obj(const char* shmem_obj_path,
     }    
 
     // debug print
-    printf("%s: #%d create shared memory obj %s "
+    printf("%s: #%d create '%s' "
         "id= %d size= %u bytes ptr= %p\n", __func__, DIMES_CID, 
         shmem_obj_path, shmem_obj_id, shmem_obj_size, seg_ptr);
 
@@ -611,9 +611,9 @@ static struct shared_memory_obj* open_shmem_obj(const char* shmem_obj_path,
     }
 
     // debug print
-    printf("%s: #%d open shared memory obj %s "
-        "id= %d size= %u bytes ptr= %p\n", __func__, DIMES_CID,
-        shmem_obj_path, shmem_obj_id, shmem_obj_size, seg_ptr);
+    //printf("%s: #%d open '%s' "
+    //    "id= %d size= %u bytes ptr= %p\n", __func__, DIMES_CID,
+    //    shmem_obj_path, shmem_obj_id, shmem_obj_size, seg_ptr);
     
     struct shared_memory_obj *shmem_obj = (struct shared_memory_obj*)
                                             malloc(sizeof(*shmem_obj));
@@ -1974,8 +1974,8 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
 #ifdef DS_HAVE_DIMES_SHMEM 
         if (options.enable_shmem_buffer &&
                  is_peer_on_same_node(fetch->read_tran->remote_peer)) {
-            printf("%s(): peer %d fetch from peer %d on local node\n", __func__,
-                DIMES_CID, fetch->read_tran->remote_peer->ptlmap.id);
+            //printf("%s(): peer %d fetch from peer %d on local node\n", __func__,
+            //    DIMES_CID, fetch->read_tran->remote_peer->ptlmap.id);
 
             // Data on the same node, and is in the shared memory segment
             struct shared_memory_obj *shmem_obj =
@@ -1990,7 +1990,7 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
             fetch->read_tran->src.base_addr =
                 (shmem_obj->ptr+fetch->src_shmem_desc.offset);
             fetch->read_tran->src.size = fetch->src_shmem_desc.size;
-
+    
             // Allocate receive buffer, schedule reads, perform reads
             dimes_memory_alloc(&fetch->read_tran->dst,
                                 obj_data_size(&fetch->dst_odsc),
@@ -2670,16 +2670,13 @@ int dimes_client_shmem_finalize(unsigned int unlink)
 
 int dimes_client_shmem_clear_testing()
 {
-    // clear DIMES memory allocator and
-    // node-local shared memory objects
-    // (similar to dimes_client_shmem_finalize())
-    unsigned int unlink = 0;
-    dimes_client_shmem_finalize(unlink); 
-
     // clear DIMES storage (similar to dimes_client_free()) 
     free_gdim_list(&dimes_c->gdim_list);
     storage_free();
     dimes_memory_finalize();
+
+    // reset
+    storage_init();
     options.rdma_buffer_write_usage = 0;
     options.rdma_buffer_read_usage = 0;
 }
@@ -2826,8 +2823,9 @@ int dimes_client_shmem_restart(void *comm)
         uloga("%s: WARNING shmem_info->num_shmem_obj= %u\n",
             __func__, shmem_info->num_shmem_obj);
     }
-    printf("%s: #%d shmem_info->num_shmem_obj= %d\n",
-            __func__, DIMES_CID, shmem_info->num_shmem_obj);
+    // debug print
+    //printf("%s: #%d shmem_info->num_shmem_obj= %d\n",
+    //        __func__, DIMES_CID, shmem_info->num_shmem_obj);
 
     buf += sizeof(struct dimes_cr_shmem_info);
     struct dimes_cr_shmem_obj_info *shmem_obj_info = NULL;
@@ -2881,9 +2879,6 @@ int dimes_client_shmem_restart(void *comm)
         goto err_out_free;
     }
     dimes_client_shmem_restart_allocator(o2->ptr, DIMES_CID);
-
-    // init dimes storage
-    storage_init();
 
     // read storage restart buf
     sprintf(path, "%s", shmem_obj_info->path_storage_restart_buf);
@@ -3030,6 +3025,8 @@ static int restart_storage_insert_mem_obj(const char *group_name,
     mem_obj->ack_type = dimes_ack_type_msg;
     mem_obj->obj_desc = obj_info->obj_desc;
     mem_obj->gdim = obj_info->gdim;
+    // update owner of data
+    mem_obj->obj_desc.owner = DIMES_CID;
     // set mem_obj->shmem_desc 
     mem_obj->shmem_desc.size = obj_info->size; 
     mem_obj->shmem_desc.offset = obj_info->offset;
@@ -3068,9 +3065,6 @@ int dimes_client_shmem_restart_storage(void *restart_buf)
     void *buf = restart_buf;
  
     struct dimes_cr_storage_info *storage_info = buf;
-    printf("%s: #%d num_group= %u shmem_obj_id= %d\n",
-        __func__, DIMES_CID, storage_info->num_group,
-        storage_info->shmem_obj_id);
     
     buf += sizeof(struct dimes_cr_storage_info);
     int i, j;
