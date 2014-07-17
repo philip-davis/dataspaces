@@ -99,5 +99,6 @@ int common_dimes_shmem_update_server_state();
 #endif
 #endif
 
-void common_dspaces_set_mpi_rank(int rank);
+void common_dspaces_set_mpi_rank_hint(int rank);
+void common_dspaces_unset_mpi_rank_hint();
 #endif

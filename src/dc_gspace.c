@@ -2372,7 +2372,7 @@ int dcg_get_num_space_srv(struct dcg_space *dcg)
 	return dcg->ss_info.num_space_srv;
 }
 
-void dcg_set_mpi_rank(int rank)
+void dcg_set_mpi_rank_hint(int rank)
 {
     mpi_rank = rank;
     flag_set_mpi_rank = 1;
