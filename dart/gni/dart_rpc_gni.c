@@ -2587,7 +2587,7 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 	int size;
 	int rc = PMI_Get_size(&size);
 
-	printf("ID %d size %d\n",rpc_s->ptlmap.id, size);
+	// printf("ID %d size %d\n",rpc_s->ptlmap.id, size);
 
 	if(appid==0 && rpc_s->ptlmap.id==0){
 

@@ -502,7 +502,7 @@ static int ds_master_init(struct dart_server *ds)//testing
 		if(peer->ptlmap.id == ds->rpc_s->ptlmap.id)
 			continue;
 
-		printf("I am %d about to connect with %d\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id);
+		//printf("I am %d about to connect with %d\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id);
 
 //		peer = &ds->peer_tab[i];
 
@@ -876,7 +876,7 @@ static int ds_boot_slave(struct dart_server *ds)
 
 		peer = ds_get_peer(ds,i);//&ds->peer_tab[i];
 
-                printf("I am %d about to connect with %d\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id);
+                //printf("I am %d about to connect with %d\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id);
 
 		status = GNI_EpCreate(ds->rpc_s->nic_hndl, ds->rpc_s->src_cq_hndl, &peer->ep_hndl);
 		if (status != GNI_RC_SUCCESS)
@@ -1162,7 +1162,7 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
                 temp_peer->sys_msg_ret = 0;
 
 
-                        printf("After reg RANK %d rank %d %d %d app id %d \n",ds->rpc_s->ptlmap.id, temp_peer->ptlmap.id, temp_peer->ptlmap.nid, temp_peer->ptlmap.pid, temp_peer->ptlmap.appid);
+                        //printf("After reg RANK %d rank %d %d %d app id %d \n",ds->rpc_s->ptlmap.id, temp_peer->ptlmap.id, temp_peer->ptlmap.nid, temp_peer->ptlmap.pid, temp_peer->ptlmap.appid);
                 }
 
 
