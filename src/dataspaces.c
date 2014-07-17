@@ -55,8 +55,6 @@
 #include <rca_lib.h>
 #endif
 
-static int mpi_rank = 0;
-
 #if defined(HAVE_UGNI)
 int get_topology_info(int *out_pmi_rank, int *out_nid, 
     rca_mesh_coord_t *out_xyz)
@@ -285,8 +283,12 @@ int dimes_shmem_update_server_state()
 #endif
 #endif
 
-void dspaces_set_mpi_rank(int rank)
+void dspaces_set_mpi_rank_hint(int rank)
 {
-    mpi_rank = rank;
-    common_dspaces_set_mpi_rank(rank);
+    common_dspaces_set_mpi_rank_hint(rank);
+}
+
+void dspaces_unset_mpi_rank_hint()
+{
+    common_dspaces_unset_mpi_rank_hint();
 }
