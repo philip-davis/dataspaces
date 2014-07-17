@@ -2343,10 +2343,16 @@ int dcg_get_num_space_srv(struct dcg_space *dcg)
 	return dcg->ss_info.num_space_srv;
 }
 
-void dcg_set_mpi_rank(int rank)
+void dcg_set_mpi_rank_hint(int rank)
 {
     mpi_rank = rank;
     flag_set_mpi_rank = 1;
+}
+
+void dcg_unset_mpi_rank_hint()
+{
+    mpi_rank = 0;
+    flag_set_mpi_rank = 0;
 }
 
 #ifdef TIMING_PERF
