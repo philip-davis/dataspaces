@@ -405,7 +405,7 @@ static int dc_master_init(struct dart_client *dc) //working
 
 		peer = dc_get_peer (dc, i);//rpc_server_find(dc->rpc_s,i); //&dc->peer_tab[i];
 
-                printf("I am %d about to connect with %d\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id);
+                //printf("I am %d about to connect with %d\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id);
 
 
 		status = GNI_EpCreate(dc->rpc_s->nic_hndl, dc->rpc_s->src_cq_hndl, &peer->ep_hndl);
@@ -771,7 +771,7 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 		 peer = dc_get_peer (dc, i);//peer = rpc_server_find(dc->rpc_s, i);//&dc->peer_tab[i];
 
 
-                printf("I am %d about to connect with %d\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id);
+                //printf("I am %d about to connect with %d\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id);
 
 
 		status = GNI_EpCreate(dc->rpc_s->nic_hndl, dc->rpc_s->src_cq_hndl, &peer->ep_hndl);
@@ -1042,7 +1042,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 		assert(err == PMI_SUCCESS);
 	}
 
-        printf("'%s(%d:%d:%d:%d)': init ok.\n", __func__, dc->self->ptlmap.id, dc->self->ptlmap.appid, dc->self->ptlmap.pid, dc->self->ptlmap.nid);//partial debug
+        //printf("'%s(%d:%d:%d:%d)': init ok.\n", __func__, dc->self->ptlmap.id, dc->self->ptlmap.appid, dc->self->ptlmap.pid, dc->self->ptlmap.nid);//partial debug
 
 #ifdef DEBUG
 	uloga("'%s(%d:%d:%d:%d)': init ok.\n", __func__, dc->self->ptlmap.id, dc->self->ptlmap.appid, dc->self->ptlmap.pid, dc->self->ptlmap.nid);//partial debug
