@@ -415,7 +415,7 @@ void FC_FUNC(dspaces_unset_mpi_rank_hint, DSPACES_UNSET_MPI_RANK_HINT)()
 
 void FC_FUNC(dspaces_set_mpi_rank_hint, DSPACES_SET_MPI_RANK_HINT)(int *rank)
 {
-    common_dspaces_set_mpi_rank_hint(rank);
+    common_dspaces_set_mpi_rank_hint(*rank);
 }
 
 void FC_FUNC(dspaces_unset_mpi_rank_hint, DSPACES_UNSET_MPI_RANK_HINT)()
