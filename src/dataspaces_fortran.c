@@ -411,6 +411,46 @@ void FC_FUNC(dspaces_unset_mpi_rank_hint, DSPACES_UNSET_MPI_RANK_HINT)()
 {
     common_dspaces_unset_mpi_rank_hint();
 } 
+
+#ifdef DS_HAVE_DIMES_SHMEM
+void FC_FUNC(dimes_shmem_init, DIMES_SHMEM_INIT)(void *comm,
+            unsigned int *shmem_obj_size, int *err)
+{
+    MPI_Comm c_comm;
+    c_comm = MPI_Comm_f2c(*(MPI_Fint*)comm);
+
+    *err = common_dimes_shmem_init(&c_comm, *shmem_obj_size);
+}
+
+void FC_FUNC(dimes_shmem_finalize, DIMES_SHMEM_FINALIZE)(unsigned int *unlink,
+        int *err)
+{
+    *err = common_dimes_shmem_finalize(*unlink);
+}
+
+void FC_FUNC(dimes_shmem_checkpoint, DIMES_SHMEM_CHECKPOINT)(int *err) {
+    *err = common_dimes_shmem_checkpoint();
+}
+
+void FC_FUNC(dimes_shmem_restart, DIMES_SHMEM_RESTART)(void *comm, int *err) {
+    MPI_Comm c_comm;
+    c_comm = MPI_Comm_f2c(*(MPI_Fint*)comm);
+
+    *err = common_dimes_shmem_restart(&c_comm);
+}
+
+void FC_FUNC(dimes_shmem_reset_server_state, DIMES_SHMEM_RESET_SERVER_STATE)(
+            int *server_id, int *err)
+{
+    *err = common_dimes_shmem_reset_server_state(*server_id);
+}
+
+void FC_FUNC(dimes_shmem_update_server_state, DIMES_SHMEM_UPDATE_SERVER_STATE)(int *err)
+{
+    *err = common_dimes_shmem_update_server_state();
+}
+#endif
+
 #endif
 
 void FC_FUNC(dspaces_set_mpi_rank_hint, DSPACES_SET_MPI_RANK_HINT)(int *rank)
