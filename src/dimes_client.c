@@ -457,9 +457,9 @@ static struct shared_memory_obj* create_shmem_obj(const char* shmem_obj_path,
     }    
 
     // debug print
-    printf("%s: #%d create '%s' "
-        "id= %d size= %u bytes ptr= %p\n", __func__, DIMES_CID, 
-        shmem_obj_path, shmem_obj_id, shmem_obj_size, seg_ptr);
+    //printf("%s: #%d create '%s' "
+    //    "id= %d size= %u bytes ptr= %p\n", __func__, DIMES_CID, 
+    //    shmem_obj_path, shmem_obj_id, shmem_obj_size, seg_ptr);
 
     struct shared_memory_obj *shmem_obj = (struct shared_memory_obj*)
                                             malloc(sizeof(*shmem_obj));
@@ -2537,7 +2537,7 @@ static void init_node_mpi_comm(void *comm)
     //for (i = 0; i < dimes_c->num_local_peer; i++) {
     //    printf(" %d ", dimes_c->local_peer_tab[i]->ptlmap.id);
     //}
-    printf("\n");
+    //printf("\n");
 
     // create node-local mpi communicator for inter-process communication
     int node_color = dimes_c->node_master_dart_id; //TODO: this is unsafe...
@@ -2791,8 +2791,9 @@ int dimes_client_shmem_restart(void *comm)
     buf = o1->ptr; 
     struct dimes_cr_shmem_info *shmem_info = buf;
     if (shmem_info->num_shmem_obj != dimes_c->num_local_peer) {
-        uloga("%s: WARNING shmem_info->num_shmem_obj= %u\n",
-            __func__, shmem_info->num_shmem_obj);
+        uloga("%s: WARNING shmem_info->num_shmem_obj= %u "
+            "but dimes_c->num_local_peer= %d\n",
+            __func__, shmem_info->num_shmem_obj, dimes_c->num_local_peer);
     }
     // debug print
     //printf("%s: #%d shmem_info->num_shmem_obj= %d\n",
