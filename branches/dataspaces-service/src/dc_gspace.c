@@ -1629,6 +1629,54 @@ int dcg_obj_put(struct obj_data *od)
         return err;
 }
 
+int dcg_obj_put_with_server_id(struct obj_data *od, int server_id)
+{
+        struct msg_buf *msg;
+        struct node_id *peer;
+        struct hdr_obj_put *hdr;
+        int sync_op_id;
+        int err = -ENOMEM;
+
+        if (server_id < 0 || server_id >= dcg->dc->num_sp) {
+            uloga("%s: ERROR invalid server_id= %d\n", __func__, server_id);
+            goto err_out;
+        }
+        peer = dc_get_peer(dcg->dc, server_id);
+
+        sync_op_id = syncop_next();
+
+        msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+        if (!msg)
+                goto err_out;
+
+        msg->msg_data = od->data;
+        msg->size = obj_data_size(&od->obj_desc);
+        msg->cb = obj_put_completion;
+        msg->private = od;
+
+        msg->sync_op_id = syncop_ref(sync_op_id);
+
+        msg->msg_rpc->cmd = ss_obj_put_no_dht_update;
+        msg->msg_rpc->id = DCG_ID; // dcg->dc->self->id;
+
+        hdr = msg->msg_rpc->pad;
+        hdr->odsc = od->obj_desc;
+        memcpy(&hdr->gdim, &od->gdim, sizeof(struct global_dimension));
+
+        err = rpc_send(dcg->dc->rpc_s, peer, msg);
+        if (err < 0) {
+                free(msg);
+                goto err_out;
+        }
+
+        dcg_inc_pending();
+
+        return sync_op_id;
+ err_out:
+        uloga("'%s()': failed with %d.\n", __func__, err);
+        return err;
+}
+
 /* 
    Register a region for continuous queries and return the transaction
    id; it will be used for transaction completion checks.
@@ -1841,6 +1889,93 @@ int dcg_obj_get(struct obj_data *od)
  err_out:
         ERROR_TRACE();
 }
+
+int dcg_obj_get_with_server_id(struct obj_data *od, int server_id)
+{
+        struct query_tran_entry *qte;
+        int err = -ENOMEM;
+#ifdef TIMING_PERF
+        double tm_st, tm_end;
+        tm_st = timer_read(&tm_perf);
+#endif
+
+        if (server_id < 0 || server_id >= dcg->dc->num_sp) {
+            uloga("%s: ERROR invalid server_id= %d\n", __func__, server_id);
+            goto err_out;
+        }
+
+        qte = qte_alloc(od, 1);
+        if (!qte)
+                goto err_out;
+        qt_add(&dcg->qt, qte);
+
+        versions_reset();
+
+        // No need to get dht peers
+        qte->qh->qh_num_peer = 0;
+        qte->qh->qh_num_rep_received = 0;
+        qte->f_peer_received = 1;
+
+        // Set obj descriptor directly
+        qte->size_od = 1;
+        struct obj_descriptor odsc = od->obj_desc;
+        odsc.owner = server_id;
+        qt_add_obj(qte, &odsc); 
+        qte->f_odsc_recv = 1;
+
+#ifdef TIMING_PERF
+        tm_end = timer_read(&tm_perf);
+        uloga("TIMING_PERF locate_data ts %d peer %d time %lf %s\n",
+            od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
+        tm_st = tm_end;
+#endif
+
+        err = dcg_obj_data_get(qte);
+        if (err < 0) {
+                // FIXME: should I jump to err_qt_free ?
+                qt_free_obj_data(qte, 1);
+                goto err_data_free; // err_out;
+        }
+
+        /* Wait for transaction to complete. */
+        while (! qte->f_complete) {
+                err = dc_process(dcg->dc);
+                if (err < 0) {
+                        uloga("'%s()': error %d.\n", __func__, err);
+                        break;
+                }
+        }
+
+        if (!qte->f_complete) {
+                // !qte->num_req || qte->num_reply != qte->num_od) {
+                /* Object is not complete, not all parts
+                   successfull. */
+                // qt_free_obj_data(qte, 1);
+                err = -ENODATA;
+                goto out_no_data;
+        }
+
+        err = dcg_obj_assemble(qte, od);
+#ifdef TIMING_PERF
+        tm_end = timer_read(&tm_perf);
+        uloga("TIMING_PERF fetch_data ts %d peer %d time %lf %s\n",
+            od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
+#endif 
+ out_no_data:
+        qt_free_obj_data(qte, 1);
+        qt_remove(&dcg->qt, qte);
+        free(qte);
+
+        return err;
+ err_data_free:
+        qt_free_obj_data(qte, 1);
+ err_qt_free:
+        qt_remove(&dcg->qt, qte);
+        free(qte);
+ err_out:
+        ERROR_TRACE();
+}
+
 
 int dcg_get_versions(int **p_version)
 {
