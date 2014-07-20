@@ -1311,6 +1311,55 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         return err;
 }
 
+static int dsgrpc_obj_put_no_dht_update(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+        struct hdr_obj_put *hdr = (struct hdr_obj_put *)cmd->pad;
+        struct obj_descriptor *odsc = &(hdr->odsc);
+        struct obj_data *od;
+        struct node_id *peer;
+        struct msg_buf *msg;
+        int err;
+
+        odsc->owner = DSG_ID;
+
+        err = -ENOMEM;
+        peer = ds_get_peer(dsg->ds, cmd->id);
+        od = obj_data_alloc(odsc);
+        if (!od)
+                goto err_out;
+
+        od->obj_desc.owner = DSG_ID;
+        memcpy(&od->gdim, &hdr->gdim, sizeof(struct global_dimension));
+
+        msg = msg_buf_alloc(rpc_s, peer, 0);
+        if (!msg)
+                goto err_free_data;
+
+        msg->msg_data = od->data;
+        msg->size = obj_data_size(&od->obj_desc);
+        msg->private = od;
+        msg->cb = obj_put_completion;
+
+#ifdef DEBUG
+        uloga("'%s()': server %d start receiving %s, version %d.\n",
+            __func__, DSG_ID, odsc->name, odsc->version);
+#endif
+        rpc_mem_info_cache(peer, msg, cmd);
+        err = rpc_receive_direct(rpc_s, peer, msg);
+        rpc_mem_info_reset(peer, msg, cmd);
+
+        if (err < 0)
+                goto err_free_msg;
+        return 0;
+ err_free_msg:
+        free(msg);
+ err_free_data:
+        free(od);
+ err_out:
+        uloga("'%s()': failed with %d.\n", __func__, err);
+        return err;
+}
+
 static int obj_info_reply_descriptor(
         struct node_id *q_peer,
         const struct obj_descriptor *q_odsc) // __attribute__((__unused__))
@@ -1439,6 +1488,18 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
         peer = ds_get_peer(dsg->ds, cmd->id);
 
         peer_num = ssd_hash(ssd, &oh->u.o.odsc.bb, de_tab);
+#ifdef TIMING_PERF
+ {
+     char *str;
+
+     asprintf(&str, "S%2d: request for obj_desc '%s' ver %d from C%2d for  ",
+          DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version, cmd->id);
+     str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
+
+     uloga("'%s()': %s peer_num= %d\n", __func__, str, peer_num);
+     free(str);
+ }
+#endif
         peer_id_tab = malloc(sizeof(int) * (peer_num+1));
         if (!peer_id_tab)
                 goto err_out;
@@ -1680,6 +1741,18 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         struct msg_buf *msg;
         int err = -ENOENT;
 
+#ifdef TIMING_PERF
+ {
+     char *str;
+
+     asprintf(&str, "S%2d: request for obj_desc '%s' ver %d from C%2d for  ",
+          DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version, cmd->id);
+     str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
+
+     uloga("'%s()': %s\n", __func__, str);
+     free(str);
+ }
+#endif
         num_odsc = dht_find_entry_all(ssd->ent_self, &oh->u.o.odsc, podsc);
         if (!num_odsc) {
 #ifdef DEBUG
@@ -2069,6 +2142,7 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name, void *comm)
 #ifdef DS_HAVE_ACTIVESPACE
         rpc_add_service(ss_code_put, dsgrpc_bin_code_put);
 #endif
+        rpc_add_service(ss_obj_put_no_dht_update, dsgrpc_obj_put_no_dht_update);
         INIT_LIST_HEAD(&dsg_l->cq_list);
         INIT_LIST_HEAD(&dsg_l->obj_desc_req_list);
         INIT_LIST_HEAD(&dsg_l->obj_data_req_list);
