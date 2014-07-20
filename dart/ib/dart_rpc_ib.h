@@ -434,6 +434,7 @@ enum cmd_type {
     dimes_shmem_update_server_msg,
 #endif
 #endif
+    ss_obj_put_no_dht_update,
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,
 	_CMD_COUNT,
