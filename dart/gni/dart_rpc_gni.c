@@ -906,6 +906,40 @@ static int sys_cleanup (struct rpc_server *rpc_s)
 	free(rpc_s->sys_mem);
 	*///SCA SYS
 
+        for(i=0; i < rpc_s->num_rpc_per_buff; i++)
+        { 
+          if(rpc_s->peer_tab[i].ptlmap.id==rpc_s->ptlmap.id)
+            continue;
+
+
+                status = GNI_EpUnbind(rpc_s->peer_tab[i].sys_ep_hndl);
+                if (status != GNI_RC_NOT_DONE && status != GNI_RC_SUCCESS)
+                { 
+                  printf("(%d)Fail: GNI_EpUnbind(%d) returned error. %d.\n", rank_id_pmi, rpc_s->peer_tab[i].ptlmap.id, status);
+                        goto err_out;
+                }
+
+                status = GNI_EpDestroy(rpc_s->peer_tab[i].sys_ep_hndl);
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Fail: GNI_EpDestroy returned error. %d.\n", status);
+                        goto err_out;
+                }
+        }
+
+        status = GNI_CqDestroy(rpc_s->sys_cq_hndl);
+        if (status != GNI_RC_SUCCESS)
+        {
+                printf("Fail: GNI_CqDestroy returned error. %d.\n", status);
+                goto err_out;
+        }
+
+        return 0;
+err_out:
+        printf("(%s): failed. (%d)\n",__func__, status);
+        return status;
+
+/*
 	for(i=0; i < rpc_s->num_rpc_per_buff; i++)
 	{
 		struct node_id *peer=rpc_server_find(rpc_s,i);
@@ -940,6 +974,7 @@ static int sys_cleanup (struct rpc_server *rpc_s)
 err_out:
 	printf("(%s): failed. (%d)\n",__func__, status);
 	return status;
+*/
 }
 
 
@@ -1113,8 +1148,8 @@ err_out:
 // this function can only be used after rpc_server is fully initiated
 static struct node_id *rpc_get_peer(struct rpc_server *rpc_s, int peer_id)
 {
-//		return rpc_s->peer_tab + peer_id;
-	return rpc_server_find(rpc_s,peer_id);
+		return rpc_s->peer_tab + peer_id;
+//	return rpc_server_find(rpc_s,peer_id);
 }
 
 /* 
@@ -2053,7 +2088,8 @@ int rpc_process_msg_resend(struct rpc_server *rpc_s, struct node_id *peer_tab, i
     struct node_id *peer;
     int i;
     for (i = 0; i < num_peer; i++) {
-        peer = rpc_server_find(rpc_s, i);
+        peer = peer_tab + i;
+//      peer = rpc_server_find(rpc_s, i);
         if (peer->num_req > 0 && peer->num_msg_at_peer > 0) {
             //printf("%s(): %d resend to %d num_req= %d num_msg_at_peer= %d\n", __func__, 
             //  rpc_s->ptlmap.id, peer->ptlmap.id, peer->num_req, peer->num_msg_at_peer);
@@ -2299,6 +2335,25 @@ int rpc_server_free(struct rpc_server *rpc_s)
 	  }	
 	free(rpc_s->rpc_mem);
 
+        for(i=0; i < rpc_s->num_rpc_per_buff; i++)
+        { 
+          if(rpc_s->peer_tab[i].ptlmap.id==rpc_s->ptlmap.id)
+            continue;
+
+                status = GNI_EpUnbind(rpc_s->peer_tab[i].ep_hndl); //Unbind the remote address from the endpoint handler.
+                if (status != GNI_RC_SUCCESS && status != GNI_RC_NOT_DONE)
+                {
+                        printf("Fail: GNI_EpUnbind returned error. %d.\n", status);
+                        goto err_out;
+                }
+                status = GNI_EpDestroy(rpc_s->peer_tab[i].ep_hndl); //You must do an EpDestroy for each endpoint pair.
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Fail: GNI_EpDestroy returned error. %d.\n", status);
+                        goto err_out;
+                }
+        }
+/*
 	for(i=0; i < rpc_s->num_rpc_per_buff; i++)
 	{
 		peer = rpc_server_find(rpc_s,i);
@@ -2318,7 +2373,7 @@ int rpc_server_free(struct rpc_server *rpc_s)
 			goto err_out;
 		}
 	}
-
+*/
 	status = GNI_CqDestroy(rpc_s->src_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
@@ -2700,7 +2755,7 @@ int rpc_receivev(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf 
 {
 	return 0;
 }
-
+/*
 struct node_id *rpc_server_find(struct rpc_server *rpc_s, int nodeid)
 {
         struct node_id *temp_peer;
@@ -2710,7 +2765,7 @@ struct node_id *rpc_server_find(struct rpc_server *rpc_s, int nodeid)
         }
         return 0;
 }
-
+*/
 
 
 #ifdef DS_HAVE_DIMES_SHMEM
@@ -2725,6 +2780,7 @@ void rpc_server_find_local_peers(struct rpc_server *rpc_s,
 {
     // find all peers (include current peer itself) that reside on the
     // same compute node as current peer
+/*
     int j = 0;
     struct node_id *peer;
     list_for_each_entry(peer, &rpc_s->peer_list, struct node_id, peer_entry) {
@@ -2732,6 +2788,17 @@ void rpc_server_find_local_peers(struct rpc_server *rpc_s,
             peer_tab[j++] = peer;
         }
     }
+*/
+	int i;
+	int j=0;
+        for(i=0; i < rpc_s->num_rpc_per_buff; i++)
+        {
+          if(rpc_s->peer_tab[i].ptlmap.nid==rpc_s->ptlmap.nid){
+		peer_tab[j++] = rpc_s->peer_tab[i];
+	
+	}
+
+
     *num_local_peer = j;
 }
 #endif

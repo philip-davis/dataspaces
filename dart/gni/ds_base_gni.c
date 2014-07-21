@@ -409,12 +409,12 @@ static int ds_master_init(struct dart_server *ds)//testing
                         list_add(&temp_peer->peer_entry,&ds->rpc_s->peer_list);
 
 
-/*
+
 			ds->peer_tab[ds->size_sp+count+j].ptlmap.nid = dcreg->nid;
 			ds->peer_tab[ds->size_sp+count+j].ptlmap.pid = dcreg->pid;
 			ds->peer_tab[ds->size_sp+count+j].ptlmap.appid = dcreg->appid;
 			ds->peer_tab[ds->size_sp+count+j].ptlmap.id = ds->size_sp+count+j;
-*/
+
 			dcreg++;
                 }
 		count = count+info_size/sizeof(struct ptlid_map);	
@@ -432,7 +432,7 @@ static int ds_master_init(struct dart_server *ds)//testing
 	dcreg = (struct ptlid_map *)send_buffer;
 
 
-
+/*
          struct node_id *temp_peer;
          list_for_each_entry(temp_peer, &ds->rpc_s->peer_list, struct node_id, peer_entry) {
                 dcreg->nid = temp_peer->ptlmap.nid;
@@ -441,17 +441,21 @@ static int ds_master_init(struct dart_server *ds)//testing
                 dcreg->id = temp_peer->ptlmap.id;
                 dcreg++;
         }
+*/
 
-/*
 
 	for(j=0;j<ds->peer_size;j++){
 		dcreg->nid = ds->peer_tab[j].ptlmap.nid;
 		dcreg->pid = ds->peer_tab[j].ptlmap.pid;
 		dcreg->appid = ds->peer_tab[j].ptlmap.appid;
 		dcreg->id = ds->peer_tab[j].ptlmap.id;
+
+//                printf("send %d %d %d %d\n",dcreg->id, dcreg->nid, dcreg->pid, dcreg->appid);
+
+
 		dcreg++;
 	}
-*/
+
 	for(k=0;k<connect_num;k++){
 		tmp_size = 0;
 		while(1){
@@ -500,20 +504,47 @@ static int ds_master_init(struct dart_server *ds)//testing
 
 // 3. EpCreate+Epbind+smsg_init(rpc+sys)
 
-//	for(i=0;i<ds->peer_size; i++){
-//		if(i == ds->rpc_s->ptlmap.id)
-//			continue;
-
-
-
-                list_for_each_entry(peer, &ds->rpc_s->peer_list, struct node_id, peer_entry) {
-		
-		if(peer->ptlmap.id == ds->rpc_s->ptlmap.id)
+	for(i=0;i<ds->peer_size; i++){
+		if(i == ds->rpc_s->ptlmap.id)
 			continue;
+
+
+
+//                list_for_each_entry(peer, &ds->rpc_s->peer_list, struct node_id, peer_entry) {
+		
+//		if(peer->ptlmap.id == ds->rpc_s->ptlmap.id)
+//			continue;
 
 		//printf("I am %d about to connect with %d\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id);
 
-//		peer = &ds->peer_tab[i];
+		peer = &ds->peer_tab[i];
+                status = GNI_EpCreate(ds->rpc_s->nic_hndl, ds->rpc_s->src_cq_hndl, &ds->peer_tab[i].ep_hndl);
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Fail: GNI_EpCreate returned error. %d.\n", status);
+                        goto err_free;
+                }
+
+                status = GNI_EpBind(ds->peer_tab[i].ep_hndl, ds->peer_tab[i].ptlmap.nid, ds->peer_tab[i].ptlmap.id);
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Fail: GNI_EpBind returned error. %d.\n", status);
+                        goto err_free;
+                }
+
+                status = GNI_EpCreate(ds->rpc_s->nic_hndl, ds->rpc_s->sys_cq_hndl, &peer->sys_ep_hndl);
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Rank %d: Fail GNI_EpCreate SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
+                        goto err_out;
+                }
+                status = GNI_EpBind(peer->sys_ep_hndl, peer->ptlmap.nid, peer->ptlmap.id);
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Rank %d: Fail GNI_EpBind SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
+                        goto err_out;
+                }
+/*
 
 		status = GNI_EpCreate(ds->rpc_s->nic_hndl, ds->rpc_s->src_cq_hndl, &peer->ep_hndl);
 		if (status != GNI_RC_SUCCESS)
@@ -541,7 +572,7 @@ static int ds_master_init(struct dart_server *ds)//testing
 			printf("Rank %d: Fail GNI_EpBind SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
 			goto err_out;
 		}
-
+*/
 	}
 
 		err = rpc_smsg_init(ds->rpc_s, ds->peer_size);
@@ -828,13 +859,16 @@ static int ds_boot_slave(struct dart_server *ds)
 
                         list_add(&temp_peer->peer_entry,&ds->rpc_s->peer_list);
 
-/*
+
 
 		ds->peer_tab[j].ptlmap.nid = ptlmap->nid;
 		ds->peer_tab[j].ptlmap.pid = ptlmap->pid;
 		ds->peer_tab[j].ptlmap.appid = ptlmap->appid;
 		ds->peer_tab[j].ptlmap.id = ptlmap->id;
-*/
+
+//                printf("Got %d %d %d %d\n",ds->peer_tab[j].ptlmap.id, ds->peer_tab[j].ptlmap.nid, ds->peer_tab[j].ptlmap.pid, ds->peer_tab[j].ptlmap.appid);
+
+
 		ptlmap++;
 
 		//		printf("Rank %d: peer[nid %d, pid %d, id %d, appid %d].\n", ds->rpc_s->ptlmap.id, ds->peer_tab[j].ptlmap.nid, ds->peer_tab[j].ptlmap.pid, ds->peer_tab[j].ptlmap.id, ds->peer_tab[j].ptlmap.appid);
@@ -848,7 +882,35 @@ static int ds_boot_slave(struct dart_server *ds)
 		if(i == ds->rpc_s->ptlmap.id)
 			continue;
 
-		peer = ds_get_peer(ds,i);//&ds->peer_tab[i];
+//		peer = ds_get_peer(ds,i);//&ds->peer_tab[i];
+		peer = &ds->peer_tab[i];
+                status = GNI_EpCreate(ds->rpc_s->nic_hndl, ds->rpc_s->src_cq_hndl, &ds->peer_tab[i].ep_hndl);
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Fail: GNI_EpCreate returned error. %d.\n", status);
+                        goto err_free;
+                }
+
+                status = GNI_EpBind(ds->peer_tab[i].ep_hndl, ds->peer_tab[i].ptlmap.nid, ds->peer_tab[i].ptlmap.id);
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Fail: GNI_EpBind returned error. %d.\n", status);
+                        goto err_free;
+                }
+
+                status = GNI_EpCreate(ds->rpc_s->nic_hndl, ds->rpc_s->sys_cq_hndl, &peer->sys_ep_hndl);
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Rank %d: Fail GNI_EpCreate SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
+                        goto err_out;
+                }
+                status = GNI_EpBind(peer->sys_ep_hndl, peer->ptlmap.nid, peer->ptlmap.id);
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Rank %d: Fail GNI_EpBind SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
+                        goto err_out;
+                }
+/*
 
                 //printf("I am %d about to connect with %d\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id);
 
@@ -878,7 +940,7 @@ static int ds_boot_slave(struct dart_server *ds)
 			printf("Rank %d: Fail GNI_EpBind SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
 			goto err_out;
 		}
-
+*/
 	}	
 
 		err = rpc_smsg_init(ds->rpc_s, ds->peer_size);
