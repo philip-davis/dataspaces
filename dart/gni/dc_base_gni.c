@@ -363,17 +363,21 @@ static int dc_master_init(struct dart_client *dc) //working
 
                 list_add(&temp_peer->peer_entry,&dc->rpc_s->peer_list);
 
-/*
+
 		peer->ptlmap.nid = dcreg->nid;
 		peer->ptlmap.pid = dcreg->pid;
 		peer->ptlmap.appid = dcreg->appid;
 		peer->ptlmap.id = dcreg->id;
-*/
+
+
+//                printf("Got %d %d %d %d\n",peer->ptlmap.id, peer->ptlmap.nid, peer->ptlmap.pid, peer->ptlmap.appid);
+
+
 		if(dc->rpc_s->ptlmap.pid == dcreg->pid && dc->rpc_s->ptlmap.nid == dcreg->nid)
 		  dc->rpc_s->ptlmap.id = dcreg->id;
 
 		dcreg++;
-//		peer++;
+		peer++;
 	}
 
 	if (dc->comm) {
@@ -403,11 +407,38 @@ static int dc_master_init(struct dart_client *dc) //working
 			continue;
 
 
-		peer = dc_get_peer (dc, i);//rpc_server_find(dc->rpc_s,i); //&dc->peer_tab[i];
+//		peer = dc_get_peer (dc, i);//rpc_server_find(dc->rpc_s,i); //&dc->peer_tab[i];
+                peer = &dc->peer_tab[i];
 
                 //printf("I am %d about to connect with %d\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id);
 
+                status = GNI_EpCreate(dc->rpc_s->nic_hndl, dc->rpc_s->src_cq_hndl, &dc->peer_tab[i].ep_hndl);
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Fail: GNI_EpCreate returned error. %d.\n", status);
+                        goto err_free;
+                }
 
+                status = GNI_EpBind(dc->peer_tab[i].ep_hndl, dc->peer_tab[i].ptlmap.nid, dc->peer_tab[i].ptlmap.id);
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Fail: GNI_EpBind returned error. %d.\n", status);
+                        goto err_free;
+                }
+
+                status = GNI_EpCreate(dc->rpc_s->nic_hndl, dc->rpc_s->sys_cq_hndl, &peer->sys_ep_hndl);
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Rank %d: Fail GNI_EpCreate SYS returned error. %d.\n", dc->rpc_s->ptlmap.id, status);
+                        goto err_out;
+                }
+                status = GNI_EpBind(peer->sys_ep_hndl, peer->ptlmap.nid, peer->ptlmap.id);
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Rank %d: Fail GNI_EpBind SYS returned error. %d.\n", dc->rpc_s->ptlmap.id, status);
+                        goto err_out;
+                }
+/*
 		status = GNI_EpCreate(dc->rpc_s->nic_hndl, dc->rpc_s->src_cq_hndl, &peer->ep_hndl);
 		if (status != GNI_RC_SUCCESS)
 		{
@@ -434,13 +465,14 @@ static int dc_master_init(struct dart_client *dc) //working
 			uloga("Rank %d: Fail GNI_EpBind SYS returned error. %d.\n", dc->rpc_s->ptlmap.id, status);
 			goto err_out;
 		}
-
+*/
 	}
 
 	k=0;
 	while(k < dc->peer_size)
 	{
-		peer =  peer = dc_get_peer (dc, k);//rpc_server_find(dc->rpc_s,k);
+	//	peer = dc_get_peer (dc, k);//rpc_server_find(dc->rpc_s,k);
+		peer = &dc->peer_tab[k];
 		if(peer->ptlmap.appid == 0)
 			sp++;
 		k++;
@@ -556,12 +588,16 @@ static int dc_master_init(struct dart_client *dc) //working
 			break;
 	}
 
-	peer =  peer = dc_get_peer (dc, 0);//rpc_server_find(dc->rpc_s, 0);
+	//peer = dc_get_peer (dc, 0);//rpc_server_find(dc->rpc_s, 0);
+        peer = dc->peer_tab;
+
 	smsg_attr = (gni_smsg_attr_t *)recv_buffer;
 
 	for(j=0;j<info_size/sizeof(gni_smsg_attr_t);j++){
-		peer = dc_get_peer (dc, j); //peer = rpc_server_find(dc->rpc_s, j);
-		peer->remote_smsg_attr = *smsg_attr;
+		//peer = dc_get_peer (dc, j); //peer = rpc_server_find(dc->rpc_s, j);
+                dc->peer_tab[j].remote_smsg_attr = *smsg_attr;
+                peer++;
+//		peer->remote_smsg_attr = *smsg_attr;
 		smsg_attr++;//SCA SYS
 
 	}
@@ -598,8 +634,10 @@ static int dc_master_init(struct dart_client *dc) //working
 		if(i == dc->rpc_s->ptlmap.id)
 			continue;
 
-		 peer = dc_get_peer (dc, i);//peer = rpc_server_find(dc->rpc_s, i);//&dc->peer_tab[i];
+//		 peer = dc_get_peer (dc, i);//peer = rpc_server_find(dc->rpc_s, i);//&dc->peer_tab[i];
 
+		peer = &dc->peer_tab[i];
+	
 		err = rpc_smsg_config(dc->rpc_s, peer);
 		if (err != 0){
 			uloga("Rank %d: failed for config RPC SMSG for peer %d. (%d)\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, err);
@@ -641,7 +679,10 @@ static int dcrpc_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		goto err_out;
 	}
 
-	 peer = dc_get_peer (dc, 0);//peer = rpc_server_find(dc->rpc_s, 0);//&dc->peer_tab[0];
+//	 peer = dc_get_peer (dc, 0);//peer = rpc_server_find(dc->rpc_s, 0);//&dc->peer_tab[0];
+
+        peer = &dc->peer_tab[0];
+	
 	msg = msg_buf_alloc(dc->rpc_s, peer, 1);
 	msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
 	msg->msg_data = remote_server_attr;
@@ -748,19 +789,30 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
                 temp_peer->ptlmap.id = dcreg->id;
 
                 list_add(&temp_peer->peer_entry,&dc->rpc_s->peer_list);
-/*
+
 		peer->ptlmap.nid = dcreg->nid;
 		peer->ptlmap.pid = dcreg->pid;
 		peer->ptlmap.appid = dcreg->appid;
 		peer->ptlmap.id = dcreg->id;
-*/
+
+
 	//	printf("AAA %d %d %d %d %d %d\n", dc->rpc_s->ptlmap.id, dc->rpc_s->ptlmap.nid, dc->rpc_s->ptlmap.pid, dcreg->id, dcreg->nid, dcreg->pid);
 		if(dc->rpc_s->ptlmap.pid == dcreg->pid && dc->rpc_s->ptlmap.nid == dcreg->nid)
 		  dc->rpc_s->ptlmap.id = dcreg->id;
 
+//                printf("Got from master %d %d %d %d\n",peer->ptlmap.id, peer->ptlmap.nid, peer->ptlmap.pid, peer->ptlmap.appid);
+
+
 		dcreg++;
-//		peer++;
+		peer++;
 	}
+        peer = dc->peer_tab;
+
+        for (i = 0; i < dc->peer_size; i++)
+        {
+//		printf("Rank %d: Got from master %d %d %d %d\n",dc->rpc_s->ptlmap.id, peer->ptlmap.id, peer->ptlmap.nid, peer->ptlmap.pid, peer->ptlmap.appid);
+                peer++;
+	}		
 
 	free(recv_buffer);
 
@@ -768,12 +820,39 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 		if(i == dc->rpc_s->ptlmap.id)
 			continue;
 
-		 peer = dc_get_peer (dc, i);//peer = rpc_server_find(dc->rpc_s, i);//&dc->peer_tab[i];
-
+//		 peer = dc_get_peer (dc, i);//peer = rpc_server_find(dc->rpc_s, i);//&dc->peer_tab[i];
+	 	 peer = &dc->peer_tab[i];
 
                 //printf("I am %d about to connect with %d\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id);
 
+                status = GNI_EpCreate(dc->rpc_s->nic_hndl, dc->rpc_s->src_cq_hndl, &dc->peer_tab[i].ep_hndl);
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Fail: GNI_EpCreate returned error. %d.\n", status);
+                        goto err_free;
+                }
 
+                status = GNI_EpBind(dc->peer_tab[i].ep_hndl, dc->peer_tab[i].ptlmap.nid, dc->peer_tab[i].ptlmap.id);
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Fail: GNI_EpBind returned error. %d.\n", status);
+                        goto err_free;
+                }
+
+                status = GNI_EpCreate(dc->rpc_s->nic_hndl, dc->rpc_s->sys_cq_hndl, &peer->sys_ep_hndl);
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Rank %d: Fail GNI_EpCreate SYS returned error. %d.\n", dc->rpc_s->ptlmap.id, status);
+                        goto err_out;
+                }
+                status = GNI_EpBind(peer->sys_ep_hndl, peer->ptlmap.nid, peer->ptlmap.id);
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Rank %d: Fail GNI_EpBind SYS returned error. %d.\n", dc->rpc_s->ptlmap.id, status);
+                        goto err_out;
+                }
+
+/*
 		status = GNI_EpCreate(dc->rpc_s->nic_hndl, dc->rpc_s->src_cq_hndl, &peer->ep_hndl);
 		if (status != GNI_RC_SUCCESS)
 		{
@@ -800,6 +879,7 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 			uloga("Rank %d: Fail GNI_EpBind SYS returned error. %d.\n", dc->rpc_s->ptlmap.id, status);
 			goto err_out;
 		}
+	*/
 
 	}
 
@@ -808,7 +888,8 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 	k=0;
 	while(k < dc->peer_size)
 	{
-	 peer = dc_get_peer (dc, k);//peer = rpc_server_find(dc->rpc_s, k);//&dc->peer_tab[k];
+//	 peer = dc_get_peer (dc, k);//peer = rpc_server_find(dc->rpc_s, k);//&dc->peer_tab[k];
+	 peer = &dc->peer_tab[k];
 		if(peer->ptlmap.appid == 0)
 			sp++;
 		k++;
@@ -867,7 +948,9 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 		if(i == dc->rpc_s->ptlmap.id)
 			continue;
 
-		 peer = dc_get_peer (dc, i);//peer = rpc_server_find(dc->rpc_s, i);//&dc->peer_tab[i];
+//		 peer = dc_get_peer (dc, i);//peer = rpc_server_find(dc->rpc_s, i);//&dc->peer_tab[i];
+
+		peer = &dc->peer_tab[i];
 
 		err = rpc_smsg_config(dc->rpc_s, peer);
         if (err != 0){
@@ -915,7 +998,9 @@ static int dc_boot(struct dart_client *dc, int appid)
 
 	while(counter < dc->rpc_s->num_rpc_per_buff)
 	{
-		peer = dc_get_peer (dc, i);//peer = rpc_server_find(dc->rpc_s, i);//&dc->peer_tab[i];
+//		peer = dc_get_peer (dc, i);//peer = rpc_server_find(dc->rpc_s, i);//&dc->peer_tab[i];
+
+		peer = &dc->peer_tab[i];
 		if(peer->ptlmap.appid == 0)
 			sp++;
 		if(peer->ptlmap.appid == appid)
@@ -998,7 +1083,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
                 free(dc);
                 return NULL;
         }
-/*
+
 	peer = dc->peer_tab;
 	for (i = 0; i < dc->peer_size; i++) 
 	{
@@ -1014,7 +1099,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 
 		peer++;
 	}
-*/
+
          struct node_id *temp_peer;
                 list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
 

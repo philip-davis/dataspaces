@@ -501,7 +501,7 @@ int rpc_receivev(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf 
 void rpc_report_md_usage(struct rpc_server *rpc_s);
 struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *peer, int num_rpcs);
 
-struct node_id *rpc_server_find(struct rpc_server *rpc_s, int nodeid);
+//struct node_id *rpc_server_find(struct rpc_server *rpc_s, int nodeid);
 
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
