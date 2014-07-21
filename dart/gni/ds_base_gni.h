@@ -103,7 +103,9 @@ static inline int ds_get_rank(struct dart_server *ds)
 
 static inline struct node_id * ds_get_peer(struct dart_server *ds, int n)
 {
-        return rpc_server_find(ds->rpc_s,n);
+        //return rpc_server_find(ds->rpc_s,n);
+        return (ds->peer_tab + n);
+
 }
 
 static inline int ds_stop(struct dart_server *ds)

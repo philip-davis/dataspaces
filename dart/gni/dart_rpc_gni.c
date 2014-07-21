@@ -993,16 +993,6 @@ static int sys_cleanup (struct rpc_server *rpc_s)
 	gni_return_t status;
 	int i, err;
 	void *tmp;
-	/*
-	status = GNI_MemDeregister(rpc_s->nic_hndl, &rpc_s->sys_local_smsg_attr.mem_hndl);
-	if (status != GNI_RC_SUCCESS) 
-	{
-		uloga("Fail: GNI_MemDeregister returned error. %d.\n", status);
-		goto err_out;
-	}
-
-	free(rpc_s->sys_mem);
-	*///SCA SYS
 
 #ifdef DS_HAVE_DRC
 	if(rpc_s->cmp_type == DART_SERVER && rank_id_pmi==0){
@@ -1010,40 +1000,39 @@ static int sys_cleanup (struct rpc_server *rpc_s)
 	}
 #endif
 
-	for(i=0; i < rpc_s->num_rpc_per_buff; i++)
-	{
-		struct node_id *peer=rpc_server_find(rpc_s,i);
-		
-	  if(peer->ptlmap.id==rpc_s->ptlmap.id)
-	    continue;
+        for(i=0; i < rpc_s->num_rpc_per_buff; i++)
+        { 
+          if(rpc_s->peer_tab[i].ptlmap.id==rpc_s->ptlmap.id)
+            continue;
 
-	  
-		status = GNI_EpUnbind(peer->sys_ep_hndl);
-		if (status != GNI_RC_NOT_DONE && status != GNI_RC_SUCCESS) 
-		{
-		  uloga("(%d)Fail: GNI_EpUnbind(%d) returned error. %d.\n", rank_id, rpc_s->peer_tab[i].ptlmap.id, status);
-			goto err_out;
-		}
 
-		status = GNI_EpDestroy(peer->sys_ep_hndl); 
-		if (status != GNI_RC_SUCCESS) 
-		{
-			uloga("Fail: GNI_EpDestroy returned error. %d.\n", status);
-			goto err_out;
-		}
-	}
+                status = GNI_EpUnbind(rpc_s->peer_tab[i].sys_ep_hndl);
+                if (status != GNI_RC_NOT_DONE && status != GNI_RC_SUCCESS)
+                { 
+                  printf("(%d)Fail: GNI_EpUnbind(%d) returned error. %d.\n", rank_id_pmi, rpc_s->peer_tab[i].ptlmap.id, status);
+                        goto err_out;
+                }
 
-	status = GNI_CqDestroy(rpc_s->sys_cq_hndl);
-	if (status != GNI_RC_SUCCESS) 
-	{
-		uloga("Fail: GNI_CqDestroy returned error. %d.\n", status);
-		goto err_out;
-	}
+                status = GNI_EpDestroy(rpc_s->peer_tab[i].sys_ep_hndl);
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Fail: GNI_EpDestroy returned error. %d.\n", status);
+                        goto err_out;
+                }
+        }
 
-	return 0;
+        status = GNI_CqDestroy(rpc_s->sys_cq_hndl);
+        if (status != GNI_RC_SUCCESS)
+        {
+                printf("Fail: GNI_CqDestroy returned error. %d.\n", status);
+                goto err_out;
+        }
+
+        return 0;
 err_out:
-	uloga("(%s): failed. (%d)\n",__func__, status);
-	return status;
+        printf("(%s): failed. (%d)\n",__func__, status);
+        return status;
+
 }
 
 
@@ -1223,8 +1212,8 @@ err_out:
 // this function can only be used after rpc_server is fully initiated
 static struct node_id *rpc_get_peer(struct rpc_server *rpc_s, int peer_id)
 {
-//		return rpc_s->peer_tab + peer_id;
-	return rpc_server_find(rpc_s,peer_id);
+		return rpc_s->peer_tab + peer_id;
+//	return rpc_server_find(rpc_s,peer_id);
 }
 
 /* 
@@ -2490,7 +2479,8 @@ int rpc_process_msg_resend(struct rpc_server *rpc_s, struct node_id *peer_tab, i
     struct node_id *peer;
     int i;
     for (i = 0; i < num_peer; i++) {
-        peer = rpc_server_find(rpc_s, i);
+        peer = peer_tab + i;
+//      peer = rpc_server_find(rpc_s, i);
         if (peer->num_req > 0 && peer->num_msg_at_peer > 0) {
             peer_process_send_list(rpc_s, peer);
         }
@@ -2744,26 +2734,25 @@ int rpc_server_free(struct rpc_server *rpc_s, void *comm)
 	    goto err_out;
 	  }	
 	free(rpc_s->rpc_mem);
-	for(i=0; i < rpc_s->num_rpc_per_buff; i++)
-	{
-		peer = rpc_server_find(rpc_s,i);
-	  if(peer->ptlmap.id==rpc_s->ptlmap.id)
-	    continue;
 
-		status = GNI_EpUnbind(peer->ep_hndl); //Unbind the remote address from the endpoint handler.
-		if (status != GNI_RC_SUCCESS && status != GNI_RC_NOT_DONE) 
-		{
-			uloga("Fail: GNI_EpUnbind returned error. %d.\n", status);
-			goto err_out;
-		}
-		status = GNI_EpDestroy(peer->ep_hndl); //You must do an EpDestroy for each endpoint pair.
-		if (status != GNI_RC_SUCCESS) 
-		{
-			uloga("Fail: GNI_EpDestroy returned error. %d.\n", status);
-			goto err_out;
-		}
-	}
+        for(i=0; i < rpc_s->num_rpc_per_buff; i++)
+        { 
+          if(rpc_s->peer_tab[i].ptlmap.id==rpc_s->ptlmap.id)
+            continue;
 
+                status = GNI_EpUnbind(rpc_s->peer_tab[i].ep_hndl); //Unbind the remote address from the endpoint handler.
+                if (status != GNI_RC_SUCCESS && status != GNI_RC_NOT_DONE)
+                {
+                        printf("Fail: GNI_EpUnbind returned error. %d.\n", status);
+                        goto err_out;
+                }
+                status = GNI_EpDestroy(rpc_s->peer_tab[i].ep_hndl); //You must do an EpDestroy for each endpoint pair.
+                if (status != GNI_RC_SUCCESS)
+                {
+                        printf("Fail: GNI_EpDestroy returned error. %d.\n", status);
+                        goto err_out;
+                }
+        }
 	status = GNI_CqDestroy(rpc_s->src_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
@@ -3149,7 +3138,7 @@ int rpc_receivev(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf 
 {
 	return 0;
 }
-
+/*
 struct node_id *rpc_server_find(struct rpc_server *rpc_s, int nodeid)
 {
         struct node_id *temp_peer;
@@ -3159,7 +3148,7 @@ struct node_id *rpc_server_find(struct rpc_server *rpc_s, int nodeid)
         }
         return 0;
 }
-
+*/
 
 
 #ifdef DS_HAVE_DIMES_SHMEM
@@ -3174,6 +3163,7 @@ void rpc_server_find_local_peers(struct rpc_server *rpc_s,
 {
     // find all peers (include current peer itself) that reside on the
     // same compute node as current peer
+/*
     int j = 0;
     struct node_id *peer;
     list_for_each_entry(peer, &rpc_s->peer_list, struct node_id, peer_entry) {
@@ -3181,6 +3171,17 @@ void rpc_server_find_local_peers(struct rpc_server *rpc_s,
             peer_tab[j++] = peer;
         }
     }
+*/
+	int i;
+	int j=0;
+        for(i=0; i < rpc_s->num_rpc_per_buff; i++)
+        {
+          if(rpc_s->peer_tab[i].ptlmap.nid==rpc_s->ptlmap.nid){
+		peer_tab[j++] = rpc_s->peer_tab[i];
+	
+	}
+
+
     *num_local_peer = j;
 }
 #endif
