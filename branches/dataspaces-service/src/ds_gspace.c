@@ -1453,18 +1453,6 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
         peer = ds_get_peer(dsg->ds, cmd->id);
 
         peer_num = ssd_hash(ssd, &oh->u.o.odsc.bb, de_tab);
-#ifdef TIMING_PERF
- {
-     char *str;
-
-     asprintf(&str, "S%2d: request for obj_desc '%s' ver %d from C%2d for  ",
-          DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version, cmd->id);
-     str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
-
-     uloga("'%s()': %s peer_num= %d\n", __func__, str, peer_num);
-     free(str);
- }
-#endif
         peer_id_tab = malloc(sizeof(int) * (peer_num+1));
         if (!peer_id_tab)
                 goto err_out;
@@ -1706,18 +1694,6 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         struct msg_buf *msg;
         int err = -ENOENT;
 
-#ifdef TIMING_PERF
- {
-     char *str;
-
-     asprintf(&str, "S%2d: request for obj_desc '%s' ver %d from C%2d for  ",
-          DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version, cmd->id);
-     str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
-
-     uloga("'%s()': %s\n", __func__, str);
-     free(str);
- }
-#endif
         num_odsc = dht_find_entry_all(ssd->ent_self, &oh->u.o.odsc, podsc);
         if (!num_odsc) {
 #ifdef DEBUG
