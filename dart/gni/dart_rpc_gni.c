@@ -3174,13 +3174,11 @@ void rpc_server_find_local_peers(struct rpc_server *rpc_s,
 */
 	int i;
 	int j=0;
-        for(i=0; i < rpc_s->num_rpc_per_buff; i++)
-        {
-          if(rpc_s->peer_tab[i].ptlmap.nid==rpc_s->ptlmap.nid){
-		peer_tab[j++] = rpc_s->peer_tab[i];
-	
-	}
-
+    for(i=0; i < rpc_s->num_rpc_per_buff; i++) {
+        if(rpc_s->peer_tab[i].ptlmap.nid==rpc_s->ptlmap.nid){
+            peer_tab[j++] = &(rpc_s->peer_tab[i]);
+        }
+    }
 
     *num_local_peer = j;
 }
