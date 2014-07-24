@@ -1923,13 +1923,6 @@ int dcg_obj_get_with_server_id(struct obj_data *od, int server_id)
         qt_add_obj(qte, &odsc); 
         qte->f_odsc_recv = 1;
 
-#ifdef TIMING_PERF
-        tm_end = timer_read(&tm_perf);
-        uloga("TIMING_PERF locate_data ts %d peer %d time %lf %s\n",
-            od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
-        tm_st = tm_end;
-#endif
-
         err = dcg_obj_data_get(qte);
         if (err < 0) {
                 // FIXME: should I jump to err_qt_free ?

@@ -2530,9 +2530,9 @@ static void init_node_mpi_comm(void *comm)
     dimes_c->node_id = rpc_server_get_nid(RPC_S);
 
     // debug print
-    printf("%s() nid %u dart_id %d node_master_peer %d num_local_peer %d:",
-         __func__, dimes_c->node_id, DIMES_CID,
-         dimes_c->node_master_dart_id, dimes_c->num_local_peer);
+    //printf("%s() nid %u dart_id %d node_master_peer %d num_local_peer %d:",
+    //     __func__, dimes_c->node_id, DIMES_CID,
+    //     dimes_c->node_master_dart_id, dimes_c->num_local_peer);
     //int i;
     //for (i = 0; i < dimes_c->num_local_peer; i++) {
     //    printf(" %d ", dimes_c->local_peer_tab[i]->ptlmap.id);
@@ -3043,8 +3043,8 @@ int dimes_client_shmem_restart_storage(void *restart_buf)
     for (i = 0; i < storage_info->num_group; i++) {
         struct dimes_cr_group_info *group_info = buf; 
         buf += sizeof(struct dimes_cr_group_info);
-        printf("%s: #%d group name= %s num_obj= %u\n", __func__, DIMES_CID,
-            group_info->name, group_info->num_obj);
+        //printf("%s: #%d group name= %s num_obj= %u\n", __func__, DIMES_CID,
+        //    group_info->name, group_info->num_obj);
         for (j = 0; j < group_info->num_obj; j++) {
             struct dimes_cr_mem_obj_info *obj_info = buf;
             // add obj
