@@ -701,9 +701,10 @@ int dimes_client_shmem_restart_allocator(void *restart_buf, int dart_id)
     void *buf = restart_buf;
     struct dimes_cr_allocator_info *alloc_info = buf;
 
-    printf("%s: #%d num_used_blocks= %u num_free_blocks= %u shmem_obj_id= %d\n",
-        __func__, dart_id, alloc_info->num_used_blocks, alloc_info->num_free_blocks,
-        alloc_info->shmem_obj_id);
+    // debug print
+    //printf("%s: #%d num_used_blocks= %u num_free_blocks= %u shmem_obj_id= %d\n",
+    //    __func__, dart_id, alloc_info->num_used_blocks, alloc_info->num_free_blocks,
+    //    alloc_info->shmem_obj_id);
 
     buf += sizeof(struct dimes_cr_allocator_info);
     struct dimes_cr_allocator_block_info *alloc_blk_info;
