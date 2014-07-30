@@ -242,6 +242,11 @@ int dimes_shmem_update_server_state()
 {
     return common_dimes_shmem_update_server_state();
 }
+
+uint32_t dimes_shmem_get_nid()
+{
+    return common_dimes_shmem_get_nid();
+}
 #endif
 #endif
 

@@ -720,6 +720,11 @@ int common_dimes_shmem_update_server_state()
 {
     return dimes_client_shmem_update_server_state();
 }
+
+uint32_t common_dimes_shmem_get_nid()
+{
+    return dimes_client_shmem_get_nid();
+}
 #endif
 
 #endif
