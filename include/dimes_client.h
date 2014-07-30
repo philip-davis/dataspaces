@@ -112,6 +112,8 @@ int dimes_client_shmem_clear_testing();
 int dimes_client_shmem_reset_server_state(int server_id);
 int dimes_client_shmem_update_server_state();
 
+uint32_t dimes_client_shmem_get_nid();
+
 size_t estimate_storage_restart_buf_size();
 size_t estimate_node_shmem_restart_buf_size();
 

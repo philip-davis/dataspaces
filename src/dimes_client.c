@@ -3113,6 +3113,11 @@ int dimes_client_shmem_reset_server_state(int dart_id)
     ERROR_TRACE();     
 }
 
+uint32_t dimes_client_shmem_get_nid()
+{
+    return dimes_c->node_id;
+}
+
 size_t estimate_node_shmem_restart_buf_size()
 {
     size_t bytes = sizeof(struct dimes_cr_shmem_obj_info) * MAX_NUM_PEER_PER_NODE + sizeof(struct dimes_cr_shmem_info);
