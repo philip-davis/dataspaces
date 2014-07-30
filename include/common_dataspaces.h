@@ -95,6 +95,7 @@ int common_dimes_shmem_restart(void *comm);
 int common_dimes_shmem_clear();
 int common_dimes_shmem_reset_server_state(int server_id);
 int common_dimes_shmem_update_server_state();
+uint32_t common_dimes_shmem_get_nid();
 #endif
 #endif
 

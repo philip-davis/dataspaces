@@ -192,6 +192,7 @@ int dimes_shmem_restart(void *comm);
 int dimes_shmem_clear();
 int dimes_shmem_reset_server_state(int server_id);
 int dimes_shmem_update_server_state();
+uint32_t dimes_shmem_get_nid();
 #endif
 
 #ifdef __cplusplus
