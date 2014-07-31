@@ -3118,6 +3118,11 @@ uint32_t dimes_client_shmem_get_nid()
     return dimes_c->node_id;
 }
 
+int dimes_client_shmem_get_node_rank()
+{
+    return dimes_c->node_mpi_rank;
+}
+
 size_t estimate_node_shmem_restart_buf_size()
 {
     size_t bytes = sizeof(struct dimes_cr_shmem_obj_info) * MAX_NUM_PEER_PER_NODE + sizeof(struct dimes_cr_shmem_info);
