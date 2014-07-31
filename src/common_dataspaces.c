@@ -725,6 +725,11 @@ uint32_t common_dimes_shmem_get_nid()
 {
     return dimes_client_shmem_get_nid();
 }
+
+int common_dimes_shmem_get_node_rank()
+{
+    return dimes_client_shmem_get_node_rank();
+}
 #endif
 
 #endif
