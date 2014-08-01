@@ -165,7 +165,7 @@ struct dimes_client_option {
     int enable_dimes_ack;
     int enable_pre_allocated_rdma_buffer;
 #ifdef DS_HAVE_DIMES_SHMEM
-    int enable_shmem_buffer;
+    int init_shmem_buffer;
 #endif
     size_t pre_allocated_rdma_buffer_size;
     struct dart_rdma_mem_handle pre_allocated_rdma_handle;
@@ -287,6 +287,7 @@ struct dimes_memory_obj {
     struct obj_descriptor obj_desc;
 #ifdef DS_HAVE_DIMES_SHMEM
     struct dimes_shmem_descriptor shmem_desc;
+    enum dimes_memory_type mem_type;
 #endif
     struct global_dimension gdim;
     struct dart_rdma_mem_handle rdma_handle;
@@ -667,7 +668,7 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl, size_t siz
             rdma_hndl->size = size;
         } 
 #ifdef DS_HAVE_DIMES_SHMEM 
-        else if (options.enable_shmem_buffer) {
+        else if (options.init_shmem_buffer) {
             dimes_buffer_alloc(size, &buf);
             if (!buf) {
                 uloga("%s(): ERROR dimes_buffer_alloc() failed\n", __func__);
@@ -721,7 +722,7 @@ static int dimes_memory_free(struct dart_rdma_mem_handle *rdma_hndl, enum dimes_
             dimes_buffer_free(rdma_hndl->base_addr);
         } 
 #ifdef DS_HAVE_DIMES_SHMEM 
-        else if (options.enable_shmem_buffer) {
+        else if (options.init_shmem_buffer) {
             err = dart_rdma_deregister_mem(rdma_hndl);
             if (err < 0) {
                 uloga("%s(): dart_rdma_deregister_mem failed\n", __func__);
@@ -934,7 +935,7 @@ static int qt_add_obj_with_cmd_d(struct query_tran_entry_d *qte,
     fetch->src_odsc = hdr->odsc;
     fetch->dst_odsc = *odsc;
 #ifdef DS_HAVE_DIMES_SHMEM
-    if (options.enable_shmem_buffer) {
+    if (options.init_shmem_buffer) {
         fetch->src_shmem_desc = hdr->shmem_desc;
     }
 #endif
@@ -1265,7 +1266,7 @@ static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
 		hdr->has_rdma_data = 1;
 #ifdef DS_HAVE_DIMES_SHMEM
         hdr->has_shmem_data = 0;
-        if (options.enable_shmem_buffer) {
+        if (options.init_shmem_buffer) {
             hdr->has_shmem_data = 1; 
             hdr->shmem_desc = mem_obj->shmem_desc;
         }
@@ -1833,7 +1834,7 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
     list_for_each_entry(fetch, &qte->fetch_list, struct fetch_entry, entry)
     {
 #ifdef DS_HAVE_DIMES_SHMEM
-        if (options.enable_shmem_buffer &&
+        if (options.init_shmem_buffer &&
             is_peer_on_same_node(fetch->read_tran->remote_peer)) {
             continue;
         }
@@ -1908,7 +1909,7 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
     list_for_each_entry(fetch, &qte->fetch_list, struct fetch_entry, entry)
     {
 #ifdef DS_HAVE_DIMES_SHMEM 
-        if (options.enable_shmem_buffer &&
+        if (options.init_shmem_buffer &&
                  is_peer_on_same_node(fetch->read_tran->remote_peer)) {
             //printf("%s(): peer %d fetch from peer %d on local node\n", __func__,
             //    DIMES_CID, fetch->read_tran->remote_peer->ptlmap.id);
@@ -2239,6 +2240,9 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 		return dimes_c;
 	}
 
+#ifdef DS_HAVE_DIMES_SHMEM
+    options.init_shmem_buffer = 0;
+#endif
     options.enable_pre_allocated_rdma_buffer = 0;
     options.pre_allocated_rdma_buffer_size = DIMES_RDMA_BUFFER_SIZE*1024*1024; // bytes
     options.rdma_buffer_size = DIMES_RDMA_BUFFER_SIZE*1024*1024; // bytes 
@@ -2401,6 +2405,9 @@ int dimes_client_put(const char *var_name,
     mem_obj->sync_id = syncop_next_sync_id();
     mem_obj->ack_type = dimes_ack_type_msg;
     mem_obj->obj_desc = odsc;
+#ifdef DS_HAVE_DIMES_SHMEM
+    mem_obj->mem_type = dimes_memory_rdma;
+#endif
     // TODO: can we memcpy safely? do we need a new function like
     // dimes_memory_alloc_with_data()?
     err = dimes_memory_alloc(&mem_obj->rdma_handle, data_size,
@@ -2412,7 +2419,7 @@ int dimes_client_put(const char *var_name,
     // Copy user data
     memcpy((void*)mem_obj->rdma_handle.base_addr, data, data_size);
 #ifdef DS_HAVE_DIMES_SHMEM
-    if (options.enable_shmem_buffer) {
+    if (options.init_shmem_buffer) {
         // TODO: hardcoded for now, and assume there is 
         // only one shared mem obj that belongs to me ...
         struct shared_memory_obj *shmem_obj = find_my_shmem_obj();
@@ -2586,7 +2593,7 @@ static int gather_node_shmem_obj(struct shared_memory_obj *shmem_obj)
 
 int dimes_client_shmem_init(void *comm, size_t shmem_obj_size)
 {
-    options.enable_shmem_buffer = 1;
+    options.init_shmem_buffer = 1;
     INIT_LIST_HEAD(&dimes_c->shmem_obj_list);
 
     // init node-local mpi communicator
@@ -2769,7 +2776,7 @@ int dimes_client_shmem_checkpoint()
 
 int dimes_client_shmem_restart(void *comm)
 {
-    options.enable_shmem_buffer = 1;
+    options.init_shmem_buffer = 1;
     INIT_LIST_HEAD(&dimes_c->shmem_obj_list);
 
     // init node-local mpi communicator
