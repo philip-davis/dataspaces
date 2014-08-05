@@ -57,6 +57,7 @@ struct dimes_client {
     struct list_head gdim_list;
 	struct bbox domain;
 	struct query_tran_d qt;
+    unsigned int max_versions;
 	int    f_ss_info;
 #ifdef DS_HAVE_DIMES_SHMEM
     struct list_head shmem_obj_list;

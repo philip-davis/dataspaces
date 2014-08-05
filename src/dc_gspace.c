@@ -1455,6 +1455,7 @@ static int dcgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
     dcg->ss_domain.num_dims = hsi->num_dims;
     dcg->default_gdim.ndim = hsi->num_dims;
     dcg->hash_version = hsi->hash_version;
+    dcg->max_versions = hsi->max_versions;
 	int i;
 	for(i = 0; i < hsi->num_dims; i++){
 		dcg->ss_domain.lb.c[i] = 0;

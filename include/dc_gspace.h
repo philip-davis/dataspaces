@@ -74,6 +74,7 @@ struct dcg_space {
         int                     num_pending;
 
         enum sspace_hash_version    hash_version;
+        int    max_versions; 
         /* Version bookeeping for objects available in the space. */
         int                     num_vers;
         int                     versions[64];
