@@ -169,6 +169,7 @@ struct hdr_ss_info {
     struct  coord dims;
     int     num_space_srv;
     unsigned char hash_version;
+    int max_versions;
 } __attribute__ ((__packed__));
 
 /* Header structure for obj_get requests. */

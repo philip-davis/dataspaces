@@ -2006,6 +2006,7 @@ static int dsgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
     }
 	hsi->num_space_srv = dsg->ds->size_sp;
     hsi->hash_version = ds_conf.hash_version;
+    hsi->max_versions = ds_conf.max_versions;
 
 	err = rpc_send(rpc_s, peer, msg);
 	if (err == 0)
