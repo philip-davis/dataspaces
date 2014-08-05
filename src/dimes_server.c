@@ -66,41 +66,6 @@ static struct dimes_sync_info* sync_info_list_find(struct list_head *l, int sid,
 	return NULL;
 }
 
-static int dsgrpc_dimes_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
-{
-	struct msg_buf *msg;
-	struct node_id *peer = ds_get_peer(dimes_s->dsg->ds, cmd->id);
-	struct hdr_ss_info *hsi;
-	int err = -ENOMEM;
-
-	msg = msg_buf_alloc(rpc_s, peer, 1);
-	if (!msg)
-		goto err_out;
-
-	msg->msg_rpc->cmd = dimes_ss_info_msg;
-	msg->msg_rpc->id = DIMES_SID;
-	
-	hsi = (struct hdr_ss_info*) msg->msg_rpc->pad;
-	hsi->num_dims = dimes_s->dsg->ssd->dht->bb_glb_domain.num_dims;
-
-/*	hsi->val_dims[bb_x] = dimes_s->dsg->ssd->dht->bb_glb_domain.ub.c[0] + 1;
-	hsi->val_dims[bb_y] = dimes_s->dsg->ssd->dht->bb_glb_domain.ub.c[1] + 1;
-	hsi->val_dims[bb_z] = dimes_s->dsg->ssd->dht->bb_glb_domain.ub.c[2] + 1;
-*/
-	int i;
-	for(i = 0; i < hsi->num_dims; i++){
-		hsi->dims.c[i] = dimes_s->dsg->ssd->dht->bb_glb_domain.ub.c[i] + 1;
-	}
-
-	hsi->num_space_srv = dimes_s->dsg->ds->size_sp;
-
-	err = rpc_send(rpc_s, peer, msg);
-	if (err == 0)
-		return 0;
-err_out:
-	ERROR_TRACE();
-}
-
 static int locate_data_completion_server(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
 	free(msg->msg_data);
