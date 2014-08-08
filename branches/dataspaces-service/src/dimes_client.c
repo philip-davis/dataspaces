@@ -63,7 +63,9 @@ static struct timer tm_perf;
 #endif
 
 // Forward declaration.
-static int dimes_memory_free(struct dart_rdma_mem_handle *rdma_hndl, enum dimes_memory_type type);
+static int dimes_memory_free(struct dart_rdma_mem_handle *rdma_hndl,
+                             enum dimes_memory_type type);
+static int build_node_local_obj_index(void *restart_buf);
 
 #ifdef DS_HAVE_DIMES_SHMEM
 int compare_peer_by_dart_id(const void *a, const void *b)
@@ -168,6 +170,7 @@ struct dimes_client_option {
     int enable_pre_allocated_rdma_buffer;
 #ifdef DS_HAVE_DIMES_SHMEM
     int init_shmem_buffer;
+    int enable_get_local;
 #endif
     size_t pre_allocated_rdma_buffer_size;
     struct dart_rdma_mem_handle pre_allocated_rdma_handle;
@@ -206,6 +209,18 @@ static int is_peer_on_same_node(struct node_id *peer)
         }
     }
     return 0;
+}
+
+static int get_peer_dart_id_on_same_node(int node_rank)
+{
+    if (node_rank < 0 || node_rank >= dimes_c->num_local_peer) return -1;
+    else return dimes_c->local_peer_tab[node_rank]->ptlmap.id;
+}
+
+static struct node_id* get_peer_on_same_node(int node_rank)
+{
+    if (node_rank < 0 || node_rank >= dimes_c->num_local_peer) return NULL;
+    else return dimes_c->local_peer_tab[node_rank];
 }
 #endif
 
@@ -289,7 +304,6 @@ struct dimes_memory_obj {
     struct obj_descriptor obj_desc;
 #ifdef DS_HAVE_DIMES_SHMEM
     struct dimes_shmem_descriptor shmem_desc;
-    enum dimes_memory_type mem_type;
 #endif
     struct global_dimension gdim;
     struct dart_rdma_mem_handle rdma_handle;
@@ -305,6 +319,77 @@ struct dimes_storage_group {
 static char *current_group_name = NULL;
 const char* default_group_name = "__default_storage_group__";
 static struct list_head storage;
+
+#ifdef DS_HAVE_DIMES_SHMEM
+static struct list_head node_local_obj_index;
+
+static struct dimes_storage_group* node_local_obj_index_add_group(const char *group_name)
+{
+    struct dimes_storage_group *p = malloc(sizeof(*p));
+    if (!p) goto err_out_free;
+
+    p->version_tab = malloc(sizeof(*p->version_tab)*dimes_c->dcg->max_versions);
+    if (!p->version_tab) goto err_out_free;
+
+    strcpy(p->name, group_name);
+    int i;
+    for (i = 0; i < dimes_c->dcg->max_versions; i++) {
+        INIT_LIST_HEAD(&p->version_tab[i]);
+    }
+    list_add(&p->entry, &node_local_obj_index);
+    return p;
+ err_out_free:
+    if (p) free(p);
+    return NULL;    
+}
+
+static struct dimes_storage_group* node_local_obj_index_lookup_group(const char *group_name)
+{
+    struct dimes_storage_group *p;
+    list_for_each_entry(p, &node_local_obj_index, struct dimes_storage_group, entry)
+    {
+        if (p->name == NULL) continue;
+        if (0 == strcmp(p->name, group_name)) {
+            return p;
+        }
+    }
+
+    return NULL;
+}
+
+static int node_local_obj_index_free_group(struct dimes_storage_group *group)
+{
+    int i;
+    struct dimes_memory_obj *p, *t;
+    for (i = 0; i < dimes_c->dcg->max_versions; i++) {
+        list_for_each_entry_safe(p, t, &group->version_tab[i],
+                    struct dimes_memory_obj, entry) {
+            list_del(&p->entry);
+            free(p);
+        }
+    }
+
+    list_del(&group->entry);
+    if (group->version_tab) free(group->version_tab);
+    free(group);
+
+    return 0;
+}
+
+static void node_local_obj_index_init()
+{
+    INIT_LIST_HEAD(&node_local_obj_index);
+}
+
+static void node_local_obj_index_free()
+{
+    struct dimes_storage_group *p, *t;
+    list_for_each_entry_safe(p, t, &node_local_obj_index, struct dimes_storage_group, entry)
+    {
+        node_local_obj_index_free_group(p);
+    }
+}
+#endif
 
 static int mem_obj_list_add(struct list_head *l, struct dimes_memory_obj *p) {
 	list_add(&p->entry, l);
@@ -2217,6 +2302,7 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 
 #ifdef DS_HAVE_DIMES_SHMEM
     options.init_shmem_buffer = 0;
+    options.enable_get_local = 0;
 #endif
     options.enable_pre_allocated_rdma_buffer = 0;
     options.pre_allocated_rdma_buffer_size = DIMES_RDMA_BUFFER_SIZE*1024*1024; // bytes
@@ -2380,9 +2466,6 @@ int dimes_client_put(const char *var_name,
     mem_obj->sync_id = syncop_next_sync_id();
     mem_obj->ack_type = dimes_ack_type_msg;
     mem_obj->obj_desc = odsc;
-#ifdef DS_HAVE_DIMES_SHMEM
-    mem_obj->mem_type = dimes_memory_rdma;
-#endif
     // TODO: can we memcpy safely? do we need a new function like
     // dimes_memory_alloc_with_data()?
     err = dimes_memory_alloc(&mem_obj->rdma_handle, data_size,
@@ -2440,6 +2523,11 @@ int dimes_client_put_sync_all(void)
         if (err < 0) return err;
     }
 
+#ifdef DS_HAVE_DIMES_SHMEM
+    if (options.init_shmem_buffer && options.enable_get_local) {
+        node_local_obj_index_free();
+    }
+#endif
 	return 0;
 }
 
@@ -2480,10 +2568,177 @@ int dimes_client_put_sync_group(const char *group_name, int step)
     err = storage_free_group(p);
     if (err < 0) return err;
 
+#ifdef DS_HAVE_DIMES_SHMEM
+    if (options.init_shmem_buffer && options.enable_get_local) {
+        p = node_local_obj_index_lookup_group(group_name);
+        if (p == NULL) return 0;
+        err = node_local_obj_index_free_group(p);
+        if (err < 0) return err; 
+    }
+#endif
+
     return 0;
 }
 
 #ifdef DS_HAVE_DIMES_SHMEM
+static int local_search_mem_obj_list(struct list_head *mem_obj_list,
+        struct query_tran_entry_d *qte)
+{
+    struct dimes_memory_obj *mem_obj;
+    list_for_each_entry(mem_obj, mem_obj_list, struct dimes_memory_obj, entry)
+    {
+        if (!obj_desc_equals_intersect(&mem_obj->obj_desc, &qte->q_obj))
+            continue;
+
+        struct obj_descriptor obj_desc = mem_obj->obj_desc;
+        // Calculate the bbox intersection
+        bbox_intersect(&qte->q_obj.bb, &mem_obj->obj_desc.bb, &obj_desc.bb);
+        if (qt_find_obj_d(qte, &obj_desc))
+            continue;
+ 
+        // Add to qte->fetch_list
+        struct node_id *peer =
+                    get_peer_on_same_node(mem_obj->shmem_desc.owner_node_rank);
+        if (!peer) continue;
+
+        struct fetch_entry *fetch = (struct fetch_entry*)malloc(sizeof(*fetch));
+        dart_rdma_create_read_tran(peer, &fetch->read_tran);
+        fetch->remote_sync_id = mem_obj->sync_id;
+        fetch->src_odsc = mem_obj->obj_desc;
+        fetch->dst_odsc = obj_desc;
+        fetch->src_shmem_desc = mem_obj->shmem_desc;
+        list_add(&fetch->entry, &qte->fetch_list);
+        qte->num_fetch++; 
+    }
+    return 0;
+}
+
+static int local_search_group_list(struct list_head *group_list, 
+    struct query_tran_entry_d *qte)
+{
+    struct dimes_storage_group *p;
+    list_for_each_entry(p, group_list, struct dimes_storage_group, entry) {
+        int tab_idx = qte->q_obj.version % dimes_c->dcg->max_versions;
+        local_search_mem_obj_list(&p->version_tab[tab_idx], qte); 
+    }
+
+    return 0; 
+}
+
+static int dimes_obj_get_local(struct obj_data *od)
+{
+    struct query_tran_entry_d *qte;
+    int err = -ENOMEM;
+#ifdef TIMING_PERF
+    double tm_st, tm_end;
+#endif
+
+    qte = qte_alloc_d(od);
+    if (!qte)
+        goto err_out;
+    qt_add_d(&dimes_c->qt, qte);
+
+    // No need to interact with dht nodes, but set the values.
+    qte->qh->qh_num_peer = 0;
+    qte->f_dht_peer_recv = 1;
+
+#ifdef TIMING_PERF
+    tm_st = timer_read(&tm_perf);
+#endif
+    // Locate data objects
+    local_search_group_list(&storage, qte);
+    local_search_group_list(&node_local_obj_index, qte);
+    if (qte->num_fetch == 0) {
+        uloga("%s(): ERROR qte->num_fetch is %d\n", __func__, qte->num_fetch);
+        goto err_qt_free;
+    } 
+    qte->f_locate_data_complete = 1;
+#ifdef TIMING_PERF
+    tm_end = timer_read(&tm_perf);
+    uloga("TIMING_PERF locate_data ts %d peer %d time %lf %s\n",
+        od->obj_desc.version, DIMES_RANK, tm_end-tm_st, log_header);
+    tm_st = tm_end;
+#endif
+
+    // Fetch data
+    err = dimes_fetch_data(qte);
+    if (err < 0) {
+        goto err_data_free;
+    }
+
+    if (!qte->f_complete) {
+        err = -ENODATA;
+        goto out_no_data;
+    }
+#ifdef TIMING_PERF
+    tm_end = timer_read(&tm_perf);
+    uloga("TIMING_PERF fetch_data ts %d peer %d time %lf %s\n",
+        od->obj_desc.version, DIMES_RANK, tm_end-tm_st, log_header);
+#endif
+out_no_data:
+    qt_free_obj_data_d(qte);
+    qt_remove_d(&dimes_c->qt, qte);
+    qte_free_d(qte);
+    return err;
+err_data_free:
+    qt_free_obj_data_d(qte);
+err_qt_free:
+    qt_remove_d(&dimes_c->qt, qte);
+    qte_free_d(qte);
+err_out:
+    ERROR_TRACE();
+}
+
+int dimes_client_shmem_get_local(const char *var_name,
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        void *data)
+{
+    if (!options.init_shmem_buffer || !options.enable_get_local) {
+        uloga("%s(): ERROR DIMES SHMEM runtime is not initialized.\n", __func__);
+        return -1;
+    }
+
+    struct obj_descriptor odsc = {
+            .version = ver, .owner = -1,
+            .st = st,
+            .size = size,
+            .bb = {.num_dims = ndim,}
+    };
+    memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+    memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+
+    memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
+    memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
+
+    struct obj_data *od;
+    int err = -ENOMEM;
+
+    strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
+    odsc.name[sizeof(odsc.name)-1] = '\0';
+
+    od = obj_data_alloc_no_data(&odsc, data);
+    if (!od) {
+        uloga("%s(): ERROR obj_data_alloc_no_data() failed.\n", __func__);
+        err = -ENOMEM;
+        goto err_out;
+    }
+
+    set_global_dimension(&dimes_c->gdim_list, var_name,
+            &dimes_c->dcg->default_gdim, &od->gdim);
+    err = dimes_obj_get_local(od);
+    obj_data_free(od);
+    if (err < 0 && err != -EAGAIN) {
+        goto err_out;
+    }
+
+    return err;
+err_out:
+    ERROR_TRACE();
+}
+
 static void init_node_mpi_comm(void *comm)
 {
     int ret;
@@ -2561,6 +2816,9 @@ static int gather_node_shmem_obj(struct shared_memory_obj *shmem_obj)
 int dimes_client_shmem_init(void *comm, size_t shmem_obj_size)
 {
     options.init_shmem_buffer = 1;
+    // TODO: add programmer-provided parameters list
+    options.enable_get_local = 1;
+
     INIT_LIST_HEAD(&dimes_c->shmem_obj_list);
 
     // init node-local mpi communicator
@@ -2584,11 +2842,18 @@ int dimes_client_shmem_init(void *comm, size_t shmem_obj_size)
 
     // init dimes buffer with my shared memory object
     dimes_buffer_init(shmem_obj->ptr, shmem_obj->size);
+
+    if (options.enable_get_local) {
+        node_local_obj_index_init();
+    }
     return 0;
 }
 
 int dimes_client_shmem_finalize(unsigned int unlink)
 {
+    if (options.enable_get_local) {
+        node_local_obj_index_free();
+    }
     dimes_buffer_finalize();
 
     struct shared_memory_obj *shmem_obj, *temp;
@@ -2615,12 +2880,18 @@ int dimes_client_shmem_finalize(unsigned int unlink)
 
 int dimes_client_shmem_clear_testing()
 {
+    if (options.enable_get_local) {
+        node_local_obj_index_free();
+    }
     // clear DIMES storage (similar to dimes_client_free()) 
     free_gdim_list(&dimes_c->gdim_list);
     storage_free();
     dimes_memory_finalize();
 
     // reset
+    if (options.enable_get_local) {
+        node_local_obj_index_init();
+    }
     storage_init();
     options.rdma_buffer_write_usage = 0;
     options.rdma_buffer_read_usage = 0;
@@ -2744,6 +3015,9 @@ int dimes_client_shmem_checkpoint()
 int dimes_client_shmem_restart(void *comm)
 {
     options.init_shmem_buffer = 1;
+    // TODO: add programmer-provided parameters list
+    options.enable_get_local = 1;
+
     INIT_LIST_HEAD(&dimes_c->shmem_obj_list);
 
     // init node-local mpi communicator
@@ -2775,7 +3049,7 @@ int dimes_client_shmem_restart(void *comm)
 
     buf += sizeof(struct dimes_cr_shmem_info);
     struct dimes_cr_shmem_obj_info *shmem_obj_info = NULL;
-    struct dimes_cr_shmem_obj_info *tab = buf;
+    struct dimes_cr_shmem_obj_info *shmem_obj_info_tab = buf;
     // debug print
     //int i;
     //for (i = 0; i < shmem_info->num_shmem_obj; i++) {
@@ -2791,7 +3065,7 @@ int dimes_client_shmem_restart(void *comm)
 
     // assign shmem obj to node peer
     if (dimes_c->node_mpi_rank < shmem_info->num_shmem_obj)
-        shmem_obj_info = &tab[dimes_c->node_mpi_rank];
+        shmem_obj_info = &shmem_obj_info_tab[dimes_c->node_mpi_rank];
     else {
         uloga("%s: ERROR dimes_c->node_mpi_rank= %d num_shmem_obj= %d\n",
             __func__, dimes_c->node_mpi_rank, shmem_info->num_shmem_obj);
@@ -2835,6 +3109,26 @@ int dimes_client_shmem_restart(void *comm)
         goto err_out_free;
     }
     dimes_client_shmem_restart_storage(o3->ptr);
+
+    // construct node_local_obj_index
+    if (options.enable_get_local) {
+        int i;
+        for (i = 0; i < shmem_info->num_shmem_obj; i++) {
+            if (i != dimes_c->node_mpi_rank) {
+                sprintf(path, "%s", shmem_obj_info_tab[i].path_storage_restart_buf);
+                bytes = shmem_obj_info_tab[i].storage_restart_buf_size;
+                struct shared_memory_obj *o4 = open_shmem_obj(path,
+                            bytes, get_next_shmem_obj_id(), dimes_c->node_mpi_rank);
+                if (!o3) {
+                    goto err_out_free;
+                }
+                
+                build_node_local_obj_index(o4->ptr); 
+                unmap_shmem_obj(o4);
+                remove_shmem_obj(o4, 0); 
+            }
+        }        
+    }
 
     MPI_Barrier(dimes_c->node_mpi_comm);
     unmap_shmem_obj(o1);
@@ -3040,6 +3334,81 @@ int dimes_client_shmem_restart_storage(void *restart_buf)
     return 0;
 }
 
+static int node_local_obj_index_insert_mem_obj(const char *group_name,
+    int shmem_obj_id, struct dimes_cr_mem_obj_info *obj_info)
+{
+    struct dimes_memory_obj *mem_obj = malloc(sizeof(*mem_obj));
+    struct shared_memory_obj *shmem_obj = find_shmem_obj(shmem_obj_id);
+    if (!shmem_obj) {
+        uloga("%s: ERROR failed to find shmem_obj with id %d\n",
+            __func__, shmem_obj_id);
+        goto err_out_free;
+    }   
+
+    // set mem_obj information
+    mem_obj->sync_id = syncop_next_sync_id();
+    mem_obj->ack_type = dimes_ack_type_msg;
+    mem_obj->obj_desc = obj_info->obj_desc;
+    mem_obj->gdim = obj_info->gdim;    
+    mem_obj->shmem_desc.size = obj_info->size;
+    mem_obj->shmem_desc.offset = obj_info->offset;
+    mem_obj->shmem_desc.shmem_obj_id = shmem_obj_id;
+
+    // update owner node rank and dart id of the data object
+    mem_obj->shmem_desc.owner_node_rank = shmem_obj->owner_node_rank;
+    mem_obj->obj_desc.owner = get_peer_dart_id_on_same_node(shmem_obj->owner_node_rank);
+
+    // TODO: check if the code below works on all systems.
+    // set mem_obj->rdma_handle
+    uint64_t buf = (uint64_t)shmem_obj->ptr + obj_info->offset;
+    mem_obj->rdma_handle.base_addr = buf;
+    mem_obj->rdma_handle.size = obj_info->size;
+
+    // add memory object
+    struct dimes_storage_group *p = node_local_obj_index_lookup_group(group_name);
+    if (!p) {
+        p = node_local_obj_index_add_group(group_name);
+    }
+    int tab_idx = mem_obj->obj_desc.version % dimes_c->dcg->max_versions;
+    mem_obj_list_add(&p->version_tab[tab_idx], mem_obj);
+
+    return 0;
+ err_out_free:
+    if (mem_obj) free(mem_obj);
+    return -1;
+}
+
+static int build_node_local_obj_index(void *restart_buf) {
+    if (!options.enable_get_local) {
+        uloga("%s(): ERROR options.enable_get_local is %d\n",
+            __func__, options.enable_get_local);
+        return -1;
+    }
+
+    void *buf = restart_buf;
+    struct dimes_cr_storage_info *storage_info = buf;
+    buf += sizeof(struct dimes_cr_storage_info);
+    int i, j;
+    for (i = 0; i < storage_info->num_group; i++) {
+        struct dimes_cr_group_info *group_info = buf;
+        buf += sizeof(struct dimes_cr_group_info);
+        //printf("%s: #%d group name= %s num_obj= %u\n", __func__, DIMES_CID,
+        //    group_info->name, group_info->num_obj);
+        for (j = 0; j < group_info->num_obj; j++) {
+            struct dimes_cr_mem_obj_info *obj_info = buf;
+            // add obj information
+            node_local_obj_index_insert_mem_obj(group_info->name,
+                    storage_info->shmem_obj_id, obj_info);
+            buf += sizeof(struct dimes_cr_mem_obj_info);
+            //printf("%s: #%d obj name= %s size= %u offset= %u\n", __func__,
+            //    DIMES_CID, obj_info->obj_desc.name, obj_info->size,
+            //    obj_info->offset);
+        }
+    }
+
+    return 0;    
+}
+
 int dimes_client_shmem_reset_server_state(int dart_id)
 {
     struct msg_buf *msg;
@@ -3112,6 +3481,9 @@ size_t estimate_storage_restart_buf_size()
     //printf("%s: #%d num_group= %u num_obj= %u storage_restart_buf num_page= %u size= %u bytes\n", __func__, DIMES_CID, num_group, num_obj, bytes/page_size, bytes);
     return bytes; 
 }
+
+
+
 #endif // end of #ifdef DS_HAVE_DIMES_SHMEM
 
 

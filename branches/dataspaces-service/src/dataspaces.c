@@ -252,6 +252,14 @@ int dimes_shmem_get_node_rank()
 {
     return common_dimes_shmem_get_node_rank();
 }
+
+int dimes_shmem_get_local(const char *var_name,
+        unsigned int ver, int size,
+        int ndim, uint64_t *lb, uint64_t *ub,
+        void *data)
+{
+    return common_dimes_shmem_get_local(var_name, ver, size, ndim, lb, ub, data);
+}
 #endif
 #endif
 
