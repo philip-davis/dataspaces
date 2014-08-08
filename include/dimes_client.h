@@ -106,21 +106,30 @@ int dimes_client_put_sync_group(const char *group_name, int step); //TODO: renam
 #ifdef DS_HAVE_DIMES_SHMEM
 int dimes_client_shmem_init(void *comm, size_t shmem_obj_size);
 int dimes_client_shmem_finalize(unsigned int unlink);
-int dimes_client_shmem_checkpoint();
 
+int dimes_client_shmem_checkpoint();
 int dimes_client_shmem_restart(void *comm);
-int dimes_client_shmem_clear_testing();
+
 int dimes_client_shmem_reset_server_state(int server_id);
 int dimes_client_shmem_update_server_state();
 
 uint32_t dimes_client_shmem_get_nid();
 int dimes_client_shmem_get_node_rank();
 
+int dimes_client_shmem_clear_testing();
+
 size_t estimate_storage_restart_buf_size();
 size_t estimate_node_shmem_restart_buf_size();
 
 int dimes_client_shmem_checkpoint_storage(int shmem_obj_id, void *restart_buf);
 int dimes_client_shmem_restart_storage(void *restart_buf);
+
+int dimes_client_shmem_get_local(const char *var_name,
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        void *data);
 #endif
 
 #ifdef __cplusplus
