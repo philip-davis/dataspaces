@@ -1,5 +1,5 @@
-#ifndef __HSTAGING_DEF_H__
-#define __HSTAGING_DEF_H__
+#ifndef __CODS_DEF_H__
+#define __CODS_DEF_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,19 +29,34 @@ extern "C" {
 #define MAX_NUM_TASKS 512 
 #define MAX_NUM_VARS 48 
 
+enum core_type {
+    hs_manager_core = 1,
+    hs_worker_core
+};
+
+enum worker_type {
+    hs_simulation_worker = 1,
+    hs_staging_worker
+};
+
+enum location_type {
+    hs_insitu = 1,
+    hs_intransit
+};
+
 // TODO: change to lowercase, reasonable naming for the enum types below
-enum hstaging_var_type {
+enum cods_var_type {
 	var_type_depend = 0,
 	var_type_put,
 	var_type_get,
 };
 
-enum hstaging_var_status {
+enum cods_var_status {
 	var_not_available = 0,
 	var_available,
 };
 
-enum hstaging_task_status {
+enum cods_task_status {
 	task_not_ready = 0,
     task_ready,
     task_pending,
@@ -49,28 +64,28 @@ enum hstaging_task_status {
     task_finish,
 };
 
-enum hstaging_bucket_status {
+enum cods_bucket_status {
     bucket_idle = 0,
     bucket_busy
 };
 
-enum hstaging_update_var_op {
+enum cods_update_var_op {
 	OP_PUT = 0,
 	OP_GET,
 };
 
-enum hstaging_pe_type {
-    hs_manager = 0,
-    hs_executor,
-    hs_submitter,
+enum cods_pe_type {
+    cods_manager = 0,
+    cods_executor,
+    cods_submitter,
 };
 
-enum hstaging_location_type {
+enum cods_location_type {
 	loc_insitu = 0,
 	loc_intransit
 };
 
-enum hstaging_placement_hint {
+enum cods_placement_hint {
 	hint_insitu = 0,
 	hint_intransit,
 	hint_none
@@ -152,10 +167,10 @@ struct block_distribution {
     struct coord sizes;    
 };
 
-struct hstaging_var {
+struct cods_var {
 	char name[MAX_VAR_NAME_LEN];
-	enum hstaging_var_type type;
-    enum hstaging_var_status status;
+	enum cods_var_type type;
+    enum cods_var_status status;
     int version;
     size_t elem_size;
     struct global_dimension gdim;
@@ -170,18 +185,18 @@ struct task_descriptor {
 	int nproc;
 	int num_vars;
     int *bk_mpi_rank_tab;
-	struct hstaging_var *vars;
+	struct cods_var *vars;
 };
 
-struct hstaging_task {
+struct cods_task {
     struct list_head entry;
     uint32_t wid; // TODO: why we need both wid and tid?
     uint32_t tid;
     int appid; // id of workflow component application/operation/executable 
-    enum hstaging_task_status status;
-    enum hstaging_placement_hint placement_hint;
+    enum cods_task_status status;
+    enum cods_placement_hint placement_hint;
     int size_hint;
-    struct hstaging_var vars[MAX_NUM_VARS];
+    struct cods_var vars[MAX_NUM_VARS];
     int num_vars;
     int submitter_dart_id; // peer who submits the task execution
 };
@@ -190,7 +205,7 @@ struct workflow_state {
     unsigned char f_done;
 };
 
-struct hstaging_workflow {
+struct cods_workflow {
     struct list_head entry;
     uint32_t wid;
     struct workflow_state state;
@@ -198,14 +213,14 @@ struct hstaging_workflow {
 	int num_tasks;
 };
 
-int parse_task_conf_file(struct hstaging_task *task, const char *fname);
-int evaluate_dataflow_by_available_var(struct hstaging_workflow *wf, const struct hstaging_var *var_desc);
-int get_ready_tasks(struct hstaging_workflow *wf, struct hstaging_task **tasks, int *num_ready_tasks);
-void update_task_status(struct hstaging_task *task, enum hstaging_task_status status);
-int is_task_finish(struct hstaging_task *task);
-int is_task_ready(struct hstaging_task *task);
+int parse_task_conf_file(struct cods_task *task, const char *fname);
+int evaluate_dataflow_by_available_var(struct cods_workflow *wf, const struct cods_var *var_desc);
+int get_ready_tasks(struct cods_workflow *wf, struct cods_task **tasks, int *num_ready_tasks);
+void update_task_status(struct cods_task *task, enum cods_task_status status);
+int is_task_finish(struct cods_task *task);
+int is_task_ready(struct cods_task *task);
 
-void print_workflow(struct hstaging_workflow *wf);
+void print_workflow(struct cods_workflow *wf);
 
 #ifdef __cplusplus
 }

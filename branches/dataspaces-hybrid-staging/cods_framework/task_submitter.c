@@ -35,7 +35,7 @@
 
 #include "mpi.h"
 
-#include "hstaging_api.h"
+#include "cods_api.h"
 
 void epsi_coupling_workflow_driver(uint32_t wid, MPI_Comm comm)
 {
@@ -43,32 +43,32 @@ void epsi_coupling_workflow_driver(uint32_t wid, MPI_Comm comm)
     int num_coupling_step = 5;
     int i;
     for (i = 0; i < num_coupling_step; i++) {
-        hstaging_submit_task(wid, tid++, "xgc1.conf");
-        hstaging_submit_task(wid, tid++, "xgca.conf");
+        cods_submit_task(wid, tid++, "xgc1.conf");
+        cods_submit_task(wid, tid++, "xgca.conf");
     }  
 
-    hstaging_set_workflow_finished(wid);
+    cods_set_workflow_finished(wid);
     uloga("%s: finish workflow execution\n", __func__);
 }
 
 void dns_les_workflow_driver(uint32_t wid, MPI_Comm comm)
 {
     uint32_t dns_tid = 1, les_tid = 2;
-    hstaging_submit_task_nb(wid, dns_tid, "dns.conf");
-    hstaging_submit_task_nb(wid, les_tid, "les.conf");
+    cods_submit_task_nb(wid, dns_tid, "dns.conf");
+    cods_submit_task_nb(wid, les_tid, "les.conf");
     
-    hstaging_wait_submitted_task(wid, dns_tid);
-    hstaging_wait_submitted_task(wid, les_tid); 
+    cods_wait_submitted_task(wid, dns_tid);
+    cods_wait_submitted_task(wid, les_tid); 
 
-    hstaging_set_workflow_finished(wid);
+    cods_set_workflow_finished(wid);
     uloga("%s: finish workflow execution\n", __func__);
 }
 
 void s3d_analysis_workflow_driver(uint32_t wid, MPI_Comm comm)
 {
     uint32_t tid = 1;
-    hstaging_submit_task(wid, tid, "s3d.conf");
-    hstaging_set_workflow_finished(wid);
+    cods_submit_task(wid, tid, "s3d.conf");
+    cods_set_workflow_finished(wid);
 
     uloga("%s: finish workflow execution\n", __func__);
 }
@@ -93,11 +93,11 @@ int main(int argc, char **argv)
 	MPI_Comm_size(comm, &nproc);
 
     if (rank == 0) {
-        uloga("DAG submitter: num_submitter= %d example_workflow_id= %u\n", nproc, example_workflow_id);
+        uloga("task submitter: num_submitter= %d example_workflow_id= %u\n", nproc, example_workflow_id);
     }
-	err = hstaging_init(nproc, appid, hs_submitter); 
+	err = cods_init(nproc, appid, cods_submitter); 
 
-    hstaging_build_staging(1, "staging.conf");
+    cods_build_staging(1, "staging.conf");
 
     switch (example_workflow_id) {
     case EPSI_WORKFLOW_ID:
@@ -114,8 +114,8 @@ int main(int argc, char **argv)
         break;
     }
 
-    hstaging_stop_framework();
-	hstaging_finalize();
+    cods_stop_framework();
+	cods_finalize();
 
 	MPI_Barrier(comm);
 	MPI_Finalize();

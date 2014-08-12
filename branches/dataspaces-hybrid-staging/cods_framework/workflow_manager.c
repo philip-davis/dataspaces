@@ -33,34 +33,29 @@
 #include "unistd.h"
 #include "mpi.h"
 
-#include "hstaging_scheduler.h"
+#include "cods_def.h"
+#include "cods_scheduler.h"
 
 #include "common.h"
-#include "hstaging_partition.h"
-
-static enum execution_mode exemode = hs_hybrid_staging_mode;
-static enum core_type coretype_ = hs_manager_core;
-static enum worker_type workertype_;
-static enum location_type loctype_ = 0;
 
 // Run scheduler
 int run_scheduler(int argc, char **argv) {
-	if (hstaging_scheduler_parse_args(argc, argv) < 0) {
-		hstaging_scheduler_usage();
+	if (cods_scheduler_parse_args(argc, argv) < 0) {
+		cods_scheduler_usage();
 		return -1;
 	}
 
-	if (hstaging_scheduler_init() < 0) {
+	if (cods_scheduler_init() < 0) {
 		printf("DART server init failed!\n");
 		return -1;
 	}
 
-	if (hstaging_scheduler_run() < 0) {
+	if (cods_scheduler_run() < 0) {
 		printf("DART server got an error at runtime!\n");
 		return -1;
 	}
 
-	hstaging_scheduler_finish();
+	cods_scheduler_finish();
 
 	uloga("%s(): all ok.\n", __func__);	
 

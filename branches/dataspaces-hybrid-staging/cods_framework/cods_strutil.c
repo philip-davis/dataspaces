@@ -1,7 +1,7 @@
 #include "stdio.h"
 #include "string.h"
 
-#include "hstaging_strutil.h"
+#include "cods_strutil.h"
 
 static int find_char(const char *str, char c)
 {

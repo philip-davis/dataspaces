@@ -411,19 +411,19 @@ enum cmd_type {
 	dimes_put_msg,
 	dimes_get_ack_msg,
 #endif
-#ifdef DS_HAVE_HYBRID_STAGING
-    hs_reg_resource_msg,
-    hs_update_var_msg,
-    hs_req_task_msg,
-    hs_exec_task_msg,
-    hs_submit_task_msg,
-    hs_finish_task_msg,
-    hs_submitted_task_done_msg,
-    hs_finish_workflow_msg,
-    hs_stop_executor_msg,
-    hs_build_staging_msg,
-    hs_build_staging_done_msg,
-    hs_stop_framework_msg,
+#ifdef DS_HAVE_CODS
+    cods_reg_resource_msg,
+    cods_update_var_msg,
+    cods_req_task_msg,
+    cods_exec_task_msg,
+    cods_submit_task_msg,
+    cods_finish_task_msg,
+    cods_submitted_task_done_msg,
+    cods_finish_workflow_msg,
+    cods_stop_executor_msg,
+    cods_build_staging_msg,
+    cods_build_staging_done_msg,
+    cods_stop_framework_msg,
 #endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,

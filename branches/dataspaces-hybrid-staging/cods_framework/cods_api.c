@@ -1,5 +1,5 @@
-#include "hstaging_api.h"
-#include "hstaging_def.h"
+#include "cods_api.h"
+#include "cods_def.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -151,8 +151,8 @@ struct bucket_info {
 	/* track data get time */
 	double tm_st, tm_end;
 
-	enum hstaging_pe_type pe_type;
-    // enum hstaging_location_type location_type;
+	enum cods_pe_type pe_type;
+    // enum cods_location_type location_type;
     int pool_id, mpi_rank, num_bucket;
     struct executor_topology_info topo_info;
 };
@@ -215,7 +215,7 @@ inline int is_submitted_task_done(struct task_info* t) {
 static int fetch_task_info_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
     size_t mpi_rank_tab_size = bk_info.current_task->nproc*sizeof(int);
-    size_t var_tab_size = bk_info.current_task->num_vars*sizeof(struct hstaging_var);
+    size_t var_tab_size = bk_info.current_task->num_vars*sizeof(struct cods_var);
 
     // copy origin mpi ranks for allocated bk
     bk_info.current_task->bk_mpi_rank_tab = malloc(mpi_rank_tab_size);
@@ -241,7 +241,7 @@ static int fetch_task_info(struct rpc_cmd *cmd)
 	if (!msg)
 		goto err_out;
 
-    msg->size = bk_info.current_task->num_vars*sizeof(struct hstaging_var)
+    msg->size = bk_info.current_task->num_vars*sizeof(struct cods_var)
                 + bk_info.current_task->nproc*sizeof(int);
     msg->msg_data = malloc(msg->size);
 	msg->cb = fetch_task_info_completion;
@@ -257,7 +257,7 @@ err_out:
 	ERROR_TRACE();
 }
 
-static int callback_hs_exec_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_cods_exec_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
 	struct hdr_exec_task *hdr = (struct hdr_exec_task *)cmd->pad;
     bk_info.current_task->wid = hdr->wid;
@@ -278,7 +278,7 @@ static int callback_hs_exec_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	return 0;
 }
 
-static int callback_hs_submitted_task_done(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_cods_submitted_task_done(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     struct hdr_submitted_task_done *hdr = (struct hdr_submitted_task_done *)cmd->pad;
     uloga("%s(): task wid= %u tid= %u execution time %.6f\n", __func__, 
@@ -295,7 +295,7 @@ static int callback_hs_submitted_task_done(struct rpc_server *rpc_s, struct rpc_
     return 0;
 }
 
-static int callback_hs_stop_executor(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_cods_stop_executor(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
 	uloga("%s(): rank= %d get msg from %d\n",
 		__func__, rpc_s->ptlmap.id, cmd->id);
@@ -304,7 +304,7 @@ static int callback_hs_stop_executor(struct rpc_server *rpc_s, struct rpc_cmd *c
 	return 0;
 }
 
-static int callback_hs_build_staging_done(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_cods_build_staging_done(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     bk_info.f_build_staging_done = 1;    
     return 0;
@@ -318,7 +318,7 @@ static int callback_hs_build_staging_done(struct rpc_server *rpc_s, struct rpc_c
 
 // TODO: do we need to separate the init function for submitter/executor?
 /* Initialize the dataspaces library. */
-int hstaging_init(int num_peers, int appid, enum hstaging_pe_type pe_type)
+int cods_init(int num_peers, int appid, enum cods_pe_type pe_type)
 {
 	int err = -ENOMEM;
 
@@ -332,10 +332,10 @@ int hstaging_init(int num_peers, int appid, enum hstaging_pe_type pe_type)
 	}
 
 	// TODO: does it matter to place rpc_add_service after dspaces_init()?
-	rpc_add_service(hs_stop_executor_msg, callback_hs_stop_executor);
-	rpc_add_service(hs_exec_task_msg, callback_hs_exec_task);
-    rpc_add_service(hs_submitted_task_done_msg, callback_hs_submitted_task_done);
-    rpc_add_service(hs_build_staging_done_msg, callback_hs_build_staging_done);
+	rpc_add_service(cods_stop_executor_msg, callback_cods_stop_executor);
+	rpc_add_service(cods_exec_task_msg, callback_cods_exec_task);
+    rpc_add_service(cods_submitted_task_done_msg, callback_cods_submitted_task_done);
+    rpc_add_service(cods_build_staging_done_msg, callback_cods_build_staging_done);
 
 	err = dspaces_init(num_peers, appid, NULL, NULL);
 	if (err < 0) {
@@ -366,7 +366,7 @@ int hstaging_init(int num_peers, int appid, enum hstaging_pe_type pe_type)
 }
 
 /* Finalize the dataspaces library. */
-int hstaging_finalize()
+int cods_finalize()
 {
 	int err;
 	if (!bk_info.f_init_dspaces) {
@@ -386,7 +386,7 @@ err_out:
 	return -1;
 }
 
-int hstaging_update_var(struct hstaging_var *var, enum hstaging_update_var_op op)
+int cods_update_var(struct cods_var *var, enum cods_update_var_op op)
 {
     struct client_rpc_send_state send_state;
 	struct msg_buf *msg;
@@ -399,7 +399,7 @@ int hstaging_update_var(struct hstaging_var *var, enum hstaging_update_var_op op
 	if (!msg)
 		goto err_out;
 
-	msg->msg_rpc->cmd = hs_update_var_msg;
+	msg->msg_rpc->cmd = cods_update_var_msg;
 	msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
 	hdr = (struct hdr_update_var*) msg->msg_rpc->pad;
 	strcpy(hdr->name, var->name);
@@ -421,7 +421,7 @@ int hstaging_update_var(struct hstaging_var *var, enum hstaging_update_var_op op
 }
 
 // TODO: the logic of the function is not clear
-int hstaging_request_task(struct task_descriptor *t)
+int cods_request_task(struct task_descriptor *t)
 {
 	int err;
 
@@ -443,7 +443,7 @@ int hstaging_request_task(struct task_descriptor *t)
 	return 0;
 }
 
-int hstaging_register_executor(int pool_id, int num_bucket, int mpi_rank)
+int cods_register_executor(int pool_id, int num_bucket, int mpi_rank)
 {
     struct client_rpc_send_state send_state;
     struct msg_buf *msg;
@@ -461,7 +461,7 @@ int hstaging_register_executor(int pool_id, int num_bucket, int mpi_rank)
     if (!msg)
         goto err_out;
 
-    msg->msg_rpc->cmd = hs_reg_resource_msg;
+    msg->msg_rpc->cmd = cods_reg_resource_msg;
     msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
     hdr = (struct hdr_register_resource *)msg->msg_rpc->pad;
     hdr->pool_id = bk_info.pool_id;
@@ -481,7 +481,7 @@ int hstaging_register_executor(int pool_id, int num_bucket, int mpi_rank)
     ERROR_TRACE();     
 }
 
-int hstaging_set_task_finished(struct task_descriptor *t)
+int cods_set_task_finished(struct task_descriptor *t)
 {
     struct client_rpc_send_state send_state;
     struct msg_buf *msg;
@@ -494,7 +494,7 @@ int hstaging_set_task_finished(struct task_descriptor *t)
     if (!msg)
         goto err_out;
 
-    msg->msg_rpc->cmd = hs_finish_task_msg;
+    msg->msg_rpc->cmd = cods_finish_task_msg;
     msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
     hdr= (struct hdr_finish_task *)msg->msg_rpc->pad;
     hdr->pool_id = bk_info.pool_id;
@@ -513,7 +513,7 @@ int hstaging_set_task_finished(struct task_descriptor *t)
     ERROR_TRACE();
 }
 
-int hstaging_submit_task_nb(uint32_t wid, uint32_t tid, const char* conf_file)
+int cods_submit_task_nb(uint32_t wid, uint32_t tid, const char* conf_file)
 {
     struct client_rpc_send_state send_state;
     struct msg_buf *msg;
@@ -525,7 +525,7 @@ int hstaging_submit_task_nb(uint32_t wid, uint32_t tid, const char* conf_file)
     if (!msg)
         goto err_out;
 
-    msg->msg_rpc->cmd = hs_submit_task_msg;
+    msg->msg_rpc->cmd = cods_submit_task_msg;
     msg->msg_rpc->id = MY_DART_ID;
     struct hdr_submit_task *hdr= (struct hdr_submit_task*)msg->msg_rpc->pad;
     hdr->wid = wid;
@@ -545,7 +545,7 @@ int hstaging_submit_task_nb(uint32_t wid, uint32_t tid, const char* conf_file)
     ERROR_TRACE();
 }
 
-int hstaging_wait_submitted_task(uint32_t wid, uint32_t tid)
+int cods_wait_submitted_task(uint32_t wid, uint32_t tid)
 {
     int err = -ENOMEM;
     struct task_info *t = lookup_submitted_task(wid, tid);
@@ -569,7 +569,7 @@ int hstaging_wait_submitted_task(uint32_t wid, uint32_t tid)
     ERROR_TRACE();
 }
 
-int hstaging_check_submitted_task(uint32_t wid, uint32_t tid)
+int cods_check_submitted_task(uint32_t wid, uint32_t tid)
 {
     int err = -ENOMEM;
     struct task_info *t = lookup_submitted_task(wid, tid);
@@ -596,15 +596,15 @@ int hstaging_check_submitted_task(uint32_t wid, uint32_t tid)
     ERROR_TRACE();
 }
 
-int hstaging_submit_task(uint32_t wid, uint32_t tid, const char* conf_file)
+int cods_submit_task(uint32_t wid, uint32_t tid, const char* conf_file)
 {
     int err;
-    err = hstaging_submit_task_nb(wid, tid, conf_file);
+    err = cods_submit_task_nb(wid, tid, conf_file);
     if (err < 0) {
         return err;
     }
 
-    err = hstaging_wait_submitted_task(wid, tid);
+    err = cods_wait_submitted_task(wid, tid);
     if (err < 0) {
         return err;
     }
@@ -612,7 +612,7 @@ int hstaging_submit_task(uint32_t wid, uint32_t tid, const char* conf_file)
     return 0;
 }
 
-int hstaging_build_staging(int pool_id, const char *conf_file)
+int cods_build_staging(int pool_id, const char *conf_file)
 {
     struct client_rpc_send_state send_state;
     struct msg_buf *msg;
@@ -625,7 +625,7 @@ int hstaging_build_staging(int pool_id, const char *conf_file)
     if (!msg)
         goto err_out;
 
-    msg->msg_rpc->cmd = hs_build_staging_msg;
+    msg->msg_rpc->cmd = cods_build_staging_msg;
     msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
     hdr= (struct hdr_build_staging *)msg->msg_rpc->pad;
     hdr->pool_id = pool_id;
@@ -651,7 +651,7 @@ err_out:
     ERROR_TRACE();
 }
 
-int hstaging_set_workflow_finished(uint32_t wid)
+int cods_set_workflow_finished(uint32_t wid)
 {
     struct client_rpc_send_state send_state;
     struct msg_buf *msg;
@@ -664,7 +664,7 @@ int hstaging_set_workflow_finished(uint32_t wid)
     if (!msg)
         goto err_out;
 
-    msg->msg_rpc->cmd = hs_finish_workflow_msg;
+    msg->msg_rpc->cmd = cods_finish_workflow_msg;
     msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
     hdr = (struct hdr_finish_workflow*) msg->msg_rpc->pad;
     hdr->wid = wid;
@@ -681,7 +681,7 @@ int hstaging_set_workflow_finished(uint32_t wid)
     ERROR_TRACE();
 }
 
-int hstaging_stop_framework()
+int cods_stop_framework()
 {
     struct client_rpc_send_state send_state;
     struct msg_buf *msg;
@@ -694,7 +694,7 @@ int hstaging_stop_framework()
     if (!msg)
         goto err_out;
 
-    msg->msg_rpc->cmd = hs_stop_framework_msg;
+    msg->msg_rpc->cmd = cods_stop_framework_msg;
     msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
 
     err = client_rpc_send(peer, msg, &send_state);

@@ -36,7 +36,7 @@
 
 #include "mpi.h"
 
-#include "hstaging_api.h"
+#include "cods_api.h"
 
 // dummy example workflows
 extern int dummy_epsi_coupling_workflow(MPI_Comm comm);
@@ -65,9 +65,9 @@ int main(int argc, char **argv)
 	MPI_Comm_size(comm, &nproc);
 
     if (rank == 0) {
-        uloga("DAG execution: workflow_id=%u num_worker= %d\n", example_workflow_id, nproc);
+        uloga("task execution: workflow_id=%u num_worker= %d\n", example_workflow_id, nproc);
     }
-	err = hstaging_init(nproc, appid, hs_executor); 
+	err = cods_init(nproc, appid, cods_executor); 
 
     switch (example_workflow_id) {
     case EPSI_WORKFLOW_ID:
@@ -90,7 +90,7 @@ int main(int argc, char **argv)
 	if (err < 0)
 		goto err_out;
 
-	hstaging_finalize();
+	cods_finalize();
 
 	MPI_Barrier(comm);
 	MPI_Finalize();

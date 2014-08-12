@@ -1,5 +1,5 @@
-#ifndef __HSTAGING_STRUTIL_H__
-#define __HSTAGING_STRUTIL_H__
+#ifndef __CODS_STRUTIL_H__
+#define __CODS_STRUTIL_H__
 
 #include <stdint.h>
 #include <stdio.h>

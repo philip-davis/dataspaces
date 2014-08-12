@@ -15,9 +15,9 @@
 #include "ds_gspace.h"
 #include "dimes_server.h"
 
-#include "hstaging_scheduler.h"
-#include "hstaging_api.h"
-#include "hstaging_def.h"
+#include "cods_scheduler.h"
+#include "cods_api.h"
+#include "cods_def.h"
 #include "mpi.h"
 
 static int num_sp;
@@ -30,19 +30,18 @@ static struct ds_gspace *dsg = NULL;
 
 static struct timer tm; 
 static double tm_st;
-//static double dag_tm_st, dag_tm_end;
 
-struct hstaging_framework_state {
+struct cods_framework_state {
     unsigned char f_done;
     unsigned char f_notify_executor_to_exit;
 };
-static struct hstaging_framework_state framework_state;
+static struct cods_framework_state framework_state;
 
 struct runnable_task {
 	struct list_head entry;
-	struct hstaging_task *task_ref;
+	struct cods_task *task_ref;
 	// int num_input_vars;
-    // enum hstaging_location_type location_type;
+    // enum cods_location_type location_type;
     int bk_allocation_size; // number of buckets required for task execution
     int *bk_idx_tab; // array of idx to the buckets in bk_tab 
 };
@@ -98,15 +97,15 @@ static struct list_head workflow_list;
  Workflow & Tasks
 **/
 
-static void free_workflow(struct hstaging_workflow *wf)
+static void free_workflow(struct cods_workflow *wf)
 {
     if (!wf) return;
     if (wf->num_tasks > 0) {
         uloga("WARNING %s: wf->num_tasks= %d\n", __func__, wf->num_tasks);
     }
 
-    struct hstaging_task *task, *temp;
-    list_for_each_entry_safe(task, temp, &wf->task_list, struct hstaging_task, entry) {
+    struct cods_task *task, *temp;
+    list_for_each_entry_safe(task, temp, &wf->task_list, struct cods_task, entry) {
         list_del(&task->entry);
         free(task);
     }
@@ -115,10 +114,10 @@ static void free_workflow(struct hstaging_workflow *wf)
     free(wf);
 }
 
-static struct hstaging_task* workflow_lookup_task(struct hstaging_workflow *wf, uint32_t tid)
+static struct cods_task* workflow_lookup_task(struct cods_workflow *wf, uint32_t tid)
 {
-    struct hstaging_task *task;
-    list_for_each_entry(task, &wf->task_list, struct hstaging_task, entry) {
+    struct cods_task *task;
+    list_for_each_entry(task, &wf->task_list, struct cods_task, entry) {
         if (task->tid == tid)
             return task;
     } 
@@ -126,17 +125,17 @@ static struct hstaging_task* workflow_lookup_task(struct hstaging_workflow *wf, 
     return NULL;
 }
 
-static void workflow_add_task(struct hstaging_workflow *wf, struct hstaging_task *task)
+static void workflow_add_task(struct cods_workflow *wf, struct cods_task *task)
 {
     if (!task) return;
     list_add_tail(&task->entry, &wf->task_list);
     wf->num_tasks++;
 }
 
-static void workflow_clear_finished_tasks(struct hstaging_workflow *wf)
+static void workflow_clear_finished_tasks(struct cods_workflow *wf)
 {
-    struct hstaging_task *task, *temp;
-    list_for_each_entry_safe(task, temp, &wf->task_list, struct hstaging_task, entry) {
+    struct cods_task *task, *temp;
+    list_for_each_entry_safe(task, temp, &wf->task_list, struct cods_task, entry) {
         if (is_task_finish(task)) {
             list_del(&task->entry);
             free(task);
@@ -145,9 +144,9 @@ static void workflow_clear_finished_tasks(struct hstaging_workflow *wf)
     }
 }
 
-static struct hstaging_task* create_new_task(uint32_t wid, uint32_t tid, const char* conf_file)
+static struct cods_task* create_new_task(uint32_t wid, uint32_t tid, const char* conf_file)
 {
-    struct hstaging_task *task = (struct hstaging_task*)malloc(sizeof(*task));
+    struct cods_task *task = (struct cods_task*)malloc(sizeof(*task));
     if (!task) {
         goto err_out;
     }
@@ -176,9 +175,9 @@ static inline void workflow_list_init()
     INIT_LIST_HEAD(&workflow_list);
 }
 
-static struct hstaging_workflow* workflow_list_lookup(uint32_t wid) {
-    struct hstaging_workflow *wf;
-    list_for_each_entry(wf, &workflow_list, struct hstaging_workflow, entry) {
+static struct cods_workflow* workflow_list_lookup(uint32_t wid) {
+    struct cods_workflow *wf;
+    list_for_each_entry(wf, &workflow_list, struct cods_workflow, entry) {
         if (wf->wid == wid)
             return wf;
     }
@@ -186,9 +185,9 @@ static struct hstaging_workflow* workflow_list_lookup(uint32_t wid) {
     return NULL;
 }
 
-static struct hstaging_workflow* workflow_list_create_new(uint32_t wid) {
-    struct hstaging_workflow *wf;
-    wf = (struct hstaging_workflow*)malloc(sizeof(*wf));
+static struct cods_workflow* workflow_list_create_new(uint32_t wid) {
+    struct cods_workflow *wf;
+    wf = (struct cods_workflow*)malloc(sizeof(*wf));
     wf->wid = wid;
     wf->state.f_done = 0;
     INIT_LIST_HEAD(&wf->task_list);
@@ -200,24 +199,24 @@ static struct hstaging_workflow* workflow_list_create_new(uint32_t wid) {
 
 static void workflow_list_clear_finished_tasks()
 {
-    struct hstaging_workflow *wf;
-    list_for_each_entry(wf, &workflow_list, struct hstaging_workflow, entry) {
+    struct cods_workflow *wf;
+    list_for_each_entry(wf, &workflow_list, struct cods_workflow, entry) {
         workflow_clear_finished_tasks(wf);
     }
 }
 
-static void workflow_list_evaluate_dataflow(const struct hstaging_var *var_desc)
+static void workflow_list_evaluate_dataflow(const struct cods_var *var_desc)
 {   
-    struct hstaging_workflow *wf;
-    list_for_each_entry(wf, &workflow_list, struct hstaging_workflow, entry) {
+    struct cods_workflow *wf;
+    list_for_each_entry(wf, &workflow_list, struct cods_workflow, entry) {
        evaluate_dataflow_by_available_var(wf, var_desc);
     }
 }
 
 static void workflow_list_free()
 {
-    struct hstaging_workflow *wf, *temp;
-    list_for_each_entry_safe(wf, temp, &workflow_list, struct hstaging_workflow, entry) {
+    struct cods_workflow *wf, *temp;
+    list_for_each_entry_safe(wf, temp, &workflow_list, struct cods_workflow, entry) {
         free_workflow(wf);
     }
 }
@@ -480,7 +479,7 @@ static struct runnable_task *rtask_list_lookup(uint32_t wid, uint32_t tid)
 	return NULL;
 }
 
-static struct runnable_task *rtask_list_add_new(struct hstaging_task *t)
+static struct runnable_task *rtask_list_add_new(struct cods_task *t)
 {
     struct runnable_task *rtask = malloc(sizeof(*rtask));
     rtask->task_ref = t;
@@ -540,9 +539,9 @@ static int notify_bk(struct runnable_task *rtask, struct bucket_pool *bp,
 	if (!msg)
 		goto err_out;
     
-    struct hstaging_task *t = rtask->task_ref;
+    struct cods_task *t = rtask->task_ref;
     size_t mpi_rank_tab_size = rtask->bk_allocation_size*sizeof(int);
-    size_t var_tab_size = t->num_vars*sizeof(struct hstaging_var);
+    size_t var_tab_size = t->num_vars*sizeof(struct cods_var);
     msg->size = mpi_rank_tab_size + var_tab_size;
     msg->msg_data = malloc(msg->size); 
     msg->cb = notify_bk_completion;
@@ -555,12 +554,12 @@ static int notify_bk(struct runnable_task *rtask, struct bucket_pool *bp,
     }
 
     // copy variable information
-    struct hstaging_var *vars = (struct hstaging_var*)(msg->msg_data+mpi_rank_tab_size);
+    struct cods_var *vars = (struct cods_var*)(msg->msg_data+mpi_rank_tab_size);
     for (i = 0; i < t->num_vars; i++) {
         vars[i] = t->vars[i];
     } 
 
-	msg->msg_rpc->cmd = hs_exec_task_msg;
+	msg->msg_rpc->cmd = cods_exec_task_msg;
 	msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
 	struct hdr_exec_task *hdr =
 		(struct hdr_exec_task *)msg->msg_rpc->pad;
@@ -591,7 +590,7 @@ static int runnable_task_allocate_bk(struct runnable_task *rtask)
 
     // Try to determine placement location
 /*
-    enum hstaging_location_type preferred_loc;
+    enum cods_location_type preferred_loc;
     switch (j->ti->placement_hint) {
     case hint_insitu:
         preferred_loc = loc_insitu;
@@ -665,7 +664,7 @@ static void print_rr_count()
 		timestamp_, num_runnable_task, num_idle_bucket, num_busy_bucket);
 }
 
-static int notify_task_submitter(struct hstaging_task *task)
+static int notify_task_submitter(struct cods_task *task)
 {
     struct msg_buf *msg;
     struct node_id *peer;
@@ -677,7 +676,7 @@ static int notify_task_submitter(struct hstaging_task *task)
     if (!msg)
         goto err_out;
 
-    msg->msg_rpc->cmd = hs_submitted_task_done_msg;
+    msg->msg_rpc->cmd = cods_submitted_task_done_msg;
     msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
     struct hdr_submitted_task_done *hdr= (struct hdr_submitted_task_done*)msg->msg_rpc->pad;
     hdr->wid = task->wid;
@@ -707,10 +706,10 @@ static int process_finished_task()
         }
     }
 
-    struct hstaging_workflow *wf;
-    list_for_each_entry(wf, &workflow_list, struct hstaging_workflow, entry) {
-        struct hstaging_task *task, *t;
-        list_for_each_entry_safe(task, t, &wf->task_list, struct hstaging_task, entry) {
+    struct cods_workflow *wf;
+    list_for_each_entry(wf, &workflow_list, struct cods_workflow, entry) {
+        struct cods_task *task, *t;
+        list_for_each_entry_safe(task, t, &wf->task_list, struct cods_task, entry) {
             if (is_task_finish(task)) {
                 notify_task_submitter(task);
                 // remove task from the workflow's task list 
@@ -726,8 +725,8 @@ static int process_finished_task()
 
 static int process_workflow_state()
 {
-    struct hstaging_workflow *wf, *temp;
-    list_for_each_entry_safe(wf, temp, &workflow_list, struct hstaging_workflow, entry) {
+    struct cods_workflow *wf, *temp;
+    list_for_each_entry_safe(wf, temp, &workflow_list, struct cods_workflow, entry) {
         if (wf->state.f_done) {
             uloga("%s: to free workflow wid= %u\n", __func__, wf->wid);
             // TODO: 
@@ -757,7 +756,7 @@ static int process_framework_state()
                 if (!msg)
                     goto err_out;
 
-                msg->msg_rpc->cmd = hs_stop_executor_msg;
+                msg->msg_rpc->cmd = cods_stop_executor_msg;
                 msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
 
                 err = rpc_send(ds->rpc_s, peer, msg);
@@ -776,7 +775,7 @@ static int process_framework_state()
     ERROR_TRACE();
 }
 
-static int process_hs_build_staging(struct pending_msg *p)
+static int process_cods_build_staging(struct pending_msg *p)
 {
     int err;
     int submitter_dart_id = p->cmd.id;
@@ -796,7 +795,7 @@ static int process_hs_build_staging(struct pending_msg *p)
 
     // TODO: build multi-level staging 
 
-    // reply to the submitter of the dag
+    // reply to task submitter 
     struct msg_buf *msg;
     struct node_id *peer;
 
@@ -805,7 +804,7 @@ static int process_hs_build_staging(struct pending_msg *p)
     if (!msg)
         goto err_out;
 
-    msg->msg_rpc->cmd = hs_build_staging_done_msg;
+    msg->msg_rpc->cmd = cods_build_staging_done_msg;
     msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
     err = rpc_send(ds->rpc_s, peer, msg);
     if (err < 0) {
@@ -827,8 +826,8 @@ static int process_pending_msg()
     list_for_each_entry_safe(p, t, &pending_msg_list, struct pending_msg, entry)
     {
         switch (p->cmd.cmd) {
-        case hs_build_staging_msg:
-            err = process_hs_build_staging(p);
+        case cods_build_staging_msg:
+            err = process_cods_build_staging(p);
             if (0 == err) {
                 // remove msg from list
                 list_del(&p->entry);
@@ -852,9 +851,9 @@ static int process_runnable_task()
 	int err = -ENOMEM;
 
 	// 1. Add ready tasks (if any) 
-    struct hstaging_workflow *wf;
-    list_for_each_entry(wf, &workflow_list, struct hstaging_workflow, entry) {
-        struct hstaging_task *tasks[MAX_NUM_TASKS];
+    struct cods_workflow *wf;
+    list_for_each_entry(wf, &workflow_list, struct cods_workflow, entry) {
+        struct cods_task *tasks[MAX_NUM_TASKS];
         int num_tasks;
         get_ready_tasks(wf, tasks, &num_tasks);
         if (num_tasks > 0) {
@@ -875,7 +874,7 @@ static int process_runnable_task()
 	return 0;
 }
 
-static int callback_hs_finish_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_cods_finish_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     struct hdr_finish_task *hdr = (struct hdr_finish_task*)cmd->pad;
     struct bucket_pool *bp = bk_pool_lookup(hdr->pool_id);
@@ -900,7 +899,7 @@ static int callback_hs_finish_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd
     return 0;
 }
 
-static int callback_hs_reg_resource(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_cods_reg_resource(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     struct hdr_register_resource *hdr = (struct hdr_register_resource*)cmd->pad;
     int pool_id = hdr->pool_id;
@@ -935,10 +934,10 @@ static int callback_hs_reg_resource(struct rpc_server *rpc_s, struct rpc_cmd *cm
     return 0;
 }
 
-static int callback_hs_finish_workflow(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_cods_finish_workflow(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     struct hdr_finish_workflow *hdr = (struct hdr_finish_workflow*)cmd->pad;
-    struct hstaging_workflow *wf = workflow_list_lookup(hdr->wid);    
+    struct cods_workflow *wf = workflow_list_lookup(hdr->wid);    
     if (wf) {
         wf->state.f_done = 1;
     } else {
@@ -950,7 +949,7 @@ static int callback_hs_finish_workflow(struct rpc_server *rpc_s, struct rpc_cmd 
 }
 
 // TODO: make the workflow evaluation asynchronous...
-static int callback_hs_update_var(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_cods_update_var(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
 	struct hdr_update_var *hdr = (struct hdr_update_var*)cmd->pad;
 
@@ -962,7 +961,7 @@ static int callback_hs_update_var(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 			hdr->bb.ub.c[0], hdr->bb.ub.c[1], hdr->bb.ub.c[2]);
 */
 
-    struct hstaging_var var_desc;
+    struct cods_var var_desc;
     strcpy(var_desc.name, hdr->name);
     var_desc.version = hdr->version;
     var_desc.elem_size = hdr->elem_size;
@@ -972,12 +971,12 @@ static int callback_hs_update_var(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	return 0;
 }
 
-static int callback_hs_submit_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_cods_submit_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     struct hdr_submit_task *hdr = (struct hdr_submit_task*)cmd->pad;
     uloga("%s(): config file %s\n", __func__, hdr->conf_file);
 
-    struct hstaging_workflow *wf = workflow_list_lookup(hdr->wid);
+    struct cods_workflow *wf = workflow_list_lookup(hdr->wid);
     if (!wf) {
         wf = workflow_list_create_new(hdr->wid);
     } else {
@@ -987,7 +986,7 @@ static int callback_hs_submit_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd
         }
     }
 
-    struct hstaging_task *task = create_new_task(hdr->wid, hdr->tid, hdr->conf_file);
+    struct cods_task *task = create_new_task(hdr->wid, hdr->tid, hdr->conf_file);
     if (!task) {
         return 0;
     }
@@ -999,7 +998,7 @@ static int callback_hs_submit_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd
     return 0;
 }
 
-static int callback_hs_build_staging(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_cods_build_staging(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     uloga("%s(): get request from peer #%d\n", __func__, cmd->id);
 
@@ -1011,21 +1010,21 @@ static int callback_hs_build_staging(struct rpc_server *rpc_s, struct rpc_cmd *c
     return 0;
 }
 
-static int callback_hs_stop_framework(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_cods_stop_framework(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     framework_state.f_done = 1;    
     return 0;
 }
 
-int hstaging_scheduler_init()
+int cods_scheduler_init()
 {
-	rpc_add_service(hs_finish_workflow_msg, callback_hs_finish_workflow);
-	rpc_add_service(hs_update_var_msg, callback_hs_update_var); 
-    rpc_add_service(hs_reg_resource_msg, callback_hs_reg_resource);
-    rpc_add_service(hs_finish_task_msg, callback_hs_finish_task);
-    rpc_add_service(hs_submit_task_msg, callback_hs_submit_task);
-    rpc_add_service(hs_build_staging_msg, callback_hs_build_staging);
-    rpc_add_service(hs_stop_framework_msg, callback_hs_stop_framework);
+	rpc_add_service(cods_finish_workflow_msg, callback_cods_finish_workflow);
+	rpc_add_service(cods_update_var_msg, callback_cods_update_var); 
+    rpc_add_service(cods_reg_resource_msg, callback_cods_reg_resource);
+    rpc_add_service(cods_finish_task_msg, callback_cods_finish_task);
+    rpc_add_service(cods_submit_task_msg, callback_cods_submit_task);
+    rpc_add_service(cods_build_staging_msg, callback_cods_build_staging);
+    rpc_add_service(cods_stop_framework_msg, callback_cods_stop_framework);
 
 	dimes_s = dimes_server_alloc(num_sp, num_cp, conf);
 	if (!dimes_s) {
@@ -1050,7 +1049,7 @@ int hstaging_scheduler_init()
 	return 0;
 }
 
-int hstaging_scheduler_run()
+int cods_scheduler_run()
 {
 	int err;
 
@@ -1083,7 +1082,7 @@ int hstaging_scheduler_run()
 	return 0;
 }
 
-int hstaging_scheduler_finish()
+int cods_scheduler_finish()
 {
 	dimes_server_barrier(dimes_s);
 	dimes_server_free(dimes_s);
@@ -1092,7 +1091,7 @@ int hstaging_scheduler_finish()
 }
 
 
-void hstaging_scheduler_usage()
+void cods_scheduler_usage()
 {
 	printf("Usage: server OPTIONS\n"
 			"OPTIONS: \n"
@@ -1101,7 +1100,7 @@ void hstaging_scheduler_usage()
 			"--conf, -f      Define configuration file\n");
 }
 
-int hstaging_scheduler_parse_args(int argc, char *argv[])
+int cods_scheduler_parse_args(int argc, char *argv[])
 {
 	const char opt_short[] = "s:c:f:";
 	const struct option opt_long[] = {

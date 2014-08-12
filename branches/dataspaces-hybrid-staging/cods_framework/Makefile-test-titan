@@ -25,7 +25,7 @@ PMI_LIBS = $(shell pkg-config --libs cray-pmi)
 UGNI_CFLAGS = $(shell pkg-config --cflags cray-ugni)
 UGNI_LIBS = $(shell pkg-config --libs cray-ugni)
 
-LIBS= -L./ -lhstaging \
+LIBS= -L./ -lcods \
 	-L$(DSPACES_DIR)/src -ldspaces -ldscommon \
 	-L$(DSPACES_DIR)/dart -ldart \
 	${PMI_LIBS} ${UGNI_LIBS} \
@@ -34,21 +34,21 @@ LIBS= -L./ -lhstaging \
     -L$(MEMQ_DIR) -lmemq \
     -L$(FASTBIT_DIR)/lib -Wl,-rpath=$(FASTBIT_DIR)/lib -lfastbit -lrt -lm
 
-CFLAGS= -g ${UGNI_CFLAGS} ${PMI_CLFASG} -DDEBUG -DHAVE_UGNI -DDS_HAVE_DIMES -DDS_HAVE_HYBRID_STAGING
+CFLAGS= -g ${UGNI_CFLAGS} ${PMI_CLFASG} -DDEBUG -DHAVE_UGNI -DDS_HAVE_DIMES -DDS_HAVE_CODS
 
-SRC = common.c hstaging_partition.c dummy_workflow_task.c
-SRC1 = scheduler_driver.c
-SRC2 = dag_executor.c
-SRC3 = dag_submitter.c
+SRC = common.c dummy_workflow_task.c
+SRC1 = workflow_manager.c
+SRC2 = task_executor.c
+SRC3 = task_submitter.c
 
 OBJ = $(SRC:.c=.o)
 OBJ1 = $(SRC1:.c=.o)
 OBJ2 = $(SRC2:.c=.o)
 OBJ3 = $(SRC3:.c=.o)
 
-OUT1 = ./scheduler_driver
-OUT2 = ./dag_executor
-OUT3 = ./dag_submitter
+OUT1 = ./workflow_manager
+OUT2 = ./task_executor
+OUT3 = ./task_submitter
 
 default: $(OUT1) $(OUT2) $(OUT3)
 

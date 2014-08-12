@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 #include "common.h"
-#include "hstaging_api.h"
+#include "cods_api.h"
 #include "mpi.h"
 
 #include "hpgv.h"
@@ -85,7 +85,7 @@ static void task_done(struct task_descriptor *t, struct parallel_communicator *c
     if (comm) {
         MPI_Barrier(comm->comm);
         if (t->rank == 0) { 
-            hstaging_set_task_finished(t);
+            cods_set_task_finished(t);
         }
     } else {
         uloga("%s(): error comm == NULL\n", __func__);
@@ -131,13 +131,13 @@ static int update_var(const char *var_name, int version, size_t elem_size,
     int ndim, uint64_t *gdim)
 {
     int err;
-    struct hstaging_var var_desc;
+    struct cods_var var_desc;
     // TODO: add filling var_desc
-    err = hstaging_update_var(&var_desc, OP_PUT);
+    err = cods_update_var(&var_desc, OP_PUT);
     return err;
 }  
 
-static struct hstaging_var* lookup_task_var(struct task_descriptor *t, const char *var_name)
+static struct cods_var* lookup_task_var(struct task_descriptor *t, const char *var_name)
 {
     int i;
     for (i = 0; i < t->num_vars; i++) {
@@ -147,7 +147,7 @@ static struct hstaging_var* lookup_task_var(struct task_descriptor *t, const cha
     return NULL;
 }
 
-static int check_var_dimension(struct hstaging_var *var) {
+static int check_var_dimension(struct cods_var *var) {
     if (!var) return -1;
 
     if (var->gdim.ndim != var->dist_hint.ndim) {
@@ -164,7 +164,7 @@ static int check_var_dimension(struct hstaging_var *var) {
     return 0;
 }
 
-static int generate_sp(struct hstaging_var *var, uint64_t *sp)
+static int generate_sp(struct cods_var *var, uint64_t *sp)
 {
     if (check_var_dimension(var) < 0) return -1;
 
@@ -181,7 +181,7 @@ static int generate_sp(struct hstaging_var *var, uint64_t *sp)
     return 0;
 }
 
-static int generate_np(struct hstaging_var *var, uint64_t *np)
+static int generate_np(struct cods_var *var, uint64_t *np)
 {
     if (check_var_dimension(var) < 0) return -1;
 
@@ -196,7 +196,7 @@ static int generate_np(struct hstaging_var *var, uint64_t *np)
     return 0;
 }
 
-static void* allocate_data(struct hstaging_var *var)
+static void* allocate_data(struct cods_var *var)
 {
     void* buf = NULL;
     uint64_t sp[BBOX_MAX_NDIM];
@@ -211,7 +211,7 @@ static void* allocate_data(struct hstaging_var *var)
     return buf;        
 }
 
-static int generate_data_value(struct hstaging_var *var, void *data, int version)
+static int generate_data_value(struct cods_var *var, void *data, int version)
 {
     double value = version;
     int i;
@@ -235,18 +235,18 @@ static int generate_data_value(struct hstaging_var *var, void *data, int version
     return 0;
 }
 
-static void set_ndim(struct hstaging_var *var, int *ndim) {
+static void set_ndim(struct cods_var *var, int *ndim) {
     *ndim = var->gdim.ndim;
 }
 
-static void set_gdim(struct hstaging_var *var, uint64_t *gdim) {
+static void set_gdim(struct cods_var *var, uint64_t *gdim) {
     int i;
     for (i = 0; i < var->gdim.ndim; i++) {
         gdim[i] = var->gdim.sizes.c[i];
     }
 }
 
-static void set_bbox(struct task_descriptor *t, struct hstaging_var *var,
+static void set_bbox(struct task_descriptor *t, struct cods_var *var,
     uint64_t *lb, uint64_t *ub)
 {
     int i, j;
@@ -266,7 +266,7 @@ static void set_bbox(struct task_descriptor *t, struct hstaging_var *var,
     }
 }
 
-static int read_data(struct task_descriptor *t, struct hstaging_var *var, int version, struct parallel_communicator *comm, int use_lock)
+static int read_data(struct task_descriptor *t, struct cods_var *var, int version, struct parallel_communicator *comm, int use_lock)
 {
     int err;
     double *data = NULL;
@@ -316,7 +316,7 @@ static int read_data(struct task_descriptor *t, struct hstaging_var *var, int ve
     return err;
 }
 
-static int write_data(struct task_descriptor *t, struct hstaging_var *var, int version, struct parallel_communicator *comm, int use_lock, int use_group) {
+static int write_data(struct task_descriptor *t, struct cods_var *var, int version, struct parallel_communicator *comm, int use_lock, int use_group) {
     int err;
     double *data = NULL;
     int ndim;
@@ -570,10 +570,10 @@ int dummy_s3d_task(struct task_descriptor *t,
         if (comm_rank == 0) {
             // submit analyis operation
             // TODO: make is non-blocking
-            hstaging_submit_task(wid, tid++, "s3d_viz.conf");
-            hstaging_submit_task(wid, tid++, "s3d_stat.conf");
-            hstaging_submit_task(wid, tid++, "s3d_topo.conf");
-            hstaging_submit_task(wid, tid++, "s3d_indexing.conf");
+            cods_submit_task(wid, tid++, "s3d_viz.conf");
+            cods_submit_task(wid, tid++, "s3d_stat.conf");
+            cods_submit_task(wid, tid++, "s3d_topo.conf");
+            cods_submit_task(wid, tid++, "s3d_indexing.conf");
         }
         MPI_Barrier(comm->comm);
     }
@@ -724,7 +724,7 @@ int dummy_dns_task(struct task_descriptor *t,
             // write variable            
             char var_name[256];
             sprintf(var_name, "var%d", i);
-            struct hstaging_var *var = lookup_task_var(t, var_name);
+            struct cods_var *var = lookup_task_var(t, var_name);
             if (var) {
                 write_data(t, var, ts, comm, 1, 1);
             }
@@ -769,7 +769,7 @@ int dummy_les_task(struct task_descriptor *t,
             // read variable
             char var_name[256];
             sprintf(var_name, "var%d", i);
-            struct hstaging_var *var = lookup_task_var(t, var_name);
+            struct cods_var *var = lookup_task_var(t, var_name);
             if (var) {
                 read_data(t, var, ts, comm, 1);
             }
@@ -840,7 +840,7 @@ int task_viz_render(struct task_descriptor *t, struct parallel_communicator *com
     double *data = NULL;
     int xl, yl, zl, xu, yu, zu;
     size_t elem_size = sizeof(double);
-    struct hstaging_var *var_desc;
+    struct cods_var *var_desc;
 
     var_desc = &(t->vars[0]);
     set_data_decomposition(t, var_desc);
@@ -851,7 +851,7 @@ int task_viz_render(struct task_descriptor *t, struct parallel_communicator *com
         data = viz_info.viz_data;
     }
     generate_bbox(&g, &xl, &yl, &zl, &xu, &yu, &zu);
-    err = hstaging_get_var(var_desc->name, var_desc->version, elem_size,
+    err = cods_get_var(var_desc->name, var_desc->version, elem_size,
             xl, yl, zl, xu, yu, zu, data, NULL);
     if (err < 0) {
         uloga("%s(): failed to get var\n", __func__);
@@ -917,7 +917,7 @@ int task_fb_indexing(struct task_descriptor *t, struct parallel_communicator *co
 
     double *data = NULL;
     int xl, yl, zl, xu, yu, zu;
-    struct hstaging_var *var_desc = &(t->vars[0]);
+    struct cods_var *var_desc = &(t->vars[0]);
     size_t elem_size = var_desc->elem_size;
     int num_double_elem = 0;
 
@@ -925,7 +925,7 @@ int task_fb_indexing(struct task_descriptor *t, struct parallel_communicator *co
     num_double_elem = (g.spx*g.spy*g.spz)*elem_size/sizeof(double);
     data = allocate_data(num_double_elem);
     generate_bbox(&g, &xl, &yl, &zl, &xu, &yu, &zu);
-    err = hstaging_get_var(var_desc->name, var_desc->version, elem_size,
+    err = cods_get_var(var_desc->name, var_desc->version, elem_size,
             xl, yl, zl, xu, yu, zu, data, NULL);
     if (err < 0) {
         uloga("%s(): failed to get var\n", __func__);
@@ -1000,19 +1000,19 @@ int dummy_sample_dag_workflow(MPI_Comm comm)
         register_task_function(appid, dag_task);
     }
     int pool_id = 1;
-    hstaging_register_executor(pool_id, mpi_nproc, mpi_rank);
+    cods_register_executor(pool_id, mpi_nproc, mpi_rank);
     MPI_Barrier(comm);
 
 	struct task_descriptor t;
-	while (!hstaging_request_task(&t)) {
-		hstaging_put_sync_all();
+	while (!cods_request_task(&t)) {
+		cods_put_sync_all();
 		err = exec_task_function(&t);	
 		if (err < 0) {
 			return err;
 		}
 	}
 
-    hstaging_put_sync_all();
+    cods_put_sync_all();
     communicator_free();
 
 	return 0;
@@ -1037,7 +1037,7 @@ int s3d_viz_render_task(struct task_descriptor *t,
     }
 
     // lookup input data var
-    struct hstaging_var *var = lookup_task_var(t, "s3d_data_viz");
+    struct cods_var *var = lookup_task_var(t, "s3d_data_viz");
     if (!var) {
         uloga("ERROR %s: failed to lookup task var 's3d_data_viz'\n", __func__);
         return 0;
@@ -1106,7 +1106,7 @@ int s3d_fb_indexing_task(struct task_descriptor *t,
     }
 
     // lookup input data var
-    struct hstaging_var *var = lookup_task_var(t, "s3d_data_fb");
+    struct cods_var *var = lookup_task_var(t, "s3d_data_fb");
     if (!var) {
         uloga("ERROR %s: failed to lookup task var 's3d_data_fb'\n", __func__);
         return 0;
@@ -1190,11 +1190,11 @@ int dummy_epsi_coupling_workflow(MPI_Comm comm)
     register_task_function(2, dummy_xgca_task);
 
     int pool_id = 1;
-    hstaging_register_executor(pool_id, mpi_nproc, mpi_rank);
+    cods_register_executor(pool_id, mpi_nproc, mpi_rank);
     MPI_Barrier(comm);
 
     struct task_descriptor t;
-    while (!hstaging_request_task(&t)) {
+    while (!cods_request_task(&t)) {
         err = exec_task_function(&t);
         if (err < 0) {
             return err;
@@ -1221,11 +1221,11 @@ int dummy_s3d_analysis_workflow(MPI_Comm comm)
     register_task_function(5, dummy_s3d_indexing_task);
 
     int pool_id = 1;
-    hstaging_register_executor(pool_id, mpi_nproc, mpi_rank);
+    cods_register_executor(pool_id, mpi_nproc, mpi_rank);
     MPI_Barrier(comm);
 
     struct task_descriptor t;
-    while (!hstaging_request_task(&t)) {
+    while (!cods_request_task(&t)) {
         err = exec_task_function(&t);
         if (err < 0) {
             return err;
@@ -1249,11 +1249,11 @@ int dummy_dns_les_workflow(MPI_Comm comm)
     register_task_function(2, dummy_les_task);
 
     int pool_id = 1;
-    hstaging_register_executor(pool_id, mpi_nproc, mpi_rank);
+    cods_register_executor(pool_id, mpi_nproc, mpi_rank);
     MPI_Barrier(comm);
 
     struct task_descriptor t;
-    while (!hstaging_request_task(&t)) {
+    while (!cods_request_task(&t)) {
         err = exec_task_function(&t);
         if (err < 0) {
             return err;
@@ -1277,11 +1277,11 @@ int s3d_analysis_workflow(MPI_Comm comm)
     register_task_function(2, s3d_fb_indexing_task);
 
     int pool_id = 1;
-    hstaging_register_executor(pool_id, mpi_nproc, mpi_rank);
+    cods_register_executor(pool_id, mpi_nproc, mpi_rank);
     MPI_Barrier(comm);
 
     struct task_descriptor t;
-    while (!hstaging_request_task(&t)) {
+    while (!cods_request_task(&t)) {
         err = exec_task_function(&t);
         if (err < 0) {
             return err;

@@ -7,26 +7,6 @@
 
 #include "mpi.h"
 
-enum core_type {
-	hs_manager_core = 1,
-	hs_worker_core
-};
-
-enum worker_type {
-	hs_simulation_worker = 1, 
-	hs_staging_worker
-};
-
-enum location_type {
-	hs_insitu = 1,
-	hs_intransit
-};
-
-enum execution_mode {
-	hs_staging_mode = 1,
-	hs_hybrid_staging_mode
-};
-
 int hs_comm_init(int, char **);
 int hs_comm_fin();
 
