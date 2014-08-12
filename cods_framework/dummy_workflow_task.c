@@ -569,11 +569,30 @@ int dummy_s3d_task(struct cods_task *t,
 
         if (comm_rank == 0) {
             // submit analyis operation
-            // TODO: make is non-blocking
-            cods_submit_task(wid, tid++, "s3d_viz.conf");
-            cods_submit_task(wid, tid++, "s3d_stat.conf");
-            cods_submit_task(wid, tid++, "s3d_topo.conf");
-            cods_submit_task(wid, tid++, "s3d_indexing.conf");
+            // create task descriptors
+            struct task_descriptor task1, task2, task3, task4;
+            task1.wid = wid;
+            task1.tid = tid++;
+            strcpy(task1.conf_file, "s3d_viz.conf"); 
+            task2.wid = wid;
+            task2.tid = tid++;
+            strcpy(task2.conf_file, "s3d_stat.conf"); 
+            task3.wid = wid;
+            task3.tid = tid++;
+            strcpy(task3.conf_file, "s3d_topo.conf"); 
+            task4.wid = wid;
+            task4.tid = tid++;
+            strcpy(task4.conf_file, "s3d_indexing.conf"); 
+
+            // execute tasks and wait for completions
+            cods_exec_task(&task1);
+            cods_exec_task(&task2);
+            cods_exec_task(&task3);
+            cods_exec_task(&task4);
+            cods_wait_task_completion(&task1);
+            cods_wait_task_completion(&task2);
+            cods_wait_task_completion(&task3);
+            cods_wait_task_completion(&task4);
         }
         MPI_Barrier(comm->comm);
     }

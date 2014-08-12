@@ -86,7 +86,7 @@ int is_task_ready(struct task_entry *task)
 	return 0;
 }
 
-int get_ready_tasks(struct cods_workflow *wf,
+int get_ready_tasks(struct workflow_entry *wf,
 	struct task_entry **tasks, int *n /*num_ready_tasks*/)
 {
 	*n = 0;
@@ -128,7 +128,7 @@ static int evaluate_task_by_available_var(struct task_entry *task, const struct 
 }
 
 // Evaluate the dataflow through the newly available variable
-int evaluate_dataflow_by_available_var(struct cods_workflow *wf, const struct cods_var *var_desc) 
+int evaluate_dataflow_by_available_var(struct workflow_entry *wf, const struct cods_var *var_desc) 
 {
     if (wf == NULL) return 0;
 
@@ -406,7 +406,7 @@ int parse_task_conf_file(struct task_entry *task, const char *fname)
 	return 0;	
 }
 
-void print_workflow(struct cods_workflow *wf)
+void print_workflow(struct workflow_entry *wf)
 {
     if (!wf) return;
     struct task_entry *task;
@@ -434,7 +434,7 @@ void print_workflow(struct cods_workflow *wf)
 }
 
 /*
-int read_emulated_vars_sequence(struct cods_workflow *wf, const char *fname)
+int read_emulated_vars_sequence(struct workflow_entry *wf, const char *fname)
 {
 	int err = -1;
 	const size_t MAX_LINE = 4096;

@@ -97,7 +97,7 @@ static struct list_head workflow_list;
  Workflow & Tasks
 **/
 
-static void free_workflow(struct cods_workflow *wf)
+static void free_workflow(struct workflow_entry *wf)
 {
     if (!wf) return;
     if (wf->num_tasks > 0) {
@@ -114,7 +114,7 @@ static void free_workflow(struct cods_workflow *wf)
     free(wf);
 }
 
-static struct task_entry* workflow_lookup_task(struct cods_workflow *wf, uint32_t tid)
+static struct task_entry* workflow_lookup_task(struct workflow_entry *wf, uint32_t tid)
 {
     struct task_entry *task;
     list_for_each_entry(task, &wf->task_list, struct task_entry, entry) {
@@ -125,14 +125,14 @@ static struct task_entry* workflow_lookup_task(struct cods_workflow *wf, uint32_
     return NULL;
 }
 
-static void workflow_add_task(struct cods_workflow *wf, struct task_entry *task)
+static void workflow_add_task(struct workflow_entry *wf, struct task_entry *task)
 {
     if (!task) return;
     list_add_tail(&task->entry, &wf->task_list);
     wf->num_tasks++;
 }
 
-static void workflow_clear_finished_tasks(struct cods_workflow *wf)
+static void workflow_clear_finished_tasks(struct workflow_entry *wf)
 {
     struct task_entry *task, *temp;
     list_for_each_entry_safe(task, temp, &wf->task_list, struct task_entry, entry) {
@@ -175,9 +175,9 @@ static inline void workflow_list_init()
     INIT_LIST_HEAD(&workflow_list);
 }
 
-static struct cods_workflow* workflow_list_lookup(uint32_t wid) {
-    struct cods_workflow *wf;
-    list_for_each_entry(wf, &workflow_list, struct cods_workflow, entry) {
+static struct workflow_entry* workflow_list_lookup(uint32_t wid) {
+    struct workflow_entry *wf;
+    list_for_each_entry(wf, &workflow_list, struct workflow_entry, entry) {
         if (wf->wid == wid)
             return wf;
     }
@@ -185,9 +185,9 @@ static struct cods_workflow* workflow_list_lookup(uint32_t wid) {
     return NULL;
 }
 
-static struct cods_workflow* workflow_list_create_new(uint32_t wid) {
-    struct cods_workflow *wf;
-    wf = (struct cods_workflow*)malloc(sizeof(*wf));
+static struct workflow_entry* workflow_list_create_new(uint32_t wid) {
+    struct workflow_entry *wf;
+    wf = (struct workflow_entry*)malloc(sizeof(*wf));
     wf->wid = wid;
     wf->state.f_done = 0;
     INIT_LIST_HEAD(&wf->task_list);
@@ -199,24 +199,24 @@ static struct cods_workflow* workflow_list_create_new(uint32_t wid) {
 
 static void workflow_list_clear_finished_tasks()
 {
-    struct cods_workflow *wf;
-    list_for_each_entry(wf, &workflow_list, struct cods_workflow, entry) {
+    struct workflow_entry *wf;
+    list_for_each_entry(wf, &workflow_list, struct workflow_entry, entry) {
         workflow_clear_finished_tasks(wf);
     }
 }
 
 static void workflow_list_evaluate_dataflow(const struct cods_var *var_desc)
 {   
-    struct cods_workflow *wf;
-    list_for_each_entry(wf, &workflow_list, struct cods_workflow, entry) {
+    struct workflow_entry *wf;
+    list_for_each_entry(wf, &workflow_list, struct workflow_entry, entry) {
        evaluate_dataflow_by_available_var(wf, var_desc);
     }
 }
 
 static void workflow_list_free()
 {
-    struct cods_workflow *wf, *temp;
-    list_for_each_entry_safe(wf, temp, &workflow_list, struct cods_workflow, entry) {
+    struct workflow_entry *wf, *temp;
+    list_for_each_entry_safe(wf, temp, &workflow_list, struct workflow_entry, entry) {
         free_workflow(wf);
     }
 }
@@ -706,8 +706,8 @@ static int process_finished_task()
         }
     }
 
-    struct cods_workflow *wf;
-    list_for_each_entry(wf, &workflow_list, struct cods_workflow, entry) {
+    struct workflow_entry *wf;
+    list_for_each_entry(wf, &workflow_list, struct workflow_entry, entry) {
         struct task_entry *task, *t;
         list_for_each_entry_safe(task, t, &wf->task_list, struct task_entry, entry) {
             if (is_task_finish(task)) {
@@ -725,8 +725,8 @@ static int process_finished_task()
 
 static int process_workflow_state()
 {
-    struct cods_workflow *wf, *temp;
-    list_for_each_entry_safe(wf, temp, &workflow_list, struct cods_workflow, entry) {
+    struct workflow_entry *wf, *temp;
+    list_for_each_entry_safe(wf, temp, &workflow_list, struct workflow_entry, entry) {
         if (wf->state.f_done) {
             uloga("%s: to free workflow wid= %u\n", __func__, wf->wid);
             // TODO: 
@@ -851,8 +851,8 @@ static int process_runnable_task()
 	int err = -ENOMEM;
 
 	// 1. Add ready tasks (if any) 
-    struct cods_workflow *wf;
-    list_for_each_entry(wf, &workflow_list, struct cods_workflow, entry) {
+    struct workflow_entry *wf;
+    list_for_each_entry(wf, &workflow_list, struct workflow_entry, entry) {
         struct task_entry *tasks[MAX_NUM_TASKS];
         int num_tasks;
         get_ready_tasks(wf, tasks, &num_tasks);
@@ -937,7 +937,7 @@ static int callback_cods_reg_resource(struct rpc_server *rpc_s, struct rpc_cmd *
 static int callback_cods_finish_workflow(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     struct hdr_finish_workflow *hdr = (struct hdr_finish_workflow*)cmd->pad;
-    struct cods_workflow *wf = workflow_list_lookup(hdr->wid);    
+    struct workflow_entry *wf = workflow_list_lookup(hdr->wid);    
     if (wf) {
         wf->state.f_done = 1;
     } else {
@@ -976,7 +976,7 @@ static int callback_cods_submit_task(struct rpc_server *rpc_s, struct rpc_cmd *c
     struct hdr_submit_task *hdr = (struct hdr_submit_task*)cmd->pad;
     uloga("%s(): config file %s\n", __func__, hdr->conf_file);
 
-    struct cods_workflow *wf = workflow_list_lookup(hdr->wid);
+    struct workflow_entry *wf = workflow_list_lookup(hdr->wid);
     if (!wf) {
         wf = workflow_list_create_new(hdr->wid);
     } else {

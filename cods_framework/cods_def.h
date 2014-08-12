@@ -28,6 +28,7 @@ extern "C" {
 #define MAX_VAR_NAME_LEN 32
 #define MAX_NUM_TASKS 512 
 #define MAX_NUM_VARS 48 
+#define PATH_MAXLEN 128 
 
 enum core_type {
     hs_manager_core = 1,
@@ -139,7 +140,7 @@ struct hdr_finish_task {
 struct hdr_submit_task {
     uint32_t wid;
     uint32_t tid;
-    char conf_file[NAME_MAXLEN];
+    char conf_file[PATH_MAXLEN];
 } __attribute__((__packed__));
 
 struct hdr_submitted_task_done {
@@ -150,7 +151,7 @@ struct hdr_submitted_task_done {
    
 struct hdr_build_staging {
     int pool_id;
-    char staging_conf_file[NAME_MAXLEN];
+    char staging_conf_file[PATH_MAXLEN];
 } __attribute__((__packed__));
 
 struct hdr_finish_workflow {
@@ -205,7 +206,7 @@ struct workflow_state {
     unsigned char f_done;
 };
 
-struct cods_workflow {
+struct workflow_entry {
     struct list_head entry;
     uint32_t wid;
     struct workflow_state state;
@@ -213,14 +214,20 @@ struct cods_workflow {
 	int num_tasks;
 };
 
+struct task_descriptor {
+    uint32_t wid;
+    uint32_t tid;
+    char conf_file[PATH_MAXLEN];
+};
+
 int parse_task_conf_file(struct task_entry *task, const char *fname);
-int evaluate_dataflow_by_available_var(struct cods_workflow *wf, const struct cods_var *var_desc);
-int get_ready_tasks(struct cods_workflow *wf, struct task_entry **tasks, int *num_ready_tasks);
+int evaluate_dataflow_by_available_var(struct workflow_entry *wf, const struct cods_var *var_desc);
+int get_ready_tasks(struct workflow_entry *wf, struct task_entry **tasks, int *num_ready_tasks);
 void update_task_status(struct task_entry *task, enum cods_task_status status);
 int is_task_finish(struct task_entry *task);
 int is_task_ready(struct task_entry *task);
 
-void print_workflow(struct cods_workflow *wf);
+void print_workflow(struct workflow_entry *wf);
 #ifdef __cplusplus
 }
 #endif

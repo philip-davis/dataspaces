@@ -172,7 +172,7 @@ void submitted_task_list_init()
     INIT_LIST_HEAD(&submitted_task_list);
 }
 
-struct task_info* create_submitted_task(uint32_t wid, uint32_t tid, const char *conf_file)
+struct task_info* create_submitted_task(struct task_descriptor *task_desc)
 {
     struct task_info *t = malloc(sizeof(*t));
     if (!t) {
@@ -180,9 +180,9 @@ struct task_info* create_submitted_task(uint32_t wid, uint32_t tid, const char *
         return NULL;
     }
     
-    t->wid = wid;
-    t->tid = tid;
-    strcpy(t->conf_file, conf_file);
+    t->wid = task_desc->wid;
+    t->tid = task_desc->tid;
+    strcpy(t->conf_file, task_desc->conf_file);
     t->f_task_execution_done = 0;
 
     list_add_tail(&t->entry, &submitted_task_list);
@@ -513,7 +513,7 @@ int cods_set_task_finished(struct cods_task *t)
     ERROR_TRACE();
 }
 
-int cods_submit_task_nb(uint32_t wid, uint32_t tid, const char* conf_file)
+int cods_exec_task(struct task_descriptor *task_desc)
 {
     struct client_rpc_send_state send_state;
     struct msg_buf *msg;
@@ -528,16 +528,16 @@ int cods_submit_task_nb(uint32_t wid, uint32_t tid, const char* conf_file)
     msg->msg_rpc->cmd = cods_submit_task_msg;
     msg->msg_rpc->id = MY_DART_ID;
     struct hdr_submit_task *hdr= (struct hdr_submit_task*)msg->msg_rpc->pad;
-    hdr->wid = wid;
-    hdr->tid = tid;
-    strcpy(hdr->conf_file, conf_file);
+    hdr->wid = task_desc->wid;
+    hdr->tid = task_desc->tid;
+    strcpy(hdr->conf_file, task_desc->conf_file);
 
     err = client_rpc_send(peer, msg, &send_state);
     if (err < 0) {
         goto err_out_free;
     }
 
-    struct task_info *t = create_submitted_task(wid, tid, conf_file);    
+    struct task_info *t = create_submitted_task(task_desc);
     return 0;
  err_out_free:
     if (msg) free(msg);
@@ -545,13 +545,13 @@ int cods_submit_task_nb(uint32_t wid, uint32_t tid, const char* conf_file)
     ERROR_TRACE();
 }
 
-int cods_wait_submitted_task(uint32_t wid, uint32_t tid)
+int cods_wait_task_completion(struct task_descriptor *task_desc)
 {
     int err = -ENOMEM;
-    struct task_info *t = lookup_submitted_task(wid, tid);
+    struct task_info *t = lookup_submitted_task(task_desc->wid, task_desc->tid);
     if (!t) {
         uloga("ERROR %s: failed to find submitted task wid= %u tid= %u\n",
-            __func__, wid, tid);
+            __func__, task_desc->wid, task_desc->tid);
         return err;
     }
 
@@ -569,13 +569,13 @@ int cods_wait_submitted_task(uint32_t wid, uint32_t tid)
     ERROR_TRACE();
 }
 
-int cods_check_submitted_task(uint32_t wid, uint32_t tid)
+int cods_get_task_status(struct task_descriptor *task_desc)
 {
     int err = -ENOMEM;
-    struct task_info *t = lookup_submitted_task(wid, tid);
+    struct task_info *t = lookup_submitted_task(task_desc->wid, task_desc->tid);
     if (!t) {
         uloga("ERROR %s: failed to find submitted task wid= %u tid= %u\n",
-            __func__, wid, tid);
+            __func__, task_desc->wid, task_desc->tid);
         return err;
     }
 
@@ -594,22 +594,6 @@ int cods_check_submitted_task(uint32_t wid, uint32_t tid)
     return 0;
  err_out:
     ERROR_TRACE();
-}
-
-int cods_submit_task(uint32_t wid, uint32_t tid, const char* conf_file)
-{
-    int err;
-    err = cods_submit_task_nb(wid, tid, conf_file);
-    if (err < 0) {
-        return err;
-    }
-
-    err = cods_wait_submitted_task(wid, tid);
-    if (err < 0) {
-        return err;
-    }
-
-    return 0;
 }
 
 int cods_build_staging(int pool_id, const char *conf_file)

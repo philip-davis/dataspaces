@@ -32,15 +32,12 @@ int cods_request_task(struct cods_task *t);
 // function.
 int cods_set_task_finished(struct cods_task *t);
 
-// Submit task execution request to workflow manager, and blocks for the
-// completion of task execution.
-int cods_submit_task(uint32_t wid, uint32_t tid, const char* conf_file);
 // Submit task execution request to workflow manager, and returns immediately.
-int cods_submit_task_nb(uint32_t wid, uint32_t tid, const char* conf_file);
+int cods_exec_task(struct task_descriptor *task_desc);
 // Wait for the completion of submitted task.
-int cods_wait_submitted_task(uint32_t wid, uint32_t tid);
+int cods_wait_task_completion(struct task_descriptor *task_desc);
 // Check the execution status of submitted task.
-int cods_check_submitted_task(uint32_t wid, uint32_t tid);
+int cods_get_task_status(struct task_descriptor *task_desc);
 // Notify to worklfow manager the completion of programmer defined workflow.
 int cods_set_workflow_finished(uint32_t wid);
 
