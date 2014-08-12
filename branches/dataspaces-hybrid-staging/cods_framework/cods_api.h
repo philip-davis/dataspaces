@@ -26,11 +26,11 @@ int cods_update_var(struct cods_var *var, enum cods_update_var_op op);
 // Add/register new task executor.
 int cods_register_executor(int pool_id, int num_executor, int mpi_rank);
 // Request for new task from workflow manager. 
-int cods_request_task(struct task_descriptor *t);
+int cods_request_task(struct cods_task *t);
 // Notify to workflow manager the completion of task execution.
 // Note: for task running on N executors, only one executor needs to call this
 // function.
-int cods_set_task_finished(struct task_descriptor *t);
+int cods_set_task_finished(struct cods_task *t);
 
 // Submit task execution request to workflow manager, and blocks for the
 // completion of task execution.

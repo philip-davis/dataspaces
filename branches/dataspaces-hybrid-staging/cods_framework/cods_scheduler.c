@@ -39,7 +39,7 @@ static struct cods_framework_state framework_state;
 
 struct runnable_task {
 	struct list_head entry;
-	struct cods_task *task_ref;
+	struct task_entry *task_ref;
 	// int num_input_vars;
     // enum cods_location_type location_type;
     int bk_allocation_size; // number of buckets required for task execution
@@ -104,8 +104,8 @@ static void free_workflow(struct cods_workflow *wf)
         uloga("WARNING %s: wf->num_tasks= %d\n", __func__, wf->num_tasks);
     }
 
-    struct cods_task *task, *temp;
-    list_for_each_entry_safe(task, temp, &wf->task_list, struct cods_task, entry) {
+    struct task_entry *task, *temp;
+    list_for_each_entry_safe(task, temp, &wf->task_list, struct task_entry, entry) {
         list_del(&task->entry);
         free(task);
     }
@@ -114,10 +114,10 @@ static void free_workflow(struct cods_workflow *wf)
     free(wf);
 }
 
-static struct cods_task* workflow_lookup_task(struct cods_workflow *wf, uint32_t tid)
+static struct task_entry* workflow_lookup_task(struct cods_workflow *wf, uint32_t tid)
 {
-    struct cods_task *task;
-    list_for_each_entry(task, &wf->task_list, struct cods_task, entry) {
+    struct task_entry *task;
+    list_for_each_entry(task, &wf->task_list, struct task_entry, entry) {
         if (task->tid == tid)
             return task;
     } 
@@ -125,7 +125,7 @@ static struct cods_task* workflow_lookup_task(struct cods_workflow *wf, uint32_t
     return NULL;
 }
 
-static void workflow_add_task(struct cods_workflow *wf, struct cods_task *task)
+static void workflow_add_task(struct cods_workflow *wf, struct task_entry *task)
 {
     if (!task) return;
     list_add_tail(&task->entry, &wf->task_list);
@@ -134,8 +134,8 @@ static void workflow_add_task(struct cods_workflow *wf, struct cods_task *task)
 
 static void workflow_clear_finished_tasks(struct cods_workflow *wf)
 {
-    struct cods_task *task, *temp;
-    list_for_each_entry_safe(task, temp, &wf->task_list, struct cods_task, entry) {
+    struct task_entry *task, *temp;
+    list_for_each_entry_safe(task, temp, &wf->task_list, struct task_entry, entry) {
         if (is_task_finish(task)) {
             list_del(&task->entry);
             free(task);
@@ -144,9 +144,9 @@ static void workflow_clear_finished_tasks(struct cods_workflow *wf)
     }
 }
 
-static struct cods_task* create_new_task(uint32_t wid, uint32_t tid, const char* conf_file)
+static struct task_entry* create_new_task(uint32_t wid, uint32_t tid, const char* conf_file)
 {
-    struct cods_task *task = (struct cods_task*)malloc(sizeof(*task));
+    struct task_entry *task = (struct task_entry*)malloc(sizeof(*task));
     if (!task) {
         goto err_out;
     }
@@ -479,7 +479,7 @@ static struct runnable_task *rtask_list_lookup(uint32_t wid, uint32_t tid)
 	return NULL;
 }
 
-static struct runnable_task *rtask_list_add_new(struct cods_task *t)
+static struct runnable_task *rtask_list_add_new(struct task_entry *t)
 {
     struct runnable_task *rtask = malloc(sizeof(*rtask));
     rtask->task_ref = t;
@@ -539,7 +539,7 @@ static int notify_bk(struct runnable_task *rtask, struct bucket_pool *bp,
 	if (!msg)
 		goto err_out;
     
-    struct cods_task *t = rtask->task_ref;
+    struct task_entry *t = rtask->task_ref;
     size_t mpi_rank_tab_size = rtask->bk_allocation_size*sizeof(int);
     size_t var_tab_size = t->num_vars*sizeof(struct cods_var);
     msg->size = mpi_rank_tab_size + var_tab_size;
@@ -664,7 +664,7 @@ static void print_rr_count()
 		timestamp_, num_runnable_task, num_idle_bucket, num_busy_bucket);
 }
 
-static int notify_task_submitter(struct cods_task *task)
+static int notify_task_submitter(struct task_entry *task)
 {
     struct msg_buf *msg;
     struct node_id *peer;
@@ -708,8 +708,8 @@ static int process_finished_task()
 
     struct cods_workflow *wf;
     list_for_each_entry(wf, &workflow_list, struct cods_workflow, entry) {
-        struct cods_task *task, *t;
-        list_for_each_entry_safe(task, t, &wf->task_list, struct cods_task, entry) {
+        struct task_entry *task, *t;
+        list_for_each_entry_safe(task, t, &wf->task_list, struct task_entry, entry) {
             if (is_task_finish(task)) {
                 notify_task_submitter(task);
                 // remove task from the workflow's task list 
@@ -853,7 +853,7 @@ static int process_runnable_task()
 	// 1. Add ready tasks (if any) 
     struct cods_workflow *wf;
     list_for_each_entry(wf, &workflow_list, struct cods_workflow, entry) {
-        struct cods_task *tasks[MAX_NUM_TASKS];
+        struct task_entry *tasks[MAX_NUM_TASKS];
         int num_tasks;
         get_ready_tasks(wf, tasks, &num_tasks);
         if (num_tasks > 0) {
@@ -986,7 +986,7 @@ static int callback_cods_submit_task(struct rpc_server *rpc_s, struct rpc_cmd *c
         }
     }
 
-    struct cods_task *task = create_new_task(hdr->wid, hdr->tid, hdr->conf_file);
+    struct task_entry *task = create_new_task(hdr->wid, hdr->tid, hdr->conf_file);
     if (!task) {
         return 0;
     }

@@ -140,7 +140,7 @@ struct parallel_job {
 
 struct bucket_info {
 	/* keep basic info of current task */
-	struct task_descriptor *current_task;
+	struct cods_task *current_task;
 
 	/* flags */
 	int f_get_task;
@@ -421,7 +421,7 @@ int cods_update_var(struct cods_var *var, enum cods_update_var_op op)
 }
 
 // TODO: the logic of the function is not clear
-int cods_request_task(struct task_descriptor *t)
+int cods_request_task(struct cods_task *t)
 {
 	int err;
 
@@ -481,7 +481,7 @@ int cods_register_executor(int pool_id, int num_bucket, int mpi_rank)
     ERROR_TRACE();     
 }
 
-int cods_set_task_finished(struct task_descriptor *t)
+int cods_set_task_finished(struct cods_task *t)
 {
     struct client_rpc_send_state send_state;
     struct msg_buf *msg;
