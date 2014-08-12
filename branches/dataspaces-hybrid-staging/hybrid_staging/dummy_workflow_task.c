@@ -1128,8 +1128,8 @@ int s3d_fb_indexing_task(struct task_descriptor *t,
     set_bbox(t, var, lb, ub);
 
     dspaces_lock_on_read(lock_name, &comm->comm);
-    log_read_var(t->rank, var->name, ndim, elem_size, version,
-            lb, ub, gdim); 
+    // log_read_var(t->rank, var->name, ndim, elem_size, version,
+    //        lb, ub, gdim); 
     dimes_define_gdim(var->name, ndim, gdim);
     err = dimes_get(var->name, version, elem_size, ndim, lb, ub, data);
     if (err < 0) {
@@ -1166,10 +1166,13 @@ int s3d_fb_indexing_task(struct task_descriptor *t,
     if (data) free(data);
     MPI_Barrier(comm->comm);
     t2 = MPI_Wtime();
-    uloga("%s(): rank %d read_data_time %lf\n", __func__, comm_rank, read_data_time);
-    uloga("%s(): rank %d build_index_time %lf\n", __func__, comm_rank, build_index_time);
+    uloga("%s(): task wid= %u tid= %u rank %d read_data_time %lf\n", __func__,
+        t->wid, t->tid, comm_rank, read_data_time);
+    uloga("%s(): task wid= %u tid= %u rank %d build_index_time %lf\n", __func__,
+        t->wid, t->tid, comm_rank, build_index_time);
     if (comm_rank == 0) {
-        uloga("%s(): execution time %lf\n", __func__, t2-t1);
+        uloga("%s(): task wid= %u tid= %u execution time %lf\n", __func__,
+            t->wid, t->tid, t2-t1);
     }
     return 0;
 }
