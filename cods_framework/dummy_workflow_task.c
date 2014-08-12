@@ -25,7 +25,7 @@ struct parallel_communicator {
     MPI_Comm comm;
 };
 
-typedef int (*task_function)(struct task_descriptor *t, struct parallel_communicator *comm);
+typedef int (*task_function)(struct cods_task *t, struct parallel_communicator *comm);
 struct parallel_task {
 	int appid;
 	task_function func_ptr;
@@ -61,7 +61,7 @@ static int communicator_free()
     return 0;    
 }
 
-static struct parallel_communicator* create_parallel_comm(struct task_descriptor *t)
+static struct parallel_communicator* create_parallel_comm(struct cods_task *t)
 {
     struct parallel_communicator *comm = malloc(sizeof(*comm));
     MPI_Group origin_mpi_comm_group;
@@ -80,7 +80,7 @@ static void free_parallel_comm(struct parallel_communicator *comm) {
     }
 }
 
-static void task_done(struct task_descriptor *t, struct parallel_communicator *comm)
+static void task_done(struct cods_task *t, struct parallel_communicator *comm)
 {
     if (comm) {
         MPI_Barrier(comm->comm);
@@ -99,7 +99,7 @@ static int register_task_function(int appid, task_function func_ptr)
 	num_tasks++;
 }
 
-static int exec_task_function(struct task_descriptor *t)
+static int exec_task_function(struct cods_task *t)
 {
 	int i, err;
 	for (i = 0; i < num_tasks; i++) {
@@ -137,7 +137,7 @@ static int update_var(const char *var_name, int version, size_t elem_size,
     return err;
 }  
 
-static struct cods_var* lookup_task_var(struct task_descriptor *t, const char *var_name)
+static struct cods_var* lookup_task_var(struct cods_task *t, const char *var_name)
 {
     int i;
     for (i = 0; i < t->num_vars; i++) {
@@ -246,7 +246,7 @@ static void set_gdim(struct cods_var *var, uint64_t *gdim) {
     }
 }
 
-static void set_bbox(struct task_descriptor *t, struct cods_var *var,
+static void set_bbox(struct cods_task *t, struct cods_var *var,
     uint64_t *lb, uint64_t *ub)
 {
     int i, j;
@@ -266,7 +266,7 @@ static void set_bbox(struct task_descriptor *t, struct cods_var *var,
     }
 }
 
-static int read_data(struct task_descriptor *t, struct cods_var *var, int version, struct parallel_communicator *comm, int use_lock)
+static int read_data(struct cods_task *t, struct cods_var *var, int version, struct parallel_communicator *comm, int use_lock)
 {
     int err;
     double *data = NULL;
@@ -316,7 +316,7 @@ static int read_data(struct task_descriptor *t, struct cods_var *var, int versio
     return err;
 }
 
-static int write_data(struct task_descriptor *t, struct cods_var *var, int version, struct parallel_communicator *comm, int use_lock, int use_group) {
+static int write_data(struct cods_task *t, struct cods_var *var, int version, struct parallel_communicator *comm, int use_lock, int use_group) {
     int err;
     double *data = NULL;
     int ndim;
@@ -378,7 +378,7 @@ static int write_data(struct task_descriptor *t, struct cods_var *var, int versi
     return err;
 } 
 
-static void print_task_info(const struct task_descriptor *t)
+static void print_task_info(const struct cods_task *t)
 {
     uloga("%s(): task wid= %u tid= %u appid= %d rank= %d nproc= %d num_vars= %d\n",
         __func__, t->wid, t->tid, t->appid, t->rank, t->nproc, t->num_vars);
@@ -426,7 +426,7 @@ static void log_read_var(int rank, const char *var_name, int ndim, int elem_size
         version, lb_str, ub_str, gdim_str);
 }
 
-int dummy_dag_task(struct task_descriptor *t, struct parallel_communicator *comm)
+int dummy_dag_task(struct cods_task *t, struct parallel_communicator *comm)
 {
     int comm_size, comm_rank;
     MPI_Barrier(comm->comm);
@@ -452,7 +452,7 @@ int dummy_dag_task(struct task_descriptor *t, struct parallel_communicator *comm
 }
 
 static int sml_mstep = 10;
-int dummy_xgc1_task(struct task_descriptor *t, struct parallel_communicator *comm)
+int dummy_xgc1_task(struct cods_task *t, struct parallel_communicator *comm)
 {
     double t1, t2;
     int comm_size, comm_rank;
@@ -496,7 +496,7 @@ int dummy_xgc1_task(struct task_descriptor *t, struct parallel_communicator *com
     return 0;
 }
 
-int dummy_xgca_task(struct task_descriptor *t, struct parallel_communicator *comm)
+int dummy_xgca_task(struct cods_task *t, struct parallel_communicator *comm)
 {
     double t1, t2;
     int comm_size, comm_rank;
@@ -541,7 +541,7 @@ int dummy_xgca_task(struct task_descriptor *t, struct parallel_communicator *com
 }
 
 static int s3d_num_ts = 10;
-int dummy_s3d_task(struct task_descriptor *t,
+int dummy_s3d_task(struct cods_task *t,
     struct parallel_communicator *comm)
 {
     double t1, t2;
@@ -587,7 +587,7 @@ int dummy_s3d_task(struct task_descriptor *t,
     return 0;
 }
 
-int dummy_s3d_viz_task(struct task_descriptor *t,
+int dummy_s3d_viz_task(struct cods_task *t,
     struct parallel_communicator *comm)
 {
     double t1, t2;
@@ -614,7 +614,7 @@ int dummy_s3d_viz_task(struct task_descriptor *t,
     return 0;
 }
 
-int dummy_s3d_stat_task(struct task_descriptor *t,
+int dummy_s3d_stat_task(struct cods_task *t,
     struct parallel_communicator *comm)
 {
     double t1, t2;
@@ -641,7 +641,7 @@ int dummy_s3d_stat_task(struct task_descriptor *t,
     return 0;
 }
 
-int dummy_s3d_topo_task(struct task_descriptor *t,
+int dummy_s3d_topo_task(struct cods_task *t,
     struct parallel_communicator *comm)
 {
     double t1, t2;
@@ -668,7 +668,7 @@ int dummy_s3d_topo_task(struct task_descriptor *t,
     return 0;
 }
 
-int dummy_s3d_indexing_task(struct task_descriptor *t,
+int dummy_s3d_indexing_task(struct cods_task *t,
     struct parallel_communicator *comm)
 {
     double t1, t2;
@@ -697,7 +697,7 @@ int dummy_s3d_indexing_task(struct task_descriptor *t,
 
 static int dns_les_num_ts = 10;
 static int dns_les_num_sub_step = 6;
-int dummy_dns_task(struct task_descriptor *t,
+int dummy_dns_task(struct cods_task *t,
     struct parallel_communicator *comm)
 {
     double t1, t2;
@@ -742,7 +742,7 @@ int dummy_dns_task(struct task_descriptor *t,
     return 0;
 }
 
-int dummy_les_task(struct task_descriptor *t,
+int dummy_les_task(struct cods_task *t,
     struct parallel_communicator *comm)
 {
     double t1, t2;
@@ -824,7 +824,7 @@ float my_data_quantize(float value, int varname)
 
 // TODO: this task routine is highly hard-coded...
 /*
-int task_viz_render(struct task_descriptor *t, struct parallel_communicator *comm)
+int task_viz_render(struct cods_task *t, struct parallel_communicator *comm)
 {
     int err;
     int npx, npy, npz, mypx, mypy, mypz;
@@ -904,7 +904,7 @@ int task_viz_render(struct task_descriptor *t, struct parallel_communicator *com
 */
 
 /*
-int task_fb_indexing(struct task_descriptor *t, struct parallel_communicator *comm)
+int task_fb_indexing(struct cods_task *t, struct parallel_communicator *comm)
 {
     int err;
     double tm_st, tm_end, tm_end1;
@@ -1003,7 +1003,7 @@ int dummy_sample_dag_workflow(MPI_Comm comm)
     cods_register_executor(pool_id, mpi_nproc, mpi_rank);
     MPI_Barrier(comm);
 
-	struct task_descriptor t;
+	struct cods_task t;
 	while (!cods_request_task(&t)) {
 		cods_put_sync_all();
 		err = exec_task_function(&t);	
@@ -1021,7 +1021,7 @@ int dummy_sample_dag_workflow(MPI_Comm comm)
 }
 */
 
-int s3d_viz_render_task(struct task_descriptor *t,
+int s3d_viz_render_task(struct cods_task *t,
     struct parallel_communicator *comm)
 {
     double t1, t2;
@@ -1087,7 +1087,7 @@ int s3d_viz_render_task(struct task_descriptor *t,
     return 0;
 }
 
-int s3d_fb_indexing_task(struct task_descriptor *t,
+int s3d_fb_indexing_task(struct cods_task *t,
     struct parallel_communicator *comm)
 {
     double t1, t2;
@@ -1193,7 +1193,7 @@ int dummy_epsi_coupling_workflow(MPI_Comm comm)
     cods_register_executor(pool_id, mpi_nproc, mpi_rank);
     MPI_Barrier(comm);
 
-    struct task_descriptor t;
+    struct cods_task t;
     while (!cods_request_task(&t)) {
         err = exec_task_function(&t);
         if (err < 0) {
@@ -1224,7 +1224,7 @@ int dummy_s3d_analysis_workflow(MPI_Comm comm)
     cods_register_executor(pool_id, mpi_nproc, mpi_rank);
     MPI_Barrier(comm);
 
-    struct task_descriptor t;
+    struct cods_task t;
     while (!cods_request_task(&t)) {
         err = exec_task_function(&t);
         if (err < 0) {
@@ -1252,7 +1252,7 @@ int dummy_dns_les_workflow(MPI_Comm comm)
     cods_register_executor(pool_id, mpi_nproc, mpi_rank);
     MPI_Barrier(comm);
 
-    struct task_descriptor t;
+    struct cods_task t;
     while (!cods_request_task(&t)) {
         err = exec_task_function(&t);
         if (err < 0) {
@@ -1280,7 +1280,7 @@ int s3d_analysis_workflow(MPI_Comm comm)
     cods_register_executor(pool_id, mpi_nproc, mpi_rank);
     MPI_Barrier(comm);
 
-    struct task_descriptor t;
+    struct cods_task t;
     while (!cods_request_task(&t)) {
         err = exec_task_function(&t);
         if (err < 0) {

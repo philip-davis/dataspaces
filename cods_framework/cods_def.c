@@ -57,17 +57,17 @@ static int str_to_placement_hint(const char *str, enum cods_placement_hint *hint
 	return -1;
 }
 
-void update_task_status(struct cods_task *task, enum cods_task_status status)
+void update_task_status(struct task_entry *task, enum cods_task_status status)
 {
     task->status = status;
 }
 
-int is_task_finish(struct cods_task *task)
+int is_task_finish(struct task_entry *task)
 {
     return task->status == task_finish;
 }
 
-int is_task_ready(struct cods_task *task)
+int is_task_ready(struct task_entry *task)
 {
 	if (task->status == task_ready) return 1;
 	else if (task->status == task_not_ready) {
@@ -87,13 +87,13 @@ int is_task_ready(struct cods_task *task)
 }
 
 int get_ready_tasks(struct cods_workflow *wf,
-	struct cods_task **tasks, int *n /*num_ready_tasks*/)
+	struct task_entry **tasks, int *n /*num_ready_tasks*/)
 {
 	*n = 0;
     if (wf == NULL) return 0;
 
-	struct cods_task *task = NULL;
-    list_for_each_entry(task, &wf->task_list, struct cods_task, entry) {
+	struct task_entry *task = NULL;
+    list_for_each_entry(task, &wf->task_list, struct task_entry, entry) {
         if (is_task_ready(task)) {
             tasks[*n] = task;
             *n = *n + 1;
@@ -103,7 +103,7 @@ int get_ready_tasks(struct cods_workflow *wf,
 	return 0;
 }
 
-static struct cods_var *lookup_var(struct cods_task *task, const char *var_name)
+static struct cods_var *lookup_var(struct task_entry *task, const char *var_name)
 {
 	int i;
 	for (i = 0; i < task->num_vars; i++) {
@@ -114,7 +114,7 @@ static struct cods_var *lookup_var(struct cods_task *task, const char *var_name)
 	return NULL;
 }
 
-static int evaluate_task_by_available_var(struct cods_task *task, const struct cods_var *var_desc)
+static int evaluate_task_by_available_var(struct task_entry *task, const struct cods_var *var_desc)
 {
     if (!task) return 0;
     struct cods_var *var = lookup_var(task, var_desc->name);
@@ -133,15 +133,15 @@ int evaluate_dataflow_by_available_var(struct cods_workflow *wf, const struct co
     if (wf == NULL) return 0;
 
 	// Update variable and task status
-	struct cods_task *task = NULL;
-    list_for_each_entry(task, &wf->task_list, struct cods_task, entry) {
+	struct task_entry *task = NULL;
+    list_for_each_entry(task, &wf->task_list, struct task_entry, entry) {
         evaluate_task_by_available_var(task, var_desc);
 	}
 	
 	return 0;
 }
 
-static struct cods_var* task_add_var(struct cods_task *task, const char *name)
+static struct cods_var* task_add_var(struct task_entry *task, const char *name)
 {
 	if (task == NULL) {
 		fprintf(stderr, "%s(): task == NULL\n", __func__);
@@ -166,7 +166,7 @@ static struct cods_var* task_add_var(struct cods_task *task, const char *name)
 	return var;
 }
 
-static int read_task_var_type(struct cods_task *task, char *fields[], int num_fields)
+static int read_task_var_type(struct task_entry *task, char *fields[], int num_fields)
 {
 	int index_to_var_type = 3;
 	// Get var type
@@ -193,7 +193,7 @@ static int read_task_var_type(struct cods_task *task, char *fields[], int num_fi
 	return 0;
 }
 
-static int read_task_var_dimension(struct cods_task *task, char *fields[], int num_fields)
+static int read_task_var_dimension(struct task_entry *task, char *fields[], int num_fields)
 {
     int index_to_var_dim = 3;
     int ndim = atoi(fields[index_to_var_dim]);
@@ -232,7 +232,7 @@ static int read_task_var_dimension(struct cods_task *task, char *fields[], int n
     return 0;
 }
 
-static int read_task_var_distribution(struct cods_task *task, char *fields[], int num_fields)
+static int read_task_var_distribution(struct task_entry *task, char *fields[], int num_fields)
 {
     int index_to_var_dist_type = 3;
     if (0 != strcmp("block", fields[index_to_var_dist_type])) {
@@ -275,7 +275,7 @@ static int read_task_var_distribution(struct cods_task *task, char *fields[], in
     return 0;
 }
 
-static int read_task_placement_hint(struct cods_task *task, char *fields[], int num_fields)
+static int read_task_placement_hint(struct task_entry *task, char *fields[], int num_fields)
 {
 	int index_to_hint = 3;
 	// Get placement hint
@@ -286,7 +286,7 @@ static int read_task_placement_hint(struct cods_task *task, char *fields[], int 
 	return 0;
 }
 
-static int read_task_size_hint(struct cods_task *task, char *fields[], int num_fields)
+static int read_task_size_hint(struct task_entry *task, char *fields[], int num_fields)
 {
     int index_to_hint = 3;
     int size_hint = atoi(fields[index_to_hint]);
@@ -298,7 +298,7 @@ static int read_task_size_hint(struct cods_task *task, char *fields[], int num_f
     return 0;
 }
 
-static int read_workflow_task(struct cods_task *task, char *fields[], int num_fields)
+static int read_workflow_task(struct task_entry *task, char *fields[], int num_fields)
 {
 	int index_to_appid = 1;
 	int index_to_desc = 2;
@@ -339,7 +339,7 @@ static int read_workflow_task(struct cods_task *task, char *fields[], int num_fi
 	return 0;
 }
 
-int parse_task_conf_file(struct cods_task *task, const char *fname)
+int parse_task_conf_file(struct task_entry *task, const char *fname)
 {
 	const size_t MAX_LINE = 4096;
 	const char *DELIM = " \t\n\r"; //space, tab, line feed, carriage return
@@ -409,12 +409,12 @@ int parse_task_conf_file(struct cods_task *task, const char *fname)
 void print_workflow(struct cods_workflow *wf)
 {
     if (!wf) return;
-    struct cods_task *task;
+    struct task_entry *task;
     uint64_t gdim[BBOX_MAX_NDIM], dist[BBOX_MAX_NDIM];
     char gdim_str[256], dist_str[256];
     int i, j;
 
-    list_for_each_entry(task, &wf->task_list, struct cods_task, entry) {
+    list_for_each_entry(task, &wf->task_list, struct task_entry, entry) {
 		printf("task tid= %u appid= %d size_hint= %d submitter_dart_id= %d\n",
 			task->tid, task->appid, task->size_hint, task->submitter_dart_id);
 		for (i = 0; i < task->num_vars; i++) {

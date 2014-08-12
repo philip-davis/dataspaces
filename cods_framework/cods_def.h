@@ -177,7 +177,7 @@ struct cods_var {
     struct block_distribution dist_hint;    
 };
 
-struct task_descriptor {
+struct cods_task {
     uint32_t wid;
 	uint32_t tid;
     int appid; // id of workflow component application/operation/executable
@@ -188,7 +188,7 @@ struct task_descriptor {
 	struct cods_var *vars;
 };
 
-struct cods_task {
+struct task_entry {
     struct list_head entry;
     uint32_t wid; // TODO: why we need both wid and tid?
     uint32_t tid;
@@ -213,15 +213,14 @@ struct cods_workflow {
 	int num_tasks;
 };
 
-int parse_task_conf_file(struct cods_task *task, const char *fname);
+int parse_task_conf_file(struct task_entry *task, const char *fname);
 int evaluate_dataflow_by_available_var(struct cods_workflow *wf, const struct cods_var *var_desc);
-int get_ready_tasks(struct cods_workflow *wf, struct cods_task **tasks, int *num_ready_tasks);
-void update_task_status(struct cods_task *task, enum cods_task_status status);
-int is_task_finish(struct cods_task *task);
-int is_task_ready(struct cods_task *task);
+int get_ready_tasks(struct cods_workflow *wf, struct task_entry **tasks, int *num_ready_tasks);
+void update_task_status(struct task_entry *task, enum cods_task_status status);
+int is_task_finish(struct task_entry *task);
+int is_task_ready(struct task_entry *task);
 
 void print_workflow(struct cods_workflow *wf);
-
 #ifdef __cplusplus
 }
 #endif
