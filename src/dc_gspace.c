@@ -2350,7 +2350,7 @@ int common_dspaces_set_log_header(const char *str)
 }
 #endif
 
-#ifdef DS_HAVE_HYBRID_STAGING
+#ifdef DS_HAVE_CODS
 struct dcg_space* dcg_get_ref()
 {
     if (!dcg) return NULL;

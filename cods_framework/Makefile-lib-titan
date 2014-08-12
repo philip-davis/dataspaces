@@ -18,16 +18,16 @@ UGNI_LIBS = $(shell pkg-config --libs cray-ugni)
 LIBS=${PMI_LIBS} ${UGNI_LIBS} \
         -L/opt/cray/rca/default/lib64 -lrca
 
-CFLAGS= -g ${UGNI_CFLAGS} ${PMI_CLFASG} -DHAVE_UGNI -DDS_HAVE_DIMES -DDS_HAVE_HYBRID_STAGING
+CFLAGS= -g ${UGNI_CFLAGS} ${PMI_CLFASG} -DHAVE_UGNI -DDS_HAVE_DIMES -DDS_HAVE_CODS
 
-SRC1 =  hstaging_api.c \
-		hstaging_strutil.c \
-		hstaging_def.c \
-		hstaging_scheduler.c 
+SRC1 =  cods_api.c \
+		cods_strutil.c \
+		cods_def.c \
+		cods_scheduler.c 
 
 OBJ1 = $(SRC1:.c=.o)
 
-OUT1 = ./libhstaging.a
+OUT1 = ./libcods.a
 
 default: $(OUT1)
 
