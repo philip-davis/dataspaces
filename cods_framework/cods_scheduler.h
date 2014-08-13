@@ -46,19 +46,14 @@ struct task_entry {
     int submitter_dart_id; // peer who submits the task execution
 };
 
-#define MAX_NUM_BK_PER_NODE 32
-struct compute_node {
-    struct node_topology_info topo_info;
-    int num_bucket;
-    int bk_idx_tab[MAX_NUM_BK_PER_NODE];
-};
-
+#define DEFAULT_PART_TYPE 0
 struct bucket {
     int dart_id; // unique id
     int pool_id; // indicate which resource pool the bucket is from
     int origin_mpi_rank;
+    unsigned char partition_type;
     enum bucket_status status;
-    struct executor_topology_info topo_info;
+    struct node_topology_info topo_info;
 };
 
 struct bucket_pool {
@@ -67,10 +62,7 @@ struct bucket_pool {
     int num_bucket;
     int bk_tab_size;
     struct bucket *bk_tab;
-    int num_node;
-    struct compute_node *node_tab;
     int f_bk_reg_done;
-    int f_node_tab_done;
 };
 
 struct pending_msg {

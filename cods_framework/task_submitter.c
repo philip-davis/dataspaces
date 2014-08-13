@@ -29,6 +29,7 @@
 *  zhangfan@cac.rutgers.edu
 */
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "debug.h"
 #include "common.h"
@@ -36,6 +37,45 @@
 #include "mpi.h"
 
 #include "cods_api.h"
+
+int partition_task_executors()
+{
+    struct executor_pool_info *pool_info = NULL;
+    int pool_id = 1;
+    pool_info = cods_get_executor_pool_info(pool_id);
+    if (!pool_info) {
+        uloga("%s(): ERROR failed to get executor pool information\n", __func__);
+        return -1;
+    }
+
+    // print executor pool information
+    uloga("pool_id= %d num_executor= %u\n", pool_info->pool_id, pool_info->num_executor);
+    int i, j, k;
+/*
+    for (i = 0; i < pool_info->num_executor; i++) {
+        uloga("executor bk_idx= %d dart_id= %d node_id= %u\n", pool_info->executor_tab[i].bk_idx,
+            pool_info->executor_tab[i].dart_id, pool_info->executor_tab[i].topo_info.nid);
+    }
+*/
+
+    uloga("pool_id= %d num_node= %d\n", pool_info->pool_id, pool_info->num_node);
+    for (j = 0; j < pool_info->num_node; j++) {
+        uloga("compute node nid= %u node_num_executor= %d\n", pool_info->node_tab[j].topo_info.nid,
+            pool_info->node_tab[j].node_num_executor);
+        int k;
+        for (k = 0; k < pool_info->node_tab[j].node_num_executor; k++) {
+            uloga("executor bk_idx= %d dart_id= %d node_id= %u part_type= %u\n", 
+                pool_info->node_tab[j].node_executor_tab[k].bk_idx,
+                pool_info->node_tab[j].node_executor_tab[k].dart_id,
+                pool_info->node_tab[j].node_executor_tab[k].topo_info.nid,
+                pool_info->node_tab[j].node_executor_tab[k].partition_type); 
+        }
+    }
+
+    free(pool_info->node_tab);
+    free(pool_info->executor_tab);
+    free(pool_info);
+}
 
 void epsi_coupling_workflow_driver(uint32_t wid, MPI_Comm comm)
 {
@@ -114,6 +154,8 @@ int main(int argc, char **argv)
         uloga("task submitter: num_submitter= %d example_workflow_id= %u\n", nproc, example_workflow_id);
     }
 	err = cods_init(nproc, appid, cods_submitter); 
+
+    partition_task_executors(); 
 
     switch (example_workflow_id) {
     case EPSI_WORKFLOW_ID:

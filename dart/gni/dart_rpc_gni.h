@@ -416,12 +416,14 @@ enum cmd_type {
     cods_update_var_msg,
     cods_req_task_msg,
     cods_exec_task_msg,
-    cods_submit_task_msg,
     cods_finish_task_msg,
+    cods_submit_task_msg,
     cods_submitted_task_done_msg,
+    cods_get_executor_pool_info_msg,
+    cods_executor_pool_info_msg,
+    //cods_build_staging_msg,
+    //cods_build_staging_done_msg,
     cods_stop_executor_msg,
-    cods_build_staging_msg,
-    cods_build_staging_done_msg,
     cods_stop_framework_msg,
 #endif
 	//Added for CCGrid Demo
