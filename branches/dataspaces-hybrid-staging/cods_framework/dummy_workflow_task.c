@@ -380,8 +380,8 @@ static int write_data(struct cods_task *t, struct cods_var *var, int version, st
 
 static void print_task_info(const struct cods_task *t)
 {
-    uloga("%s(): task wid= %u tid= %u appid= %d rank= %d nproc= %d num_vars= %d\n",
-        __func__, t->wid, t->tid, t->appid, t->rank, t->nproc, t->num_vars);
+    uloga("%s(): task tid= %u appid= %d rank= %d nproc= %d num_vars= %d\n",
+        __func__, t->tid, t->appid, t->rank, t->nproc, t->num_vars);
 
     uint64_t gdim[BBOX_MAX_NDIM], dist[BBOX_MAX_NDIM];
     char gdim_str[256], dist_str[256];
@@ -396,9 +396,9 @@ static void print_task_info(const struct cods_task *t)
         int64s_to_str(t->vars[i].gdim.ndim, gdim, gdim_str);
         int64s_to_str(t->vars[i].dist_hint.ndim, dist, dist_str);
 
-        uloga("%s(): task wid= %u tid= %u appid= %d var '%s' version %d elem_size %u "
+        uloga("%s(): task tid= %u appid= %d var '%s' version %d elem_size %u "
             "gdim (%s) dist_hint= (%s)\n",
-            __func__, t->wid, t->tid, t->appid, t->vars[i].name,
+            __func__, t->tid, t->appid, t->vars[i].name,
             t->vars[i].version, t->vars[i].elem_size,
             gdim_str, dist_str);
     } 
@@ -571,16 +571,12 @@ int dummy_s3d_task(struct cods_task *t,
             // submit analyis operation
             // create task descriptors
             struct task_descriptor task1, task2, task3, task4;
-            task1.wid = wid;
             task1.tid = tid++;
             strcpy(task1.conf_file, "s3d_viz.conf"); 
-            task2.wid = wid;
             task2.tid = tid++;
             strcpy(task2.conf_file, "s3d_stat.conf"); 
-            task3.wid = wid;
             task3.tid = tid++;
             strcpy(task3.conf_file, "s3d_topo.conf"); 
-            task4.wid = wid;
             task4.tid = tid++;
             strcpy(task4.conf_file, "s3d_indexing.conf"); 
 
@@ -1185,13 +1181,13 @@ int s3d_fb_indexing_task(struct cods_task *t,
     if (data) free(data);
     MPI_Barrier(comm->comm);
     t2 = MPI_Wtime();
-    uloga("%s(): task wid= %u tid= %u rank %d read_data_time %lf\n", __func__,
-        t->wid, t->tid, comm_rank, read_data_time);
-    uloga("%s(): task wid= %u tid= %u rank %d build_index_time %lf\n", __func__,
-        t->wid, t->tid, comm_rank, build_index_time);
+    uloga("%s(): task tid= %u rank %d read_data_time %lf\n", __func__,
+        t->tid, comm_rank, read_data_time);
+    uloga("%s(): task tid= %u rank %d build_index_time %lf\n", __func__,
+        t->tid, comm_rank, build_index_time);
     if (comm_rank == 0) {
-        uloga("%s(): task wid= %u tid= %u execution time %lf\n", __func__,
-            t->wid, t->tid, t2-t1);
+        uloga("%s(): task tid= %u execution time %lf\n", __func__,
+            t->tid, t2-t1);
     }
     return 0;
 }

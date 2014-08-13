@@ -123,7 +123,6 @@ struct hdr_update_var {
 } __attribute__((__packed__));
 
 struct hdr_exec_task {
-    uint32_t wid;
     uint32_t tid;
     int appid;
 	int rank_hint;
@@ -133,18 +132,15 @@ struct hdr_exec_task {
 
 struct hdr_finish_task {
     int pool_id;
-    uint32_t wid;
     uint32_t tid;
 } __attribute__((__packed__));
 
 struct hdr_submit_task {
-    uint32_t wid;
     uint32_t tid;
     char conf_file[PATH_MAXLEN];
 } __attribute__((__packed__));
 
 struct hdr_submitted_task_done {
-    uint32_t wid;
     uint32_t tid;
     double task_execution_time;
 } __attribute__((__packed__));
@@ -152,10 +148,6 @@ struct hdr_submitted_task_done {
 struct hdr_build_staging {
     int pool_id;
     char staging_conf_file[PATH_MAXLEN];
-} __attribute__((__packed__));
-
-struct hdr_finish_workflow {
-    uint32_t wid;
 } __attribute__((__packed__));
 
 static char* var_type_name[] =
@@ -179,7 +171,6 @@ struct cods_var {
 };
 
 struct cods_task {
-    uint32_t wid;
 	uint32_t tid;
     int appid; // id of workflow component application/operation/executable
 	int rank;
@@ -189,45 +180,11 @@ struct cods_task {
 	struct cods_var *vars;
 };
 
-struct task_entry {
-    struct list_head entry;
-    uint32_t wid; // TODO: why we need both wid and tid?
-    uint32_t tid;
-    int appid; // id of workflow component application/operation/executable 
-    enum cods_task_status status;
-    enum cods_placement_hint placement_hint;
-    int size_hint;
-    struct cods_var vars[MAX_NUM_VARS];
-    int num_vars;
-    int submitter_dart_id; // peer who submits the task execution
-};
-
-struct workflow_state {
-    unsigned char f_done;
-};
-
-struct workflow_entry {
-    struct list_head entry;
-    uint32_t wid;
-    struct workflow_state state;
-    struct list_head task_list;
-	int num_tasks;
-};
-
 struct task_descriptor {
-    uint32_t wid;
     uint32_t tid;
     char conf_file[PATH_MAXLEN];
 };
 
-int parse_task_conf_file(struct task_entry *task, const char *fname);
-int evaluate_dataflow_by_available_var(struct workflow_entry *wf, const struct cods_var *var_desc);
-int get_ready_tasks(struct workflow_entry *wf, struct task_entry **tasks, int *num_ready_tasks);
-void update_task_status(struct task_entry *task, enum cods_task_status status);
-int is_task_finish(struct task_entry *task);
-int is_task_ready(struct task_entry *task);
-
-void print_workflow(struct workflow_entry *wf);
 #ifdef __cplusplus
 }
 #endif

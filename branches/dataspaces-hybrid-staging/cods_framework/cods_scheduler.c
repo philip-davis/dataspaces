@@ -8,116 +8,39 @@
 #include "unistd.h"
 #include <math.h>
 
-#include "debug.h"
-#include "timer.h"
-#include "list.h"
-#include "dart.h"
-#include "ds_gspace.h"
-#include "dimes_server.h"
-
 #include "cods_scheduler.h"
-#include "cods_api.h"
 #include "cods_def.h"
 #include "mpi.h"
+
+static struct cods_scheduler *sched = NULL; 
+#define DART_DSG sched->dimes_s->dsg
+#define DART_DS sched->dimes_s->dsg->ds
+#define DART_RPC_S sched->dimes_s->dsg->ds->rpc_s
+#define DART_ID sched->dimes_s->dsg->ds->rpc_s->ptlmap.id
 
 static int num_sp;
 static int num_cp;
 static char *conf;
-
-static struct dimes_server *dimes_s = NULL;
-static struct dart_server *ds = NULL;
-static struct ds_gspace *dsg = NULL;
-
 static struct timer tm; 
 static double tm_st;
 
-struct cods_framework_state {
-    unsigned char f_done;
-    unsigned char f_notify_executor_to_exit;
-};
-static struct cods_framework_state framework_state;
-
-struct runnable_task {
-	struct list_head entry;
-	struct task_entry *task_ref;
-	// int num_input_vars;
-    // enum cods_location_type location_type;
-    int bk_allocation_size; // number of buckets required for task execution
-    int *bk_idx_tab; // array of idx to the buckets in bk_tab 
-};
-
-enum bucket_status {
-    bk_none = 0, // not ready for task execution 
-    bk_idle,
-    bk_busy,
-};
-
-struct mpi_rank_range {
-    int l, r;
-};
-
-struct bucket {
-    int dart_id; // unique id
-    int pool_id; // indicate which resource pool the bucket is from
-    int origin_mpi_rank;
-    enum bucket_status status;
-    struct executor_topology_info topo_info;
-};
-
-#define MAX_NUM_BK_PER_NODE 32
-struct compute_node {
-    struct node_topology_info topo_info; 
-    int num_bucket;
-    int bk_idx_tab[MAX_NUM_BK_PER_NODE];
-};
-
-struct bucket_pool {
-    struct list_head entry;
-    int pool_id;
-    int num_bucket;
-    int bk_tab_size;
-    struct bucket *bk_tab;
-    int num_node;
-    struct compute_node *node_tab;
-    int f_bk_reg_done;
-    int f_node_tab_done;
-};
-
-struct pending_msg {
-    struct list_head entry;
-    struct rpc_cmd cmd;
-};
-
-static struct list_head bk_pool_list;
-static struct list_head rtask_list; // runnable task list
-static struct list_head pending_msg_list;
-static struct list_head workflow_list;
+/* Forward declaration */
+static int evaluate_task_by_available_var(struct task_entry *task, const struct cods_var *var_desc);
+static int get_ready_tasks(struct list_head *list, struct task_entry **tasks, int *n /*num_ready_tasks*/);
+static int is_task_ready(struct task_entry *task);
+static int is_task_finish(struct task_entry *task);
+static void update_task_status(struct task_entry *task, enum cods_task_status status);
+static int parse_task_conf_file(struct task_entry *task, const char *fname);    
+static void print_task_info(struct task_entry *task);
 
 /**
- Workflow & Tasks
+ Tasks
 **/
 
-static void free_workflow(struct workflow_entry *wf)
-{
-    if (!wf) return;
-    if (wf->num_tasks > 0) {
-        uloga("WARNING %s: wf->num_tasks= %d\n", __func__, wf->num_tasks);
-    }
-
-    struct task_entry *task, *temp;
-    list_for_each_entry_safe(task, temp, &wf->task_list, struct task_entry, entry) {
-        list_del(&task->entry);
-        free(task);
-    }
-
-    list_del(&wf->entry);
-    free(wf);
-}
-
-static struct task_entry* workflow_lookup_task(struct workflow_entry *wf, uint32_t tid)
+static struct task_entry* task_list_lookup_task(struct list_head *list, uint32_t tid)
 {
     struct task_entry *task;
-    list_for_each_entry(task, &wf->task_list, struct task_entry, entry) {
+    list_for_each_entry(task, list, struct task_entry, entry) {
         if (task->tid == tid)
             return task;
     } 
@@ -125,38 +48,26 @@ static struct task_entry* workflow_lookup_task(struct workflow_entry *wf, uint32
     return NULL;
 }
 
-static void workflow_add_task(struct workflow_entry *wf, struct task_entry *task)
+static void task_list_add_task(struct list_head *list, struct task_entry *task)
 {
     if (!task) return;
-    list_add_tail(&task->entry, &wf->task_list);
-    wf->num_tasks++;
+    list_add_tail(&task->entry, list);
 }
 
-static void workflow_clear_finished_tasks(struct workflow_entry *wf)
-{
-    struct task_entry *task, *temp;
-    list_for_each_entry_safe(task, temp, &wf->task_list, struct task_entry, entry) {
-        if (is_task_finish(task)) {
-            list_del(&task->entry);
-            free(task);
-            wf->num_tasks--;
-        }
-    }
-}
-
-static struct task_entry* create_new_task(uint32_t wid, uint32_t tid, const char* conf_file)
+static struct task_entry* create_new_task(uint32_t tid, const char* conf_file, 
+    int submitter_dart_id)
 {
     struct task_entry *task = (struct task_entry*)malloc(sizeof(*task));
     if (!task) {
         goto err_out;
     }
-    task->wid = wid;
     task->tid = tid;
     task->status = task_not_ready;   
     task->appid = 0;
     task->placement_hint = hint_none;
     task->size_hint = 0;
     task->num_vars = 0;
+    task->submitter_dart_id = submitter_dart_id;
     if (parse_task_conf_file(task, conf_file) < 0) {
         goto err_out_free;
     }
@@ -170,69 +81,41 @@ static struct task_entry* create_new_task(uint32_t wid, uint32_t tid, const char
     return NULL;
 }
 
-static inline void workflow_list_init()
+static inline void task_list_init(struct list_head *list)
 {
-    INIT_LIST_HEAD(&workflow_list);
+    INIT_LIST_HEAD(list);
 }
 
-static struct workflow_entry* workflow_list_lookup(uint32_t wid) {
-    struct workflow_entry *wf;
-    list_for_each_entry(wf, &workflow_list, struct workflow_entry, entry) {
-        if (wf->wid == wid)
-            return wf;
-    }
-
-    return NULL;
-}
-
-static struct workflow_entry* workflow_list_create_new(uint32_t wid) {
-    struct workflow_entry *wf;
-    wf = (struct workflow_entry*)malloc(sizeof(*wf));
-    wf->wid = wid;
-    wf->state.f_done = 0;
-    INIT_LIST_HEAD(&wf->task_list);
-    wf->num_tasks = 0;
-
-    list_add_tail(&wf->entry, &workflow_list);
-    return wf;
-}
-
-static void workflow_list_clear_finished_tasks()
-{
-    struct workflow_entry *wf;
-    list_for_each_entry(wf, &workflow_list, struct workflow_entry, entry) {
-        workflow_clear_finished_tasks(wf);
+static void task_list_evaluate_dataflow(struct list_head *list, const struct cods_var *var_desc)
+{  
+    // Update variable and task status
+    struct task_entry *task = NULL;
+    list_for_each_entry(task, list, struct task_entry, entry) {
+        evaluate_task_by_available_var(task, var_desc);
     }
 }
 
-static void workflow_list_evaluate_dataflow(const struct cods_var *var_desc)
-{   
-    struct workflow_entry *wf;
-    list_for_each_entry(wf, &workflow_list, struct workflow_entry, entry) {
-       evaluate_dataflow_by_available_var(wf, var_desc);
-    }
-}
-
-static void workflow_list_free()
+static void task_list_free(struct list_head *list)
 {
-    struct workflow_entry *wf, *temp;
-    list_for_each_entry_safe(wf, temp, &workflow_list, struct workflow_entry, entry) {
-        free_workflow(wf);
+    struct task_entry *task, *temp;
+    list_for_each_entry_safe(task, temp, list, struct task_entry, entry) {
+        list_del(&task->entry);
+        free(task);
     }
 }
 
 /**
     Workflow executors
 **/
-static inline void bk_pool_init()
+static inline void bk_pool_list_init(struct list_head* list)
 {
-    INIT_LIST_HEAD(&bk_pool_list);
+    INIT_LIST_HEAD(list);
 }
 
-static struct bucket_pool* bk_pool_lookup(int pool_id)
+static struct bucket_pool* bk_pool_list_lookup(struct list_head* list, int pool_id)
 {
     struct bucket_pool *bp;
-    list_for_each_entry(bp, &bk_pool_list, struct bucket_pool, entry) {
+    list_for_each_entry(bp, list, struct bucket_pool, entry) {
         if (bp->pool_id == pool_id)
             return bp;
     }
@@ -240,7 +123,7 @@ static struct bucket_pool* bk_pool_lookup(int pool_id)
     return NULL;    
 }
 
-static struct bucket_pool* bk_pool_create_new(int pool_id, int num_bucket)
+static struct bucket_pool* bk_pool_list_create_new(struct list_head* list, int pool_id, int num_bucket)
 {
     struct bucket_pool *bp;
     bp = malloc(sizeof(*bp));
@@ -252,7 +135,7 @@ static struct bucket_pool* bk_pool_create_new(int pool_id, int num_bucket)
     bp->f_bk_reg_done = 0;
     bp->f_node_tab_done = 0;
 
-    list_add_tail(&bp->entry, &bk_pool_list);
+    list_add_tail(&bp->entry, list);
     return bp; 
 }
 
@@ -403,10 +286,10 @@ static void bk_pool_build_node_tab(struct bucket_pool *bp)
     return;
 }
 
-static void bk_pool_free()
+static void bk_pool_list_free(struct list_head* list)
 {
     struct bucket_pool *bp, *t;
-    list_for_each_entry_safe(bp, t, &bk_pool_list, struct bucket_pool, entry)
+    list_for_each_entry_safe(bp, t, list, struct bucket_pool, entry)
     {
         list_del(&bp->entry);
         if (bp->bk_tab) free(bp->bk_tab);
@@ -418,16 +301,16 @@ static void bk_pool_free()
 /**
     Pending messages
 **/
-static void pending_msg_list_init()
+static void pending_msg_list_init(struct list_head *list)
 {
-    INIT_LIST_HEAD(&pending_msg_list);
+    INIT_LIST_HEAD(list);
 }
 
-static void pending_msg_list_free()
+static void pending_msg_list_free(struct list_head *list)
 {
     int msg_cnt = 0;
     struct pending_msg *p, *t;
-    list_for_each_entry_safe(p, t, &pending_msg_list, struct pending_msg, entry)
+    list_for_each_entry_safe(p, t, list, struct pending_msg, entry)
     {
         list_del(&p->entry);
         free(p);
@@ -451,35 +334,34 @@ static int busy_bk_count()
 /**
     Runnable tasks management    
 **/
-static inline void rtask_list_init()
+static inline void rtask_list_init(struct list_head* list)
 {
-	INIT_LIST_HEAD(&rtask_list);
+	INIT_LIST_HEAD(list);
 }
 
-static int rtask_list_count()
+static int rtask_list_count(struct list_head* list)
 {
 	int cnt = 0;
 	struct runnable_task *rtask;
-	list_for_each_entry(rtask, &rtask_list, struct runnable_task, entry) {
+	list_for_each_entry(rtask, list, struct runnable_task, entry) {
 		cnt++;
 	}
 
 	return cnt;
 }
 
-static struct runnable_task *rtask_list_lookup(uint32_t wid, uint32_t tid)
+static struct runnable_task *rtask_list_lookup(struct list_head* list, uint32_t tid)
 {
     struct runnable_task *rtask;
-	list_for_each_entry(rtask,&rtask_list,struct runnable_task, entry) {
-		if (rtask->task_ref->wid == wid &&
-            rtask->task_ref->tid == tid)
+	list_for_each_entry(rtask,list,struct runnable_task, entry) {
+        if (rtask->task_ref->tid == tid)
 			return rtask;
 	}
 
 	return NULL;
 }
 
-static struct runnable_task *rtask_list_add_new(struct task_entry *t)
+static struct runnable_task *rtask_list_add_new(struct list_head* list, struct task_entry *t)
 {
     struct runnable_task *rtask = malloc(sizeof(*rtask));
     rtask->task_ref = t;
@@ -487,7 +369,7 @@ static struct runnable_task *rtask_list_add_new(struct task_entry *t)
     rtask->bk_idx_tab = NULL;
 
     update_task_status(t, task_pending);
-    list_add_tail(&rtask->entry, &rtask_list);
+    list_add_tail(&rtask->entry, list);
     return rtask;
 }
 
@@ -534,8 +416,8 @@ static int notify_bk(struct runnable_task *rtask, struct bucket_pool *bp,
 	int err = -ENOMEM;
 	struct msg_buf *msg;
 	struct node_id *peer;
-	peer = ds_get_peer(ds, bk->dart_id);
-	msg = msg_buf_alloc(ds->rpc_s, peer, 1);
+	peer = ds_get_peer(DART_DS, bk->dart_id);
+	msg = msg_buf_alloc(DART_RPC_S, peer, 1);
 	if (!msg)
 		goto err_out;
     
@@ -560,17 +442,16 @@ static int notify_bk(struct runnable_task *rtask, struct bucket_pool *bp,
     } 
 
 	msg->msg_rpc->cmd = cods_exec_task_msg;
-	msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
+	msg->msg_rpc->id = DART_ID;
 	struct hdr_exec_task *hdr =
 		(struct hdr_exec_task *)msg->msg_rpc->pad;
-    hdr->wid = t->wid;
 	hdr->tid = t->tid;
     hdr->appid = t->appid;
 	hdr->rank_hint = rank_hint; 
 	hdr->nproc_hint = nproc_hint;
 	hdr->num_vars = t->num_vars;
 
-	err = rpc_send(ds->rpc_s, peer, msg);
+	err = rpc_send(DART_RPC_S, peer, msg);
 	if (err < 0) {
 		free(msg->msg_data);
 		free(msg);
@@ -582,7 +463,7 @@ err_out:
 	ERROR_TRACE();
 }
 
-static int runnable_task_allocate_bk(struct runnable_task *rtask)
+static int bk_pool_list_allocate_bk(struct list_head *list, struct runnable_task *rtask)
 {
 	if (rtask->task_ref->status != task_pending) {
 		return 0;
@@ -610,7 +491,7 @@ static int runnable_task_allocate_bk(struct runnable_task *rtask)
 
     // try to allocate buckets in a simple first-fit manner
     struct bucket_pool *bp;
-    list_for_each_entry(bp, &bk_pool_list, struct bucket_pool, entry) {
+    list_for_each_entry(bp, list, struct bucket_pool, entry) {
         rtask->bk_idx_tab = bk_pool_request_bk_allocation(bp, rtask->bk_allocation_size);
         if (rtask->bk_idx_tab) break;
     }    
@@ -633,15 +514,15 @@ static int runnable_task_allocate_bk(struct runnable_task *rtask)
 	// uppdate task state
     update_task_status(rtask->task_ref, task_running);
 
-    uloga("%s(): assign task (%d,%d) to buckets timestamp %lf\n",
-        __func__, rtask->task_ref->wid, rtask->task_ref->tid, timer_read(&tm)-tm_st);
+    uloga("%s(): assign task tid= %u to buckets timestamp %lf\n",
+        __func__, rtask->task_ref->tid, timer_read(&tm)-tm_st);
 	return 0;	
 }
 
-static void rtask_list_free()
+static void rtask_list_free(struct list_head* list)
 {
 	struct runnable_task *rtask, *temp;
-	list_for_each_entry_safe(rtask, temp, &rtask_list, struct runnable_task, entry) {
+	list_for_each_entry_safe(rtask, temp, list, struct runnable_task, entry) {
 		list_del(&rtask->entry);
 		free(rtask);
 	}
@@ -649,6 +530,7 @@ static void rtask_list_free()
 
 /************/
 static int timestamp_ = 0;
+/*
 static void print_rr_count()
 {
 	int num_runnable_task = 0;
@@ -663,6 +545,7 @@ static void print_rr_count()
 	fprintf(stderr, "EVAL: %d num_runnable_task= %d num_idle_bucket= %d num_busy_bucket= %d\n",
 		timestamp_, num_runnable_task, num_idle_bucket, num_busy_bucket);
 }
+*/
 
 static int notify_task_submitter(struct task_entry *task)
 {
@@ -671,19 +554,18 @@ static int notify_task_submitter(struct task_entry *task)
     int err = -ENOMEM;
     int dart_id = task->submitter_dart_id;
 
-    peer = ds_get_peer(ds, dart_id);
-    msg = msg_buf_alloc(ds->rpc_s, peer, 1);
+    peer = ds_get_peer(DART_DS, dart_id);
+    msg = msg_buf_alloc(DART_RPC_S, peer, 1);
     if (!msg)
         goto err_out;
 
     msg->msg_rpc->cmd = cods_submitted_task_done_msg;
-    msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
+    msg->msg_rpc->id = DART_ID;
     struct hdr_submitted_task_done *hdr= (struct hdr_submitted_task_done*)msg->msg_rpc->pad;
-    hdr->wid = task->wid;
     hdr->tid = task->tid;
     hdr->task_execution_time = 0;
 
-    err = rpc_send(ds->rpc_s, peer, msg);
+    err = rpc_send(DART_RPC_S, peer, msg);
     if (err < 0) {
         free(msg);
         goto err_out;
@@ -694,10 +576,10 @@ static int notify_task_submitter(struct task_entry *task)
     ERROR_TRACE();
 }
 
-static int process_finished_task()
+static int process_finished_task(struct cods_scheduler *scheduler)
 {
     struct runnable_task *rtask, *temp;
-    list_for_each_entry_safe(rtask, temp, &rtask_list, struct runnable_task, entry) {
+    list_for_each_entry_safe(rtask, temp, &scheduler->rtask_list, struct runnable_task, entry) {
         if (rtask_is_finish(rtask)) {
             uloga("WARNING %s: shuold not remove runnable task here...\n", __func__);
             // remove runnable task from the list
@@ -706,60 +588,48 @@ static int process_finished_task()
         }
     }
 
-    struct workflow_entry *wf;
-    list_for_each_entry(wf, &workflow_list, struct workflow_entry, entry) {
-        struct task_entry *task, *t;
-        list_for_each_entry_safe(task, t, &wf->task_list, struct task_entry, entry) {
-            if (is_task_finish(task)) {
-                notify_task_submitter(task);
-                // remove task from the workflow's task list 
-                list_del(&task->entry);
-                free(task);
-                wf->num_tasks--;
-            }
-        }
-    }    
-
-    return 0;
-}
-
-static int process_workflow_state()
-{
-    struct workflow_entry *wf, *temp;
-    list_for_each_entry_safe(wf, temp, &workflow_list, struct workflow_entry, entry) {
-        if (wf->state.f_done) {
-            uloga("%s: to free workflow wid= %u\n", __func__, wf->wid);
-            // TODO: 
-            free_workflow(wf);
+    struct task_entry *task, *t;
+    list_for_each_entry_safe(task, t, &scheduler->task_list, struct task_entry, entry) {
+        if (is_task_finish(task)) {
+            notify_task_submitter(task);
+            // remove from the task list 
+            list_del(&task->entry);
+            free(task);
         }
     }
 
     return 0;
 }
 
-static int process_framework_state()
+static void reset_framework_state(struct cods_framework_state *state)
+{
+    state->f_done = 0;
+    state->f_notify_executor_to_exit = 0;
+}
+
+static int process_framework_state(struct cods_scheduler *scheduler)
 {
     int err = -ENOMEM;
-    if (framework_state.f_notify_executor_to_exit) return 0;
-    if (framework_state.f_done && 0 == busy_bk_count()) {
+    if (scheduler->framework_state.f_notify_executor_to_exit) return 0;
+    if (scheduler->framework_state.f_done && 0 == busy_bk_count()) {
         struct msg_buf *msg;
         struct node_id *peer;
         struct bucket_pool *bp;
         struct bucket *bk;
-        list_for_each_entry(bp, &bk_pool_list, struct bucket_pool, entry)
+        list_for_each_entry(bp, &scheduler->bk_pool_list, struct bucket_pool, entry)
         {
             int mpi_rank;
             for (mpi_rank = 0; mpi_rank < bp->bk_tab_size; mpi_rank++) {
                 bk = bk_pool_get_bucket(bp, mpi_rank);
-                peer = ds_get_peer(ds, bk->dart_id);
-                msg = msg_buf_alloc(ds->rpc_s, peer, 1);
+                peer = ds_get_peer(DART_DS, bk->dart_id);
+                msg = msg_buf_alloc(DART_RPC_S, peer, 1);
                 if (!msg)
                     goto err_out;
 
                 msg->msg_rpc->cmd = cods_stop_executor_msg;
-                msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
+                msg->msg_rpc->id = DART_ID;
 
-                err = rpc_send(ds->rpc_s, peer, msg);
+                err = rpc_send(DART_RPC_S, peer, msg);
                 if (err < 0) {
                     free(msg);
                     goto err_out;
@@ -767,7 +637,7 @@ static int process_framework_state()
             }
         }
 
-        framework_state.f_notify_executor_to_exit = 1;
+        scheduler->framework_state.f_notify_executor_to_exit = 1;
     }
 
     return 0;
@@ -775,6 +645,7 @@ static int process_framework_state()
     ERROR_TRACE();
 }
 
+/*
 static int process_cods_build_staging(struct pending_msg *p)
 {
     int err;
@@ -817,17 +688,19 @@ static int process_cods_build_staging(struct pending_msg *p)
     err = -1;
     ERROR_TRACE();
 }
+*/
 
-static int process_pending_msg()
+static int process_pending_msg(struct cods_scheduler *scheduler)
 {
     // process one msg at a time
     struct pending_msg *p, *t;
     int err;
-    list_for_each_entry_safe(p, t, &pending_msg_list, struct pending_msg, entry)
+    list_for_each_entry_safe(p, t, &scheduler->pending_msg_list, struct pending_msg, entry)
     {
         switch (p->cmd.cmd) {
         case cods_build_staging_msg:
-            err = process_cods_build_staging(p);
+            err = 0;
+            //err = process_cods_build_staging(p);
             if (0 == err) {
                 // remove msg from list
                 list_del(&p->entry);
@@ -845,29 +718,26 @@ static int process_pending_msg()
 
 /*
 */
-static int process_runnable_task()
+static int process_runnable_task(struct cods_scheduler *scheduler)
 {
 	struct runnable_task *rtask, *temp;
 	int err = -ENOMEM;
 
 	// 1. Add ready tasks (if any) 
-    struct workflow_entry *wf;
-    list_for_each_entry(wf, &workflow_list, struct workflow_entry, entry) {
-        struct task_entry *tasks[MAX_NUM_TASKS];
-        int num_tasks;
-        get_ready_tasks(wf, tasks, &num_tasks);
-        if (num_tasks > 0) {
-            int i;
-            for (i = 0; i < num_tasks; i++) {
-                rtask_list_add_new(tasks[i]);
-            }
+    struct task_entry *tasks[MAX_NUM_TASKS];
+    int num_tasks;
+    get_ready_tasks(&scheduler->task_list, tasks, &num_tasks);
+    if (num_tasks > 0) {
+        int i;
+        for (i = 0; i < num_tasks; i++) {
+            rtask_list_add_new(&scheduler->rtask_list, tasks[i]);
         }
     }
 
 	// 2. process runnable tasks (if any) 
-	list_for_each_entry_safe(rtask, temp, &rtask_list, struct runnable_task, entry) {
+	list_for_each_entry_safe(rtask, temp, &scheduler->rtask_list, struct runnable_task, entry) {
 		if (rtask_is_pending(rtask)) {
-			runnable_task_allocate_bk(rtask);
+			bk_pool_list_allocate_bk(&scheduler->bk_pool_list, rtask);
 		}
 	}	
 
@@ -877,23 +747,23 @@ static int process_runnable_task()
 static int callback_cods_finish_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     struct hdr_finish_task *hdr = (struct hdr_finish_task*)cmd->pad;
-    struct bucket_pool *bp = bk_pool_lookup(hdr->pool_id);
+    struct bucket_pool *bp = bk_pool_list_lookup(&sched->bk_pool_list, hdr->pool_id);
     if (bp == NULL) {
         uloga("ERROR %s(): should not happen bp == NULL\n", __func__);
         return 0;
     }
 
-    struct runnable_task *rtask = rtask_list_lookup(hdr->wid, hdr->tid);
+    struct runnable_task *rtask = rtask_list_lookup(&sched->rtask_list, hdr->tid);
     if (rtask) {
-        uloga("%s(): finish task (%u,%u) timestamp %lf\n",
-            __func__, hdr->wid, hdr->tid, timer_read(&tm)-tm_st);
+        uloga("%s(): finish task tid= %u timestamp %lf\n",
+            __func__, hdr->tid, timer_read(&tm)-tm_st);
 
         rtask_set_finish(rtask);
         bk_pool_free_bk_allocation(bp, rtask->bk_idx_tab, rtask->bk_allocation_size);
         free_rtask(rtask); 
     } else {
-        uloga("ERROR %s: failed to find task (%u,%u)\n",
-            __func__, hdr->wid, hdr->tid);
+        uloga("ERROR %s: failed to find task tid= %u\n",
+            __func__, hdr->tid);
     } 
 
     return 0;
@@ -915,11 +785,11 @@ static int callback_cods_reg_resource(struct rpc_server *rpc_s, struct rpc_cmd *
             hdr->topo_info.mesh_coord.mesh_y, hdr->topo_info.mesh_coord.mesh_z);
 #endif
 
-    struct bucket_pool *bp = bk_pool_lookup(pool_id);
+    struct bucket_pool *bp = bk_pool_list_lookup(&sched->bk_pool_list, pool_id);
     if (bp == NULL) {
-        bp = bk_pool_create_new(pool_id, num_bucket);
+        bp = bk_pool_list_create_new(&sched->bk_pool_list, pool_id, num_bucket);
         if (bp == NULL) {
-            uloga("ERROR %s(): bk_pool_create_new() failed\n", __func__);
+            uloga("ERROR %s(): bk_pool_list_create_new() failed\n", __func__);
             return -1;
         }
     }
@@ -932,20 +802,6 @@ static int callback_cods_reg_resource(struct rpc_server *rpc_s, struct rpc_cmd *
     }
 
     return 0;
-}
-
-static int callback_cods_finish_workflow(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
-{
-    struct hdr_finish_workflow *hdr = (struct hdr_finish_workflow*)cmd->pad;
-    struct workflow_entry *wf = workflow_list_lookup(hdr->wid);    
-    if (wf) {
-        wf->state.f_done = 1;
-    } else {
-        uloga("ERROR %s: failed to lookup workflow with wid= %u\n", __func__,
-            hdr->wid);
-    }
-
-	return 0;
 }
 
 // TODO: make the workflow evaluation asynchronous...
@@ -966,7 +822,7 @@ static int callback_cods_update_var(struct rpc_server *rpc_s, struct rpc_cmd *cm
     var_desc.version = hdr->version;
     var_desc.elem_size = hdr->elem_size;
     var_desc.gdim = hdr->gdim;
-    workflow_list_evaluate_dataflow(&var_desc);
+    task_list_evaluate_dataflow(&sched->task_list, &var_desc);
 
 	return 0;
 }
@@ -976,28 +832,23 @@ static int callback_cods_submit_task(struct rpc_server *rpc_s, struct rpc_cmd *c
     struct hdr_submit_task *hdr = (struct hdr_submit_task*)cmd->pad;
     uloga("%s(): config file %s\n", __func__, hdr->conf_file);
 
-    struct workflow_entry *wf = workflow_list_lookup(hdr->wid);
-    if (!wf) {
-        wf = workflow_list_create_new(hdr->wid);
-    } else {
-        if (workflow_lookup_task(wf, hdr->tid)) {
-            uloga("ERROR %s: task tid= %d already exist\n", __func__, hdr->tid);
-            return 0;
-        }
+    struct task_entry *task = task_list_lookup_task(&sched->task_list, hdr->tid);
+    if (task) {
+        uloga("ERROR %s: task tid= %d already exist\n", __func__, hdr->tid);
+        return 0;
     }
 
-    struct task_entry *task = create_new_task(hdr->wid, hdr->tid, hdr->conf_file);
+    task = create_new_task(hdr->tid, hdr->conf_file, cmd->id);
     if (!task) {
         return 0;
     }
 
-    task->submitter_dart_id = cmd->id;
-    workflow_add_task(wf, task);
-
-    print_workflow(wf);
+    task_list_add_task(&sched->task_list, task);
+    print_task_info(task);
     return 0;
 }
 
+/*
 static int callback_cods_build_staging(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     uloga("%s(): get request from peer #%d\n", __func__, cmd->id);
@@ -1009,38 +860,38 @@ static int callback_cods_build_staging(struct rpc_server *rpc_s, struct rpc_cmd 
 
     return 0;
 }
+*/
 
 static int callback_cods_stop_framework(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-    framework_state.f_done = 1;    
+    sched->framework_state.f_done = 1;    
     return 0;
 }
 
 int cods_scheduler_init()
 {
-	rpc_add_service(cods_finish_workflow_msg, callback_cods_finish_workflow);
+    sched = malloc(sizeof(*sched));
+    if (!sched) return -1;
+
 	rpc_add_service(cods_update_var_msg, callback_cods_update_var); 
     rpc_add_service(cods_reg_resource_msg, callback_cods_reg_resource);
     rpc_add_service(cods_finish_task_msg, callback_cods_finish_task);
     rpc_add_service(cods_submit_task_msg, callback_cods_submit_task);
-    rpc_add_service(cods_build_staging_msg, callback_cods_build_staging);
+    // rpc_add_service(cods_build_staging_msg, callback_cods_build_staging);
     rpc_add_service(cods_stop_framework_msg, callback_cods_stop_framework);
 
-	dimes_s = dimes_server_alloc(num_sp, num_cp, conf);
-	if (!dimes_s) {
-		return -1;
+	sched->dimes_s = dimes_server_alloc(num_sp, num_cp, conf);
+	if (!sched->dimes_s) {
+        free(sched);
+        return -1;
 	}
 	
-	dsg = dimes_s->dsg;
-	ds = dimes_s->dsg->ds;
-
 	// Init
-    pending_msg_list_init();
-    bk_pool_init();
-    workflow_list_init();
-	rtask_list_init();
-    framework_state.f_done = 0;
-    framework_state.f_notify_executor_to_exit = 0;
+    pending_msg_list_init(&sched->pending_msg_list);
+    bk_pool_list_init(&sched->bk_pool_list);
+    task_list_init(&sched->task_list);
+	rtask_list_init(&sched->rtask_list);
+    reset_framework_state(&sched->framework_state);
 
     timer_init(&tm, 1);
     timer_start(&tm);
@@ -1053,12 +904,12 @@ int cods_scheduler_run()
 {
 	int err;
 
-	while (!dimes_server_complete(dimes_s)) {
-		err = dimes_server_process(dimes_s);
+	while (!dimes_server_complete(sched->dimes_s)) {
+		err = dimes_server_process(sched->dimes_s);
 		if (err < 0) {
 			/* If there is an error on the execution path,
 			   I should stop the server. */
-			dimes_server_free(dimes_s);
+			dimes_server_free(sched->dimes_s);
 
 			/* TODO:  implement an  exit method  to signal
 			   other servers to stop. */
@@ -1067,25 +918,26 @@ int cods_scheduler_run()
 			return err;
 		}
 
-        process_pending_msg();
-        process_runnable_task();
-        process_finished_task();
-        process_workflow_state();
-        process_framework_state();
+        process_pending_msg(sched);
+        process_runnable_task(sched);
+        process_finished_task(sched);
+        process_framework_state(sched);
 	}
 
-    pending_msg_list_free();
-    bk_pool_free();
-	rtask_list_free();
-    workflow_list_free();
+    pending_msg_list_free(&sched->pending_msg_list);
+    bk_pool_list_free(&sched->bk_pool_list);
+	rtask_list_free(&sched->rtask_list);
+    task_list_free(&sched->task_list);
 
 	return 0;
 }
 
 int cods_scheduler_finish()
 {
-	dimes_server_barrier(dimes_s);
-	dimes_server_free(dimes_s);
+    if (!sched) return -1;
+	dimes_server_barrier(sched->dimes_s);
+	dimes_server_free(sched->dimes_s);
+    free(sched); 
 
 	return 0;
 }
@@ -1139,3 +991,488 @@ int cods_scheduler_parse_args(int argc, char *argv[])
 		conf = "dataspaces.conf";
 	return 0;
 }
+
+static void print_str_decimal(const char *str)
+{
+    int j = 0;
+    while (j < strlen(str)) {
+        printf("%d ", str[j++]);
+    }   
+    printf("\n");
+}
+
+// TODO: use more generic approach to convert strings to type id
+static int str_to_var_type(const char *str, enum cods_var_type *type)
+{
+    if (0 == strcmp(str, "depend")) {
+        *type = var_type_depend;
+        return 0;
+    }
+ 
+    if (0 == strcmp(str, "put")) {
+        *type = var_type_put;
+        return 0;
+    }
+
+    if (0 == strcmp(str, "get")) {
+        *type = var_type_get;
+        return 0;
+    }
+
+    fprintf(stderr, "Unknown variable type string '%s'\n", str);    
+    return -1;
+}
+
+static int str_to_placement_hint(const char *str, enum cods_placement_hint *hint)
+{
+    if (0 == strcmp(str, "insitu")) {
+        *hint = hint_insitu;
+        return 0;
+    }
+
+    if (0 == strcmp(str, "intransit")) {
+        *hint = hint_intransit;
+        return 0;
+    }
+
+    if (0 == strcmp(str, "none")) {
+        *hint = hint_none;
+        return 0;
+    }
+
+    fprintf(stderr, "Unknown placement hint string '%s'\n", str);
+    return -1;
+}
+
+static void update_task_status(struct task_entry *task, enum cods_task_status status)
+{
+    task->status = status;
+}
+
+static int is_task_finish(struct task_entry *task)
+{
+    return task->status == task_finish;
+}
+
+static int is_task_ready(struct task_entry *task)
+{
+    if (task->status == task_ready) return 1;
+    else if (task->status == task_not_ready) {
+        int i;
+        for (i = 0; i < task->num_vars; i++) {
+            if (task->vars[i].type == var_type_depend &&
+                task->vars[i].status == var_not_available) {
+                return 0;
+            }
+        }
+
+        update_task_status(task, task_ready);
+        return 1;
+    }
+
+    return 0;
+}
+
+static int get_ready_tasks(struct list_head *list,
+    struct task_entry **tasks, int *n /*num_ready_tasks*/)
+{
+    *n = 0;
+    struct task_entry *task = NULL;
+    list_for_each_entry(task, list, struct task_entry, entry) {
+        if (is_task_ready(task)) {
+            tasks[*n] = task;
+            *n = *n + 1;
+        }
+    }
+
+    return 0;
+}
+
+static struct cods_var *lookup_var(struct task_entry *task, const char *var_name)
+{
+    int i;
+    for (i = 0; i < task->num_vars; i++) {
+        if (0 == strcmp(var_name, task->vars[i].name))
+            return &task->vars[i];
+    }
+
+    return NULL;
+}
+
+static int evaluate_task_by_available_var(struct task_entry *task, const struct cods_var *var_desc)
+{
+    if (!task) return 0;
+    struct cods_var *var = lookup_var(task, var_desc->name);
+    if (var) {
+        var->status = var_available;
+        var->elem_size = var_desc->elem_size;
+        var->gdim = var_desc->gdim;
+    } 
+
+    return 0;
+}
+
+static struct cods_var* task_add_var(struct task_entry *task, const char *name)
+{
+    if (task == NULL) {
+        fprintf(stderr, "%s(): task == NULL\n", __func__);
+        return NULL;
+    }
+
+    if (task->num_vars >= MAX_NUM_VARS) {
+        fprintf(stderr, "%s(): exceeds MAX_NUM_VARS\n", __func__);
+        return NULL;
+    }
+
+    struct cods_var *var = &task->vars[task->num_vars];
+    strcpy(var->name, name);
+    var->version = -1;
+    var->elem_size = 0;
+    memset(&var->gdim, 0, sizeof(struct global_dimension));
+    memset(&var->dist_hint, 0, sizeof(struct block_distribution));
+    var->gdim.ndim = 0;
+    var->dist_hint.ndim = 0;   
+ 
+    task->num_vars++;
+    return var;
+}
+
+static int read_task_var_type(struct task_entry *task, char *fields[], int num_fields)
+{
+    int index_to_var_type = 3;
+    // Get var type
+    enum cods_var_type type;
+    if (str_to_var_type(fields[index_to_var_type], &type) < 0) {
+        return -1;
+    }
+
+    // Get the variables
+    int vars_start_at = 4;
+    int i = vars_start_at, j = 0;
+    while (i < num_fields) {
+        struct cods_var *var = lookup_var(task, fields[i]);
+        if (!var) {
+            // add new var
+            var = task_add_var(task, fields[i]);
+            if (!var) return -1;
+        }
+        // set var type
+        var->type = type;
+        i++;
+    }
+
+    return 0;
+}
+
+static int read_task_var_dimension(struct task_entry *task, char *fields[], int num_fields)
+{
+    int index_to_var_dim = 3;
+    int ndim = atoi(fields[index_to_var_dim]);
+    if (ndim < 0 || ndim > BBOX_MAX_NDIM) {
+        uloga("ERROR %s: wrong value for ndim %s\n", __func__, fields[index_to_var_dim]);
+        return -1;
+    }
+
+    struct global_dimension gdim;
+    gdim.ndim = ndim;
+    int dims_start_at = 4;
+    int i = dims_start_at, j = 0;
+    while ((i < num_fields) && (j < gdim.ndim)) {
+        gdim.sizes.c[j++] = atoll(fields[i++]);
+    }
+    
+    if (j != gdim.ndim) {
+        uloga("ERROR %s: var dimension incomplete ndim is %d but only read %d values\n",
+            __func__, gdim.ndim, j);    
+        return -1;
+    }
+
+    size_t elem_size = atoi(fields[i++]);
+    while (i < num_fields) {
+        struct cods_var *var = lookup_var(task, fields[i]);
+        if (!var) {
+            // add new var
+            var = task_add_var(task, fields[i]);
+            if (!var) return -1;
+        }
+        var->elem_size = elem_size;
+        memcpy(&var->gdim, &gdim, sizeof(struct global_dimension));
+        i++;
+    }
+
+    return 0;
+}
+
+static int read_task_var_distribution(struct task_entry *task, char *fields[], int num_fields)
+{
+    int index_to_var_dist_type = 3;
+    if (0 != strcmp("block", fields[index_to_var_dist_type])) {
+        uloga("ERROR %s: we only support 'block' distribution\n", __func__);
+        return -1;
+    }
+
+    int index_to_var_dist_dim = 4;
+    int ndim = atoi(fields[index_to_var_dist_dim]);
+    if (ndim < 0 || ndim > BBOX_MAX_NDIM) {
+        uloga("ERROR %s: wrong value for ndim %s\n", __func__, fields[index_to_var_dist_dim]);
+        return -1;
+    }
+
+    struct block_distribution dist;
+    dist.ndim = ndim;
+    int dims_start_at = 5;
+    int i = dims_start_at, j = 0; 
+    while ((i < num_fields) && (j < dist.ndim)) {
+        dist.sizes.c[j++] = atoll(fields[i++]);
+    }
+
+    if (j != dist.ndim) {
+        uloga("ERROR %s: var distribution incomplete ndim is %d but only read %d values\n",
+            __func__, dist.ndim, j);
+        return -1;
+    }
+
+    while (i < num_fields) {
+        struct cods_var *var = lookup_var(task, fields[i]);
+        if (!var) {
+            // add new var
+            var = task_add_var(task, fields[i]);
+            if (!var) return -1;
+        }
+        memcpy(&var->dist_hint, &dist, sizeof(struct block_distribution));
+        i++;
+    }
+
+    return 0;
+}
+
+static int read_task_placement_hint(struct task_entry *task, char *fields[], int num_fields)
+{
+    int index_to_hint = 3;
+    // Get placement hint
+    if (str_to_placement_hint(fields[index_to_hint], &task->placement_hint) < 0 ) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int read_task_size_hint(struct task_entry *task, char *fields[], int num_fields)
+{
+    int index_to_hint = 3;
+    int size_hint = atoi(fields[index_to_hint]);
+    if (size_hint < 0) {
+        size_hint = 0;
+    }
+
+    task->size_hint = size_hint;
+    return 0;
+}
+
+static int read_workflow_task(struct task_entry *task, char *fields[], int num_fields)
+{
+    int index_to_appid = 1;
+    int index_to_desc = 2;
+    int required_fields = 4;
+
+    if (num_fields < required_fields) {
+        fprintf(stderr, "Can NOT be valid task information\n");
+        return -1;
+    }
+
+    // read application id for the task
+    int appid = atoi(fields[index_to_appid]);
+    task->appid = appid;
+
+    char *t_desc = fields[index_to_desc];
+    if (0 == strcmp(t_desc, "def_var_type")) {
+        if (read_task_var_type(task, fields, num_fields) < 0) {
+            return -1;
+        }
+    } else if (0 == strcmp(t_desc, "placement_hint")) {
+        if (read_task_placement_hint(task, fields, num_fields) < 0) {
+            return -1;  
+        }
+    } else if (0 == strcmp(t_desc, "def_size_hint")) {
+        if (read_task_size_hint(task, fields, num_fields) < 0 ) {
+            return -1;
+        } 
+    } else if (0 == strcmp(t_desc, "def_var_dimension")) {
+        if (read_task_var_dimension(task, fields, num_fields) < 0) {
+            return -1;
+        }
+    } else if (0 == strcmp(t_desc, "def_var_distribution")) {
+        if (read_task_var_distribution(task, fields, num_fields) < 0) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+static int parse_task_conf_file(struct task_entry *task, const char *fname)
+{
+    const size_t MAX_LINE = 4096;
+    const char *DELIM = " \t\n\r"; //space, tab, line feed, carriage return
+    const int MAX_FIELDS = 50;
+
+    int err = -1;
+    if (!task) return err;
+
+    FILE *file = fopen(fname, "r");
+    if (!file) {
+        fprintf(stderr, "%s(): unable to open file %s\n", __func__, fname);
+        return err;  
+    }
+
+    char line[MAX_LINE];
+    int i = 1;
+    while (fgets(line, MAX_LINE, file) != NULL) {
+        // Trim the line
+        trim(line, DELIM);
+        i++;
+
+        // Blank line
+        if (strlen(line) == 0)
+            continue;
+
+        // Comment line
+        if (line[0] == '#')
+            continue;
+
+        //printf("line: %s\n", line);
+
+        // Split line into fields
+        int n = 0;
+        char *fields[MAX_FIELDS];
+        char *tok;
+        tok = strtok(line, DELIM);
+        while (tok != NULL) {
+            if (n < MAX_FIELDS) {
+                fields[n] = (char *) malloc(strlen(tok)+1);
+                strcpy(fields[n], tok);         
+                tok = strtok(NULL, DELIM);
+                n++;
+            } else {
+                fprintf(stderr, "Exceeds the max number of fields %d\n",
+                    MAX_FIELDS);
+                break;
+            }
+        }
+
+        // Read task information
+        if (0 == strcmp("task", fields[0])) {
+            read_workflow_task(task, fields, n);
+        }
+
+        // Free the fields array
+        int j = 0;
+        while (j < n) {
+            free(fields[j]);
+            j++;
+        }   
+    }
+
+    fclose(file);
+    return 0;   
+}
+
+static void print_task_info(struct task_entry *task)
+{
+    if (!task) return;
+    uint64_t gdim[BBOX_MAX_NDIM], dist[BBOX_MAX_NDIM];
+    char gdim_str[256], dist_str[256];
+    int i, j;
+
+    printf("task tid= %u appid= %d size_hint= %d submitter_dart_id= %d\n",
+        task->tid, task->appid, task->size_hint, task->submitter_dart_id);
+    for (i = 0; i < task->num_vars; i++) {
+        for (j = 0; j < task->vars[i].gdim.ndim; j++) {
+            gdim[j] = task->vars[i].gdim.sizes.c[j];
+        }
+        for (j = 0; j < task->vars[i].dist_hint.ndim; j++) {
+            dist[j] = task->vars[i].dist_hint.sizes.c[j];
+        }
+        int64s_to_str(task->vars[i].gdim.ndim, gdim, gdim_str);
+        int64s_to_str(task->vars[i].dist_hint.ndim, dist, dist_str);
+
+        printf("task tid= %u appid= %d var= '%s': type= '%s' elem_size= %u gdim= (%s) dist_hint= (%s)\n", 
+            task->tid, task->appid, task->vars[i].name, var_type_name[task->vars[i].type], task->vars[i].elem_size, gdim_str, dist_str);
+    }
+}
+
+/*
+int read_emulated_vars_sequence(struct workflow_entry *wf, const char *fname)
+{
+    int err = -1;
+    const size_t MAX_LINE = 4096;
+    const char *DELIM = " \t\n\r";
+    const int MAX_FIELDS = 50;
+
+    FILE *file = fopen(fname, "r");
+    if (!file) {
+        fprintf(stderr, "%s(): unable to open file %s\n", __func__, fname);
+        free(wf);
+        return -1;  
+    }
+
+    char line[MAX_LINE];
+    int i = 1;
+    while (fgets(line, MAX_LINE, file) != NULL) {
+        // Trim the line
+        trim(line, DELIM);
+        i++;
+
+        // Blank line
+        if (strlen(line) == 0)
+            continue;
+
+        // Comment line
+        if (line[0] == '#')
+            continue;
+
+        // Split line into fields
+        int n = 0;
+        char *fields[MAX_FIELDS];
+        char *tok;
+        tok = strtok(line, DELIM);
+        while (tok != NULL) {
+            if (n < MAX_FIELDS) {
+                fields[n] = (char *) malloc(strlen(tok)+1);
+                strcpy(fields[n], tok);         
+                tok = strtok(NULL, DELIM);
+                n++;
+            } else {
+                fprintf(stderr, "Exceeds the max number of fields %d\n",
+                    MAX_FIELDS);
+                break;
+            }
+        }
+
+        // Update the tasks
+        int step = atoi(fields[1]);
+        struct var_descriptor var_desc;
+        strcpy(var_desc.var_name, fields[0]);
+        var_desc.step = step;
+        evaluate_dataflow_by_available_var(wf, &var_desc);
+
+        // Get READY tasks
+        printf("Available var %s step= %d\n", fields[0], step);
+        struct task_instance *ready_tasks[MAX_NUM_TASKS];
+        int num_ready_tasks = 0;
+        get_ready_tasks(wf, ready_tasks, &num_ready_tasks);
+        if (num_ready_tasks > 0) {
+            int j;
+            for (j = 0; j < num_ready_tasks; j++) {
+                printf("Execute tid= %d step= %d\n",
+                    ready_tasks[j]->tid, ready_tasks[j]->step);
+                update_task_instance_status(ready_tasks[j], task_finish);
+            }
+        }
+    }
+
+    fclose(file);
+
+    return 0;
+}
+*/

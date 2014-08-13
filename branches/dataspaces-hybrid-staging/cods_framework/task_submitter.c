@@ -43,7 +43,6 @@ void epsi_coupling_workflow_driver(uint32_t wid, MPI_Comm comm)
     int num_coupling_step = 5;
     // set task descriptors
     struct task_descriptor xgc1_task, xgca_task;
-    xgc1_task.wid = xgca_task.wid = wid;
     strcpy(xgc1_task.conf_file, "xgc1.conf");
     strcpy(xgca_task.conf_file, "xgca.conf");
 
@@ -58,7 +57,6 @@ void epsi_coupling_workflow_driver(uint32_t wid, MPI_Comm comm)
         cods_wait_task_completion(&xgca_task);
     }  
 
-    cods_set_workflow_finished(wid);
     uloga("%s: finish workflow execution\n", __func__);
 }
 
@@ -67,7 +65,6 @@ void dns_les_workflow_driver(uint32_t wid, MPI_Comm comm)
     uint32_t dns_tid = 1, les_tid = 2;
     // set task descriptors
     struct task_descriptor dns_task, les_task;
-    dns_task.wid = les_task.wid = wid;
     dns_task.tid = dns_tid;
     les_task.tid = les_tid;
     strcpy(dns_task.conf_file, "dns.conf");
@@ -79,7 +76,6 @@ void dns_les_workflow_driver(uint32_t wid, MPI_Comm comm)
     cods_wait_task_completion(&dns_task); 
     cods_wait_task_completion(&les_task); 
 
-    cods_set_workflow_finished(wid);
     uloga("%s: finish workflow execution\n", __func__);
 }
 
@@ -87,13 +83,10 @@ void s3d_analysis_workflow_driver(uint32_t wid, MPI_Comm comm)
 {
     // set task descriptor
     struct task_descriptor s3d_task;
-    s3d_task.wid = wid;
     s3d_task.tid = 1;
     strcpy(s3d_task.conf_file, "s3d.conf");
     cods_exec_task(&s3d_task);
     cods_wait_task_completion(&s3d_task);
-
-    cods_set_workflow_finished(wid);
 
     uloga("%s: finish workflow execution\n", __func__);
 }
@@ -121,8 +114,6 @@ int main(int argc, char **argv)
         uloga("task submitter: num_submitter= %d example_workflow_id= %u\n", nproc, example_workflow_id);
     }
 	err = cods_init(nproc, appid, cods_submitter); 
-
-    cods_build_staging(1, "staging.conf");
 
     switch (example_workflow_id) {
     case EPSI_WORKFLOW_ID:

@@ -160,7 +160,6 @@ static struct bucket_info bk_info;
 
 struct task_info {
     struct list_head entry;
-    uint32_t wid;
     uint32_t tid;
     char conf_file[NAME_MAXLEN];
     unsigned char f_task_execution_done;
@@ -180,7 +179,6 @@ struct task_info* create_submitted_task(struct task_descriptor *task_desc)
         return NULL;
     }
     
-    t->wid = task_desc->wid;
     t->tid = task_desc->tid;
     strcpy(t->conf_file, task_desc->conf_file);
     t->f_task_execution_done = 0;
@@ -189,11 +187,11 @@ struct task_info* create_submitted_task(struct task_descriptor *task_desc)
     return t; 
 }
 
-struct task_info* lookup_submitted_task(uint32_t wid, uint32_t tid)
+struct task_info* lookup_submitted_task(uint32_t tid)
 {
     struct task_info *t;
     list_for_each_entry(t, &submitted_task_list, struct task_info, entry) {
-        if (t->wid == wid && t->tid == tid) {
+        if (t->tid == tid) {
             return t;
         }
     }
@@ -260,7 +258,6 @@ err_out:
 static int callback_cods_exec_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
 	struct hdr_exec_task *hdr = (struct hdr_exec_task *)cmd->pad;
-    bk_info.current_task->wid = hdr->wid;
 	bk_info.current_task->tid = hdr->tid;
     bk_info.current_task->appid = hdr->appid;
 	bk_info.current_task->rank = hdr->rank_hint;
@@ -269,8 +266,8 @@ static int callback_cods_exec_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd
     bk_info.current_task->vars = NULL;
 
     if (fetch_task_info(cmd) < 0) {
-        uloga("ERROR %s(): failed to fetch info for task (%d,%d)\n",
-            __func__, hdr->wid, hdr->tid);
+        uloga("ERROR %s(): failed to fetch info for task tid= %u\n",
+            __func__, hdr->tid);
         bk_info.current_task = NULL;
         return -1;
     }
@@ -281,13 +278,13 @@ static int callback_cods_exec_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd
 static int callback_cods_submitted_task_done(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     struct hdr_submitted_task_done *hdr = (struct hdr_submitted_task_done *)cmd->pad;
-    uloga("%s(): task wid= %u tid= %u execution time %.6f\n", __func__, 
-        hdr->wid, hdr->tid, hdr->task_execution_time);
+    uloga("%s(): task tid= %u execution time %.6f\n", __func__, 
+        hdr->tid, hdr->task_execution_time);
 
-    struct task_info *t = lookup_submitted_task(hdr->wid, hdr->tid);
+    struct task_info *t = lookup_submitted_task(hdr->tid);
     if (!t) {
-        uloga("ERROR %s: failed to find submitted task wid= %u tid= %u\n",
-            __func__, hdr->wid, hdr->tid);
+        uloga("ERROR %s: failed to find submitted task tid= %u\n",
+            __func__, hdr->tid);
         return 0;
     }
     
@@ -498,7 +495,6 @@ int cods_set_task_finished(struct cods_task *t)
     msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
     hdr= (struct hdr_finish_task *)msg->msg_rpc->pad;
     hdr->pool_id = bk_info.pool_id;
-    hdr->wid = t->wid;
     hdr->tid = t->tid;
 
     err = client_rpc_send(peer, msg, &send_state);
@@ -528,7 +524,6 @@ int cods_exec_task(struct task_descriptor *task_desc)
     msg->msg_rpc->cmd = cods_submit_task_msg;
     msg->msg_rpc->id = MY_DART_ID;
     struct hdr_submit_task *hdr= (struct hdr_submit_task*)msg->msg_rpc->pad;
-    hdr->wid = task_desc->wid;
     hdr->tid = task_desc->tid;
     strcpy(hdr->conf_file, task_desc->conf_file);
 
@@ -548,10 +543,10 @@ int cods_exec_task(struct task_descriptor *task_desc)
 int cods_wait_task_completion(struct task_descriptor *task_desc)
 {
     int err = -ENOMEM;
-    struct task_info *t = lookup_submitted_task(task_desc->wid, task_desc->tid);
+    struct task_info *t = lookup_submitted_task(task_desc->tid);
     if (!t) {
-        uloga("ERROR %s: failed to find submitted task wid= %u tid= %u\n",
-            __func__, task_desc->wid, task_desc->tid);
+        uloga("ERROR %s: failed to find submitted task tid= %u\n",
+            __func__,  task_desc->tid);
         return err;
     }
 
@@ -572,10 +567,10 @@ int cods_wait_task_completion(struct task_descriptor *task_desc)
 int cods_get_task_status(struct task_descriptor *task_desc)
 {
     int err = -ENOMEM;
-    struct task_info *t = lookup_submitted_task(task_desc->wid, task_desc->tid);
+    struct task_info *t = lookup_submitted_task(task_desc->tid);
     if (!t) {
-        uloga("ERROR %s: failed to find submitted task wid= %u tid= %u\n",
-            __func__, task_desc->wid, task_desc->tid);
+        uloga("ERROR %s: failed to find submitted task tid= %u\n",
+            __func__, task_desc->tid);
         return err;
     }
 
@@ -632,36 +627,6 @@ int cods_build_staging(int pool_id, const char *conf_file)
 err_out_free:
     if (msg) free(msg);
 err_out:
-    ERROR_TRACE();
-}
-
-int cods_set_workflow_finished(uint32_t wid)
-{
-    struct client_rpc_send_state send_state;
-    struct msg_buf *msg;
-    struct node_id *peer;
-    struct hdr_finish_workflow *hdr;
-    int err = -ENOMEM;
-
-    peer = dc_get_peer(dc, 0); //master srv has dart id as 0
-    msg = msg_buf_alloc(dc->rpc_s, peer, 1);
-    if (!msg)
-        goto err_out;
-
-    msg->msg_rpc->cmd = cods_finish_workflow_msg;
-    msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
-    hdr = (struct hdr_finish_workflow*) msg->msg_rpc->pad;
-    hdr->wid = wid;
-
-    err = client_rpc_send(peer, msg, &send_state);
-    if (err < 0) {
-        goto err_out_free;
-    }
-
-    return 0;
- err_out_free:
-    if (msg) free(msg);
- err_out:
     ERROR_TRACE();
 }
 
