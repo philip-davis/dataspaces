@@ -38,8 +38,6 @@ int cods_exec_task(struct task_descriptor *task_desc);
 int cods_wait_task_completion(struct task_descriptor *task_desc);
 // Check the execution status of submitted task.
 int cods_get_task_status(struct task_descriptor *task_desc);
-// Notify to worklfow manager the completion of programmer defined workflow.
-int cods_set_workflow_finished(uint32_t wid);
 
 // TODO: to be implemented.
 int cods_build_staging(int pool_id, const char *conf_file);

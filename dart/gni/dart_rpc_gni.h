@@ -419,7 +419,6 @@ enum cmd_type {
     cods_submit_task_msg,
     cods_finish_task_msg,
     cods_submitted_task_done_msg,
-    cods_finish_workflow_msg,
     cods_stop_executor_msg,
     cods_build_staging_msg,
     cods_build_staging_done_msg,
