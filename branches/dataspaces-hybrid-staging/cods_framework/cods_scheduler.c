@@ -131,16 +131,14 @@ static struct bucket_pool* bk_pool_list_create_new(struct list_head* list, int p
     bp->num_bucket = 0;
     bp->bk_tab_size = num_bucket;
     bp->bk_tab = malloc(sizeof(struct bucket) * num_bucket);
-    bp->node_tab = NULL;
     bp->f_bk_reg_done = 0;
-    bp->f_node_tab_done = 0;
 
     list_add_tail(&bp->entry, list);
     return bp; 
 }
 
 static int bk_pool_add_bucket(struct bucket_pool *bp, int origin_mpi_rank, int dart_id,
-                    int pool_id, struct executor_topology_info *topo_info)
+                    int pool_id, struct node_topology_info *topo_info)
 {
     if (origin_mpi_rank < 0 || origin_mpi_rank >= bp->bk_tab_size) {
         uloga("ERROR %s(): origin_mpi_rank out of range\n", __func__);
@@ -152,6 +150,7 @@ static int bk_pool_add_bucket(struct bucket_pool *bp, int origin_mpi_rank, int d
     bk->pool_id = pool_id;
     bk->origin_mpi_rank = origin_mpi_rank;
     bk->status = bk_none;
+    bk->partition_type = DEFAULT_PART_TYPE;
     if (topo_info) bk->topo_info = *topo_info; 
 
     bp->num_bucket++;
@@ -226,66 +225,6 @@ static void bk_pool_set_bucket_idle(struct bucket_pool *bp)
         __func__, bp->pool_id, bp->bk_tab_size);
 }
 
-int compare_bk_ptr(const void *p1, const void *p2)
-{
-    return (*(const struct bucket**)p1)->topo_info.nid -
-           (*(const struct bucket**)p2)->topo_info.nid;
-}
-
-static void bk_pool_build_node_tab(struct bucket_pool *bp)
-{
-    struct bucket ** bk_ptr_tab = (struct bucket **)malloc(sizeof(struct bucket*)
-                                    *bp->bk_tab_size);
-    int i, j, k;
-    // copy pointers
-    for (i = 0; i < bp->bk_tab_size; i++) {
-        bk_ptr_tab[i] = &bp->bk_tab[i];
-    }
-
-    // sort bk_ptr_tab by bk_ptr_tab[i]->topo_info.nid
-    qsort(bk_ptr_tab, bp->bk_tab_size, sizeof(struct bucket *), compare_bk_ptr);
-
-    bp->num_node = 0;
-    uint32_t cur_nid = ~0; // assume node id can not be ~0.... 
-    for (i = 0; i < bp->bk_tab_size; i++) {
-        if (cur_nid != bk_ptr_tab[i]->topo_info.nid) {
-            cur_nid = bk_ptr_tab[i]->topo_info.nid;
-            bp->num_node++;
-        }
-    }    
-        
-    bp->node_tab = malloc(sizeof(struct compute_node)*bp->num_node);
-    cur_nid = ~0;
-    for (i = 0, j = -1, k = 0; i < bp->bk_tab_size; i++) {
-        if (cur_nid != bk_ptr_tab[i]->topo_info.nid) {
-            j++; 
-            k = 0;
-            cur_nid = bk_ptr_tab[i]->topo_info.nid;
-            bp->node_tab[j].bk_idx_tab[k++] = bk_ptr_tab[i]->origin_mpi_rank;
-            bp->node_tab[j].num_bucket = 1;
-        } else {
-            bp->node_tab[j].bk_idx_tab[k++] = bk_ptr_tab[i]->origin_mpi_rank;
-            bp->node_tab[j].num_bucket += 1;
-        }
-    } 
-
-    bp->f_node_tab_done = 1;
-
-    // print it out
-    uloga("bp->num_node= %d\n", bp->num_node);
-    for (i = 0; i < bp->num_node; i++) {
-        uloga("compute node id %u num_bucket %d:\n", bp->node_tab[i].topo_info.nid,
-                bp->node_tab[i].num_bucket);
-        for (k = 0; k < bp->node_tab[i].num_bucket; k++) {
-            struct bucket *p = &(bp->bk_tab[bp->node_tab[i].bk_idx_tab[k]]);
-            uloga("bucket dart_id %d pool_id %d origin_mpi_rank %d check nid %u\n",
-                p->dart_id, p->pool_id, p->origin_mpi_rank, p->topo_info.nid);
-        }
-    }
-
-    return;
-}
-
 static void bk_pool_list_free(struct list_head* list)
 {
     struct bucket_pool *bp, *t;
@@ -293,7 +232,6 @@ static void bk_pool_list_free(struct list_head* list)
     {
         list_del(&bp->entry);
         if (bp->bk_tab) free(bp->bk_tab);
-        if (bp->node_tab) free(bp->node_tab);
         free(bp);
     }
 }
@@ -645,6 +583,61 @@ static int process_framework_state(struct cods_scheduler *scheduler)
     ERROR_TRACE();
 }
 
+static int send_executor_pool_info_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+    if (msg->size > 0) {
+        free(msg->msg_data);
+    }
+    free(msg);
+    return 0;
+}
+
+static int process_cods_get_executor_pool_info(struct pending_msg *p)
+{
+    int err;
+    struct hdr_get_executor_pool_info *hdr = (struct hdr_get_executor_pool_info*)p->cmd.pad;
+    int pool_id = hdr->pool_id;
+    struct bucket_pool *bp = bk_pool_list_lookup(&sched->bk_pool_list, pool_id);
+    if (!bp) return -1;
+    if (!bp->f_bk_reg_done) return -1;
+    
+    // reply to task submitter
+    struct msg_buf *msg;
+    struct node_id *peer;
+    peer = ds_get_peer(DART_DS, p->cmd.id);
+    msg = msg_buf_alloc(DART_RPC_S, peer, 1);
+    if (!msg) goto err_out;
+
+    msg->size = sizeof(struct executor_descriptor)*bp->num_bucket;
+    msg->msg_data = malloc(msg->size);
+    msg->cb = send_executor_pool_info_completion;
+    struct executor_descriptor *tab = msg->msg_data;
+    int i;
+    for (i = 0; i < bp->num_bucket; i++) {
+        tab[i].dart_id = bp->bk_tab[i].dart_id; 
+        tab[i].bk_idx = i;
+        tab[i].topo_info = bp->bk_tab[i].topo_info;
+        tab[i].partition_type = bp->bk_tab[i].partition_type;
+    } 
+
+    msg->msg_rpc->cmd = cods_executor_pool_info_msg;
+    msg->msg_rpc->id = DART_ID;
+    struct hdr_executor_pool_info *reply_hdr = msg->msg_rpc->pad;
+    reply_hdr->pool_id = bp->pool_id;
+    reply_hdr->num_executor = bp->num_bucket;
+    
+    err = rpc_send(DART_RPC_S, peer, msg);
+    if (err < 0) {
+        free(msg->msg_data);
+        free(msg);
+        goto err_out;
+    }
+
+    return 0;
+ err_out:
+    ERROR_TRACE();
+}
+
 /*
 static int process_cods_build_staging(struct pending_msg *p)
 {
@@ -698,11 +691,20 @@ static int process_pending_msg(struct cods_scheduler *scheduler)
     list_for_each_entry_safe(p, t, &scheduler->pending_msg_list, struct pending_msg, entry)
     {
         switch (p->cmd.cmd) {
+/*
         case cods_build_staging_msg:
             err = 0;
             //err = process_cods_build_staging(p);
             if (0 == err) {
                 // remove msg from list
+                list_del(&p->entry);
+                free(p);
+            }
+            break;
+*/
+        case cods_get_executor_pool_info_msg:
+            err = process_cods_get_executor_pool_info(p);
+            if (0 == err) {
                 list_del(&p->entry);
                 free(p);
             }
@@ -778,11 +780,13 @@ static int callback_cods_reg_resource(struct rpc_server *rpc_s, struct rpc_cmd *
     int dart_id = cmd->id; // TODO: do we need to store dart id explicitly in hdr?
 
 #ifdef HAVE_UGNI
+/*
     uloga("%s(): get msg from peer #%d mpi_rank %d num_bucket %d pool_id %d nid %u "
             "mesh_coord (%u,%u,%u)\n",
             __func__, dart_id, mpi_rank, num_bucket, pool_id,
             hdr->topo_info.nid, hdr->topo_info.mesh_coord.mesh_x,
             hdr->topo_info.mesh_coord.mesh_y, hdr->topo_info.mesh_coord.mesh_z);
+*/
 #endif
 
     struct bucket_pool *bp = bk_pool_list_lookup(&sched->bk_pool_list, pool_id);
@@ -798,7 +802,6 @@ static int callback_cods_reg_resource(struct rpc_server *rpc_s, struct rpc_cmd *
     // Check if all peers of the resource pool have registered
     if (bp->num_bucket == bp->bk_tab_size) {
         bk_pool_set_bucket_idle(bp);
-        bk_pool_build_node_tab(bp);
     }
 
     return 0;
@@ -848,6 +851,15 @@ static int callback_cods_submit_task(struct rpc_server *rpc_s, struct rpc_cmd *c
     return 0;
 }
 
+
+static int callback_cods_get_executor_pool_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+    uloga("%s(): get request from peer #%d\n", __func__, cmd->id);
+    struct pending_msg *p = malloc(sizeof(*p));
+    memcpy(&p->cmd, cmd, sizeof(struct rpc_cmd));        
+    list_add_tail(&p->entry, &sched->pending_msg_list);
+    return 0;
+}
 /*
 static int callback_cods_build_staging(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
@@ -877,6 +889,7 @@ int cods_scheduler_init()
     rpc_add_service(cods_reg_resource_msg, callback_cods_reg_resource);
     rpc_add_service(cods_finish_task_msg, callback_cods_finish_task);
     rpc_add_service(cods_submit_task_msg, callback_cods_submit_task);
+    rpc_add_service(cods_get_executor_pool_info_msg, callback_cods_get_executor_pool_info);
     // rpc_add_service(cods_build_staging_msg, callback_cods_build_staging);
     rpc_add_service(cods_stop_framework_msg, callback_cods_stop_framework);
 

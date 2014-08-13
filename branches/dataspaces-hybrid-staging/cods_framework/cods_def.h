@@ -40,11 +40,6 @@ enum worker_type {
     hs_staging_worker
 };
 
-enum location_type {
-    hs_insitu = 1,
-    hs_intransit
-};
-
 // TODO: change to lowercase, reasonable naming for the enum types below
 enum cods_var_type {
 	var_type_depend = 0,
@@ -81,11 +76,6 @@ enum cods_pe_type {
     cods_submitter,
 };
 
-enum cods_location_type {
-	loc_insitu = 0,
-	loc_intransit
-};
-
 enum cods_placement_hint {
 	hint_insitu = 0,
 	hint_intransit,
@@ -93,15 +83,10 @@ enum cods_placement_hint {
 };
 
 #ifdef HAVE_UGNI
-struct executor_topology_info {
+struct node_topology_info {
     uint32_t nid;
     rca_mesh_coord_t mesh_coord; 
 } __attribute__((__packed__));
-
-struct node_topology_info {
-    uint32_t nid;
-    rca_mesh_coord_t mesh_coord;
-};
 #endif
 
 /*
@@ -111,7 +96,7 @@ struct hdr_register_resource {
     int pool_id;
     int num_bucket;
     int mpi_rank;
-    struct executor_topology_info topo_info;
+    struct node_topology_info topo_info;
 } __attribute__((__packed__));
 
 struct hdr_update_var {
@@ -145,9 +130,13 @@ struct hdr_submitted_task_done {
     double task_execution_time;
 } __attribute__((__packed__));
    
-struct hdr_build_staging {
+struct hdr_get_executor_pool_info {
     int pool_id;
-    char staging_conf_file[PATH_MAXLEN];
+} __attribute__((__packed__));
+
+struct hdr_executor_pool_info {
+    int pool_id;
+    uint32_t num_executor;
 } __attribute__((__packed__));
 
 static char* var_type_name[] =
@@ -185,6 +174,26 @@ struct task_descriptor {
     char conf_file[PATH_MAXLEN];
 };
 
+struct executor_descriptor {
+    int dart_id;
+    int bk_idx;
+    unsigned char partition_type;
+    struct node_topology_info topo_info;
+};
+
+struct compute_node {
+    struct node_topology_info topo_info;
+    int node_num_executor;
+    struct executor_descriptor* node_executor_tab;
+};
+
+struct executor_pool_info {
+    int pool_id;
+    uint32_t num_executor;
+    struct executor_descriptor* executor_tab;
+    int num_node;
+    struct compute_node* node_tab;
+};
 #ifdef __cplusplus
 }
 #endif
