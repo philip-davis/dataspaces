@@ -144,7 +144,6 @@ struct bucket_info {
 	int f_get_task;
 	int f_stop_executor; //flag indicates that current executor can exit 
 	int f_init_dspaces;
-    // int f_build_staging_done;
 
 	/* track data get time */
 	double tm_st, tm_end;
@@ -166,6 +165,7 @@ static struct list_head submitted_task_list;
 
 struct cods_submitter {
     unsigned char f_get_executor_pool_info;
+    unsigned char f_build_partition;
     struct executor_pool_info *pool_info;
 };
 static struct cods_submitter submitter; 
@@ -341,14 +341,14 @@ static int callback_cods_stop_executor(struct rpc_server *rpc_s, struct rpc_cmd 
 	return 0;
 }
 
-/*
-static int callback_cods_build_staging_done(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+static int callback_cods_build_partition_done(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-    bk_info.f_build_staging_done = 1;    
+	uloga("%s(): rank= %d get msg from %d\n",
+		__func__, rpc_s->ptlmap.id, cmd->id);
+
+    submitter.f_build_partition = 1;
     return 0;
 }
-*/
-
 /*
 *
   Public APIs
@@ -375,7 +375,7 @@ int cods_init(int num_peers, int appid, enum cods_pe_type pe_type)
 	rpc_add_service(cods_exec_task_msg, callback_cods_exec_task);
     rpc_add_service(cods_submitted_task_done_msg, callback_cods_submitted_task_done);
     rpc_add_service(cods_executor_pool_info_msg, callback_cods_executor_pool_info);
-    // rpc_add_service(cods_build_staging_done_msg, callback_cods_build_staging_done);
+    rpc_add_service(cods_build_partition_done_msg, callback_cods_build_partition_done);
 
 	err = dspaces_init(num_peers, appid, NULL, NULL);
 	if (err < 0) {
@@ -634,47 +634,6 @@ int cods_get_task_status(struct task_descriptor *task_desc)
     ERROR_TRACE();
 }
 
-/*
-int cods_build_staging(int pool_id, const char *conf_file)
-{
-    struct client_rpc_send_state send_state;
-    struct msg_buf *msg;
-    struct node_id *peer;
-    struct hdr_build_staging *hdr;
-    int err = -ENOMEM;
-
-    peer = dc_get_peer(dc, 0); //master srv has dart id as 0
-    msg = msg_buf_alloc(dc->rpc_s, peer, 1);
-    if (!msg)
-        goto err_out;
-
-    msg->msg_rpc->cmd = cods_build_staging_msg;
-    msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
-    hdr= (struct hdr_build_staging *)msg->msg_rpc->pad;
-    hdr->pool_id = pool_id;
-    strcpy(hdr->staging_conf_file, conf_file);
-
-    err = client_rpc_send(peer, msg, &send_state);
-    if (err < 0) {
-        goto err_out_free;
-    }
-
-    // Wait for the reply from master
-    while (!bk_info.f_build_staging_done) {
-        err = process_event(dcg);
-        if (err < 0) {
-            goto err_out;
-        }
-    }
-
-    return 0;
-err_out_free:
-    if (msg) free(msg);
-err_out:
-    ERROR_TRACE();
-}
-*/
-
 int cods_stop_framework()
 {
     struct client_rpc_send_state send_state;
@@ -746,9 +705,7 @@ struct executor_pool_info* cods_get_executor_pool_info(int pool_id)
     submitter.pool_info = NULL;
 
     int i, j;
-    // sort node_executor_tab by nid
-    qsort(pool_info->executor_tab, pool_info->num_executor, sizeof(struct executor_descriptor),
-            compare_executor_nid);
+    // Note: node_executor_tab has been sorted by nid (at workflow manager)
     pool_info->num_node = 0;
     uint32_t cur_nid = ~0; // assume node id can never be ~0
     for (i = 0; i < pool_info->num_executor; i++) {
@@ -781,3 +738,57 @@ struct executor_pool_info* cods_get_executor_pool_info(int pool_id)
     return NULL;        
 }
 
+static int send_executor_partition_info_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+    uloga("%s(): here we go\n", __func__);
+    msg->msg_data = NULL;
+    free(msg);
+    return 0;
+}
+
+int cods_build_partition(struct executor_pool_info *pool_info)
+{
+    struct client_rpc_send_state send_state;
+    struct msg_buf *msg;
+    struct node_id *peer;
+    struct hdr_build_partition *hdr;
+    int err = -ENOMEM;
+
+    peer = dc_get_peer(dc, 0); //master srv has dart id as 0
+    msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+    if (!msg)
+        goto err_out;
+
+    msg->msg_rpc->cmd = cods_build_partition_msg;
+    msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
+    hdr = (struct hdr_build_partition*)msg->msg_rpc->pad;
+    hdr->pool_id = pool_info->pool_id;
+    hdr->num_executor = pool_info->num_executor;
+
+    msg->size = sizeof(struct executor_descriptor)*pool_info->num_executor;
+    msg->msg_data = (void*)pool_info->executor_tab;
+    msg->cb = send_executor_partition_info_completion;
+
+    submitter.f_build_partition = 0;
+    err = client_rpc_send(peer, msg, &send_state);
+    if (err < 0) {
+        goto err_out_free;
+    }
+
+    // Wait for the reply from master
+    while (!submitter.f_build_partition) {
+        err = process_event(dcg);
+        if (err < 0) {
+            goto err_out;
+        }
+    }
+
+    uloga("%s(): done.\n", __func__);
+    // reset
+    submitter.f_build_partition = 0;
+    return 0;
+err_out_free:
+    if (msg) free(msg);
+err_out:
+    ERROR_TRACE();
+}

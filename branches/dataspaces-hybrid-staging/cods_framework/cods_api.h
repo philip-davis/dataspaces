@@ -40,9 +40,7 @@ int cods_wait_task_completion(struct task_descriptor *task_desc);
 int cods_get_task_status(struct task_descriptor *task_desc);
 
 struct executor_pool_info* cods_get_executor_pool_info(int pool_id);
-
-// TODO: to be implemented.
-//int cods_build_staging(int pool_id, const char *conf_file);
+int cods_build_partition(struct executor_pool_info *pool_info);
 
 // Notify the framework to shutdown itself.
 int cods_stop_framework();

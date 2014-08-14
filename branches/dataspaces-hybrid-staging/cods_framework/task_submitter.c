@@ -38,7 +38,18 @@
 
 #include "cods_api.h"
 
-int partition_task_executors()
+enum programmer_defined_partition_type {
+    // Note: 0 is reserved as the default value.
+    simulation_executor = 1,
+    insitu_colocated_executor,
+    intransit_executor
+};
+
+int partition_task_executors(
+    int num_sim_node,
+    int num_intransit_node,
+    int num_sim_executor_per_node,
+    int num_insitu_colocated_executor_per_node)
 {
     struct executor_pool_info *pool_info = NULL;
     int pool_id = 1;
@@ -48,29 +59,48 @@ int partition_task_executors()
         return -1;
     }
 
-    // print executor pool information
-    uloga("pool_id= %d num_executor= %u\n", pool_info->pool_id, pool_info->num_executor);
     int i, j, k;
+    // partition task executors in programmer-specified way
+    i = 0;
+    for (j = 0; j < num_sim_node; j++, i++) {
+        for (k = 0; k < pool_info->node_tab[i].node_num_executor; k++) {
+            enum programmer_defined_partition_type part_type;
+            if (k < num_sim_executor_per_node) {
+                part_type = simulation_executor;
+            } else { 
+                part_type = insitu_colocated_executor;
+            }
+            pool_info->node_tab[i].node_executor_tab[k].partition_type = part_type;
+        }
+    }
+    for (j = 0; j < num_intransit_node; j++, i++) {
+        for (k = 0; k < pool_info->node_tab[i].node_num_executor; k++) {
+            pool_info->node_tab[i].node_executor_tab[k].partition_type = intransit_executor;
+        }
+    }
+
+    // print executor pool information
+    uloga("pool_id= %d num_node= %d num_executor= %u\n", pool_info->pool_id, pool_info->num_node,
+        pool_info->num_executor);
 /*
     for (i = 0; i < pool_info->num_executor; i++) {
         uloga("executor bk_idx= %d dart_id= %d node_id= %u\n", pool_info->executor_tab[i].bk_idx,
             pool_info->executor_tab[i].dart_id, pool_info->executor_tab[i].topo_info.nid);
     }
-*/
 
-    uloga("pool_id= %d num_node= %d\n", pool_info->pool_id, pool_info->num_node);
-    for (j = 0; j < pool_info->num_node; j++) {
-        uloga("compute node nid= %u node_num_executor= %d\n", pool_info->node_tab[j].topo_info.nid,
-            pool_info->node_tab[j].node_num_executor);
-        int k;
-        for (k = 0; k < pool_info->node_tab[j].node_num_executor; k++) {
+    for (i = 0; i < pool_info->num_node; i++) {
+        uloga("compute node nid= %u node_num_executor= %d\n", pool_info->node_tab[i].topo_info.nid,
+            pool_info->node_tab[i].node_num_executor);
+        for (j = 0; j < pool_info->node_tab[i].node_num_executor; j++) {
             uloga("executor bk_idx= %d dart_id= %d node_id= %u part_type= %u\n", 
-                pool_info->node_tab[j].node_executor_tab[k].bk_idx,
-                pool_info->node_tab[j].node_executor_tab[k].dart_id,
-                pool_info->node_tab[j].node_executor_tab[k].topo_info.nid,
-                pool_info->node_tab[j].node_executor_tab[k].partition_type); 
+                pool_info->node_tab[i].node_executor_tab[j].bk_idx,
+                pool_info->node_tab[i].node_executor_tab[j].dart_id,
+                pool_info->node_tab[i].node_executor_tab[j].topo_info.nid,
+                pool_info->node_tab[i].node_executor_tab[j].partition_type); 
         }
     }
+*/
+    cods_build_partition(pool_info);
 
     free(pool_info->node_tab);
     free(pool_info->executor_tab);
@@ -136,13 +166,23 @@ int main(int argc, char **argv)
 	int err;
 	int appid, rank, nproc;
     uint32_t example_workflow_id = 0;
+    int num_sim_node = 0;
+    int num_intransit_node = 0;
+    int num_sim_executor_per_node = 0;
+    int num_insitu_colocated_executor_per_node = 0;
     MPI_Comm comm;
 
-    if (argc != 2) {
+    if (argc != 2 && argc != 6) {
         uloga("%s: wrong number of arguments!\n", argv[0]);
         return -1;
     }
     example_workflow_id = atol(argv[1]);
+    if (argc == 6) {
+        num_sim_node = atoi(argv[2]);
+        num_intransit_node = atoi(argv[3]);
+        num_sim_executor_per_node = atoi(argv[4]);
+        num_insitu_colocated_executor_per_node = atoi(argv[5]);
+    }        
 
 	appid = 2;
 	MPI_Init(&argc, &argv);
@@ -155,7 +195,8 @@ int main(int argc, char **argv)
     }
 	err = cods_init(nproc, appid, cods_submitter); 
 
-    partition_task_executors(); 
+    partition_task_executors(num_sim_node, num_intransit_node,
+        num_sim_executor_per_node, num_insitu_colocated_executor_per_node);
 
     switch (example_workflow_id) {
     case EPSI_WORKFLOW_ID:

@@ -139,6 +139,11 @@ struct hdr_executor_pool_info {
     uint32_t num_executor;
 } __attribute__((__packed__));
 
+struct hdr_build_partition {
+    int pool_id;
+    uint32_t num_executor;
+} __attribute__((__packed__));
+
 static char* var_type_name[] =
 {
 	"depend", "put", "get"
