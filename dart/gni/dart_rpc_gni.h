@@ -421,8 +421,8 @@ enum cmd_type {
     cods_submitted_task_done_msg,
     cods_get_executor_pool_info_msg,
     cods_executor_pool_info_msg,
-    //cods_build_staging_msg,
-    //cods_build_staging_done_msg,
+    cods_build_partition_msg,
+    cods_build_partition_done_msg,
     cods_stop_executor_msg,
     cods_stop_framework_msg,
 #endif
