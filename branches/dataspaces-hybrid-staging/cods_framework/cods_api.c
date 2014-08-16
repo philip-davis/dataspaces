@@ -567,8 +567,9 @@ int cods_exec_task(struct task_descriptor *task_desc)
     msg->msg_rpc->cmd = cods_submit_task_msg;
     msg->msg_rpc->id = MY_DART_ID;
     struct hdr_submit_task *hdr= (struct hdr_submit_task*)msg->msg_rpc->pad;
-    hdr->tid = task_desc->tid;
-    strcpy(hdr->conf_file, task_desc->conf_file);
+    hdr->task_desc.tid = task_desc->tid;
+    hdr->task_desc.location_hint = task_desc->location_hint;
+    strcpy(hdr->task_desc.conf_file, task_desc->conf_file);
 
     err = client_rpc_send(peer, msg, &send_state);
     if (err < 0) {
@@ -791,4 +792,11 @@ err_out_free:
     if (msg) free(msg);
 err_out:
     ERROR_TRACE();
+}
+
+void init_task_descriptor(struct task_descriptor *task_desc, int task_id, const char* conf_file)
+{
+    task_desc->location_hint = DEFAULT_PART_TYPE;
+    task_desc->tid = task_id;
+    strcpy(task_desc->conf_file, conf_file); 
 }

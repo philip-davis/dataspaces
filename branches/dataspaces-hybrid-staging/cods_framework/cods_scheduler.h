@@ -39,14 +39,14 @@ struct task_entry {
     uint32_t tid;
     int appid; // id of workflow component application/operation/executable 
     enum cods_task_status status;
-    enum cods_placement_hint placement_hint;
     int size_hint;
     struct cods_var vars[MAX_NUM_VARS];
     int num_vars;
     int submitter_dart_id; // peer who submits the task execution
+    // programmer-provided placement hint information
+    unsigned char location_hint;
 };
 
-#define DEFAULT_PART_TYPE 0
 struct bucket {
     int dart_id; // unique id
     int pool_id; // indicate which resource pool the bucket is from

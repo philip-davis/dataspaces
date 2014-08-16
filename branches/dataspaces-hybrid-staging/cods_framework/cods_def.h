@@ -30,6 +30,10 @@ extern "C" {
 #define MAX_NUM_VARS 48 
 #define PATH_MAXLEN 128 
 
+// default value for (1) task executor partition type;
+// (2) task placement location hint;
+#define DEFAULT_PART_TYPE 0
+
 enum core_type {
     hs_manager_core = 1,
     hs_worker_core
@@ -76,73 +80,12 @@ enum cods_pe_type {
     cods_submitter,
 };
 
-enum cods_placement_hint {
-	hint_insitu = 0,
-	hint_intransit,
-	hint_none
-};
-
 #ifdef HAVE_UGNI
 struct node_topology_info {
     uint32_t nid;
     rca_mesh_coord_t mesh_coord; 
-} __attribute__((__packed__));
+}; 
 #endif
-
-/*
- *  Message headers 
- */
-struct hdr_register_resource {
-    int pool_id;
-    int num_bucket;
-    int mpi_rank;
-    struct node_topology_info topo_info;
-} __attribute__((__packed__));
-
-struct hdr_update_var {
-	int op; // TODO: what is this needed for?
-	char name[MAX_VAR_NAME_LEN];
-	int version;
-	int elem_size;
-    struct global_dimension gdim;
-} __attribute__((__packed__));
-
-struct hdr_exec_task {
-    uint32_t tid;
-    int appid;
-	int rank_hint;
-	int nproc_hint;
-	int num_vars;
-} __attribute__((__packed__));
-
-struct hdr_finish_task {
-    int pool_id;
-    uint32_t tid;
-} __attribute__((__packed__));
-
-struct hdr_submit_task {
-    uint32_t tid;
-    char conf_file[PATH_MAXLEN];
-} __attribute__((__packed__));
-
-struct hdr_submitted_task_done {
-    uint32_t tid;
-    double task_execution_time;
-} __attribute__((__packed__));
-   
-struct hdr_get_executor_pool_info {
-    int pool_id;
-} __attribute__((__packed__));
-
-struct hdr_executor_pool_info {
-    int pool_id;
-    uint32_t num_executor;
-} __attribute__((__packed__));
-
-struct hdr_build_partition {
-    int pool_id;
-    uint32_t num_executor;
-} __attribute__((__packed__));
 
 static char* var_type_name[] =
 {
@@ -177,6 +120,7 @@ struct cods_task {
 struct task_descriptor {
     uint32_t tid;
     char conf_file[PATH_MAXLEN];
+    unsigned char location_hint;
 };
 
 struct executor_descriptor {
@@ -199,6 +143,61 @@ struct executor_pool_info {
     int num_node;
     struct compute_node* node_tab;
 };
+
+/*
+ *  Message headers 
+ */
+struct hdr_register_resource {
+    int pool_id;
+    int num_bucket;
+    int mpi_rank;
+    struct node_topology_info topo_info;
+} __attribute__((__packed__));
+
+struct hdr_update_var {
+    int op; // TODO: what is this needed for?
+    char name[MAX_VAR_NAME_LEN];
+    int version;
+    int elem_size;
+    struct global_dimension gdim;
+} __attribute__((__packed__));
+
+struct hdr_exec_task {
+    uint32_t tid;
+    int appid;
+    int rank_hint;
+    int nproc_hint;
+    int num_vars;
+} __attribute__((__packed__));
+
+struct hdr_finish_task {
+    int pool_id;
+    uint32_t tid;
+} __attribute__((__packed__));
+
+struct hdr_submit_task {
+    struct task_descriptor task_desc;
+} __attribute__((__packed__));
+
+struct hdr_submitted_task_done {
+    uint32_t tid;
+    double task_execution_time;
+} __attribute__((__packed__));
+
+struct hdr_get_executor_pool_info {
+    int pool_id;
+} __attribute__((__packed__));
+
+struct hdr_executor_pool_info {
+    int pool_id;
+    uint32_t num_executor;
+} __attribute__((__packed__));
+
+struct hdr_build_partition {
+    int pool_id;
+    uint32_t num_executor;
+} __attribute__((__packed__));
+
 #ifdef __cplusplus
 }
 #endif
