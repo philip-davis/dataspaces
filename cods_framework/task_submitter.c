@@ -38,13 +38,6 @@
 
 #include "cods_api.h"
 
-enum programmer_defined_partition_type {
-    // Note: 0 is reserved as the default value.
-    simulation_executor = 1,
-    insitu_colocated_executor,
-    intransit_executor
-};
-
 int partition_task_executors(
     int num_sim_node,
     int num_intransit_node,
@@ -109,20 +102,21 @@ int partition_task_executors(
 
 void epsi_coupling_workflow_driver(uint32_t wid, MPI_Comm comm)
 {
-    uint32_t tid = 1; 
     int num_coupling_step = 5;
     // set task descriptors
     struct task_descriptor xgc1_task, xgca_task;
-    strcpy(xgc1_task.conf_file, "xgc1.conf");
-    strcpy(xgca_task.conf_file, "xgca.conf");
+    init_task_descriptor(&xgc1_task, 1, "xgc1.conf");
+    init_task_descriptor(&xgca_task, 2, "xgca.conf");
+    xgc1_task.location_hint = simulation_executor;
+    xgca_task.location_hint = simulation_executor;
 
     int i;
     for (i = 0; i < num_coupling_step; i++) {
-        xgc1_task.tid = tid++;
+        xgc1_task.tid += 2;
         cods_exec_task(&xgc1_task);
         cods_wait_task_completion(&xgc1_task);
 
-        xgca_task.tid = tid++;
+        xgca_task.tid += 2;
         cods_exec_task(&xgca_task);
         cods_wait_task_completion(&xgca_task);
     }  
@@ -135,10 +129,10 @@ void dns_les_workflow_driver(uint32_t wid, MPI_Comm comm)
     uint32_t dns_tid = 1, les_tid = 2;
     // set task descriptors
     struct task_descriptor dns_task, les_task;
-    dns_task.tid = dns_tid;
-    les_task.tid = les_tid;
-    strcpy(dns_task.conf_file, "dns.conf");
-    strcpy(les_task.conf_file, "les.conf");
+    init_task_descriptor(&dns_task, dns_tid, "dns.conf");
+    init_task_descriptor(&les_task, les_tid, "les.conf");
+    dns_task.location_hint = simulation_executor;
+    les_task.location_hint = simulation_executor;
 
     cods_exec_task(&dns_task);
     cods_exec_task(&les_task);
@@ -153,8 +147,9 @@ void s3d_analysis_workflow_driver(uint32_t wid, MPI_Comm comm)
 {
     // set task descriptor
     struct task_descriptor s3d_task;
-    s3d_task.tid = 1;
-    strcpy(s3d_task.conf_file, "s3d.conf");
+    init_task_descriptor(&s3d_task, 1, "s3d.conf");
+    s3d_task.location_hint = simulation_executor;
+
     cods_exec_task(&s3d_task);
     cods_wait_task_completion(&s3d_task);
 

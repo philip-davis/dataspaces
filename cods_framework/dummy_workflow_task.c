@@ -571,14 +571,16 @@ int dummy_s3d_task(struct cods_task *t,
             // submit analyis operation
             // create task descriptors
             struct task_descriptor task1, task2, task3, task4;
-            task1.tid = tid++;
-            strcpy(task1.conf_file, "s3d_viz.conf"); 
-            task2.tid = tid++;
-            strcpy(task2.conf_file, "s3d_stat.conf"); 
-            task3.tid = tid++;
-            strcpy(task3.conf_file, "s3d_topo.conf"); 
-            task4.tid = tid++;
-            strcpy(task4.conf_file, "s3d_indexing.conf"); 
+            init_task_descriptor(&task1, tid++, "s3d_viz.conf");
+            init_task_descriptor(&task2, tid++, "s3d_stat.conf");
+            init_task_descriptor(&task3, tid++, "s3d_topo.conf");
+            init_task_descriptor(&task4, tid++, "s3d_indexing.conf");
+
+            // provide placement location hint
+            task1.location_hint = intransit_executor; 
+            task2.location_hint = insitu_colocated_executor; 
+            task3.location_hint = intransit_executor; 
+            task4.location_hint = insitu_colocated_executor; 
 
             // execute tasks and wait for completions
             cods_exec_task(&task1);
@@ -671,8 +673,8 @@ int dummy_s3d_topo_task(struct cods_task *t,
         print_task_info(t);
     }
 
-    // sleep for 2 second
-    unsigned int seconds = 2;
+    // sleep for 1 second
+    unsigned int seconds = 1;
     sleep(seconds);
 
     MPI_Barrier(comm->comm);

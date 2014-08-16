@@ -54,21 +54,21 @@ static void task_list_add_task(struct list_head *list, struct task_entry *task)
     list_add_tail(&task->entry, list);
 }
 
-static struct task_entry* create_new_task(uint32_t tid, const char* conf_file, 
-    int submitter_dart_id)
+static struct task_entry* create_new_task(struct task_descriptor *task_desc, int submitter_dart_id)
 {
+    uloga("%s(): task config file '%s'\n", __func__, task_desc->conf_file);
     struct task_entry *task = (struct task_entry*)malloc(sizeof(*task));
     if (!task) {
         goto err_out;
     }
-    task->tid = tid;
+    task->tid = task_desc->tid;
     task->status = task_not_ready;   
     task->appid = 0;
-    task->placement_hint = hint_none;
+    task->location_hint = task_desc->location_hint;
     task->size_hint = 0;
     task->num_vars = 0;
     task->submitter_dart_id = submitter_dart_id;
-    if (parse_task_conf_file(task, conf_file) < 0) {
+    if (parse_task_conf_file(task, task_desc->conf_file) < 0) {
         goto err_out_free;
     }
 
@@ -77,7 +77,7 @@ static struct task_entry* create_new_task(uint32_t tid, const char* conf_file,
     free(task);
  err_out:
     uloga("ERROR %s: failed to create new task tid= %d conf_file %s\n",
-        __func__, tid, conf_file);
+        __func__, task_desc->tid, task_desc->conf_file);
     return NULL;
 }
 
@@ -171,8 +171,13 @@ static void bk_pool_free_bk_allocation(struct bucket_pool *bp, int *bk_idx_tab,
     }
 }
 
+static int satisfy_location_hint(struct bucket *bk, unsigned char location_hint)
+{
+    return bk->partition_type == location_hint;
+}
 
-static int* bk_pool_request_bk_allocation(struct bucket_pool *bp, int allocation_size)
+static int* bk_pool_request_bk_allocation(struct bucket_pool *bp, int allocation_size,
+    unsigned char location_hint)
 {
     if (allocation_size > bp->bk_tab_size) {
         uloga("ERROR %s(): allocation_size is larger than bk_tab_size\n", __func__);
@@ -184,7 +189,9 @@ static int* bk_pool_request_bk_allocation(struct bucket_pool *bp, int allocation
 
     int i, j;
     for (i = 0, j = 0; i < bp->bk_tab_size; i++) {
-        if (bp->bk_tab[i].status == bk_idle) {
+        if (bp->bk_tab[i].status == bk_idle &&
+            satisfy_location_hint(&bp->bk_tab[i], location_hint)) 
+        {
             bk_idx_tab[j++] = i;
         }
         if (j == allocation_size) break;
@@ -430,30 +437,11 @@ static int bk_pool_list_allocate_bk(struct list_head *list, struct runnable_task
 		return 0;
 	}
 
-    // Try to determine placement location
-/*
-    enum cods_location_type preferred_loc;
-    switch (j->ti->placement_hint) {
-    case hint_insitu:
-        preferred_loc = loc_insitu;
-        break;
-    case hint_intransit:
-        preferred_loc = loc_intransit;
-        break;
-    case hint_none:
-        preferred_loc = loc_intransit;
-        break;
-    default:
-        preferred_loc = loc_intransit;
-        uloga("%s(): unknown placement hint information\n", __func__);
-        break;
-    }
-*/
-
     // try to allocate buckets in a simple first-fit manner
     struct bucket_pool *bp;
     list_for_each_entry(bp, list, struct bucket_pool, entry) {
-        rtask->bk_idx_tab = bk_pool_request_bk_allocation(bp, rtask->bk_allocation_size);
+        rtask->bk_idx_tab = bk_pool_request_bk_allocation(bp, rtask->bk_allocation_size,
+                                rtask->task_ref->location_hint);
         if (rtask->bk_idx_tab) break;
     }    
     
@@ -802,15 +790,14 @@ static int callback_cods_update_var(struct rpc_server *rpc_s, struct rpc_cmd *cm
 static int callback_cods_submit_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     struct hdr_submit_task *hdr = (struct hdr_submit_task*)cmd->pad;
-    uloga("%s(): config file %s\n", __func__, hdr->conf_file);
-
-    struct task_entry *task = task_list_lookup_task(&sched->task_list, hdr->tid);
+    struct task_descriptor *task_desc = &hdr->task_desc;
+    struct task_entry *task = task_list_lookup_task(&sched->task_list, task_desc->tid);
     if (task) {
-        uloga("ERROR %s: task tid= %d already exist\n", __func__, hdr->tid);
+        uloga("ERROR %s: task tid= %d already exist\n", __func__, task_desc->tid);
         return 0;
     }
 
-    task = create_new_task(hdr->tid, hdr->conf_file, cmd->id);
+    task = create_new_task(task_desc, cmd->id);
     if (!task) {
         return 0;
     }
@@ -1061,6 +1048,7 @@ static int str_to_var_type(const char *str, enum cods_var_type *type)
     return -1;
 }
 
+/*
 static int str_to_placement_hint(const char *str, enum cods_placement_hint *hint)
 {
     if (0 == strcmp(str, "insitu")) {
@@ -1081,6 +1069,7 @@ static int str_to_placement_hint(const char *str, enum cods_placement_hint *hint
     fprintf(stderr, "Unknown placement hint string '%s'\n", str);
     return -1;
 }
+*/
 
 static void update_task_status(struct task_entry *task, enum cods_task_status status)
 {
@@ -1284,6 +1273,7 @@ static int read_task_var_distribution(struct task_entry *task, char *fields[], i
     return 0;
 }
 
+/*
 static int read_task_placement_hint(struct task_entry *task, char *fields[], int num_fields)
 {
     int index_to_hint = 3;
@@ -1294,6 +1284,7 @@ static int read_task_placement_hint(struct task_entry *task, char *fields[], int
 
     return 0;
 }
+*/
 
 static int read_task_size_hint(struct task_entry *task, char *fields[], int num_fields)
 {
@@ -1328,9 +1319,12 @@ static int read_workflow_task(struct task_entry *task, char *fields[], int num_f
             return -1;
         }
     } else if (0 == strcmp(t_desc, "placement_hint")) {
+        uloga("ERROR 'placement_hint' is not specified in task config file.\n");
+/*
         if (read_task_placement_hint(task, fields, num_fields) < 0) {
             return -1;  
         }
+*/
     } else if (0 == strcmp(t_desc, "def_size_hint")) {
         if (read_task_size_hint(task, fields, num_fields) < 0 ) {
             return -1;
@@ -1422,8 +1416,8 @@ static void print_task_info(struct task_entry *task)
     char gdim_str[256], dist_str[256];
     int i, j;
 
-    printf("task tid= %u appid= %d size_hint= %d submitter_dart_id= %d\n",
-        task->tid, task->appid, task->size_hint, task->submitter_dart_id);
+    printf("task tid= %u appid= %d size_hint= %d location_hint= %u submitter_dart_id= %d\n",
+        task->tid, task->appid, task->size_hint, task->location_hint, task->submitter_dart_id);
     for (i = 0; i < task->num_vars; i++) {
         for (j = 0; j < task->vars[i].gdim.ndim; j++) {
             gdim[j] = task->vars[i].gdim.sizes.c[j];

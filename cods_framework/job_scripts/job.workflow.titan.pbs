@@ -29,8 +29,8 @@ dns_les_workflow_id=4
 
 num_sim_node=2
 num_intransit_node=1
-num_sim_executor_per_node=12
-num_insitu_colocated_executor_per_node=4
+num_sim_executor_per_node=14
+num_insitu_colocated_executor_per_node=2
 
 workflow_id=$s3d_workflow_id
 aprun -n 48 ./task_executor $workflow_id &
