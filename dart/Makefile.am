@@ -61,3 +61,12 @@ noinst_HEADERS +=       pami/dart_rpc_pami.h \
                                         pami/dart_rdma_pami.h
 endif # HAVE_PAMI
 
+if HAVE_TCP_SOCKET
+libdart_a_SOURCES = tcp/dart_rpc_tcp.c \
+										tcp/ds_base_tcp.c \
+										tcp/dc_base_tcp.c
+noinst_HEADERS +=		tcp/dart_rpc_tcp.h \
+										tcp/ds_base_tcp.h \
+										tcp/dc_base_tcp.h
+endif # HAVE_TCP_SOCKET
+
