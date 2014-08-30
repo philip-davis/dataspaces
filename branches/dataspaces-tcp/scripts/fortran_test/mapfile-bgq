@@ -1,0 +1,10 @@
+#mpmdbegin 0-1
+#mpmdcmd dataspaces_server -s 2 -c 6
+#mpmdend
+#mpmdbegin 2-5
+#mpmdcmd test_put 4 3 2 2 1 128 128 256 10 1
+#mpmdend
+#mpmdbegin 6-7
+#mpmdcmd test_get 2 3 2 1 1 128 256 256 10 2
+#mpmdend
+#mapping ABCDET
