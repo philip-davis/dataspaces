@@ -10,6 +10,7 @@ void rpc_add_service(enum cmd_type rpc_cmd, rpc_service rpc_func) {}
 int rpc_barrier(struct rpc_server *rpc_s) { return 0; }
 int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg) { return 0; }
 int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg) { return 0; }
+int rpc_send_directv(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg) { return 0; }
 int rpc_receive(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg) { return 0; }
 int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg) { return 0; }
 

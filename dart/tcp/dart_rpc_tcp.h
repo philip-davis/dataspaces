@@ -312,6 +312,8 @@ int rpc_send_direct(struct rpc_server *, struct node_id *, struct msg_buf *);
 int rpc_receive(struct rpc_server *, struct node_id *, struct msg_buf *);
 int rpc_receive_direct(struct rpc_server *, struct node_id *, struct msg_buf *);
 
+int rpc_send_directv(struct rpc_server *, struct node_id *, struct msg_buf *);
+
 void rpc_report_md_usage(struct rpc_server *);
 
 struct msg_buf* msg_buf_alloc(struct rpc_server *, const struct node_id *, int);
