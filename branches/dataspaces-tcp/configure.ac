@@ -47,6 +47,23 @@ if test "x$enable_dart_tcp" == "xyes"; then
     AM_CONDITIONAL(HAVE_PORTALS, false)
     AC_DEFINE(HAVE_PORTALS, 0, [])
   fi
+else
+  if test -z "${HAVE_UGNI_TRUE}"; then
+    AM_CONDITIONAL(HAVE_TCP_SOCKET, false)
+    AC_DEFINE(HAVE_TCP_SOCKET, 0, [])
+  elif test -z "${HAVE_DCMF_TRUE}"; then
+    AM_CONDITIONAL(HAVE_TCP_SOCKET, false)
+    AC_DEFINE(HAVE_TCP_SOCKET, 0, [])
+  elif test -z "${HAVE_PAMI_TRUE}"; then
+    AM_CONDITIONAL(HAVE_TCP_SOCKET, false)
+    AC_DEFINE(HAVE_TCP_SOCKET, 0, [])
+  elif test -z "${HAVE_INFINIBAND_TRUE}"; then
+    AM_CONDITIONAL(HAVE_TCP_SOCKET, false)
+    AC_DEFINE(HAVE_TCP_SOCKET, 0, [])
+  elif test -z "${HAVE_PORTALS_TRUE}"; then
+    AM_CONDITIONAL(HAVE_TCP_SOCKET, false)
+    AC_DEFINE(HAVE_TCP_SOCKET, 0, [])
+  fi
 fi
 
 dnl Check if DIMES is enabled
