@@ -11,6 +11,9 @@ extern "C" {
 #include "list.h"
 #include "bbox.h"
 #include "ss_data.h"
+#include "dart.h"
+#include "dc_gspace.h"
+#include "dataspaces.h"
 
 #ifdef HAVE_UGNI
 #include <pmi.h>
@@ -144,14 +147,32 @@ struct executor_pool_info {
     struct compute_node* node_tab;
 };
 
+struct executor_register_info {
+    int pool_id;
+    int dart_id;
+    int mpi_rank;
+    struct node_topology_info topo_info;
+};
+
 /*
  *  Message headers 
  */
 struct hdr_register_resource {
+    int dart_id;
+    int pool_id;
+    int mpi_rank;
+    int num_bucket;
+    struct node_topology_info topo_info;
+} __attribute__((__packed__));
+
+struct hdr_register_resource_v2 {
     int pool_id;
     int num_bucket;
-    int mpi_rank;
-    struct node_topology_info topo_info;
+    char var_name[NAME_MAXLEN];
+} __attribute__((__packed__));
+
+struct hdr_stop_executor {
+    int dart_id;
 } __attribute__((__packed__));
 
 struct hdr_update_var {
@@ -185,18 +206,51 @@ struct hdr_submitted_task_done {
 } __attribute__((__packed__));
 
 struct hdr_get_executor_pool_info {
+    int src_dart_id;
     int pool_id;
 } __attribute__((__packed__));
 
 struct hdr_executor_pool_info {
+    int dst_dart_id;
     int pool_id;
     uint32_t num_executor;
+    char var_name[NAME_MAXLEN];
 } __attribute__((__packed__));
 
 struct hdr_build_partition {
+    int src_dart_id;
     int pool_id;
     uint32_t num_executor;
+    char var_name[NAME_MAXLEN];
 } __attribute__((__packed__));
+
+struct hdr_build_partition_done {
+    int dst_dart_id;
+    int pool_id;
+} __attribute__((__packed__));
+
+/*
+*/
+struct pending_msg {
+    struct list_head entry;
+    struct rpc_cmd cmd;
+};
+
+/**
+    Messaging
+**/
+int process_event(struct dcg_space *dcg);
+
+struct client_rpc_send_state {
+    int f_done;
+};
+int client_rpc_send(struct dcg_space *dcg, struct node_id *peer, struct msg_buf *msg, struct client_rpc_send_state *state);
+
+/**
+    Meta data sharing using DataSpaces
+**/
+int write_meta_data(const char* var_name, size_t size, void *send_buf);
+int read_meta_data(const char* var_name, size_t size, void *recv_buf); 
 
 #ifdef __cplusplus
 }

@@ -75,12 +75,6 @@ int partition_task_executors(
     // print executor pool information
     uloga("pool_id= %d num_node= %d num_executor= %u\n", pool_info->pool_id, pool_info->num_node,
         pool_info->num_executor);
-/*
-    for (i = 0; i < pool_info->num_executor; i++) {
-        uloga("executor bk_idx= %d dart_id= %d node_id= %u\n", pool_info->executor_tab[i].bk_idx,
-            pool_info->executor_tab[i].dart_id, pool_info->executor_tab[i].topo_info.nid);
-    }
-
     for (i = 0; i < pool_info->num_node; i++) {
         uloga("compute node nid= %u node_num_executor= %d\n", pool_info->node_tab[i].topo_info.nid,
             pool_info->node_tab[i].node_num_executor);
@@ -92,9 +86,8 @@ int partition_task_executors(
                 pool_info->node_tab[i].node_executor_tab[j].partition_type); 
         }
     }
-*/
-    cods_build_partition(pool_info);
 
+    cods_build_partition(pool_info);
     free(pool_info->node_tab);
     free(pool_info->executor_tab);
     free(pool_info);
@@ -192,7 +185,7 @@ int main(int argc, char **argv)
 
     partition_task_executors(num_sim_node, num_intransit_node,
         num_sim_executor_per_node, num_insitu_colocated_executor_per_node);
-
+/*
     switch (example_workflow_id) {
     case EPSI_WORKFLOW_ID:
         epsi_coupling_workflow_driver(example_workflow_id, comm);
@@ -207,7 +200,8 @@ int main(int argc, char **argv)
         uloga("ERROR invalid workflow_id %u\n", example_workflow_id);
         break;
     }
-
+*/
+    sleep(30);
     cods_stop_framework();
 	cods_finalize();
 

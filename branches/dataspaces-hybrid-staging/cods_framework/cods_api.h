@@ -30,6 +30,9 @@ int cods_update_var(struct cods_var *var, enum cods_update_var_op op);
 
 // Add/register new task executor.
 int cods_register_executor(int pool_id, int num_executor, int mpi_rank);
+// Add/register new task executors (collective operation and requires 
+// a valid MPI communicator).
+int cods_register_executor_v2(int pool_id, int num_executor, MPI_Comm comm);
 
 // Request for new task from workflow manager. 
 int cods_request_task(struct cods_task *t);

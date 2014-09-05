@@ -4,7 +4,7 @@
 #PBS -q debug
 #PBS -j oe
 #PBS -l walltime=00:10:00
-#PBS -l nodes=5
+#PBS -l nodes=6
 
 cd $PBS_O_WORKDIR
 
@@ -20,7 +20,7 @@ lock_type = 2
 hash_version = 2
 " > dataspaces.conf
 
-aprun -n 1 ./workflow_manager -s 1 -c 49 &
+aprun -n 4 ./information_space -s 4 -c 50 >& log.infospace &
 sleep 10
 
 epsi_workflow_id=1
@@ -33,8 +33,12 @@ num_sim_executor_per_node=14
 num_insitu_colocated_executor_per_node=2
 
 workflow_id=$s3d_workflow_id
-aprun -n 48 ./task_executor $workflow_id &
-#aprun -n 1 ./task_submitter $workflow_id &
-aprun -n 1 ./task_submitter $workflow_id $num_sim_node $num_intransit_node $num_sim_executor_per_node $num_insitu_colocated_executor_per_node &
+
+aprun -n 1 ./workflow_manager >& log.manager &
+
+aprun -n 48 ./task_executor $workflow_id >& log.executor &
+
+#aprun -n 1 ./task_submitter $workflow_id >& log.submitter &
+aprun -n 1 ./task_submitter $workflow_id $num_sim_node $num_intransit_node $num_sim_executor_per_node $num_insitu_colocated_executor_per_node >& log.submitter &
 
 wait
