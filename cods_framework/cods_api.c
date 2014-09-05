@@ -10,46 +10,21 @@
 #include "ss_data.h"
 #include "timer.h"
 
-
-static struct dart_client *dc;
 static struct dcg_space *dcg;
 static struct timer timer;
-// TODO: 'num_dims' is hardcoded to 2.
-static int num_dims = 2;
 
-#define MY_DART_ID dc->rpc_s->ptlmap.id 
+#define DART_DC dcg->dc
+#define DART_RPC_S dcg->dc->rpc_s
+#define DART_ID dcg->dc->rpc_s->ptlmap.id 
+
+static int get_server_id()
+{
+    return DART_ID % dcg->dc->num_sp;
+}
 
 /**
     Platform (system) dependent functions
 **/
-#ifdef HAVE_UGNI
-static int process_event(struct dcg_space *dcg)
-{
-    int err;
-    err = rpc_process_event_with_timeout(dcg->dc->rpc_s, 1);
-    if (err < 0)
-        goto err_out;
-
-    return 0;
-err_out:
-    ERROR_TRACE();
-}
-#endif
-
-#ifdef HAVE_DCMF
-static int process_event(struct dcg_space *dcg)
-{
-    int err;
-    err = rpc_process_event(dcg->dc->rpc_s);
-    if (err < 0)
-        goto err_out;
-
-    return 0;
-err_out:
-    ERROR_TRACE();
-}
-#endif
-
 #ifdef HAVE_UGNI 
 int get_topology_information(struct node_topology_info *topo_info)
 {
@@ -88,46 +63,6 @@ int get_topology_information(struct node_topology_info *topo_info)
 #endif
 
 /**
-    Messaging
-**/
-struct client_rpc_send_state {
-    int f_done;
-};
-
-static int client_rpc_send_completion_callback(struct rpc_server *rpc_s, struct msg_buf *msg)
-{
-    struct client_rpc_send_state *p = (struct client_rpc_send_state *)msg->private;
-    p->f_done = 1;
-    return 0;
-}
-
-static int client_rpc_send(struct node_id *peer, struct msg_buf *msg, struct client_rpc_send_state *state)
-{
-    int err;
-    state->f_done = 0;
-    msg->cb = client_rpc_send_completion_callback;
-    msg->private = state;
-
-    err = rpc_send(dc->rpc_s, peer, msg);
-    if (err < 0) {
-        goto err_out;
-    }
-
-    // Wait/block for the message delivery 
-    while (!state->f_done) {
-        err = process_event(dcg);
-        if (err < 0) {
-            goto err_out;
-        }
-    }
-
-    return 0;
- err_out:
-    uloga("ERROR %s: err= %d\n", __func__, err);
-    return err;
-}
-
-/**
     Data structures: bucket (executor), task
 **/
 struct parallel_job {
@@ -149,8 +84,7 @@ struct bucket_info {
 	double tm_st, tm_end;
 
 	enum cods_pe_type pe_type;
-    // enum cods_location_type location_type;
-    int pool_id, mpi_rank, num_bucket;
+    int dart_id, pool_id, mpi_rank, num_bucket;
     struct node_topology_info topo_info;
 };
 static struct bucket_info bk_info;
@@ -169,6 +103,28 @@ struct cods_submitter {
     struct executor_pool_info *pool_info;
 };
 static struct cods_submitter submitter; 
+
+static struct list_head pending_msg_list;
+
+/**
+    Pending messages
+**/
+static void pending_msg_list_init(struct list_head *list)
+{
+    INIT_LIST_HEAD(list);
+}
+
+static void pending_msg_list_free(struct list_head *list)
+{
+    int msg_cnt = 0;
+    struct pending_msg *p, *t;
+    list_for_each_entry_safe(p, t, list, struct pending_msg, entry)
+    {
+        list_del(&p->entry);
+        free(p);
+        msg_cnt++;
+    }
+}
 
 void submitted_task_list_init()
 {
@@ -235,11 +191,11 @@ static int fetch_task_info_completion(struct rpc_server *rpc_s, struct msg_buf *
 
 static int fetch_task_info(struct rpc_cmd *cmd)
 {
-	struct node_id *peer = dc_get_peer(dc, cmd->id);
+	struct node_id *peer = dc_get_peer(DART_DC, cmd->id);
 	struct msg_buf *msg;
 	int err = -ENOMEM;
 
-	msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+	msg = msg_buf_alloc(DART_RPC_S, peer, 1);
 	if (!msg)
 		goto err_out;
 
@@ -249,7 +205,7 @@ static int fetch_task_info(struct rpc_cmd *cmd)
 	msg->cb = fetch_task_info_completion;
 
 	rpc_mem_info_cache(peer, msg, cmd);
-	err = rpc_receive_direct(dc->rpc_s, peer, msg);
+	err = rpc_receive_direct(DART_RPC_S, peer, msg);
 	rpc_mem_info_reset(peer, msg, cmd);
 	if (err == 0)
 		return 0;
@@ -279,40 +235,28 @@ static int callback_cods_exec_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd
 	return 0;
 }
 
-static int fetch_executor_pool_info_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+static int process_cods_executor_pool_info(struct pending_msg *p)
 {
-    submitter.f_get_executor_pool_info = 1;
-    msg->msg_data = NULL;
-    free(msg);
-    return 0;
-}
-
-static int callback_cods_executor_pool_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
-{
-    struct hdr_executor_pool_info *hdr = cmd->pad;
-    struct node_id *peer = dc_get_peer(dc, cmd->id);
-    struct msg_buf *msg;
-    int err = -ENOMEM;
-
-    msg = msg_buf_alloc(dc->rpc_s, peer, 1);
-    if (!msg) goto err_out;
-
-    msg->size = sizeof(struct executor_descriptor)*hdr->num_executor;
+    struct hdr_executor_pool_info *hdr = p->cmd.pad;
     submitter.pool_info = malloc(sizeof(*submitter.pool_info));
     submitter.pool_info->pool_id = hdr->pool_id;
     submitter.pool_info->num_executor = hdr->num_executor;
-    msg->msg_data = submitter.pool_info->executor_tab = malloc(msg->size);
-    msg->cb = fetch_executor_pool_info_completion;
 
-    rpc_mem_info_cache(peer, msg, cmd);
-    err = rpc_receive_direct(dc->rpc_s, peer, msg);
-    rpc_mem_info_reset(peer, msg, cmd);
-    if (err == 0)
-        return 0;
+    // Read executor pool information from dataspaces.
+    size_t size = sizeof(struct executor_descriptor)*hdr->num_executor;
+    submitter.pool_info->executor_tab = malloc(size);
+    int err = read_meta_data(hdr->var_name, size, submitter.pool_info->executor_tab);
+    if (err < 0) {
+        free(submitter.pool_info->executor_tab);
+        free(submitter.pool_info);
+        goto err_out;
+    }
 
-    free(msg);
-err_out:
-    ERROR_TRACE();
+    // Set the flag.
+    submitter.f_get_executor_pool_info = 1;
+    return 0;
+ err_out:
+    return -1;
 }
 
 static int callback_cods_submitted_task_done(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
@@ -334,8 +278,8 @@ static int callback_cods_submitted_task_done(struct rpc_server *rpc_s, struct rp
 
 static int callback_cods_stop_executor(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	uloga("%s(): rank= %d get msg from %d\n",
-		__func__, rpc_s->ptlmap.id, cmd->id);
+	uloga("%s(): #%d get msg from #%d\n",
+		__func__, DART_ID, cmd->id);
 
 	bk_info.f_stop_executor = 1;
 	return 0;
@@ -343,12 +287,42 @@ static int callback_cods_stop_executor(struct rpc_server *rpc_s, struct rpc_cmd 
 
 static int callback_cods_build_partition_done(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	uloga("%s(): rank= %d get msg from %d\n",
-		__func__, rpc_s->ptlmap.id, cmd->id);
-
     submitter.f_build_partition = 1;
     return 0;
 }
+
+static int callback_add_pending_msg(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+    struct pending_msg *p = malloc(sizeof(*p));
+    memcpy(&p->cmd, cmd, sizeof(struct rpc_cmd));
+    list_add_tail(&p->entry, &pending_msg_list);
+    return 0;
+}
+
+static int process_pending_msg()
+{
+    struct pending_msg *p, *t;
+    list_for_each_entry_safe(p, t, &pending_msg_list, struct pending_msg, entry)
+    {
+        int err = 0;
+        switch(p->cmd.cmd) {
+        case cods_executor_pool_info_msg:
+            err = process_cods_executor_pool_info(p);
+            break;
+        default:
+            uloga("%s(): unknonw message type\n", __func__);
+            break;
+        }
+
+        if (err == 0) {
+            list_del(&p->entry);
+            free(p);
+            break; // process one msg at a time.
+        }
+    }
+    return 0;    
+}
+
 /*
 *
   Public APIs
@@ -374,7 +348,7 @@ int cods_init(int num_peers, int appid, enum cods_pe_type pe_type)
 	rpc_add_service(cods_stop_executor_msg, callback_cods_stop_executor);
 	rpc_add_service(cods_exec_task_msg, callback_cods_exec_task);
     rpc_add_service(cods_submitted_task_done_msg, callback_cods_submitted_task_done);
-    rpc_add_service(cods_executor_pool_info_msg, callback_cods_executor_pool_info);
+    rpc_add_service(cods_executor_pool_info_msg, callback_add_pending_msg);
     rpc_add_service(cods_build_partition_done_msg, callback_cods_build_partition_done);
 
 	err = dspaces_init(num_peers, appid, NULL, NULL);
@@ -389,17 +363,12 @@ int cods_init(int num_peers, int appid, enum cods_pe_type pe_type)
 		return -1;
 	}
 
-	dc = dcg->dc;
-	if (!dc) {
-		uloga("%s(): dc == NULL should not happen\n", __func__);
-		return -1;
-	}
-
 	timer_init(&timer, 1);
 	timer_start(&timer);
 
     // Init
     submitted_task_list_init();    
+    pending_msg_list_init(&pending_msg_list);
 	
 	bk_info.f_init_dspaces = 1;
 	return 0;
@@ -413,6 +382,8 @@ int cods_finalize()
 		uloga("'%s()': library was not properly initialized!\n", __func__);
 		return -1;
 	}
+
+    pending_msg_list_free(&pending_msg_list);
 
     // Free all previously allocated RDMA buffers
     dimes_put_sync_all();
@@ -434,13 +405,13 @@ int cods_update_var(struct cods_var *var, enum cods_update_var_op op)
 	struct hdr_update_var *hdr;
 	int peer_id, err = -ENOMEM;
 
-	peer = dc_get_peer(dc, 0); //master srv has dart id as 0
-	msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+	peer = dc_get_peer(DART_DC, 0); //master srv has dart id as 0
+	msg = msg_buf_alloc(DART_RPC_S, peer, 1);
 	if (!msg)
 		goto err_out;
 
 	msg->msg_rpc->cmd = cods_update_var_msg;
-	msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
+	msg->msg_rpc->id = DART_ID;
 	hdr = (struct hdr_update_var*) msg->msg_rpc->pad;
 	strcpy(hdr->name, var->name);
 	hdr->version = var->version;
@@ -448,7 +419,7 @@ int cods_update_var(struct cods_var *var, enum cods_update_var_op op)
 	hdr->gdim = var->gdim;
 	hdr->op = op;
 
-    err = client_rpc_send(peer, msg, &send_state);
+    err = client_rpc_send(dcg, peer, msg, &send_state);
     if (err < 0) {
         goto err_out_free;
     }
@@ -491,25 +462,27 @@ int cods_register_executor(int pool_id, int num_bucket, int mpi_rank)
     struct hdr_register_resource *hdr;
     int err = -ENOMEM;   
 
+    bk_info.dart_id = DART_ID;
     bk_info.pool_id = pool_id;
     bk_info.num_bucket = num_bucket;
     bk_info.mpi_rank = mpi_rank;
     get_topology_information(&bk_info.topo_info);
 
-    peer = dc_get_peer(dc, 0); //master srv has dart id as 0
-    msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+    peer = dc_get_peer(DART_DC, get_server_id());
+    msg = msg_buf_alloc(DART_RPC_S, peer, 1);
     if (!msg)
         goto err_out;
 
     msg->msg_rpc->cmd = cods_reg_resource_msg;
-    msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
+    msg->msg_rpc->id = DART_ID;
     hdr = (struct hdr_register_resource *)msg->msg_rpc->pad;
+    hdr->dart_id = bk_info.dart_id;
     hdr->pool_id = bk_info.pool_id;
     hdr->num_bucket = bk_info.num_bucket;
     hdr->mpi_rank = bk_info.mpi_rank;
     hdr->topo_info = bk_info.topo_info;
 
-    err = client_rpc_send(peer, msg, &send_state);
+    err = client_rpc_send(dcg, peer, msg, &send_state);
     if (err < 0) {
         goto err_out_free;
     }
@@ -521,6 +494,90 @@ int cods_register_executor(int pool_id, int num_bucket, int mpi_rank)
     ERROR_TRACE();     
 }
 
+int cods_register_executor_v2(int pool_id, int num_bucket, MPI_Comm comm)
+{
+    int err;
+    int mpi_rank;
+    MPI_Comm_rank(comm, &mpi_rank);
+ 
+    bk_info.dart_id = DART_ID;
+    bk_info.pool_id = pool_id;
+    bk_info.num_bucket = num_bucket;
+    bk_info.mpi_rank = mpi_rank;
+    get_topology_information(&bk_info.topo_info);
+
+    struct executor_register_info info;
+    info.pool_id = bk_info.pool_id;
+    info.dart_id = bk_info.dart_id;
+    info.mpi_rank = bk_info.mpi_rank;
+    info.topo_info = bk_info.topo_info;
+
+    // Gather registration info of all task executors
+    struct executor_register_info *info_tab = NULL;
+    size_t info_tab_size = sizeof(*info_tab)*num_bucket;
+    int root_rank = 0;
+    if (mpi_rank == root_rank) {
+        info_tab = malloc(info_tab_size);
+    }
+    int count = sizeof(struct executor_register_info);
+    err = MPI_Gather(&info, count, MPI_BYTE, info_tab, count, MPI_BYTE,
+                root_rank, comm);
+    if (err != MPI_SUCCESS) {
+        uloga("%s(): MPI_Gather() error %d.\n", __func__, err);
+        goto err_out_free;
+    } 
+
+    // Root rank write gathered data to dataspaces
+    if (info_tab) {
+        int i;
+        uloga("%s(): info_tab_size= %u\n", __func__, info_tab_size);
+        for (i = 0; i < num_bucket; i++) {
+            uloga("%s(): info_tab[%d] dart_id= %d pool_id= %d node_id= %u\n",
+                __func__, i, info_tab[i].dart_id, info_tab[i].pool_id,
+                info_tab[i].topo_info.nid);
+        }
+
+        // write to dataspaces
+        char var_name[NAME_MAXLEN];
+        sprintf(var_name, "reg_executor_pool_%d", pool_id);
+        err = write_meta_data(var_name, info_tab_size, info_tab);
+        if (err < 0) {
+            goto err_out_free;
+        }
+        free(info_tab); 
+
+        // send message to workflow manager
+        struct client_rpc_send_state send_state;
+        struct msg_buf *msg;
+        struct node_id *peer;
+        struct hdr_register_resource_v2 *hdr;    
+        peer = dc_get_peer(DART_DC, get_server_id());
+        msg = msg_buf_alloc(DART_RPC_S, peer, 1);
+        if (!msg)
+            goto err_out;
+        
+        msg->msg_rpc->cmd = cods_reg_resource_msg_v2;
+        msg->msg_rpc->id = DART_ID;
+        hdr = (struct hdr_register_resource_v2*)msg->msg_rpc->pad;
+        hdr->pool_id = pool_id;
+        hdr->num_bucket = num_bucket;
+        strcpy(hdr->var_name, var_name);
+       
+        err = client_rpc_send(dcg, peer, msg, &send_state);
+        if (err < 0) {
+            free(msg);
+            goto err_out;
+        }
+    }
+
+    return 0;
+ err_out_free:
+    if (info_tab) free(info_tab);
+ err_out:
+    return -1;
+    uloga("%s(): ERROR!\n", __func__);
+}
+
 int cods_set_task_finished(struct cods_task *t)
 {
     struct client_rpc_send_state send_state;
@@ -529,18 +586,18 @@ int cods_set_task_finished(struct cods_task *t)
     struct hdr_finish_task *hdr;
     int err = -ENOMEM;
 
-    peer = dc_get_peer(dc, 0); //master srv has dart id as 0
-    msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+    peer = dc_get_peer(DART_DC, 0); //master srv has dart id as 0
+    msg = msg_buf_alloc(DART_RPC_S, peer, 1);
     if (!msg)
         goto err_out;
 
     msg->msg_rpc->cmd = cods_finish_task_msg;
-    msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
+    msg->msg_rpc->id = DART_ID;
     hdr= (struct hdr_finish_task *)msg->msg_rpc->pad;
     hdr->pool_id = bk_info.pool_id;
     hdr->tid = t->tid;
 
-    err = client_rpc_send(peer, msg, &send_state);
+    err = client_rpc_send(dcg, peer, msg, &send_state);
     if (err < 0) {
         goto err_out_free;
     }
@@ -559,19 +616,19 @@ int cods_exec_task(struct task_descriptor *task_desc)
     struct node_id *peer;
     int err = -ENOMEM;
 
-    peer = dc_get_peer(dc, 0); //master srv has dart id as 0
-    msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+    peer = dc_get_peer(DART_DC, 0); //master srv has dart id as 0
+    msg = msg_buf_alloc(DART_RPC_S, peer, 1);
     if (!msg)
         goto err_out;
 
     msg->msg_rpc->cmd = cods_submit_task_msg;
-    msg->msg_rpc->id = MY_DART_ID;
+    msg->msg_rpc->id = DART_ID;
     struct hdr_submit_task *hdr= (struct hdr_submit_task*)msg->msg_rpc->pad;
     hdr->task_desc.tid = task_desc->tid;
     hdr->task_desc.location_hint = task_desc->location_hint;
     strcpy(hdr->task_desc.conf_file, task_desc->conf_file);
 
-    err = client_rpc_send(peer, msg, &send_state);
+    err = client_rpc_send(dcg, peer, msg, &send_state);
     if (err < 0) {
         goto err_out_free;
     }
@@ -642,15 +699,15 @@ int cods_stop_framework()
     struct node_id *peer;
     int err = -ENOMEM;
 
-    peer = dc_get_peer(dc, 0); //master srv has dart id as 0
-    msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+    peer = dc_get_peer(DART_DC, get_server_id()); 
+    msg = msg_buf_alloc(DART_RPC_S, peer, 1);
     if (!msg)
         goto err_out;
 
     msg->msg_rpc->cmd = cods_stop_framework_msg;
-    msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
+    msg->msg_rpc->id = DART_ID;
 
-    err = client_rpc_send(peer, msg, &send_state);
+    err = client_rpc_send(dcg, peer, msg, &send_state);
     if (err < 0) {
         goto err_out_free;
     }
@@ -662,12 +719,6 @@ int cods_stop_framework()
     ERROR_TRACE();
 }
 
-int compare_executor_nid(const void *p1, const void *p2)
-{
-    return ((const struct executor_descriptor*)p1)->topo_info.nid -
-            ((const struct executor_descriptor*)p2)->topo_info.nid;
-}
-
 struct executor_pool_info* cods_get_executor_pool_info(int pool_id)
 {
     struct client_rpc_send_state send_state;
@@ -676,18 +727,19 @@ struct executor_pool_info* cods_get_executor_pool_info(int pool_id)
     struct hdr_get_executor_pool_info *hdr;
     int err = -ENOMEM;
 
-    peer = dc_get_peer(dc, 0); //master srv has dart id as 0
-    msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+    peer = dc_get_peer(DART_DC, get_server_id()); 
+    msg = msg_buf_alloc(DART_RPC_S, peer, 1);
     if (!msg)
         goto err_out;
 
     msg->msg_rpc->cmd = cods_get_executor_pool_info_msg;
-    msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
+    msg->msg_rpc->id = DART_ID;
     hdr = msg->msg_rpc->pad;
     hdr->pool_id = pool_id;
+    hdr->src_dart_id = DART_ID;
 
     submitter.f_get_executor_pool_info = 0;
-    err = client_rpc_send(peer, msg, &send_state);
+    err = client_rpc_send(dcg, peer, msg, &send_state);
     if (err < 0) {
         goto err_out_free;
     }
@@ -697,7 +749,7 @@ struct executor_pool_info* cods_get_executor_pool_info(int pool_id)
         if (err < 0) {
             goto err_out_free;
         }
-
+        if (process_pending_msg()) goto err_out_free;
     }
 
     struct executor_pool_info* pool_info = submitter.pool_info;
@@ -705,8 +757,9 @@ struct executor_pool_info* cods_get_executor_pool_info(int pool_id)
     submitter.f_get_executor_pool_info = 0;
     submitter.pool_info = NULL;
 
+    // Note: node_executor_tab has been sorted by nid (at workflow manager).
+    // Following code builds the compute node table of pool_info.
     int i, j;
-    // Note: node_executor_tab has been sorted by nid (at workflow manager)
     pool_info->num_node = 0;
     uint32_t cur_nid = ~0; // assume node id can never be ~0
     for (i = 0; i < pool_info->num_executor; i++) {
@@ -739,39 +792,41 @@ struct executor_pool_info* cods_get_executor_pool_info(int pool_id)
     return NULL;        
 }
 
-static int send_executor_partition_info_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
-{
-    uloga("%s(): here we go\n", __func__);
-    msg->msg_data = NULL;
-    free(msg);
-    return 0;
-}
-
 int cods_build_partition(struct executor_pool_info *pool_info)
 {
+    int err = -ENOMEM;
+    submitter.f_build_partition = 0;
+
+    // Write new partition information to dataspaces.
+    char var_name[NAME_MAXLEN];
+    sprintf(var_name, "executor_pool_%d_partition", pool_info->pool_id);
+    err = write_meta_data(var_name,
+                    sizeof(struct executor_descriptor)*pool_info->num_executor,
+                    pool_info->executor_tab);
+    if (err < 0) {
+        goto err_out;
+    }
+
+    // Send message to workflow manager.
     struct client_rpc_send_state send_state;
     struct msg_buf *msg;
     struct node_id *peer;
     struct hdr_build_partition *hdr;
-    int err = -ENOMEM;
 
-    peer = dc_get_peer(dc, 0); //master srv has dart id as 0
-    msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+    peer = dc_get_peer(DART_DC, get_server_id()); 
+    msg = msg_buf_alloc(DART_RPC_S, peer, 1);
     if (!msg)
         goto err_out;
 
     msg->msg_rpc->cmd = cods_build_partition_msg;
-    msg->msg_rpc->id = dc->rpc_s->ptlmap.id;
+    msg->msg_rpc->id = DART_ID;
     hdr = (struct hdr_build_partition*)msg->msg_rpc->pad;
+    hdr->src_dart_id = DART_ID;
     hdr->pool_id = pool_info->pool_id;
     hdr->num_executor = pool_info->num_executor;
+    strcpy(hdr->var_name, var_name);
 
-    msg->size = sizeof(struct executor_descriptor)*pool_info->num_executor;
-    msg->msg_data = (void*)pool_info->executor_tab;
-    msg->cb = send_executor_partition_info_completion;
-
-    submitter.f_build_partition = 0;
-    err = client_rpc_send(peer, msg, &send_state);
+    err = client_rpc_send(dcg, peer, msg, &send_state);
     if (err < 0) {
         goto err_out_free;
     }
@@ -783,10 +838,9 @@ int cods_build_partition(struct executor_pool_info *pool_info)
             goto err_out;
         }
     }
-
-    uloga("%s(): done.\n", __func__);
     // reset
     submitter.f_build_partition = 0;
+    uloga("%s(): done.\n", __func__);
     return 0;
 err_out_free:
     if (msg) free(msg);

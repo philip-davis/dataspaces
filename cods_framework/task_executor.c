@@ -87,9 +87,7 @@ int main(int argc, char **argv)
         uloga("ERROR invalid workflow_id %u\n", example_workflow_id);
         break;
     }
-	if (err < 0)
-		goto err_out;
-
+	if (err < 0) goto err_out;
 	cods_finalize();
 
 	MPI_Barrier(comm);

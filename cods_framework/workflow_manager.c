@@ -39,23 +39,19 @@
 #include "common.h"
 
 // Run scheduler
-int run_scheduler(int argc, char **argv) {
-	if (cods_scheduler_parse_args(argc, argv) < 0) {
-		cods_scheduler_usage();
-		return -1;
-	}
-
-	if (cods_scheduler_init() < 0) {
-		printf("DART server init failed!\n");
+int run_scheduler(int nproc, int appid)
+{
+	if (cods_scheduler_init(nproc, appid) < 0) {
+		printf("CoDS scheduler init failed!\n");
 		return -1;
 	}
 
 	if (cods_scheduler_run() < 0) {
-		printf("DART server got an error at runtime!\n");
+		printf("CoDS scheduler got an error at runtime!\n");
 		return -1;
 	}
 
-	cods_scheduler_finish();
+	cods_scheduler_finalize();
 
 	uloga("%s(): all ok.\n", __func__);	
 
@@ -65,15 +61,16 @@ int run_scheduler(int argc, char **argv) {
 int main(int argc, char **argv)
 {
 	int err;
-    int color, rank;
+    int appid, rank, nproc;
     MPI_Comm comm;
 
-    color = 0;
+    appid = 3; // TODO: remove hard-coded value
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_split(MPI_COMM_WORLD, color, rank, &comm);
-
-	err = run_scheduler(argc, argv);
+    MPI_Comm_split(MPI_COMM_WORLD, appid, rank, &comm);
+    MPI_Comm_size(comm, &nproc);
+    
+	err = run_scheduler(nproc, appid);
 
     MPI_Barrier(comm);
     MPI_Finalize();

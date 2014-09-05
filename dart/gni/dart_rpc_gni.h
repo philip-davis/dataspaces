@@ -413,6 +413,7 @@ enum cmd_type {
 #endif
 #ifdef DS_HAVE_CODS
     cods_reg_resource_msg,
+    cods_reg_resource_msg_v2,
     cods_update_var_msg,
     cods_req_task_msg,
     cods_exec_task_msg,
@@ -425,6 +426,7 @@ enum cmd_type {
     cods_build_partition_done_msg,
     cods_stop_executor_msg,
     cods_stop_framework_msg,
+    cods_update_manager_info_msg,
 #endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,

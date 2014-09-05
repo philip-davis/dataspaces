@@ -9,8 +9,8 @@ extern "C" {
 #include "timer.h"
 #include "list.h"
 #include "dart.h"
-#include "ds_gspace.h"
-#include "dimes_server.h"
+#include "dataspaces.h"
+#include "dc_gspace.h"
 
 #include "cods_def.h"
 
@@ -65,13 +65,8 @@ struct bucket_pool {
     int f_bk_reg_done;
 };
 
-struct pending_msg {
-    struct list_head entry;
-    struct rpc_cmd cmd;
-};
-
 struct cods_scheduler {
-    struct dimes_server *dimes_s; 
+    struct dcg_space* dcg;
     struct cods_framework_state framework_state;     
     struct list_head bk_pool_list;
     struct list_head rtask_list;
@@ -82,9 +77,9 @@ struct cods_scheduler {
 int cods_scheduler_parse_args(int argc, char** argv);
 void cods_scheduler_usage();
 
-int cods_scheduler_init();
+int cods_scheduler_init(int num_peers, int appid);
 int cods_scheduler_run();
-int cods_scheduler_finish();
+int cods_scheduler_finalize();
 
 #ifdef __cplusplus
 }
