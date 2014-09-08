@@ -2849,18 +2849,12 @@ int dimes_client_shmem_finalize(unsigned int unlink)
 
 int dimes_client_shmem_clear_testing()
 {
-    if (options.enable_get_local) {
-        node_local_obj_index_free();
-    }
     // clear DIMES storage (similar to dimes_client_free()) 
     free_gdim_list(&dimes_c->gdim_list);
     storage_free();
     dimes_memory_finalize();
 
     // reset
-    if (options.enable_get_local) {
-        node_local_obj_index_init();
-    }
     storage_init();
     options.rdma_buffer_write_usage = 0;
     options.rdma_buffer_read_usage = 0;
@@ -2987,6 +2981,9 @@ int dimes_client_shmem_restart(void *comm)
     // TODO: add programmer-provided parameters list
     options.enable_get_local = 1;
 
+    if (options.enable_get_local) {
+        node_local_obj_index_init();
+    }
     INIT_LIST_HEAD(&dimes_c->shmem_obj_list);
 
     // init node-local mpi communicator
