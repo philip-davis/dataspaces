@@ -476,6 +476,31 @@ void FC_FUNC(dimes_shmem_update_server_state, DIMES_SHMEM_UPDATE_SERVER_STATE)(i
 {
     *err = common_dimes_shmem_update_server_state();
 }
+
+void FC_FUNC(dimes_shmem_get_nid, DIMES_SHMEM_GET_NID)(int64_t *nid)
+{
+    *nid = common_dimes_shmem_get_nid();
+}
+
+void FC_FUNC(dimes_shmem_get_node_rank, DIMES_SHMEM_GET_NODE_RANK)(int *node_rank)
+{
+    *node_rank = common_dimes_shmem_get_node_rank();
+}
+
+void FC_FUNC(dimes_shmem_get_local, DIMES_SHMEM_GET_LOCAL) (const char *var_name,
+        unsigned int *ver, int *size, int *ndim,
+        uint64_t *lb, uint64_t *ub, void *data, int *err, int len)
+{
+    char vname[256];
+
+    if (!fstrncpy(vname, var_name, (size_t) len, sizeof(vname))) {
+            uloga("'%s()': failed, can not copy Fortran var of len %d.\n",
+                    __func__, len);
+            *err = -ENOMEM;
+    }
+
+    *err = common_dimes_shmem_get_local(vname, *ver, *size, *ndim, lb, ub, data);
+}
 #endif
 
 #endif
