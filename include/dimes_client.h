@@ -123,7 +123,12 @@ size_t estimate_node_shmem_restart_buf_size();
 
 int dimes_client_shmem_checkpoint_storage(int shmem_obj_id, void *restart_buf);
 int dimes_client_shmem_restart_storage(void *restart_buf);
-
+int dimes_client_shmem_put_local(const char *var_name,
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        void *data);
 int dimes_client_shmem_get_local(const char *var_name,
         unsigned int ver, int size,
         int ndim,

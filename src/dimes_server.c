@@ -46,26 +46,6 @@ static struct dimes_server *dimes_s = NULL;
 
 #define DIMES_SID dimes_s->dsg->ds->self->ptlmap.id
 
-struct dimes_sync_info {
-	struct list_head entry;
-	int qid;
-	int sync_id;
-	int dart_id;
-	struct obj_descriptor odsc;
-	size_t bytes_read;
-};
-
-static struct list_head sync_info_list;
-static struct dimes_sync_info* sync_info_list_find(struct list_head *l, int sid, int dartid) {
-	struct dimes_sync_info *p;
-	list_for_each_entry(p, l, struct dimes_sync_info, entry) {
-		if (sid == p->sync_id && dartid == p->dart_id)
-			return p;
-	}
-
-	return NULL;
-}
-
 static int locate_data_completion_server(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
 	free(msg->msg_data);
@@ -214,69 +194,6 @@ static int dsgrpc_dimes_shmem_update_server(struct rpc_server *rpc_s, struct rpc
 }
 #endif
 
-static int send_ack(struct dimes_sync_info *p)
-{
-	int err;
-	struct msg_buf *msg;
-	struct node_id *peer;
-	struct hdr_dimes_get_ack *oh;
-
-	peer = ds_get_peer(dimes_s->dsg->ds, p->dart_id);
-	msg = msg_buf_alloc(dimes_s->dsg->ds->rpc_s, peer, 1);
-	msg->msg_rpc->cmd = dimes_get_ack_msg;
-	msg->msg_rpc->id = DIMES_SID;
-
-	oh = (struct hdr_dimes_get_ack *)msg->msg_rpc->pad;
-	oh->qid = p->qid;
-	oh->sync_id = p->sync_id;
-	oh->odsc = p->odsc;
-	oh->bytes_read = obj_data_size(&p->odsc);
-	err = rpc_send(dimes_s->dsg->ds->rpc_s, peer, msg);
-	if (err < 0) {
-		free(msg);
-		goto err_out;
-	}
-
-	return 0;
- err_out:
-	ERROR_TRACE();
-}
-
-static int dsgrpc_dimes_get_ack(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
-{ 
-	int err;
-	struct hdr_dimes_get_ack *oh = (struct hdr_dimes_get_ack*)cmd->pad;
-	int qid = oh->qid;
-	int sync_id = oh->sync_id;
-	int dart_id = oh->odsc.owner;
-	struct dimes_sync_info *p;
-
-	p = sync_info_list_find(&sync_info_list, sync_id, dart_id);	
-	if (p == NULL) {
-		p = (struct dimes_sync_info*)malloc(sizeof(*p));
-		p->qid = qid;
-		p->sync_id = sync_id;
-		p->dart_id = dart_id;	
-		p->odsc = oh->odsc;
-		p->bytes_read = 0;
-		list_add(&p->entry, &sync_info_list);
-	}
-	p->bytes_read += oh->bytes_read;
-	
-	if (obj_data_size(&p->odsc) == p->bytes_read) {
-		err = send_ack(p);
-		if (err < 0)
-			goto err_out;
-		// Delete
-		list_del(&p->entry);
-		free(p);
-	}
-
-	return 0;
- err_out:
-	ERROR_TRACE();
-}
-
 /*
   Public API starts here.
 */
@@ -297,7 +214,6 @@ struct dimes_server *dimes_server_alloc(int num_sp, int num_cp, char *conf_name,
 
 	rpc_add_service(dimes_put_msg, dsgrpc_dimes_put);
 	rpc_add_service(dimes_locate_data_msg, dsgrpc_dimes_locate_data);
-	rpc_add_service(dimes_get_ack_msg, dsgrpc_dimes_get_ack);
 #ifdef DS_HAVE_DIMES_SHMEM
     rpc_add_service(dimes_shmem_reset_server_msg, dsgrpc_dimes_shmem_reset_server);
     rpc_add_service(dimes_shmem_update_server_msg, dsgrpc_dimes_shmem_update_server);
