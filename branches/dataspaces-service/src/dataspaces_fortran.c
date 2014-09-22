@@ -487,6 +487,21 @@ void FC_FUNC(dimes_shmem_get_node_rank, DIMES_SHMEM_GET_NODE_RANK)(int *node_ran
     *node_rank = common_dimes_shmem_get_node_rank();
 }
 
+void FC_FUNC(dimes_shmem_put_local, DIMES_SHMEM_PUT_LOCAL) (const char *var_name,
+        unsigned int *ver, int *size, int *ndim,
+        uint64_t *lb, uint64_t *ub, void *data, int *err, int len)
+{
+    char vname[256];
+
+    if (!fstrncpy(vname, var_name, (size_t) len, sizeof(vname))) {
+            uloga("'%s()': failed, can not copy Fortran var of len %d.\n",
+                    __func__, len);
+            *err = -ENOMEM;
+    }
+
+    *err = common_dimes_shmem_put_local(vname, *ver, *size, *ndim, lb, ub, data);
+}
+
 void FC_FUNC(dimes_shmem_get_local, DIMES_SHMEM_GET_LOCAL) (const char *var_name,
         unsigned int *ver, int *size, int *ndim,
         uint64_t *lb, uint64_t *ub, void *data, int *err, int len)

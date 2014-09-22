@@ -731,6 +731,21 @@ int common_dimes_shmem_get_node_rank()
     return dimes_client_shmem_get_node_rank();
 }
 
+int common_dimes_shmem_put_local(const char *var_name,
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        void *data)
+{
+    if (!is_dimes_lib_init() || !is_ndim_within_bound(ndim)) {
+        return -EINVAL;
+    }
+
+    return dimes_client_shmem_put_local(var_name, ver, size,
+                ndim, lb, ub, data);
+}
+
 int common_dimes_shmem_get_local(const char *var_name,
         unsigned int ver, int size,
         int ndim,
