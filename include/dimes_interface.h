@@ -193,6 +193,10 @@ int dimes_shmem_reset_server_state(int server_id);
 int dimes_shmem_update_server_state();
 uint32_t dimes_shmem_get_nid();
 int dimes_shmem_get_node_rank();
+int dimes_shmem_put_local(const char *var_name,
+        unsigned int ver, int size,
+        int ndim, uint64_t *lb, uint64_t *ub,
+        void *data);
 int dimes_shmem_get_local(const char *var_name,
         unsigned int ver, int size,
         int ndim, uint64_t *lb, uint64_t *ub,
