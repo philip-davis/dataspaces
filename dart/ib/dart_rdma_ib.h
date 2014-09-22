@@ -11,12 +11,18 @@
 #ifdef DS_HAVE_DIMES
 #include "dart_rpc_ib.h"
 
+enum dart_memory_type {
+    dart_memory_non_rdma = 0,
+    dart_memory_rdma,
+};
+
 struct dart_rdma_mem_handle {
 	// TODO: fix using both mr and mr_ref
 	struct ibv_mr mr;	// memory region 
 	struct ibv_mr *mr_ref;	// keep the pointer value returned by ibv_reg_mr
 	uint64_t base_addr;
 	size_t size;
+    enum dart_memory_type mem_type;
 };
 
 struct dart_rdma_op {

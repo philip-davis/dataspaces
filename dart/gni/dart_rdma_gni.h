@@ -36,6 +36,11 @@
 #ifdef DS_HAVE_DIMES
 #include "dart_rpc_gni.h"
 
+enum dart_memory_type {
+    dart_memory_non_rdma = 0,
+    dart_memory_rdma,
+};
+
 enum dart_rdma_tran_type {
     dart_rdma_tran_type_read = 0,
     dart_rdma_tran_type_write
@@ -45,6 +50,7 @@ struct dart_rdma_mem_handle {
 	gni_mem_handle_t mdh;
 	uint64_t base_addr;
 	size_t size;
+    enum dart_memory_type mem_type;
 };
 
 struct dart_rdma_op {

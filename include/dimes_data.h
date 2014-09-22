@@ -55,11 +55,6 @@ struct box_2pointers{
 	void *ptr2;
 };
 
-enum dimes_memory_type {
-    dimes_memory_non_rdma = 0,
-    dimes_memory_rdma,
-};
-
 #ifdef DS_HAVE_DIMES_SHMEM
 struct shared_memory_obj {
     struct list_head    entry;
@@ -116,6 +111,7 @@ struct dimes_cr_mem_obj_info
     struct global_dimension gdim;
     size_t size;
     size_t offset;
+    unsigned char mem_type;
 } __attribute__((__packed__));
 
 struct dimes_cr_allocator_info
