@@ -39,6 +39,8 @@
 enum dart_memory_type {
     dart_memory_non_rdma = 0,
     dart_memory_rdma,
+    dart_memory_shmem_non_rdma,
+    dart_memory_shmem_rdma,
 };
 
 enum dart_rdma_tran_type {
