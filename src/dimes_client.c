@@ -3353,9 +3353,9 @@ int dimes_client_shmem_restart_storage(void *restart_buf)
             restart_storage_insert_mem_obj(group_info->name,
                         storage_info->shmem_obj_id, obj_info);
             buf += sizeof(struct dimes_cr_mem_obj_info);
-            //printf("%s: #%d obj name= %s size= %u offset= %u\n", __func__,
-            //    DIMES_CID, obj_info->obj_desc.name, obj_info->size,
-            //    obj_info->offset);
+            //printf("%s: #%d obj name= %s version= %d size= %u offset= %u\n", __func__,
+            //    DIMES_CID, obj_info->obj_desc.name, obj_info->obj_desc.version,
+            //    obj_info->size, obj_info->offset);
         }
     }        
 
@@ -3371,7 +3371,7 @@ static int node_local_obj_index_insert_mem_obj(const char *group_name,
         uloga("%s: ERROR failed to find shmem_obj with id %d\n",
             __func__, shmem_obj_id);
         goto err_out_free;
-    }   
+    }
 
     // set mem_obj information
     mem_obj->sync_id = syncop_next_sync_id();
@@ -3427,9 +3427,9 @@ static int build_node_local_obj_index(void *restart_buf) {
             node_local_obj_index_insert_mem_obj(group_info->name,
                     storage_info->shmem_obj_id, obj_info);
             buf += sizeof(struct dimes_cr_mem_obj_info);
-            //printf("%s: #%d obj name= %s size= %u offset= %u\n", __func__,
-            //    DIMES_CID, obj_info->obj_desc.name, obj_info->size,
-            //    obj_info->offset);
+            //printf("%s: #%d obj name= %s version= %d size= %u offset= %u\n", __func__,
+            //    DIMES_CID, obj_info->obj_desc.name, obj_info->obj_desc.version,
+            //    obj_info->size, obj_info->offset);
         }
     }
 
