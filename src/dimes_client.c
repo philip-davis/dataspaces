@@ -2524,7 +2524,10 @@ static int local_search_mem_obj_list(struct list_head *mem_obj_list,
         // Add to qte->fetch_list
         struct node_id *peer =
                     get_peer_on_same_node(mem_obj->shmem_desc.owner_node_rank);
-        if (!peer) continue;
+        if (!peer) {
+            uloga("%s(): ERROR data is not on local node.\n", __func__);
+            continue;
+        }
 
         struct fetch_entry *fetch = (struct fetch_entry*)malloc(sizeof(*fetch));
         dart_rdma_create_read_tran(peer, &fetch->read_tran);
@@ -2574,7 +2577,8 @@ static int dimes_obj_get_local(struct obj_data *od)
     local_search_group_list(&storage, qte);
     local_search_group_list(&node_local_obj_index, qte);
     if (qte->num_fetch == 0) {
-        uloga("%s(): ERROR qte->num_fetch is %d\n", __func__, qte->num_fetch);
+        uloga("%s(): ERROR qte->num_fetch= %d for obj '%s' version= %d\n",
+            __func__, qte->num_fetch, qte->q_obj.name, qte->q_obj.version);
         goto err_qt_free;
     } 
     qte->f_locate_data_complete = 1;
