@@ -52,8 +52,6 @@
 #include "dimes_interface.h"
 #include "dimes_client.h"
 #include "dimes_data.h"
-/* Name mangling for C functions to adapt Fortran compiler */
-#define FC_FUNC(name,NAME) name ## _
 
 static struct dimes_client *dimes_c = NULL;
 static enum storage_type st = column_major;
@@ -3449,6 +3447,11 @@ uint32_t dimes_client_shmem_get_nid()
 int dimes_client_shmem_get_node_rank()
 {
     return dimes_c->node_mpi_rank;
+}
+
+MPI_Comm dimes_client_shmem_get_node_mpi_comm()
+{
+    return dimes_c->node_mpi_comm;
 }
 
 size_t estimate_node_shmem_restart_buf_size()
