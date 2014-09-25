@@ -115,6 +115,7 @@ int dimes_client_shmem_update_server_state();
 
 uint32_t dimes_client_shmem_get_nid();
 int dimes_client_shmem_get_node_rank();
+MPI_Comm dimes_client_shmem_get_node_mpi_comm();
 
 int dimes_client_shmem_clear_testing();
 

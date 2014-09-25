@@ -3485,6 +3485,11 @@ int dimes_client_shmem_get_node_rank()
     return dimes_c->node_mpi_rank;
 }
 
+MPI_Comm dimes_client_shmem_get_node_mpi_comm()
+{
+    return dimes_c->node_mpi_comm;
+}
+
 size_t estimate_node_shmem_restart_buf_size()
 {
     size_t bytes = sizeof(struct dimes_cr_shmem_obj_info) * MAX_NUM_PEER_PER_NODE + sizeof(struct dimes_cr_shmem_info);
