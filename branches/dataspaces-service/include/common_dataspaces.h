@@ -41,6 +41,9 @@
 
 #include <stdint.h>
 #include "config.h"
+#ifdef DS_HAVE_DIMES_SHMEM
+#include "mpi.h"
+#endif
 
 int common_dspaces_init(int num_peers, int appid, void *comm, const char *parameters);
 int common_dspaces_rank(void);
@@ -97,6 +100,7 @@ int common_dimes_shmem_reset_server_state(int server_id);
 int common_dimes_shmem_update_server_state();
 uint32_t common_dimes_shmem_get_nid();
 int common_dimes_shmem_get_node_rank();
+MPI_Comm common_dimes_shmem_get_node_mpi_comm();
 int common_dimes_shmem_put_local(const char *var_name,
         unsigned int ver, int size,
         int ndim,

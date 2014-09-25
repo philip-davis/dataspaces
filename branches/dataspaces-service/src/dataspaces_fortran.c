@@ -487,6 +487,12 @@ void FC_FUNC(dimes_shmem_get_node_rank, DIMES_SHMEM_GET_NODE_RANK)(int *node_ran
     *node_rank = common_dimes_shmem_get_node_rank();
 }
 
+void FC_FUNC(dimes_shmem_get_node_mpi_comm, DIMES_SHMEM_GET_NODE_MPI_COMM)(void *comm)
+{
+    MPI_Fint *p = (MPI_Fint*)comm;
+    *p = MPI_Comm_c2f(common_dimes_shmem_get_node_mpi_comm());
+}
+
 void FC_FUNC(dimes_shmem_put_local, DIMES_SHMEM_PUT_LOCAL) (const char *var_name,
         unsigned int *ver, int *size, int *ndim,
         uint64_t *lb, uint64_t *ub, void *data, int *err, int len)

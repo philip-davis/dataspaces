@@ -731,6 +731,11 @@ int common_dimes_shmem_get_node_rank()
     return dimes_client_shmem_get_node_rank();
 }
 
+MPI_Comm common_dimes_shmem_get_node_mpi_comm()
+{
+    return dimes_client_shmem_get_node_mpi_comm();
+}
+
 int common_dimes_shmem_put_local(const char *var_name,
         unsigned int ver, int size,
         int ndim,
