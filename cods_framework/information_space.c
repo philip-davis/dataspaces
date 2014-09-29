@@ -111,7 +111,6 @@ static int process_pending_msg()
         switch (p->cmd.cmd) {
         // Messages that need to be forwarded to manager server.
         case cods_reg_resource_msg:
-        case cods_reg_resource_msg_v2:
         case cods_get_executor_pool_info_msg:
         case cods_build_partition_msg:
         case cods_stop_framework_msg:
@@ -163,7 +162,6 @@ int info_space_init()
 
     // Messages sent from task executors
     rpc_add_service(cods_reg_resource_msg, callback_add_pending_msg);
-    rpc_add_service(cods_reg_resource_msg_v2, callback_add_pending_msg);
     // Messages sent from task submitter
     rpc_add_service(cods_get_executor_pool_info_msg, callback_add_pending_msg);
     rpc_add_service(cods_build_partition_msg, callback_add_pending_msg);

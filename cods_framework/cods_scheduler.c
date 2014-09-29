@@ -681,9 +681,6 @@ static int process_pending_msg(struct cods_scheduler *scheduler)
         case cods_reg_resource_msg:
             err = process_cods_reg_resource(p);
             break;
-        case cods_reg_resource_msg_v2:
-            err = process_cods_reg_resource_v2(p);
-            break;
         default:
             uloga("%s(): unknown message type\n", __func__);
             break;
@@ -751,9 +748,9 @@ static int callback_cods_finish_task(struct rpc_server *rpc_s, struct rpc_cmd *c
     return 0;
 }
 
-static int process_cods_reg_resource_v2(struct pending_msg *p)
+static int process_cods_reg_resource(struct pending_msg *p)
 {
-    struct hdr_register_resource_v2 *hdr = (struct hdr_register_resource_v2*)p->cmd.pad;
+    struct hdr_register_resource *hdr = (struct hdr_register_resource*)p->cmd.pad;
     uloga("%s(): got executor pool id= %d num_bucket= %d var_name= %s\n",
         __func__, hdr->pool_id, hdr->num_bucket, hdr->var_name);
 
@@ -796,44 +793,6 @@ static int process_cods_reg_resource_v2(struct pending_msg *p)
  err_out_free:
     if (info_tab) free(info_tab);
     return -1;
-}
-
-static int process_cods_reg_resource(struct pending_msg *p)
-{
-    struct hdr_register_resource *hdr = (struct hdr_register_resource*)p->cmd.pad;
-    int dart_id = hdr->dart_id;
-    int pool_id = hdr->pool_id;
-    int num_bucket = hdr->num_bucket;
-    int mpi_rank = hdr->mpi_rank;
-
-#ifdef HAVE_UGNI
-    uloga("%s(): get msg for bucket #%d mpi_rank %d num_bucket %d pool_id %d nid %u "
-            "mesh_coord (%u,%u,%u)\n",
-            __func__, dart_id, mpi_rank, num_bucket, pool_id,
-            hdr->topo_info.nid, hdr->topo_info.mesh_coord.mesh_x,
-            hdr->topo_info.mesh_coord.mesh_y, hdr->topo_info.mesh_coord.mesh_z);
-#endif
-
-    struct bucket_pool *bp = bk_pool_list_lookup(&sched->bk_pool_list, pool_id);
-    if (bp == NULL) {
-        bp = bk_pool_list_create_new(&sched->bk_pool_list, pool_id, num_bucket);
-        if (bp == NULL) {
-            uloga("ERROR %s(): bk_pool_list_create_new() failed\n", __func__);
-            return -1;
-        }
-    }
-
-    bk_pool_add_bucket(bp, mpi_rank, dart_id, pool_id, &hdr->topo_info);
-    uloga("%s(): bp->num_bucket= %d bp->bk_tab_size= %d\n", __func__,
-        bp->num_bucket, bp->bk_tab_size);
-    // Check if all peers of the resource pool have registered
-    if (bp->num_bucket == bp->bk_tab_size) {
-        bk_pool_set_bucket_idle(bp);
-        bk_pool_sort_bucket(bp);
-        print_bk_pool(bp);
-    }
-
-    return 0;
 }
 
 // TODO: make the workflow evaluation asynchronous...
@@ -978,8 +937,7 @@ int cods_scheduler_init(int num_peers, int appid)
     sched = malloc(sizeof(*sched));
     if (!sched) return -1;
 
-    // rpc_add_service(cods_reg_resource_msg, callback_add_pending_msg);
-    rpc_add_service(cods_reg_resource_msg_v2, callback_add_pending_msg);
+    rpc_add_service(cods_reg_resource_msg, callback_add_pending_msg);
     rpc_add_service(cods_stop_framework_msg, callback_cods_stop_framework);
     rpc_add_service(cods_get_executor_pool_info_msg, callback_add_pending_msg);
     rpc_add_service(cods_build_partition_msg, callback_add_pending_msg);

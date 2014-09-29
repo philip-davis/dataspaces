@@ -1,5 +1,5 @@
 #!/bin/sh
-#PBS -N test-hybrid-staging 
+#PBS -N test_cods 
 #PBS -A csc025ewk
 #PBS -q debug
 #PBS -j oe
@@ -9,6 +9,7 @@
 cd $PBS_O_WORKDIR
 
 rm -f conf dataspaces.conf
+rm -f log.infospace log.manager log.executor log.submitter
 
 # Prepare config file for DataSpaces
 echo "## Config file for DataSpaces
