@@ -454,47 +454,7 @@ int cods_request_task(struct cods_task *t)
 	return 0;
 }
 
-int cods_register_executor(int pool_id, int num_bucket, int mpi_rank)
-{
-    struct client_rpc_send_state send_state;
-    struct msg_buf *msg;
-    struct node_id *peer;
-    struct hdr_register_resource *hdr;
-    int err = -ENOMEM;   
-
-    bk_info.dart_id = DART_ID;
-    bk_info.pool_id = pool_id;
-    bk_info.num_bucket = num_bucket;
-    bk_info.mpi_rank = mpi_rank;
-    get_topology_information(&bk_info.topo_info);
-
-    peer = dc_get_peer(DART_DC, get_server_id());
-    msg = msg_buf_alloc(DART_RPC_S, peer, 1);
-    if (!msg)
-        goto err_out;
-
-    msg->msg_rpc->cmd = cods_reg_resource_msg;
-    msg->msg_rpc->id = DART_ID;
-    hdr = (struct hdr_register_resource *)msg->msg_rpc->pad;
-    hdr->dart_id = bk_info.dart_id;
-    hdr->pool_id = bk_info.pool_id;
-    hdr->num_bucket = bk_info.num_bucket;
-    hdr->mpi_rank = bk_info.mpi_rank;
-    hdr->topo_info = bk_info.topo_info;
-
-    err = client_rpc_send(dcg, peer, msg, &send_state);
-    if (err < 0) {
-        goto err_out_free;
-    }
-
-    return 0;
- err_out_free:
-    if (msg) free(msg);
- err_out:
-    ERROR_TRACE();     
-}
-
-int cods_register_executor_v2(int pool_id, int num_bucket, MPI_Comm comm)
+int cods_register_executor(int pool_id, int num_bucket, MPI_Comm comm)
 {
     int err;
     int mpi_rank;
@@ -550,15 +510,15 @@ int cods_register_executor_v2(int pool_id, int num_bucket, MPI_Comm comm)
         struct client_rpc_send_state send_state;
         struct msg_buf *msg;
         struct node_id *peer;
-        struct hdr_register_resource_v2 *hdr;    
+        struct hdr_register_resource *hdr;    
         peer = dc_get_peer(DART_DC, get_server_id());
         msg = msg_buf_alloc(DART_RPC_S, peer, 1);
         if (!msg)
             goto err_out;
         
-        msg->msg_rpc->cmd = cods_reg_resource_msg_v2;
+        msg->msg_rpc->cmd = cods_reg_resource_msg;
         msg->msg_rpc->id = DART_ID;
-        hdr = (struct hdr_register_resource_v2*)msg->msg_rpc->pad;
+        hdr = (struct hdr_register_resource*)msg->msg_rpc->pad;
         hdr->pool_id = pool_id;
         hdr->num_bucket = num_bucket;
         strcpy(hdr->var_name, var_name);

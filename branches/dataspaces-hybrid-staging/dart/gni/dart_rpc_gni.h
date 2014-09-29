@@ -413,7 +413,6 @@ enum cmd_type {
 #endif
 #ifdef DS_HAVE_CODS
     cods_reg_resource_msg,
-    cods_reg_resource_msg_v2,
     cods_update_var_msg,
     cods_req_task_msg,
     cods_exec_task_msg,

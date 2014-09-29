@@ -158,14 +158,6 @@ struct executor_register_info {
  *  Message headers 
  */
 struct hdr_register_resource {
-    int dart_id;
-    int pool_id;
-    int mpi_rank;
-    int num_bucket;
-    struct node_topology_info topo_info;
-} __attribute__((__packed__));
-
-struct hdr_register_resource_v2 {
     int pool_id;
     int num_bucket;
     char var_name[NAME_MAXLEN];

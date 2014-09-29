@@ -1207,7 +1207,7 @@ int dummy_epsi_coupling_workflow(MPI_Comm comm)
     register_task_function(2, dummy_xgca_task);
 
     int pool_id = 1;
-    cods_register_executor(pool_id, mpi_nproc, mpi_rank);
+    cods_register_executor(pool_id, mpi_nproc, comm);
     MPI_Barrier(comm);
 
     struct cods_task t;
@@ -1238,8 +1238,7 @@ int dummy_s3d_analysis_workflow(MPI_Comm comm)
     register_task_function(5, dummy_s3d_indexing_task);
 
     int pool_id = 1;
-    // cods_register_executor(pool_id, mpi_nproc, mpi_rank);
-    cods_register_executor_v2(pool_id, mpi_nproc, comm);
+    cods_register_executor(pool_id, mpi_nproc, comm);
     MPI_Barrier(comm);
 
     struct cods_task t;
@@ -1267,7 +1266,7 @@ int dummy_dns_les_workflow(MPI_Comm comm)
     register_task_function(2, dummy_les_task);
 
     int pool_id = 1;
-    cods_register_executor(pool_id, mpi_nproc, mpi_rank);
+    cods_register_executor(pool_id, mpi_nproc, comm);
     MPI_Barrier(comm);
 
     struct cods_task t;
@@ -1295,7 +1294,7 @@ int s3d_analysis_workflow(MPI_Comm comm)
     register_task_function(2, s3d_fb_indexing_task);
 
     int pool_id = 1;
-    cods_register_executor(pool_id, mpi_nproc, mpi_rank);
+    cods_register_executor(pool_id, mpi_nproc, comm);
     MPI_Barrier(comm);
 
     struct cods_task t;
