@@ -2182,7 +2182,8 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 
 	if(appid==0 && rpc_s->ptlmap.id==0){
 
-	for(int i =0;i<size;i++){
+    int i;
+	for(i =0;i<size;i++){
 		struct node_id *temp_peer = calloc(1, sizeof(struct node_id));
 		
 	        temp_peer->ptlmap.nid = rpc_s->peer_tab[i].ptlmap.nid;
