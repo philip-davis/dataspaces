@@ -30,6 +30,7 @@ struct runnable_task {
     struct task_entry *task_ref;
     // int num_input_vars;
     // enum cods_location_type location_type;
+    int bk_pool_id; // pool id for the allocated buckets
     int bk_allocation_size; // number of buckets required for task execution
     int *bk_idx_tab; // array of idx to the buckets in bk_tab 
 };

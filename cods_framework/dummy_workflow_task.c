@@ -6,12 +6,14 @@
 #include "cods_api.h"
 #include "mpi.h"
 
+/*
 #include "hpgv.h"
 #include "carraysearch.h"
+*/
 
 // Forward declaration
-void log_write_var(int rank, const char *var_name, int ndim, int elem_size, int version, uint64_t *lb, uint64_t *ub, uint64_t *gdim);
-void log_read_var(int rank, const char *var_name, int ndim, int elem_size, int version, uint64_t *lb, uint64_t *ub, uint64_t *gdim);
+static void log_write_var(int rank, const char *var_name, int ndim, int elem_size, int version, uint64_t *lb, uint64_t *ub, uint64_t *gdim);
+static void log_read_var(int rank, const char *var_name, int ndim, int elem_size, int version, uint64_t *lb, uint64_t *ub, uint64_t *gdim);
 
 struct viz_task_info {
     int is_viz_init;
@@ -113,12 +115,8 @@ static int exec_task_function(struct cods_task *t)
             //t2 = MPI_Wtime();
             //uloga("%s(): task appid= %d execution time %lf\n", __func__, t->appid, t2-t1);
 
-            if (t->bk_mpi_rank_tab) {
-                free(t->bk_mpi_rank_tab);
-            }
-            if (t->vars) {
-                free(t->vars);
-            }
+            if (t->bk_mpi_rank_tab) free(t->bk_mpi_rank_tab);
+            if (t->vars) free(t->vars);
             return err;
 		}
 	}
@@ -1038,6 +1036,7 @@ int dummy_sample_dag_workflow(MPI_Comm comm)
 }
 */
 
+/*
 int s3d_viz_render_task(struct cods_task *t,
     struct parallel_communicator *comm)
 {
@@ -1103,7 +1102,9 @@ int s3d_viz_render_task(struct cods_task *t,
     }
     return 0;
 }
+*/
 
+/*
 int s3d_fb_indexing_task(struct cods_task *t,
     struct parallel_communicator *comm)
 {
@@ -1193,6 +1194,7 @@ int s3d_fb_indexing_task(struct cods_task *t,
     }
     return 0;
 }
+*/
 
 int dummy_epsi_coupling_workflow(MPI_Comm comm)
 {
@@ -1281,6 +1283,7 @@ int dummy_dns_les_workflow(MPI_Comm comm)
     return 0;
 }
 
+/*
 int s3d_analysis_workflow(MPI_Comm comm)
 {
     int err;
@@ -1308,3 +1311,4 @@ int s3d_analysis_workflow(MPI_Comm comm)
 
     return 0;
 }
+*/

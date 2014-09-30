@@ -14,9 +14,9 @@ INCLUDES=-I. \
 	-I$(DSPACES_DIR)/dart \
 	-I$(DSPACES_DIR)/dart/gni \
 	-I/opt/cray/rca/default/include \
-	-I/opt/cray-hss-devel/6.0.0/include     \
-	-I/opt/cray/krca/1.0.0-2.0400.29855.4.28.gem/include \
-    -I$(HPGV_DIR) \
+	-I/opt/cray-hss-devel/default/include     \
+	-I/opt/cray/krca/default/include
+    #-I$(HPGV_DIR) \
     -I$(FASTBIT_DIR)/win -I$(FASTBIT_DIR)/include \
     -I$(MEMQ_DIR)
 
@@ -29,8 +29,8 @@ LIBS= -L./ -lcods \
 	-L$(DSPACES_DIR)/src -ldspaces -ldscommon \
 	-L$(DSPACES_DIR)/dart -ldart \
 	${PMI_LIBS} ${UGNI_LIBS} \
-	-L/opt/cray/rca/default/lib64 -lrca \
-    -L$(HPGV_DIR) -lhpgv \
+	-L/opt/cray/rca/default/lib64 -lrca
+    #-L$(HPGV_DIR) -lhpgv \
     -L$(MEMQ_DIR) -lmemq \
     -L$(FASTBIT_DIR)/lib -Wl,-rpath=$(FASTBIT_DIR)/lib -lfastbit -lrt -lm
 
