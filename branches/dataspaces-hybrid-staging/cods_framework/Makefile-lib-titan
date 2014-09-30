@@ -8,8 +8,8 @@ INCLUDES=-I. \
 		-I$(DSPACES_DIR)/dart \
 		-I$(DSPACES_DIR)/dart/gni \
         -I/opt/cray/rca/default/include \
-        -I/opt/cray-hss-devel/6.0.0/include     \
-        -I/opt/cray/krca/1.0.0-2.0400.29855.4.28.gem/include
+        -I/opt/cray-hss-devel/default/include     \
+        -I/opt/cray/krca/default/include
 
 PMI_CFLAGS = $(shell pkg-config --cflags cray-pmi)
 PMI_LIBS = $(shell pkg-config --libs cray-pmi)

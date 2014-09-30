@@ -28,6 +28,7 @@ epsi_workflow_id=1
 s3d_workflow_id=2
 dns_les_workflow_id=4
 
+## Task executor partitions for S3D analysis workflow
 num_sim_node=2
 num_intransit_node=1
 num_sim_executor_per_node=14

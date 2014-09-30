@@ -170,49 +170,29 @@ inline int is_submitted_task_done(struct task_info* t) {
     return t->f_task_execution_done;
 }
 
-static int fetch_task_info_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+static int fetch_task_info(struct cods_task *task, const char *meta_data_name)
 {
     size_t mpi_rank_tab_size = bk_info.current_task->nproc*sizeof(int);
     size_t var_tab_size = bk_info.current_task->num_vars*sizeof(struct cods_var);
+    size_t size = mpi_rank_tab_size + var_tab_size;
 
+    void *data = malloc(size);
+    int err = read_meta_data(meta_data_name, size, data);
+    if (err < 0) {
+        free(data);
+        return -1;
+    }   
+ 
     // copy origin mpi ranks for allocated bk
-    bk_info.current_task->bk_mpi_rank_tab = malloc(mpi_rank_tab_size);
-    memcpy(bk_info.current_task->bk_mpi_rank_tab, msg->msg_data, mpi_rank_tab_size);
+    task->bk_mpi_rank_tab = malloc(mpi_rank_tab_size);
+    memcpy(task->bk_mpi_rank_tab, data, mpi_rank_tab_size);
 
     // copy vars
-    bk_info.current_task->vars = malloc(var_tab_size);
-    memcpy(bk_info.current_task->vars, msg->msg_data+mpi_rank_tab_size, var_tab_size);
+    task->vars = malloc(var_tab_size);
+    memcpy(task->vars, data+mpi_rank_tab_size, var_tab_size);
 
-	bk_info.f_get_task = 1;
-    free(msg->msg_data);
-	free(msg);
-	return 0;
-}
-
-static int fetch_task_info(struct rpc_cmd *cmd)
-{
-	struct node_id *peer = dc_get_peer(DART_DC, cmd->id);
-	struct msg_buf *msg;
-	int err = -ENOMEM;
-
-	msg = msg_buf_alloc(DART_RPC_S, peer, 1);
-	if (!msg)
-		goto err_out;
-
-    msg->size = bk_info.current_task->num_vars*sizeof(struct cods_var)
-                + bk_info.current_task->nproc*sizeof(int);
-    msg->msg_data = malloc(msg->size);
-	msg->cb = fetch_task_info_completion;
-
-	rpc_mem_info_cache(peer, msg, cmd);
-	err = rpc_receive_direct(DART_RPC_S, peer, msg);
-	rpc_mem_info_reset(peer, msg, cmd);
-	if (err == 0)
-		return 0;
-
-	free(msg);
-err_out:
-	ERROR_TRACE();
+    free(data);
+    return 0;
 }
 
 static int callback_cods_exec_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
@@ -223,15 +203,17 @@ static int callback_cods_exec_task(struct rpc_server *rpc_s, struct rpc_cmd *cmd
 	bk_info.current_task->rank = hdr->rank_hint;
 	bk_info.current_task->nproc = hdr->nproc_hint;
     bk_info.current_task->num_vars = hdr->num_vars;
+    bk_info.current_task->bk_mpi_rank_tab = NULL;
     bk_info.current_task->vars = NULL;
 
-    if (fetch_task_info(cmd) < 0) {
+    if (fetch_task_info(bk_info.current_task, hdr->meta_data_name) < 0) {
         uloga("ERROR %s(): failed to fetch info for task tid= %u\n",
             __func__, hdr->tid);
         bk_info.current_task = NULL;
         return -1;
     }
-    
+
+    bk_info.f_get_task = 1;    
 	return 0;
 }
 
@@ -245,7 +227,7 @@ static int process_cods_executor_pool_info(struct pending_msg *p)
     // Read executor pool information from dataspaces.
     size_t size = sizeof(struct executor_descriptor)*hdr->num_executor;
     submitter.pool_info->executor_tab = malloc(size);
-    int err = read_meta_data(hdr->var_name, size, submitter.pool_info->executor_tab);
+    int err = read_meta_data(hdr->meta_data_name, size, submitter.pool_info->executor_tab);
     if (err < 0) {
         free(submitter.pool_info->executor_tab);
         free(submitter.pool_info);
@@ -262,8 +244,8 @@ static int process_cods_executor_pool_info(struct pending_msg *p)
 static int callback_cods_submitted_task_done(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     struct hdr_submitted_task_done *hdr = (struct hdr_submitted_task_done *)cmd->pad;
-    uloga("%s(): task tid= %u execution time %.6f\n", __func__, 
-        hdr->tid, hdr->task_execution_time);
+    //uloga("%s(): task tid= %u execution time %.6f\n", __func__, 
+    //    hdr->tid, hdr->task_execution_time);
 
     struct task_info *t = lookup_submitted_task(hdr->tid);
     if (!t) {
@@ -405,7 +387,7 @@ int cods_update_var(struct cods_var *var, enum cods_update_var_op op)
 	struct hdr_update_var *hdr;
 	int peer_id, err = -ENOMEM;
 
-	peer = dc_get_peer(DART_DC, 0); //master srv has dart id as 0
+	peer = dc_get_peer(DART_DC, get_server_id());
 	msg = msg_buf_alloc(DART_RPC_S, peer, 1);
 	if (!msg)
 		goto err_out;
@@ -431,11 +413,10 @@ int cods_update_var(struct cods_var *var, enum cods_update_var_op op)
 	ERROR_TRACE();
 }
 
-// TODO: the logic of the function is not clear
+// TODO: the logic of this function is not clear
 int cods_request_task(struct cods_task *t)
 {
 	int err;
-
 	bk_info.f_get_task = 0;
 	bk_info.current_task = t;
 
@@ -491,16 +472,17 @@ int cods_register_executor(int pool_id, int num_bucket, MPI_Comm comm)
     if (info_tab) {
         int i;
         uloga("%s(): info_tab_size= %u\n", __func__, info_tab_size);
-        for (i = 0; i < num_bucket; i++) {
-            uloga("%s(): info_tab[%d] dart_id= %d pool_id= %d node_id= %u\n",
-                __func__, i, info_tab[i].dart_id, info_tab[i].pool_id,
-                info_tab[i].topo_info.nid);
-        }
+        // debug print
+        //for (i = 0; i < num_bucket; i++) {
+        //    uloga("%s(): info_tab[%d] dart_id= %d pool_id= %d node_id= %u\n",
+        //        __func__, i, info_tab[i].dart_id, info_tab[i].pool_id,
+        //        info_tab[i].topo_info.nid);
+        //}
 
         // write to dataspaces
-        char var_name[NAME_MAXLEN];
-        sprintf(var_name, "reg_executor_pool_%d", pool_id);
-        err = write_meta_data(var_name, info_tab_size, info_tab);
+        char meta_data_name[NAME_MAXLEN];
+        sprintf(meta_data_name, "reg_executor_pool_%d", pool_id);
+        err = write_meta_data(meta_data_name, info_tab_size, info_tab);
         if (err < 0) {
             goto err_out_free;
         }
@@ -521,7 +503,7 @@ int cods_register_executor(int pool_id, int num_bucket, MPI_Comm comm)
         hdr = (struct hdr_register_resource*)msg->msg_rpc->pad;
         hdr->pool_id = pool_id;
         hdr->num_bucket = num_bucket;
-        strcpy(hdr->var_name, var_name);
+        strcpy(hdr->meta_data_name, meta_data_name);
        
         err = client_rpc_send(dcg, peer, msg, &send_state);
         if (err < 0) {
@@ -546,7 +528,7 @@ int cods_set_task_finished(struct cods_task *t)
     struct hdr_finish_task *hdr;
     int err = -ENOMEM;
 
-    peer = dc_get_peer(DART_DC, 0); //master srv has dart id as 0
+    peer = dc_get_peer(DART_DC, get_server_id()); 
     msg = msg_buf_alloc(DART_RPC_S, peer, 1);
     if (!msg)
         goto err_out;
@@ -576,7 +558,7 @@ int cods_exec_task(struct task_descriptor *task_desc)
     struct node_id *peer;
     int err = -ENOMEM;
 
-    peer = dc_get_peer(DART_DC, 0); //master srv has dart id as 0
+    peer = dc_get_peer(DART_DC, get_server_id()); 
     msg = msg_buf_alloc(DART_RPC_S, peer, 1);
     if (!msg)
         goto err_out;
@@ -587,6 +569,7 @@ int cods_exec_task(struct task_descriptor *task_desc)
     hdr->task_desc.tid = task_desc->tid;
     hdr->task_desc.location_hint = task_desc->location_hint;
     strcpy(hdr->task_desc.conf_file, task_desc->conf_file);
+    hdr->src_dart_id = DART_ID;
 
     err = client_rpc_send(dcg, peer, msg, &send_state);
     if (err < 0) {
@@ -758,9 +741,9 @@ int cods_build_partition(struct executor_pool_info *pool_info)
     submitter.f_build_partition = 0;
 
     // Write new partition information to dataspaces.
-    char var_name[NAME_MAXLEN];
-    sprintf(var_name, "executor_pool_%d_partition", pool_info->pool_id);
-    err = write_meta_data(var_name,
+    char meta_data_name[NAME_MAXLEN];
+    sprintf(meta_data_name, "executor_pool_%d_partition", pool_info->pool_id);
+    err = write_meta_data(meta_data_name,
                     sizeof(struct executor_descriptor)*pool_info->num_executor,
                     pool_info->executor_tab);
     if (err < 0) {
@@ -784,7 +767,7 @@ int cods_build_partition(struct executor_pool_info *pool_info)
     hdr->src_dart_id = DART_ID;
     hdr->pool_id = pool_info->pool_id;
     hdr->num_executor = pool_info->num_executor;
-    strcpy(hdr->var_name, var_name);
+    strcpy(hdr->meta_data_name, meta_data_name);
 
     err = client_rpc_send(dcg, peer, msg, &send_state);
     if (err < 0) {

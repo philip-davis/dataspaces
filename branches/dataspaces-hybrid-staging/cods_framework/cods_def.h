@@ -160,7 +160,7 @@ struct executor_register_info {
 struct hdr_register_resource {
     int pool_id;
     int num_bucket;
-    char var_name[NAME_MAXLEN];
+    char meta_data_name[NAME_MAXLEN];
 } __attribute__((__packed__));
 
 struct hdr_stop_executor {
@@ -176,11 +176,13 @@ struct hdr_update_var {
 } __attribute__((__packed__));
 
 struct hdr_exec_task {
+    int dart_id;
     uint32_t tid;
     int appid;
+    int num_vars;
     int rank_hint;
     int nproc_hint;
-    int num_vars;
+    char meta_data_name[NAME_MAXLEN];
 } __attribute__((__packed__));
 
 struct hdr_finish_task {
@@ -189,10 +191,12 @@ struct hdr_finish_task {
 } __attribute__((__packed__));
 
 struct hdr_submit_task {
+    int src_dart_id;
     struct task_descriptor task_desc;
 } __attribute__((__packed__));
 
 struct hdr_submitted_task_done {
+    int submitter_dart_id;
     uint32_t tid;
     double task_execution_time;
 } __attribute__((__packed__));
@@ -206,14 +210,14 @@ struct hdr_executor_pool_info {
     int dst_dart_id;
     int pool_id;
     uint32_t num_executor;
-    char var_name[NAME_MAXLEN];
+    char meta_data_name[NAME_MAXLEN];
 } __attribute__((__packed__));
 
 struct hdr_build_partition {
     int src_dart_id;
     int pool_id;
     uint32_t num_executor;
-    char var_name[NAME_MAXLEN];
+    char meta_data_name[NAME_MAXLEN];
 } __attribute__((__packed__));
 
 struct hdr_build_partition_done {

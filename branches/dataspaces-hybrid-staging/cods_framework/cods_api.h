@@ -19,21 +19,24 @@ enum programmer_defined_partition_type {
     intransit_executor
 };
 
-/* Initialize the dataspaces library. */
+// Initialize the dataspaces library.
 int cods_init(int num_peers, int appid, enum cods_pe_type pe_type);
-/* Finalize the dataspaces library. */
+// Finalize the dataspaces library.
 int cods_finalize();
-
-// Update variable information to drive the dependency resolution on
-// workflow manager.
-int cods_update_var(struct cods_var *var, enum cods_update_var_op op);
 
 // Add/register new task executors (collective operation and requires 
 // a valid MPI communicator).
 int cods_register_executor(int pool_id, int num_executor, MPI_Comm comm);
 
 // Request for new task from workflow manager. 
+// This function would block untill one of the following conditions occurs:
+// (1) Workflow manager returns with a task to execute.
+// (2) Workflow manager returns with a message that asks current executor to terminate. 
 int cods_request_task(struct cods_task *t);
+
+// Update variable information to drive the dependency resolution on
+// workflow manager.
+int cods_update_var(struct cods_var *var, enum cods_update_var_op op);
 
 // Notify to workflow manager the completion of task execution.
 // Note: for task running on N executors, only one executor needs to call this
@@ -49,16 +52,15 @@ int cods_wait_task_completion(struct task_descriptor *task_desc);
 // Check the execution status of submitted task.
 int cods_get_task_status(struct task_descriptor *task_desc);
 
-//
+// Retrieve task executor information for a resource pool.
 struct executor_pool_info* cods_get_executor_pool_info(int pool_id);
 
-//
+// Build customized functional partitions for a resource pool.
 int cods_build_partition(struct executor_pool_info *pool_info);
 
 // Notify the framework to shutdown itself.
 int cods_stop_framework();
 
-//
 void init_task_descriptor(struct task_descriptor *task_desc, int task_id, const char* conf_file);
 #ifdef __cplusplus
 }

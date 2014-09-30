@@ -114,6 +114,9 @@ static int process_pending_msg()
         case cods_get_executor_pool_info_msg:
         case cods_build_partition_msg:
         case cods_stop_framework_msg:
+        case cods_submit_task_msg:
+        case cods_update_var_msg:
+        case cods_finish_task_msg:
             err = forward_msg_to_peer(p, info_space->manager_dart_id);
             break;
         // Other messages ...
@@ -135,8 +138,20 @@ static int process_pending_msg()
                 err = forward_msg_to_peer(p, hdr->dst_dart_id);
             }
             break;
+        case cods_exec_task_msg:
+            {
+                struct hdr_exec_task *hdr = p->cmd.pad;
+                err = forward_msg_to_peer(p, hdr->dart_id); 
+            }
+            break;
+        case cods_submitted_task_done_msg: 
+            {
+                struct hdr_submitted_task_done *hdr = p->cmd.pad;
+                err = forward_msg_to_peer(p, hdr->submitter_dart_id);
+            }
+            break;
         default:
-            uloga("%s(): unknown message type\n", __func__);
+            uloga("%s(): unknown message type %u\n", __func__, p->cmd.cmd);
             break;
         }
 
@@ -162,15 +177,20 @@ int info_space_init()
 
     // Messages sent from task executors
     rpc_add_service(cods_reg_resource_msg, callback_add_pending_msg);
+    rpc_add_service(cods_update_var_msg, callback_add_pending_msg);
+    rpc_add_service(cods_finish_task_msg, callback_add_pending_msg);
     // Messages sent from task submitter
     rpc_add_service(cods_get_executor_pool_info_msg, callback_add_pending_msg);
     rpc_add_service(cods_build_partition_msg, callback_add_pending_msg);
     rpc_add_service(cods_stop_framework_msg, callback_add_pending_msg);
+    rpc_add_service(cods_submit_task_msg, callback_add_pending_msg);
     // Messages sent from workflow manager
     rpc_add_service(cods_update_manager_info_msg, callback_cods_update_manager_info);
     rpc_add_service(cods_stop_executor_msg, callback_add_pending_msg);
     rpc_add_service(cods_executor_pool_info_msg, callback_add_pending_msg);
     rpc_add_service(cods_build_partition_done_msg, callback_add_pending_msg);
+    rpc_add_service(cods_exec_task_msg, callback_add_pending_msg);
+    rpc_add_service(cods_submitted_task_done_msg, callback_add_pending_msg);
 
     info_space->dimes_s = dimes_server_alloc(num_sp, num_cp, conf);
     if (!info_space->dimes_s) {

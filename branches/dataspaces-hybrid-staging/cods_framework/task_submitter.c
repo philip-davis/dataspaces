@@ -100,8 +100,6 @@ void epsi_coupling_workflow_driver(uint32_t wid, MPI_Comm comm)
     struct task_descriptor xgc1_task, xgca_task;
     init_task_descriptor(&xgc1_task, 1, "xgc1.conf");
     init_task_descriptor(&xgca_task, 2, "xgca.conf");
-    xgc1_task.location_hint = simulation_executor;
-    xgca_task.location_hint = simulation_executor;
 
     int i;
     for (i = 0; i < num_coupling_step; i++) {
@@ -124,8 +122,6 @@ void dns_les_workflow_driver(uint32_t wid, MPI_Comm comm)
     struct task_descriptor dns_task, les_task;
     init_task_descriptor(&dns_task, dns_tid, "dns.conf");
     init_task_descriptor(&les_task, les_tid, "les.conf");
-    dns_task.location_hint = simulation_executor;
-    les_task.location_hint = simulation_executor;
 
     cods_exec_task(&dns_task);
     cods_exec_task(&les_task);
@@ -158,6 +154,7 @@ int main(int argc, char **argv)
     int num_intransit_node = 0;
     int num_sim_executor_per_node = 0;
     int num_insitu_colocated_executor_per_node = 0;
+    int does_partition = 0;
     MPI_Comm comm;
 
     if (argc != 2 && argc != 6) {
@@ -170,6 +167,7 @@ int main(int argc, char **argv)
         num_intransit_node = atoi(argv[3]);
         num_sim_executor_per_node = atoi(argv[4]);
         num_insitu_colocated_executor_per_node = atoi(argv[5]);
+        does_partition = 1;
     }        
 
 	appid = 2;
@@ -183,9 +181,11 @@ int main(int argc, char **argv)
     }
 	err = cods_init(nproc, appid, cods_submitter); 
 
-    partition_task_executors(num_sim_node, num_intransit_node,
-        num_sim_executor_per_node, num_insitu_colocated_executor_per_node);
-/*
+    if (does_partition) {
+        partition_task_executors(num_sim_node, num_intransit_node,
+            num_sim_executor_per_node, num_insitu_colocated_executor_per_node);
+    }
+
     switch (example_workflow_id) {
     case EPSI_WORKFLOW_ID:
         epsi_coupling_workflow_driver(example_workflow_id, comm);
@@ -200,8 +200,7 @@ int main(int argc, char **argv)
         uloga("ERROR invalid workflow_id %u\n", example_workflow_id);
         break;
     }
-*/
-    sleep(30);
+
     cods_stop_framework();
 	cods_finalize();
 

@@ -23,12 +23,14 @@ static double tm_st;
 
 /* Forward declaration */
 static int evaluate_task_by_available_var(struct task_entry *task, const struct cods_var *var_desc);
-static int get_ready_tasks(struct list_head *list, struct task_entry **tasks, int *n /*num_ready_tasks*/);
+static int get_ready_tasks(struct list_head *list, struct task_entry **tasks, int *n);
 static int is_task_ready(struct task_entry *task);
 static int is_task_finish(struct task_entry *task);
 static void update_task_status(struct task_entry *task, enum cods_task_status status);
 static int parse_task_conf_file(struct task_entry *task, const char *fname);    
 static void print_task_info(struct task_entry *task);
+static int process_cods_reg_resource(struct pending_msg *p);
+static int process_cods_build_partition(struct pending_msg *p);
 
 static int get_server_id()
 {
@@ -369,59 +371,28 @@ static void free_rtask(struct runnable_task *rtask) {
     free(rtask);
 }
 
-/**
-
-**/
-static int notify_bk_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
-{
-	if (msg->size > 0) {
-		free(msg->msg_data);
-	}
-	free(msg);	
-
-	return 0;
-}
-
-static int notify_bk(struct runnable_task *rtask, struct bucket_pool *bp, 
-    struct bucket *bk, int rank_hint, int nproc_hint)
+static int notify_bk(struct bucket *bk, struct task_entry *t, int rank_hint, 
+    int nproc_hint, const char *meta_data_name)
 {
 	int err = -ENOMEM;
 	struct msg_buf *msg;
 	struct node_id *peer;
-	peer = dc_get_peer(DART_DC, bk->dart_id);
+	peer = dc_get_peer(DART_DC, get_server_id());
 	msg = msg_buf_alloc(DART_RPC_S, peer, 1);
 	if (!msg)
 		goto err_out;
-    
-    struct task_entry *t = rtask->task_ref;
-    size_t mpi_rank_tab_size = rtask->bk_allocation_size*sizeof(int);
-    size_t var_tab_size = t->num_vars*sizeof(struct cods_var);
-    msg->size = mpi_rank_tab_size + var_tab_size;
-    msg->msg_data = malloc(msg->size); 
-    msg->cb = notify_bk_completion;
-
-    int i;
-    // copy mpi ranks of the bk allocation
-    int *mpi_rank_tab = (int*)msg->msg_data;
-    for (i = 0; i < rtask->bk_allocation_size; i++) {
-        mpi_rank_tab[i] = bp->bk_tab[rtask->bk_idx_tab[i]].origin_mpi_rank; 
-    }
-
-    // copy variable information
-    struct cods_var *vars = (struct cods_var*)(msg->msg_data+mpi_rank_tab_size);
-    for (i = 0; i < t->num_vars; i++) {
-        vars[i] = t->vars[i];
-    } 
-
+   
 	msg->msg_rpc->cmd = cods_exec_task_msg;
 	msg->msg_rpc->id = DART_ID;
 	struct hdr_exec_task *hdr =
 		(struct hdr_exec_task *)msg->msg_rpc->pad;
+    hdr->dart_id = bk->dart_id;
 	hdr->tid = t->tid;
     hdr->appid = t->appid;
+	hdr->num_vars = t->num_vars;
 	hdr->rank_hint = rank_hint; 
 	hdr->nproc_hint = nproc_hint;
-	hdr->num_vars = t->num_vars;
+    strcpy(hdr->meta_data_name, meta_data_name);
 
 	err = rpc_send(DART_RPC_S, peer, msg);
 	if (err < 0) {
@@ -435,31 +406,63 @@ err_out:
 	ERROR_TRACE();
 }
 
-static int bk_pool_list_allocate_bk(struct list_head *list, struct runnable_task *rtask)
+static int allocate_bk(struct list_head *list, struct runnable_task *rtask)
 {
-	if (rtask->task_ref->status != task_pending) {
-		return 0;
-	}
-
-    // try to allocate buckets in a simple first-fit manner
+    // allocate buckets in a simple first-fit manner
     struct bucket_pool *bp;
     list_for_each_entry(bp, list, struct bucket_pool, entry) {
         rtask->bk_idx_tab = bk_pool_request_bk_allocation(bp, rtask->bk_allocation_size,
                                 rtask->task_ref->location_hint);
-        if (rtask->bk_idx_tab) break;
+        if (rtask->bk_idx_tab) {
+            rtask->bk_pool_id = bp->pool_id;
+            return 0;
+        } 
     }    
     
-    if (!rtask->bk_idx_tab) {
-        return 0;
+    return -1;
+}
+
+static int execute_task(struct list_head *list, struct runnable_task *rtask)
+{
+    int i, err;
+    struct task_entry *t = rtask->task_ref;
+    struct bucket_pool *bp = bk_pool_list_lookup(list, rtask->bk_pool_id);
+    if (!bp) return -1; 
+
+    // write task information into DataSpaces
+    size_t mpi_rank_tab_size = rtask->bk_allocation_size*sizeof(int); 
+    size_t var_tab_size = t->num_vars*sizeof(struct cods_var);
+    size_t size = mpi_rank_tab_size + var_tab_size;
+    void *data = malloc(size);
+    if (!data) return -1;
+
+    // copy mpi ranks of the bk allocation
+    int *mpi_rank_tab = (int*)data;
+    for (i = 0; i < rtask->bk_allocation_size; i++) {
+        mpi_rank_tab[i] = bp->bk_tab[rtask->bk_idx_tab[i]].origin_mpi_rank; 
     }
 
+    // copy variable information
+    struct cods_var *vars = (struct cods_var*)(data+mpi_rank_tab_size);
+    for (i = 0; i < t->num_vars; i++) {
+        vars[i] = t->vars[i];
+    }  
+
+    char meta_data_name[NAME_MAXLEN];
+    sprintf(meta_data_name, "task_%u_info", t->tid);
+    err = write_meta_data(meta_data_name, size, data);
+    if (err < 0) {
+        free(data);
+        return -1;
+    }
+    free(data);
+
     // notify the allocated buckets
-    int i;
     for (i = 0; i < rtask->bk_allocation_size; i++) {
         struct bucket *bk = bk_pool_get_bucket(bp, rtask->bk_idx_tab[i]);
         int rank_hint = i;
         int nproc_hint = rtask->bk_allocation_size;
-		if (notify_bk(rtask, bp, bk, rank_hint, nproc_hint) < 0) {
+		if (notify_bk(bk, t, rank_hint, nproc_hint, meta_data_name) < 0) {
 			return -1;
 		}
 	}
@@ -505,9 +508,8 @@ static int notify_task_submitter(struct task_entry *task)
     struct msg_buf *msg;
     struct node_id *peer;
     int err = -ENOMEM;
-    int dart_id = task->submitter_dart_id;
 
-    peer = dc_get_peer(DART_DC, dart_id);
+    peer = dc_get_peer(DART_DC, get_server_id());
     msg = msg_buf_alloc(DART_RPC_S, peer, 1);
     if (!msg)
         goto err_out;
@@ -515,6 +517,7 @@ static int notify_task_submitter(struct task_entry *task)
     msg->msg_rpc->cmd = cods_submitted_task_done_msg;
     msg->msg_rpc->id = DART_ID;
     struct hdr_submitted_task_done *hdr= (struct hdr_submitted_task_done*)msg->msg_rpc->pad;
+    hdr->submitter_dart_id = task->submitter_dart_id;
     hdr->tid = task->tid;
     hdr->task_execution_time = 0;
 
@@ -627,9 +630,9 @@ static int process_cods_get_executor_pool_info(struct pending_msg *p)
     } 
    
     // Write executor pool information to dataspaces.
-    char var_name[NAME_MAXLEN];
-    sprintf(var_name, "executor_pool_%d_info", pool_id);
-    write_meta_data(var_name, tab_size, tab);
+    char meta_data_name[NAME_MAXLEN];
+    sprintf(meta_data_name, "executor_pool_%d_info", pool_id);
+    err = write_meta_data(meta_data_name, tab_size, tab);
     if (err < 0) {
         goto err_out_free;
     } 
@@ -648,7 +651,7 @@ static int process_cods_get_executor_pool_info(struct pending_msg *p)
     reply_hdr->dst_dart_id = submitter_dart_id;
     reply_hdr->pool_id = bp->pool_id;
     reply_hdr->num_executor = bp->num_bucket;
-    strcpy(reply_hdr->var_name, var_name);
+    strcpy(reply_hdr->meta_data_name, meta_data_name);
     
     err = rpc_send(DART_RPC_S, peer, msg);
     if (err < 0) {
@@ -671,18 +674,16 @@ static int process_pending_msg(struct cods_scheduler *scheduler)
         int err = 0;
         switch (p->cmd.cmd) {
         case cods_get_executor_pool_info_msg:
-            uloga("%s(): to handle cods_get_executor_pool_info_msg\n", __func__);
             err = process_cods_get_executor_pool_info(p);
             break;
         case cods_build_partition_msg:
-            uloga("%s(): to handle cods_build_partition_msg\n", __func__);
             err = process_cods_build_partition(p);
             break;
         case cods_reg_resource_msg:
             err = process_cods_reg_resource(p);
             break;
         default:
-            uloga("%s(): unknown message type\n", __func__);
+            uloga("%s(): unknown message type %u\n", __func__, p->cmd.cmd);
             break;
         }
 
@@ -716,7 +717,9 @@ static int process_runnable_task(struct cods_scheduler *scheduler)
 	// 2. process runnable tasks (if any) 
 	list_for_each_entry_safe(rtask, temp, &scheduler->rtask_list, struct runnable_task, entry) {
 		if (rtask_is_pending(rtask)) {
-			bk_pool_list_allocate_bk(&scheduler->bk_pool_list, rtask);
+			err = allocate_bk(&scheduler->bk_pool_list, rtask);
+            if (err < 0) break;
+            execute_task(&scheduler->bk_pool_list, rtask);
 		}
 	}	
 
@@ -751,14 +754,14 @@ static int callback_cods_finish_task(struct rpc_server *rpc_s, struct rpc_cmd *c
 static int process_cods_reg_resource(struct pending_msg *p)
 {
     struct hdr_register_resource *hdr = (struct hdr_register_resource*)p->cmd.pad;
-    uloga("%s(): got executor pool id= %d num_bucket= %d var_name= %s\n",
-        __func__, hdr->pool_id, hdr->num_bucket, hdr->var_name);
+    uloga("%s(): got executor pool id= %d num_bucket= %d meta_data_name= %s\n",
+        __func__, hdr->pool_id, hdr->num_bucket, hdr->meta_data_name);
 
     // Read task executors information from information space.
     struct executor_register_info *info_tab = NULL;
     size_t info_tab_size = sizeof(*info_tab)*hdr->num_bucket;
     info_tab = malloc(info_tab_size);
-    int err = read_meta_data(hdr->var_name, info_tab_size, info_tab);
+    int err = read_meta_data(hdr->meta_data_name, info_tab_size, info_tab);
     if (err < 0) {
         goto err_out_free;
     }
@@ -828,7 +831,7 @@ static int callback_cods_submit_task(struct rpc_server *rpc_s, struct rpc_cmd *c
         return 0;
     }
 
-    task = create_new_task(task_desc, cmd->id);
+    task = create_new_task(task_desc, hdr->src_dart_id);
     if (!task) {
         return 0;
     }
@@ -863,7 +866,7 @@ static int process_cods_build_partition(struct pending_msg *p)
     // Read executor pool partition information from dataspaces.
     size_t size = sizeof(struct executor_descriptor)*hdr->num_executor;
     struct executor_descriptor *tab = malloc(size);
-    err = read_meta_data(hdr->var_name, size, tab);
+    err = read_meta_data(hdr->meta_data_name, size, tab);
     if (err < 0) {
         free(tab);
         goto err_out;
@@ -941,11 +944,9 @@ int cods_scheduler_init(int num_peers, int appid)
     rpc_add_service(cods_stop_framework_msg, callback_cods_stop_framework);
     rpc_add_service(cods_get_executor_pool_info_msg, callback_add_pending_msg);
     rpc_add_service(cods_build_partition_msg, callback_add_pending_msg);
-/*
+    rpc_add_service(cods_submit_task_msg, callback_cods_submit_task);
 	rpc_add_service(cods_update_var_msg, callback_cods_update_var); 
     rpc_add_service(cods_finish_task_msg, callback_cods_finish_task);
-    rpc_add_service(cods_submit_task_msg, callback_cods_submit_task);
-*/
 
     err = dspaces_init(num_peers, appid, NULL, NULL);
     if (err < 0) {
@@ -1099,7 +1100,7 @@ static int is_task_ready(struct task_entry *task)
 }
 
 static int get_ready_tasks(struct list_head *list,
-    struct task_entry **tasks, int *n /*num_ready_tasks*/)
+    struct task_entry **tasks, int *n /* out: number of ready tasks */)
 {
     *n = 0;
     struct task_entry *task = NULL;
