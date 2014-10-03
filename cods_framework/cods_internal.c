@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "cods_def.h"
+#include "cods_internal.h"
 #include "cods_strutil.h"
 
 #ifdef HAVE_UGNI

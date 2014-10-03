@@ -9,7 +9,7 @@
 #include <math.h>
 
 #include "cods_scheduler.h"
-#include "cods_def.h"
+#include "cods_internal.h"
 #include "mpi.h"
 
 static struct cods_scheduler *sched = NULL; 

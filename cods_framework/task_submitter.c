@@ -93,7 +93,7 @@ int partition_task_executors(
     free(pool_info);
 }
 
-void epsi_coupling_workflow_driver(uint32_t wid, MPI_Comm comm)
+void epsi_coupling_workflow_driver(MPI_Comm comm)
 {
     int num_coupling_step = 5;
     // set task descriptors
@@ -105,17 +105,17 @@ void epsi_coupling_workflow_driver(uint32_t wid, MPI_Comm comm)
     for (i = 0; i < num_coupling_step; i++) {
         xgc1_task.tid += 2;
         cods_exec_task(&xgc1_task);
-        cods_wait_task_completion(&xgc1_task);
+        cods_wait_task_completion(xgc1_task.tid);
 
         xgca_task.tid += 2;
         cods_exec_task(&xgca_task);
-        cods_wait_task_completion(&xgca_task);
+        cods_wait_task_completion(xgca_task.tid);
     }  
 
     uloga("%s: finish workflow execution\n", __func__);
 }
 
-void dns_les_workflow_driver(uint32_t wid, MPI_Comm comm)
+void dns_les_workflow_driver(MPI_Comm comm)
 {
     uint32_t dns_tid = 1, les_tid = 2;
     // set task descriptors
@@ -126,13 +126,13 @@ void dns_les_workflow_driver(uint32_t wid, MPI_Comm comm)
     cods_exec_task(&dns_task);
     cods_exec_task(&les_task);
    
-    cods_wait_task_completion(&dns_task); 
-    cods_wait_task_completion(&les_task); 
+    cods_wait_task_completion(dns_task.tid); 
+    cods_wait_task_completion(les_task.tid); 
 
     uloga("%s: finish workflow execution\n", __func__);
 }
 
-void s3d_analysis_workflow_driver(uint32_t wid, MPI_Comm comm)
+void s3d_analysis_workflow_driver(MPI_Comm comm)
 {
     // set task descriptor
     struct task_descriptor s3d_task;
@@ -140,7 +140,7 @@ void s3d_analysis_workflow_driver(uint32_t wid, MPI_Comm comm)
     s3d_task.location_hint = simulation_executor;
 
     cods_exec_task(&s3d_task);
-    cods_wait_task_completion(&s3d_task);
+    cods_wait_task_completion(s3d_task.tid);
 
     uloga("%s: finish workflow execution\n", __func__);
 }
@@ -188,13 +188,13 @@ int main(int argc, char **argv)
 
     switch (example_workflow_id) {
     case EPSI_WORKFLOW_ID:
-        epsi_coupling_workflow_driver(example_workflow_id, comm);
+        epsi_coupling_workflow_driver(comm);
         break;
     case DNS_LES_WORKFLOW_ID:
-        dns_les_workflow_driver(example_workflow_id, comm);
+        dns_les_workflow_driver(comm);
         break;
     case S3D_WORKFLOW_ID:
-        s3d_analysis_workflow_driver(example_workflow_id, comm);
+        s3d_analysis_workflow_driver(comm);
         break;
     default:
         uloga("ERROR invalid workflow_id %u\n", example_workflow_id);

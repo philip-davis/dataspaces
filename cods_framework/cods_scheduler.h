@@ -12,7 +12,7 @@ extern "C" {
 #include "dataspaces.h"
 #include "dc_gspace.h"
 
-#include "cods_def.h"
+#include "cods_internal.h"
 
 enum bucket_status {
     bk_none = 0, // not ready for task execution 

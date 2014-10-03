@@ -7,7 +7,6 @@ extern "C" {
 
 #include <stdint.h>
 
-#include "cods_partition.h"
 #include "cods_def.h"
 
 #include "mpi.h"
@@ -47,10 +46,10 @@ int cods_set_task_finished(struct cods_task *t);
 int cods_exec_task(struct task_descriptor *task_desc);
 
 // Wait for the completion of submitted task.
-int cods_wait_task_completion(struct task_descriptor *task_desc);
+int cods_wait_task_completion(uint32_t tid);
 
 // Check the execution status of submitted task.
-int cods_get_task_status(struct task_descriptor *task_desc);
+int cods_get_task_status(uint32_t tid);
 
 // Retrieve task executor information for a resource pool.
 struct executor_pool_info* cods_get_executor_pool_info(int pool_id);

@@ -22,7 +22,7 @@ CFLAGS= -g ${UGNI_CFLAGS} ${PMI_CLFASG} -DHAVE_UGNI -DDS_HAVE_DIMES -DDS_HAVE_CO
 
 SRC1 =  cods_api.c \
 		cods_strutil.c \
-		cods_def.c \
+		cods_internal.c \
 		cods_scheduler.c 
 
 OBJ1 = $(SRC1:.c=.o)
