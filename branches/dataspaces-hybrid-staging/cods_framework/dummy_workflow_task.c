@@ -557,7 +557,6 @@ int dummy_s3d_task(struct cods_task *t,
     // sleep for 1 second
     unsigned int seconds = 3;
     int ts;
-    uint32_t wid = S3D_WORKFLOW_ID;
     uint32_t tid = 2;
     for (ts = 1; ts <= s3d_num_ts; ts++) {
         if (comm_rank == 0) {
@@ -585,10 +584,10 @@ int dummy_s3d_task(struct cods_task *t,
             cods_exec_task(&task2);
             cods_exec_task(&task3);
             cods_exec_task(&task4);
-            cods_wait_task_completion(&task1);
-            cods_wait_task_completion(&task2);
-            cods_wait_task_completion(&task3);
-            cods_wait_task_completion(&task4);
+            cods_wait_task_completion(task1.tid);
+            cods_wait_task_completion(task2.tid);
+            cods_wait_task_completion(task3.tid);
+            cods_wait_task_completion(task4.tid);
         }
         MPI_Barrier(comm->comm);
     }

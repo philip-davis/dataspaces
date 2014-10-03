@@ -33,7 +33,7 @@
 #include "unistd.h"
 #include "mpi.h"
 
-#include "cods_def.h"
+#include "cods_internal.h"
 #include "cods_scheduler.h"
 
 #include "common.h"

@@ -1,5 +1,5 @@
 #include "cods_api.h"
-#include "cods_def.h"
+#include "cods_internal.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,6 +9,7 @@
 #include "dc_gspace.h"
 #include "ss_data.h"
 #include "timer.h"
+
 
 static struct dcg_space *dcg;
 static struct timer timer;
@@ -584,13 +585,13 @@ int cods_exec_task(struct task_descriptor *task_desc)
     ERROR_TRACE();
 }
 
-int cods_wait_task_completion(struct task_descriptor *task_desc)
+int cods_wait_task_completion(uint32_t tid)
 {
     int err = -ENOMEM;
-    struct task_info *t = lookup_submitted_task(task_desc->tid);
+    struct task_info *t = lookup_submitted_task(tid);
     if (!t) {
         uloga("ERROR %s: failed to find submitted task tid= %u\n",
-            __func__,  task_desc->tid);
+            __func__,  tid);
         return err;
     }
 
@@ -608,13 +609,13 @@ int cods_wait_task_completion(struct task_descriptor *task_desc)
     ERROR_TRACE();
 }
 
-int cods_get_task_status(struct task_descriptor *task_desc)
+int cods_get_task_status(uint32_t tid)
 {
     int err = -ENOMEM;
-    struct task_info *t = lookup_submitted_task(task_desc->tid);
+    struct task_info *t = lookup_submitted_task(tid);
     if (!t) {
         uloga("ERROR %s: failed to find submitted task tid= %u\n",
-            __func__, task_desc->tid);
+            __func__, tid);
         return err;
     }
 

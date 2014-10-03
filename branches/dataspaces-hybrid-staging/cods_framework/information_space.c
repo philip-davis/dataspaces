@@ -33,7 +33,7 @@
 #include "unistd.h"
 #include "mpi.h"
 
-#include "cods_def.h"
+#include "cods_internal.h"
 
 #include "dart.h"
 #include "dimes_server.h"
