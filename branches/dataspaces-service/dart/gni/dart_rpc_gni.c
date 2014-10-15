@@ -2768,28 +2768,16 @@ struct node_id *rpc_server_find(struct rpc_server *rpc_s, int nodeid)
 }
 */
 
-
-#ifdef DS_HAVE_DIMES_SHMEM
 uint32_t rpc_server_get_nid(struct rpc_server *rpc_s)
 {
     return rpc_s->ptlmap.nid;
 }
-
 
 void rpc_server_find_local_peers(struct rpc_server *rpc_s,
     struct node_id **peer_tab, int *num_local_peer, int peer_tab_size)
 {
     // find all peers (include current peer itself) that reside on the
     // same compute node as current peer
-/*
-    int j = 0;
-    struct node_id *peer;
-    list_for_each_entry(peer, &rpc_s->peer_list, struct node_id, peer_entry) {
-        if (rpc_s->ptlmap.nid == peer->ptlmap.nid) {
-            peer_tab[j++] = peer;
-        }
-    }
-*/
 	int i;
 	int j=0;
     for(i=0; i < rpc_s->num_rpc_per_buff; i++) {
@@ -2800,7 +2788,6 @@ void rpc_server_find_local_peers(struct rpc_server *rpc_s,
 
     *num_local_peer = j;
 }
-#endif
 
 // for debug:
 void rpc_smsg_check(struct rpc_server *rpc_s){
