@@ -535,10 +535,8 @@ struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *pe
 void rpc_print_connection_err(struct rpc_server *rpc_s, struct node_id *peer, struct rdma_cm_event event);
 
 struct node_id *rpc_server_find(struct rpc_server *rpc_s, int nodeid);
-#ifdef DS_HAVE_DIMES_SHMEM
 void rpc_server_find_local_peers(struct rpc_server *rpc_s,
     struct node_id **peer_tab, int *num_local_peer, int peer_tab_size);
 uint32_t rpc_server_get_nid(struct rpc_server *rpc_s);
-#endif
 
 #endif
