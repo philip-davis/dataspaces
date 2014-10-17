@@ -146,6 +146,14 @@ int dspaces_put (const char *var_name,
     return common_dspaces_put(var_name, ver, size, ndim, lb, ub, data);
 }
 
+int dspaces_put_local (const char *var_name,
+        unsigned int ver, int size,
+        int ndim, uint64_t *lb, uint64_t *ub,
+        void *data)
+{
+    return common_dspaces_put_local(var_name, ver, size, ndim, lb, ub, data);
+}
+
 int dspaces_get (const char *var_name,
         unsigned int ver, int size,
         int ndim, uint64_t *lb, uint64_t *ub,

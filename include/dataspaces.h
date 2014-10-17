@@ -268,6 +268,11 @@ int dspaces_put_sync(void);
  */
 int dspaces_get_num_space_server(void);
 
+int dspaces_put_local (const char *var_name,
+        unsigned int ver, int size,
+        int ndim, uint64_t *lb, uint64_t *ub, 
+        void *data); 
+
 #ifdef __cplusplus
 }
 #endif

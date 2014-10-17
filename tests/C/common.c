@@ -92,7 +92,9 @@ int parse_args(int argc, char** argv, enum transport_type *type, int *npapp,
 	*type = USE_DSPACES;
 	if(0 == strcmp(argv[1], "DIMES")){
 		*type = USE_DIMES;
-	}
+	} else if (0 == strcmp(argv[1], "DATASPACES_HYBRID")) {
+        *type = USE_DSPACES_HYBRID;
+    }
 	*npapp = atoi(argv[2]);
 	*dims = atoi(argv[3]);
 	count = 3;
@@ -173,7 +175,10 @@ int common_put(const char *var_name,
 	if ( type == USE_DSPACES ) {
 		return dspaces_put(var_name, ver, size,
                         ndim,lb, ub,data);
-	} else if (type == USE_DIMES) {
+    } else if (type == USE_DSPACES_HYBRID) {
+		return dspaces_put_local(var_name, ver, size,
+                        ndim,lb, ub,data);
+    } else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
 		return dimes_put(var_name, ver, size, 
 			ndim, lb, ub, data);
@@ -191,7 +196,7 @@ int common_get(const char *var_name,
 	uint64_t *lb, uint64_t *ub,
 	void *data, enum transport_type type)
 {
-	if ( type == USE_DSPACES ) {
+	if ( type == USE_DSPACES || type == USE_DSPACES_HYBRID) {
 		return dspaces_get(var_name, ver, size,
                         ndim,lb, ub,data);
 	} else if (type == USE_DIMES) {
@@ -207,7 +212,7 @@ int common_get(const char *var_name,
 }
 
 int common_put_sync(enum transport_type type) {
-        if (type == USE_DSPACES) {
+        if (type == USE_DSPACES || type == USE_DSPACES_HYBRID) {
                 return dspaces_put_sync();
         } else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
@@ -412,6 +417,8 @@ int common_get_transport_type_str(enum transport_type type, char* str)
         sprintf(str, "DATASPACES");
     } else if (type == USE_DIMES) {
         sprintf(str, "DIMES");
+    } else if (type == USE_DSPACES_HYBRID) {
+        sprintf(str, "DATASPACES_HYBRID");
     } else sprintf(str, "UNKNOWN");
 
     return 0;

@@ -376,8 +376,93 @@ int common_dspaces_put_with_server_id(const char *var_name,
 
         // set global dimension
         set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
+                             &od->gdim);
+        // Do not update dht at the server side.
+        // Application needs to explicitly use dspaces_get_with_server_id() to fetch the data. 
+        unsigned int no_dht_update = 1;
+        err = dcg_obj_put_with_server_id(od, server_id, 0);
+        if (err < 0) {
+            obj_data_free(od);
+            uloga("'%s()': failed with %d, can not put data object.\n", 
+                __func__, err);
+            return err;
+        }
+        sync_op_id = err;
+
+        return 0;
+}
+
+#define MAX_NUM_PEER_PER_NODE 64
+int common_dspaces_put_local(const char *var_name, 
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        void *data)
+{
+        if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) {
+            return -EINVAL;
+        }
+
+        struct obj_descriptor odsc = {
+                .version = ver, .owner = -1, 
+                .st = st,
+                .size = size,
+                .bb = {.num_dims = ndim,}
+        };
+
+        memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+        memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+
+        memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
+        memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
+
+        struct obj_data *od;
+        int err = -ENOMEM;
+
+        strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
+        odsc.name[sizeof(odsc.name)-1] = '\0';
+
+        od = obj_data_alloc_with_data(&odsc, data);
+        if (!od) {
+            uloga("'%s()': failed, can not allocate data object.\n", 
+                __func__);
+                return -ENOMEM;
+        }
+
+        // set global dimension
+        set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
                              &od->gdim); 
-        err = dcg_obj_put_with_server_id(od, server_id);
+
+        // find dataspaces servers running on local compute node
+        struct node_id* peer_tab[MAX_NUM_PEER_PER_NODE];
+        int local_server_ids[MAX_NUM_PEER_PER_NODE];
+        int num_space_srv = 0, num_local_peer = 0, num_local_server = 0;
+        num_space_srv = dcg_get_num_space_peers(dcg);
+        rpc_server_find_local_peers(dcg->dc->rpc_s, peer_tab,
+            &num_local_peer, MAX_NUM_PEER_PER_NODE);
+        int i, j;
+        for (i = j = 0; i < num_local_peer; i++) {
+            if (peer_tab[i]->ptlmap.id < num_space_srv) {
+                local_server_ids[j++] = peer_tab[i]->ptlmap.id;
+                num_local_server++;        
+            }
+        }
+        //for (i = 0; i < num_local_server; i++) {
+        //    uloga("%s(): my_dart_id= %d num_local_server= %d local_server_dart_id= %d\n",
+        //        __func__, dcg->dc->rpc_s->ptlmap.id, num_local_server, local_server_ids[i]);
+        //} 
+
+        if (num_local_server == 0) {
+            err = dcg_obj_put(od);
+        } else {
+            // select on local server to put the data
+            int server_id = local_server_ids[dcg->dc->rpc_s->ptlmap.id % num_local_server];
+            // Update dht at the server side.
+            // Application can use dspaces_get() to fetch the data.
+            unsigned int no_dht_update = 0;
+            err = dcg_obj_put_with_server_id(od, server_id, no_dht_update);
+        }
         if (err < 0) {
             obj_data_free(od);
             uloga("'%s()': failed with %d, can not put data object.\n", 

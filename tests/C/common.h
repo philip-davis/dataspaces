@@ -44,7 +44,8 @@
 
 enum transport_type {
 	USE_DSPACES = 0,
-	USE_DIMES
+	USE_DIMES,
+    USE_DSPACES_HYBRID // Note: set this transport type only changes how common_put() works
 };
 
 // wrapper functions of DataSpaces/DIMES APIs
