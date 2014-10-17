@@ -67,6 +67,12 @@ int common_dspaces_put (const char *var_name,
         uint64_t *lb,
         uint64_t *ub,
         void *data);
+int common_dspaces_put (const char *var_name, 
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        void *data);
 int common_dspaces_put_sync(void);
 void common_dspaces_finalize (void);
 int common_dspaces_get_num_space_server(void);
