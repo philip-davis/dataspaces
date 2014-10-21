@@ -42,10 +42,7 @@
 extern int dummy_epsi_coupling_workflow(MPI_Comm comm);
 extern int dummy_s3d_analysis_workflow(MPI_Comm comm);
 extern int dummy_dns_les_workflow(MPI_Comm comm);
-
-/*
 extern int s3d_analysis_workflow(MPI_Comm comm);
-*/
 
 int main(int argc, char **argv)
 {
@@ -60,7 +57,7 @@ int main(int argc, char **argv)
     }
     example_workflow_id = atol(argv[1]);
 
-	appid = 1;
+	appid = 3;
 	MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_split(MPI_COMM_WORLD, appid, rank, &comm);
@@ -72,18 +69,18 @@ int main(int argc, char **argv)
 	err = cods_init(nproc, appid, cods_executor); 
 
     switch (example_workflow_id) {
-    case EPSI_WORKFLOW_ID:
+    case DUMMY_EPSI_WORKFLOW_ID:
         err = dummy_epsi_coupling_workflow(comm);
         break;
-    case DNS_LES_WORKFLOW_ID:
+    case DUMMY_DNS_LES_WORKFLOW_ID:
         err = dummy_dns_les_workflow(comm);
         break;
-    case S3D_WORKFLOW_ID:
+    case DUMMY_S3D_WORKFLOW_ID:
         err = dummy_s3d_analysis_workflow(comm);
         break;
-    //case S3D_ANALYSIS_WORKFLOW_ID:
-        //err = s3d_analysis_workflow(comm);
-        //break;
+    case S3D_ANALYSIS_WORKFLOW_ID:
+        err = s3d_analysis_workflow(comm);
+        break;
     default:
         err = 0;
         uloga("ERROR invalid workflow_id %u\n", example_workflow_id);

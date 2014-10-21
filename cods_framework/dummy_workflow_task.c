@@ -1035,7 +1035,6 @@ int dummy_sample_dag_workflow(MPI_Comm comm)
 }
 */
 
-/*
 int s3d_viz_render_task(struct cods_task *t,
     struct parallel_communicator *comm)
 {
@@ -1101,7 +1100,6 @@ int s3d_viz_render_task(struct cods_task *t,
     }
     return 0;
 }
-*/
 
 /*
 int s3d_fb_indexing_task(struct cods_task *t,
@@ -1282,7 +1280,6 @@ int dummy_dns_les_workflow(MPI_Comm comm)
     return 0;
 }
 
-/*
 int s3d_analysis_workflow(MPI_Comm comm)
 {
     int err;
@@ -1293,7 +1290,7 @@ int s3d_analysis_workflow(MPI_Comm comm)
     communicator_init(comm);
 
     register_task_function(1, s3d_viz_render_task);
-    register_task_function(2, s3d_fb_indexing_task);
+    //register_task_function(2, s3d_fb_indexing_task);
 
     int pool_id = 1;
     cods_register_executor(pool_id, mpi_nproc, comm);
@@ -1310,4 +1307,3 @@ int s3d_analysis_workflow(MPI_Comm comm)
 
     return 0;
 }
-*/
