@@ -64,7 +64,7 @@ int main(int argc, char **argv)
     int appid, rank, nproc;
     MPI_Comm comm;
 
-    appid = 3; // TODO: remove hard-coded value
+    appid = 1; // TODO: remove hard-coded value
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_split(MPI_COMM_WORLD, appid, rank, &comm);

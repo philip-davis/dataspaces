@@ -14,12 +14,12 @@ extern "C" {
 #include <rca_lib.h>
 #endif
 
-#define EPSI_WORKFLOW_ID 1
-#define S3D_WORKFLOW_ID 2
-#define DAG_WORKFLOW_ID 3
-#define DNS_LES_WORKFLOW_ID 4
+#define DUMMY_EPSI_WORKFLOW_ID 1
+#define DUMMY_S3D_WORKFLOW_ID 2
+#define DUMMY_DNS_LES_WORKFLOW_ID 3 
+#define S3D_ANALYSIS_WORKFLOW_ID 4
 #define STAGING_IO_WORKFLOW_ID 5
-#define S3D_ANALYSIS_WORKFLOW_ID 6
+#define DAG_WORKFLOW_ID 6
 
 #define NAME_MAXLEN 128
 #define MAX_VAR_NAME_LEN 32

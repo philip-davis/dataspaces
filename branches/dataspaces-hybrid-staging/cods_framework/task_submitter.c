@@ -187,13 +187,13 @@ int main(int argc, char **argv)
     }
 
     switch (example_workflow_id) {
-    case EPSI_WORKFLOW_ID:
+    case DUMMY_EPSI_WORKFLOW_ID:
         epsi_coupling_workflow_driver(comm);
         break;
-    case DNS_LES_WORKFLOW_ID:
+    case DUMMY_DNS_LES_WORKFLOW_ID:
         dns_les_workflow_driver(comm);
         break;
-    case S3D_WORKFLOW_ID:
+    case DUMMY_S3D_WORKFLOW_ID:
         s3d_analysis_workflow_driver(comm);
         break;
     default:
