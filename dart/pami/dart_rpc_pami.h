@@ -1,4 +1,3 @@
-
 #ifndef __DART_RPC_PAMI_H__
 #define __DART_RPC_PAMI_H__
 
@@ -17,6 +16,9 @@ extern "C" {
 
 #include "config.h"
 #include "list.h"
+
+#define RPC_CMD_PAD_BASE_SIZE 296 
+#define RPC_CMD_PAD_SIZE RPC_CMD_PAD_BASE_SIZE+(BBOX_MAX_NDIM-3)*24
 
 #define ALIGN_ADDR_QUAD_BYTES(a)                                \
         unsigned long _a = (unsigned long) (a);                 \
@@ -83,7 +85,7 @@ struct rpc_cmd {
         pami_memregion_t	mem_region; //PAMI memory region created for remote node
         size_t			mem_size; //Size for created PAMI memory region
 
-        __u8            pad[280+(BBOX_MAX_NDIM-3)*24];// payload of the command
+        __u8            pad[RPC_CMD_PAD_SIZE];// payload of the command
 } __attribute__((__packed__));
 
 /*
