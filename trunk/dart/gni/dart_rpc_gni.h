@@ -56,6 +56,9 @@
 #include "config.h"
 #include "list.h"
 
+#define RPC_CMD_PAD_BASE_SIZE 296 
+#define RPC_CMD_PAD_SIZE RPC_CMD_PAD_BASE_SIZE+(BBOX_MAX_NDIM-3)*24
+
 #define ALIGN_ADDR_QUAD_BYTES(a)				\
 {								\
 	unsigned long _a = (unsigned long) (a);			\
@@ -220,7 +223,7 @@ struct rpc_cmd {
 	struct mdh_addr_t	mdh_addr;
 	__u32			id;
 	// payload of the command
-	__u8			pad[280+(BBOX_MAX_NDIM-3)*24]; // TODO: fix this
+	__u8			pad[RPC_CMD_PAD_SIZE];
 };
 
 struct node_id {
