@@ -1083,6 +1083,7 @@ int s3d_viz_render_task(struct cods_task *t,
     dspaces_unlock_on_read(lock_name, &comm->comm);
 
     // check data values
+/*
     uint64_t sp[BBOX_MAX_NDIM];
     uint64_t num_elem = 1;
     int i;
@@ -1091,17 +1092,17 @@ int s3d_viz_render_task(struct cods_task *t,
         num_elem *= sp[i];
     }
     compute_stats(var->name, data, (num_elem*var->elem_size)/sizeof(double), t->rank);
-    if (data) free(data);
+*/
 
+    if (data) free(data);
     MPI_Barrier(comm->comm);
     t2 = MPI_Wtime();
     if (comm_rank == 0) {
-        uloga("%s(): execution time %lf\n", __func__, t2-t1);
+        uloga("%s(): task tid= %d execution time %lf\n", __func__, t->tid, t2-t1);
     }
     return 0;
 }
 
-/*
 int s3d_fb_indexing_task(struct cods_task *t,
     struct parallel_communicator *comm)
 {
@@ -1110,7 +1111,7 @@ int s3d_fb_indexing_task(struct cods_task *t,
     int comm_size, comm_rank;
 
     t1 = MPI_Wtime();
-    read_data_time = t1;
+    read_data_time = MPI_Wtime();
     MPI_Barrier(comm->comm);
     MPI_Comm_size(comm->comm, &comm_size);
     MPI_Comm_rank(comm->comm, &comm_rank);
@@ -1143,19 +1144,18 @@ int s3d_fb_indexing_task(struct cods_task *t,
     set_bbox(t, var, lb, ub);
 
     dspaces_lock_on_read(lock_name, &comm->comm);
-    // log_read_var(t->rank, var->name, ndim, elem_size, version,
-    //        lb, ub, gdim); 
+    log_read_var(t->rank, var->name, ndim, elem_size, version,
+            lb, ub, gdim); 
     dimes_define_gdim(var->name, ndim, gdim);
     err = dimes_get(var->name, version, elem_size, ndim, lb, ub, data);
     if (err < 0) {
         uloga("ERROR %s: dimes_get() failed\n", __func__);
     }
     dspaces_unlock_on_read(lock_name, &comm->comm);
-    t2 = MPI_Wtime();
-    read_data_time = (t2-read_data_time);
-    build_index_time = t2;
+    read_data_time = MPI_Wtime()-read_data_time;
 
     // check data values
+/*
     uint64_t sp[BBOX_MAX_NDIM];
     uint64_t num_elem = 1;
     int i;
@@ -1163,9 +1163,12 @@ int s3d_fb_indexing_task(struct cods_task *t,
     for (i = 0; i < var->gdim.ndim; i++) {
         num_elem *= sp[i];
     }
-    //compute_stats(var->name, data, (num_elem*var->elem_size)/sizeof(double), t->rank);
+    compute_stats(var->name, data, (num_elem*var->elem_size)/sizeof(double), t->rank);
+*/
 
     // build fb indexing
+    build_index_time = MPI_Wtime();
+/*
     void *cas;
     const char *indopt = "<binning start=0 end=1000 nbins=100 scale=simple/>";
     char *col_name = "var";
@@ -1176,7 +1179,8 @@ int s3d_fb_indexing_task(struct cods_task *t,
     if (cas == 0) {
         printf("%s failed\n", __func__);
     }
-    build_index_time = (MPI_Wtime()-build_index_time);    
+*/
+    build_index_time = MPI_Wtime()-build_index_time;    
 
     if (data) free(data);
     MPI_Barrier(comm->comm);
@@ -1191,7 +1195,6 @@ int s3d_fb_indexing_task(struct cods_task *t,
     }
     return 0;
 }
-*/
 
 int dummy_epsi_coupling_workflow(MPI_Comm comm)
 {
@@ -1290,7 +1293,7 @@ int s3d_analysis_workflow(MPI_Comm comm)
     communicator_init(comm);
 
     register_task_function(1, s3d_viz_render_task);
-    //register_task_function(2, s3d_fb_indexing_task);
+    register_task_function(2, s3d_fb_indexing_task);
 
     int pool_id = 1;
     cods_register_executor(pool_id, mpi_nproc, comm);
