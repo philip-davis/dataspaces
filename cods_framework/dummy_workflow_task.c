@@ -12,8 +12,10 @@
 */
 
 // Forward declaration
-static void log_write_var(int rank, const char *var_name, int ndim, int elem_size, int version, uint64_t *lb, uint64_t *ub, uint64_t *gdim);
-static void log_read_var(int rank, const char *var_name, int ndim, int elem_size, int version, uint64_t *lb, uint64_t *ub, uint64_t *gdim);
+static void log_write_var(int rank, const char *var_name, int ndim,
+    int elem_size, int version, uint64_t *lb, uint64_t *ub, uint64_t *gdim);
+static void log_read_var(int rank, const char *var_name, int ndim,
+    int elem_size, int version, uint64_t *lb, uint64_t *ub, uint64_t *gdim);
 
 struct viz_task_info {
     int is_viz_init;
@@ -424,31 +426,6 @@ static void log_read_var(int rank, const char *var_name, int ndim, int elem_size
         version, lb_str, ub_str, gdim_str);
 }
 
-int dummy_dag_task(struct cods_task *t, struct parallel_communicator *comm)
-{
-    int comm_size, comm_rank;
-    MPI_Barrier(comm->comm);
-    MPI_Comm_size(comm->comm, &comm_size);
-    MPI_Comm_rank(comm->comm, &comm_rank);
-
-    // Print input variable information
-    if (t->rank == 0) {
-        print_task_info(t);
-    }
-
-    unsigned int seconds = t->appid; // TODO: fixme
-    sleep(seconds);
-
-    MPI_Barrier(comm->comm);
-
-    if (t->rank == 0) {
-        char var_name[MAX_VAR_NAME_LEN];
-        sprintf(var_name, "task%d_output_var", t->appid);
-    }
-        
-    return 0;
-}
-
 static int sml_mstep = 10;
 int dummy_xgc1_task(struct cods_task *t, struct parallel_communicator *comm)
 {
@@ -568,10 +545,10 @@ int dummy_s3d_task(struct cods_task *t,
             // submit analyis operation
             // create task descriptors
             struct task_descriptor task1, task2, task3, task4;
-            init_task_descriptor(&task1, tid++, "s3d_viz.conf");
-            init_task_descriptor(&task2, tid++, "s3d_stat.conf");
-            init_task_descriptor(&task3, tid++, "s3d_topo.conf");
-            init_task_descriptor(&task4, tid++, "s3d_indexing.conf");
+            init_task_descriptor(&task1, tid++, "dummy_s3d_viz.conf");
+            init_task_descriptor(&task2, tid++, "dummy_s3d_stat.conf");
+            init_task_descriptor(&task3, tid++, "dummy_s3d_topo.conf");
+            init_task_descriptor(&task4, tid++, "dummy_s3d_indexing.conf");
 
             // provide placement location hint
             task1.location_hint = intransit_executor; 
@@ -996,42 +973,6 @@ int task_fb_indexing(struct cods_task *t, struct parallel_communicator *comm)
 
     free(data);
     return 0;
-}
-*/
-
-/*
-int dummy_sample_dag_workflow(MPI_Comm comm)
-{
-    int err;
-    int mpi_rank, mpi_nproc;
-    MPI_Comm_size(comm, &mpi_nproc);
-    MPI_Comm_rank(comm, &mpi_rank);
-
-    communicator_init(comm);
-
-    int appid;
-    for (appid = 1; appid < MAX_NUM_TASKS; appid++) {
-        register_task_function(appid, dag_task);
-    }
-    int pool_id = 1;
-    cods_register_executor(pool_id, mpi_nproc, mpi_rank);
-    MPI_Barrier(comm);
-
-	struct cods_task t;
-	while (!cods_request_task(&t)) {
-		cods_put_sync_all();
-		err = exec_task_function(&t);	
-		if (err < 0) {
-			return err;
-		}
-	}
-
-    cods_put_sync_all();
-    communicator_free();
-
-	return 0;
- err_out:
-	return -1;
 }
 */
 
