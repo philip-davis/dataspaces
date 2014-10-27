@@ -1836,6 +1836,76 @@ err_out:
 	ERROR_TRACE();
 }
 
+#ifdef DS_HAVE_CODS
+static int dimes_obj_get_location(struct obj_data *od,
+                int *num_tab_entry, struct obj_descriptor **tab_pp)
+{
+    struct dht_entry *dht_nodes[dimes_c->dcg->ss_info.num_space_srv];
+    int i, err = -ENOMEM;
+    int num_dht_nodes;
+
+    // Create query transaction entry.
+    struct query_tran_entry_d *qte = qte_alloc_d(od);
+    if (!qte)
+        goto err_out;
+    qt_add_d(&dimes_c->qt, qte);
+
+    // Get DHT nodes
+    struct sspace *ssd = lookup_sspace_dimes(dimes_c, od->obj_desc.name,
+                                &od->gdim);
+    num_dht_nodes = ssd_hash(ssd, &od->obj_desc.bb, dht_nodes);
+    if (num_dht_nodes <= 0) {
+        uloga("%s(): ERROR ssd_hash() return %d but value should be > 0\n",
+            __func__, num_dht_nodes);
+        goto err_qt_free;
+    }
+
+    for ( i=0; i<num_dht_nodes && i<qte->qh->qh_size; i++ ) {
+        qte->qh->qh_peerid_tab[i] = dht_nodes[i]->rank;
+    }
+    qte->qh->qh_peerid_tab[i] = -1;
+    qte->qh->qh_num_peer = num_dht_nodes;
+    qte->f_dht_peer_recv = 1;
+
+    // Locate the data 
+    err = dimes_locate_data(qte);
+    if ( err < 0 ) {
+        if (err == -EAGAIN)
+            goto out_no_data;
+        else goto err_qt_free;
+    }
+    DIMES_WAIT_COMPLETION(qte->f_locate_data_complete == 1);
+
+    // Copy data location information into tab_pp
+    size_t tab_size = sizeof(struct obj_descriptor)*qte->num_fetch; 
+    struct obj_descriptor *tab = (struct obj_descriptor*)malloc(tab_size);
+    if (!tab) {
+        uloga("%s(): ERROR failed to allocate tab memory buffer.\n", __func__);
+        goto out_no_data;
+    }
+    *tab_pp = tab;
+    *num_tab_entry = qte->num_fetch;
+
+    i = 0;
+    struct fetch_entry *fetch;
+    list_for_each_entry(fetch, &qte->fetch_list, struct fetch_entry, entry)
+    {
+        tab[i++] = fetch->src_odsc;
+    }
+
+out_no_data:
+    qt_free_obj_data_d(qte);
+    qt_remove_d(&dimes_c->qt, qte);
+    qte_free_d(qte);
+    return err;
+err_qt_free:
+    qt_remove_d(&dimes_c->qt, qte);
+    qte_free_d(qte);
+err_out:
+    ERROR_TRACE();
+}
+#endif
+
 static int dcgrpc_dimes_get_ack(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
 	struct hdr_dimes_get_ack *oh = (struct hdr_dimes_get_ack *)cmd->pad;
@@ -2218,6 +2288,54 @@ int dimes_client_put_sync_group(const char *group_name, int step)
 
     return 0;
 }
+
+#ifdef DS_HAVE_CODS
+int dimes_client_get_data_location(const char *var_name,
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        int *num_tab_entry,
+        struct obj_descriptor **tab_pp)
+{
+    struct obj_descriptor odsc = {
+            .version = ver, .owner = -1,
+            .st = st,
+            .size = size,
+            .bb = {.num_dims = ndim,}
+    };
+    memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+    memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+
+    memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
+    memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
+
+    struct obj_data *od;
+    int err = -ENOMEM;
+
+    strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
+    odsc.name[sizeof(odsc.name)-1] = '\0';
+
+    od = obj_data_alloc_no_data(&odsc, NULL);
+    if (!od) {
+        uloga("%s(): ERROR obj_data_alloc_no_data() failed.\n", __func__);
+        err = -ENOMEM;
+        goto err_out;
+    }
+
+    set_global_dimension(&dimes_c->gdim_list, var_name,
+            &dimes_c->dcg->default_gdim, &od->gdim);
+    err = dimes_obj_get_location(od, num_tab_entry, tab_pp);
+    obj_data_free(od);
+    if (err < 0 && err != -EAGAIN) {
+        goto err_out;
+    }
+
+    return err;
+err_out:
+    ERROR_TRACE();
+}
+#endif
 
 #ifdef TIMING_PERF
 int common_dimes_set_log_header(const char *str)

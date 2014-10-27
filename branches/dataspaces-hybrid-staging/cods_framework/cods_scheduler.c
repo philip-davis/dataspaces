@@ -696,6 +696,42 @@ static int process_pending_msg(struct cods_scheduler *scheduler)
     return 0;
 }
 
+static int test_get_data_location(struct runnable_task *rtask)
+{
+    uint64_t lb[BBOX_MAX_NDIM], ub[BBOX_MAX_NDIM], gdim[BBOX_MAX_NDIM];
+    struct task_entry *t = rtask->task_ref;
+    int i, j, k;
+
+    for (i = 0; i < t->num_vars; i++) {
+        if (t->vars[i].type == var_type_get) {
+            for (j = 0; j < t->vars[i].gdim.ndim; j++) {
+                gdim[j] = t->vars[i].gdim.sizes.c[j];
+                lb[j] = 0;
+                ub[j] = t->vars[i].gdim.sizes.c[j]-1;
+            }
+
+            int num_tab_entry;
+            struct obj_descriptor *tab = NULL; 
+            dimes_define_gdim(t->vars[i].name, t->vars[i].gdim.ndim, gdim);
+            dimes_get_data_location(t->vars[i].name, 0, t->vars[i].elem_size,
+                t->vars[i].gdim.ndim, lb, ub, &num_tab_entry, &tab);
+   
+            // Debug print
+            for (k = 0; k < num_tab_entry; k++) {
+                printf("%s(): data obj name= %s owner= %d version= %d "
+                    "elem_size= %u bb= ({%llu, %llu, %llu}, {%llu, %llu, %llu})\n",
+                     __func__, tab[k].name, tab[k].owner, tab[k].version, tab[k].size,
+                    tab[k].bb.lb.c[0], tab[k].bb.lb.c[1], tab[k].bb.lb.c[2],
+                    tab[k].bb.ub.c[0], tab[k].bb.ub.c[1], tab[k].bb.ub.c[2]);
+            }  
+
+            if (tab) free(tab);
+        }
+    } 
+
+    return 0;
+}
+
 /*
 */
 static int process_runnable_task(struct cods_scheduler *scheduler)
