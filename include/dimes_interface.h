@@ -38,6 +38,10 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#if defined(DS_HAVE_DIMES) && defined(DS_HAVE_CODS)
+#include "list.h"
+#include "ss_data.h"
+#endif
 
 /** @file dimes_interface.h
  *  @brief DIMES data coupling APIs for performing RDMA-based memory-to-memory
@@ -183,6 +187,17 @@ int dimes_put_unset_group();
  */
 int dimes_put_sync_group(const char *group_name, int version);
 
+
+#ifdef DS_HAVE_CODS
+int dimes_get_data_location(const char *var_name,
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        // OUT parameters
+        int *num_tab_entry,
+        struct obj_descriptor **tab_pp);
+#endif
 
 #ifdef __cplusplus
 }

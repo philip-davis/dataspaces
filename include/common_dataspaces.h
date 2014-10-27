@@ -41,6 +41,10 @@
 
 #include <stdint.h>
 #include "config.h"
+#if defined(DS_HAVE_DIMES) && defined(DS_HAVE_CODS)
+#include "list.h"
+#include "ss_data.h"
+#endif
 
 int common_dspaces_init(int num_peers, int appid, void *comm, const char *parameters);
 int common_dspaces_rank(void);
@@ -85,6 +89,18 @@ int common_dimes_put_sync_all(void);
 int common_dimes_put_set_group(const char *group_name, int step);
 int common_dimes_put_unset_group();
 int common_dimes_put_sync_group(const char *group_name, int step);
+
+#ifdef DS_HAVE_CODS
+int common_dimes_get_data_location(const char *var_name,
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        // OUT parameters
+        int *num_tab_entry,
+        struct obj_descriptor **tab_pp);       
+#endif
+
 #endif
 
 void common_dspaces_set_mpi_rank(int rank);

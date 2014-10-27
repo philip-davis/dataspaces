@@ -78,6 +78,17 @@ int dimes_client_put_set_group(const char *group_name, int step);
 int dimes_client_put_unset_group();
 int dimes_client_put_sync_group(const char *group_name, int step);
 
+#ifdef DS_HAVE_CODS
+int dimes_client_get_data_location(const char *var_name,
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        // OUT parameters
+        int *num_tab_entry,
+        struct obj_descriptor **tab_pp);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

@@ -587,6 +587,25 @@ int common_dimes_put_sync_group(const char *group_name, int step)
     if (!is_dimes_lib_init()) return -EINVAL;
     return dimes_client_put_sync_group(group_name, step);
 }
+
+#ifdef DS_HAVE_CODS
+int common_dimes_get_data_location(const char *var_name,
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        int *num_tab_entry,
+        struct obj_descriptor **tab_pp)
+{
+    if (!is_dimes_lib_init() || !is_ndim_within_bound(ndim)) {
+        return -EINVAL;
+    }
+
+    return dimes_client_get_data_location(var_name, ver, size,
+                ndim, lb, ub, num_tab_entry, tab_pp);
+}
+#endif
+
 #endif
 
 void common_dspaces_set_mpi_rank(int rank)
