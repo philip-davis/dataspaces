@@ -97,9 +97,10 @@ void epsi_coupling_workflow_driver(MPI_Comm comm)
 {
     int num_coupling_step = 5;
     // set task descriptors
+    uint32_t xgc1_tid = 1, xgca_tid = 2;
     struct task_descriptor xgc1_task, xgca_task;
-    init_task_descriptor(&xgc1_task, 1, "dummy_xgc1.conf");
-    init_task_descriptor(&xgca_task, 2, "dummy_xgca.conf");
+    init_task_descriptor(&xgc1_task, xgc1_tid, "dummy_xgc1.conf");
+    init_task_descriptor(&xgca_task, xgca_tid, "dummy_xgca.conf");
 
     int i;
     for (i = 0; i < num_coupling_step; i++) {
@@ -117,8 +118,8 @@ void epsi_coupling_workflow_driver(MPI_Comm comm)
 
 void dns_les_workflow_driver(MPI_Comm comm)
 {
-    uint32_t dns_tid = 1, les_tid = 2;
     // set task descriptors
+    uint32_t dns_tid = 1, les_tid = 2;
     struct task_descriptor dns_task, les_task;
     init_task_descriptor(&dns_task, dns_tid, "dummy_dns.conf");
     init_task_descriptor(&les_task, les_tid, "dummy_les.conf");
@@ -135,12 +136,27 @@ void dns_les_workflow_driver(MPI_Comm comm)
 void s3d_analysis_workflow_driver(MPI_Comm comm)
 {
     // set task descriptor
+    uint32_t s3d_tid = 1;
     struct task_descriptor s3d_task;
-    init_task_descriptor(&s3d_task, 1, "dummy_s3d.conf");
+    init_task_descriptor(&s3d_task, s3d_tid, "dummy_s3d.conf");
     s3d_task.location_hint = simulation_executor;
 
     cods_exec_task(&s3d_task);
     cods_wait_task_completion(s3d_task.tid);
+
+    uloga("%s: finish workflow execution\n", __func__);
+}
+
+void data_hint_example_workflow_driver(MPI_Comm comm)
+{
+    // set task descriptor
+    uint32_t sim_tid = 1;
+    struct task_descriptor simulation_task;
+    init_task_descriptor(&simulation_task, sim_tid, "dummy_simulation.conf");
+    simulation_task.location_hint = simulation_executor;
+
+    cods_exec_task(&simulation_task);
+    cods_wait_task_completion(simulation_task.tid);
 
     uloga("%s: finish workflow execution\n", __func__);
 }
@@ -195,6 +211,9 @@ int main(int argc, char **argv)
         break;
     case DUMMY_S3D_WORKFLOW_ID:
         s3d_analysis_workflow_driver(comm);
+        break;
+    case DUMMY_DATA_HINT_EXAMPLE_WORKFLOW_ID:
+        data_hint_example_workflow_driver(comm);
         break;
     default:
         uloga("ERROR invalid workflow_id %u\n", example_workflow_id);
