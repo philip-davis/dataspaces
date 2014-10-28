@@ -79,18 +79,14 @@ static struct parallel_communicator* create_parallel_comm(struct cods_task *t)
 }
 
 static void free_parallel_comm(struct parallel_communicator *comm) {
-    if (comm) {
-        free(comm);
-    }
+    if (comm) free(comm);
 }
 
 static void task_done(struct cods_task *t, struct parallel_communicator *comm)
 {
     if (comm) {
         MPI_Barrier(comm->comm);
-        if (t->rank == 0) { 
-            cods_set_task_finished(t);
-        }
+        if (t->rank == 0) cods_set_task_finished(t);
     } else {
         uloga("%s(): error comm == NULL\n", __func__);
     }
@@ -108,15 +104,13 @@ static int exec_task_function(struct cods_task *t)
 	int i, err;
 	for (i = 0; i < num_tasks; i++) {
 		if (t->appid == ptasks[i].appid) {
-            //double t1, t2;
-            //t1 = MPI_Wtime();
+            // create MPI communicator for task execution.
             struct parallel_communicator *comm = create_parallel_comm(t);	
+            // execute task function.
             err = (ptasks[i].func_ptr)(t, comm);
+            // clean-up for the task execution.
             task_done(t, comm); 
             free_parallel_comm(comm); 
-            //t2 = MPI_Wtime();
-            //uloga("%s(): task appid= %d execution time %lf\n", __func__, t->appid, t2-t1);
-
             if (t->bk_mpi_rank_tab) free(t->bk_mpi_rank_tab);
             if (t->vars) free(t->vars);
             return err;
@@ -341,10 +335,7 @@ static int write_data(struct cods_task *t, struct cods_var *var, int version, st
     set_bbox(t, var, lb, ub);
 
     // Write data starts ...
-    if (use_lock) {
-        dspaces_lock_on_write(lock_name, &comm->comm);
-    }
-
+    if (use_lock) dspaces_lock_on_write(lock_name, &comm->comm);
     if (use_group) {
         dimes_put_sync_group(group_name, version);
         dimes_put_set_group(group_name, version);
@@ -362,13 +353,8 @@ static int write_data(struct cods_task *t, struct cods_var *var, int version, st
         goto err_out;
     }
 
-    if (use_group) {
-        dimes_put_unset_group(group_name, version);
-    }
-
-    if (use_lock) {
-        dspaces_unlock_on_write(lock_name, &comm->comm);
-    }
+    if (use_group) dimes_put_unset_group(group_name, version);
+    if (use_lock) dspaces_unlock_on_write(lock_name, &comm->comm);
     // Write data ends ...
 
     if (data) free(data);
@@ -437,9 +423,7 @@ int dummy_xgc1_task(struct cods_task *t, struct parallel_communicator *comm)
     t1 = MPI_Wtime();
 
     // print variable information
-    if (t->rank == 0) {
-        print_task_info(t);
-    }
+    if (t->rank == 0) print_task_info(t);
     
     // read particle data
     if (comm_rank == 0) {
@@ -481,9 +465,7 @@ int dummy_xgca_task(struct cods_task *t, struct parallel_communicator *comm)
     t1 = MPI_Wtime();
 
     // print variable information
-    if (t->rank == 0) {
-        print_task_info(t);
-    }
+    if (t->rank == 0) print_task_info(t);
 
     // read particle data
     if (comm_rank == 0) {
@@ -527,11 +509,9 @@ int dummy_s3d_task(struct cods_task *t,
     t1 = MPI_Wtime();
 
     // print variable information
-    if (t->rank == 0) {
-        print_task_info(t);
-    }
+    if (t->rank == 0) print_task_info(t);
 
-    // sleep for 1 second
+    // sleep for "seconds"
     unsigned int seconds = 3;
     int ts;
     uint32_t tid = 2;
@@ -589,9 +569,7 @@ int dummy_s3d_viz_task(struct cods_task *t,
     t1 = MPI_Wtime();
 
     // print input variable information
-    if (t->rank == 0) {
-        print_task_info(t);
-    }
+    if (t->rank == 0) print_task_info(t);
 
     // sleep for 1 second
     unsigned int seconds = 1;
@@ -616,9 +594,7 @@ int dummy_s3d_stat_task(struct cods_task *t,
     t1 = MPI_Wtime();
 
     // print input variable information
-    if (t->rank == 0) {
-        print_task_info(t);
-    }
+    if (t->rank == 0) print_task_info(t);
 
     // sleep for 1 second
     unsigned int seconds = 1;
@@ -643,9 +619,7 @@ int dummy_s3d_topo_task(struct cods_task *t,
     t1 = MPI_Wtime();
 
     // print input variable information
-    if (t->rank == 0) {
-        print_task_info(t);
-    }
+    if (t->rank == 0) print_task_info(t);
 
     // sleep for 1 second
     unsigned int seconds = 1;
@@ -670,9 +644,7 @@ int dummy_s3d_indexing_task(struct cods_task *t,
     t1 = MPI_Wtime();
 
     // print input variable information
-    if (t->rank == 0) {
-        print_task_info(t);
-    }
+    if (t->rank == 0) print_task_info(t);
 
     // sleep for 1 second
     unsigned int seconds = 1;
@@ -699,9 +671,7 @@ int dummy_dns_task(struct cods_task *t,
     t1 = MPI_Wtime();
 
     // print input variable information
-    if (t->rank == 0) {
-        print_task_info(t);
-    }
+    if (t->rank == 0) print_task_info(t);
 
     // sleep for 1 second
     unsigned int seconds = 1;
@@ -744,9 +714,7 @@ int dummy_les_task(struct cods_task *t,
     t1 = MPI_Wtime();
 
     // print input variable information
-    if (t->rank == 0) {
-        print_task_info(t);
-    }
+    if (t->rank == 0) print_task_info(t);
 
     // sleep for 1 second
     unsigned int seconds = 1;
@@ -778,6 +746,7 @@ int dummy_les_task(struct cods_task *t,
     return 0;
 }
 
+/*
 #define RENDER_VAR 3
 float my_data_quantize(float value, int varname)
 {
@@ -812,6 +781,7 @@ float my_data_quantize(float value, int varname)
     }
     return v;
 }
+*/
 
 // TODO: this task routine is highly hard-coded...
 /*
@@ -987,9 +957,7 @@ int s3d_viz_render_task(struct cods_task *t,
     t1 = MPI_Wtime();
 
     // print input variable information
-    if (t->rank == 0) {
-        print_task_info(t);
-    }
+    if (t->rank == 0) print_task_info(t);
 
     // lookup input data var
     struct cods_var *var = lookup_task_var(t, "s3d_data_viz");
@@ -1058,9 +1026,7 @@ int s3d_fb_indexing_task(struct cods_task *t,
     MPI_Comm_rank(comm->comm, &comm_rank);
 
     // print input variable information
-    if (t->rank == 0) {
-        print_task_info(t);
-    }
+    if (t->rank == 0) print_task_info(t);
 
     // lookup input data var
     struct cods_var *var = lookup_task_var(t, "s3d_data_fb");
@@ -1137,7 +1103,114 @@ int s3d_fb_indexing_task(struct cods_task *t,
     return 0;
 }
 
-int dummy_epsi_coupling_workflow(MPI_Comm comm)
+static int simulation_num_ts = 50;
+int dummy_simulation_task(struct cods_task *t, struct parallel_communicator *comm)
+{
+    double t1, t2;
+    int comm_size, comm_rank;
+    MPI_Barrier(comm->comm);
+    MPI_Comm_size(comm->comm, &comm_size);
+    MPI_Comm_rank(comm->comm, &comm_rank); 
+    t1 = MPI_Wtime();
+
+    if (t->rank == 0) print_task_info(t);
+
+    unsigned int seconds = 1;
+    int ts;
+    uint32_t tid = 2; 
+    for (ts = 0; ts < simulation_num_ts; ts++) {
+        if (comm_rank == 0) uloga("%s(): ts %d\n", __func__, ts);
+        sleep(seconds);
+
+        // Write "array_data_var"
+        struct cods_var *var = lookup_task_var(t, "array_data_var");
+        if (var) {
+            int version = 0, use_lock = 1, use_group = 0;
+            write_data(t, var, version, comm, use_lock, use_group);
+        }
+        
+        // Launch analysis task
+        if (comm_rank == 0) {
+            struct task_descriptor analysis_task;
+            init_task_descriptor(&analysis_task, tid++, "dummy_analysis.conf");
+
+            // provide placement location hint
+            analysis_task.location_hint = insitu_colocated_executor;
+            // provide placement data hint
+            // analysis_task.data_hint 
+            // execute task and wait for completion
+            cods_exec_task(&analysis_task);
+            cods_wait_task_completion(analysis_task.tid);
+        }
+        MPI_Barrier(comm->comm);
+    }
+
+    MPI_Barrier(comm->comm);
+    t2 = MPI_Wtime();
+
+    if (t->rank == 0) {
+        uloga("%s(): execution time %lf\n", __func__, t2-t1);
+    }        
+    return 0;
+}
+
+int dummy_analysis_task(struct cods_task *t, struct parallel_communicator *comm)
+{
+    double read_data_time = 0;
+    int comm_size, comm_rank;
+    MPI_Barrier(comm->comm);
+    MPI_Comm_size(comm->comm, &comm_size);
+    MPI_Comm_rank(comm->comm, &comm_rank);
+
+    // print input variable information
+    if (t->rank == 0) print_task_info(t);
+
+    // lookup input data var
+    struct cods_var *var = lookup_task_var(t, "array_data_var");
+    if (!var) {
+        uloga("ERROR %s: failed to lookup task var 'array_data_var'\n", __func__);
+        return 0;
+    }
+
+    read_data_time = MPI_Wtime();
+    // read input data
+    int err;
+    uint64_t lb[BBOX_MAX_NDIM], ub[BBOX_MAX_NDIM], gdim[BBOX_MAX_NDIM];
+    double *data = NULL;
+    int version = 0;
+    int ndim = var->gdim.ndim;
+    size_t elem_size = var->elem_size;
+    char lock_name[256];
+    sprintf(lock_name, "%s_lock", var->name);
+
+    data = allocate_data(var);
+    set_ndim(var, &ndim);
+    set_gdim(var, gdim);
+    set_bbox(t, var, lb, ub);
+
+    dspaces_lock_on_read(lock_name, &comm->comm);
+    log_read_var(t->rank, var->name, ndim, elem_size, version,
+            lb, ub, gdim);
+    dimes_define_gdim(var->name, ndim, gdim);
+    err = dimes_get(var->name, version, elem_size, ndim, lb, ub, data);
+    if (err < 0) {
+        uloga("ERROR %s: dimes_get() failed\n", __func__);
+    }
+    dspaces_unlock_on_read(lock_name, &comm->comm);
+    read_data_time = MPI_Wtime()-read_data_time;    
+
+    if (data) free(data);
+    MPI_Barrier(comm->comm);
+    uloga("%s(): task tid= %u rank %d read_data_time %lf\n", __func__,
+        t->tid, comm_rank, read_data_time);
+
+    return 0;
+}
+
+/*
+    Main routine for task executor.
+*/
+int task_executor_run(MPI_Comm comm)
 {
     int err;
     int mpi_rank, mpi_nproc;
@@ -1145,9 +1218,6 @@ int dummy_epsi_coupling_workflow(MPI_Comm comm)
     MPI_Comm_rank(comm, &mpi_rank);
 
     communicator_init(comm);
-
-    register_task_function(1, dummy_xgc1_task);
-    register_task_function(2, dummy_xgca_task);
 
     int pool_id = 1;
     cods_register_executor(pool_id, mpi_nproc, comm);
@@ -1165,89 +1235,53 @@ int dummy_epsi_coupling_workflow(MPI_Comm comm)
     return 0;
 }
 
+/*
+    Task functions registration for example workflows.
+*/
+int dummy_epsi_coupling_workflow(MPI_Comm comm)
+{
+    register_task_function(1, dummy_xgc1_task);
+    register_task_function(2, dummy_xgca_task);
+
+    task_executor_run(comm);
+    return 0;
+}
+
 int dummy_s3d_analysis_workflow(MPI_Comm comm)
 {
-    int err;
-    int mpi_rank, mpi_nproc;
-    MPI_Comm_size(comm, &mpi_nproc);
-    MPI_Comm_rank(comm, &mpi_rank);
-
-    communicator_init(comm);
-
     register_task_function(1, dummy_s3d_task);
     register_task_function(2, dummy_s3d_viz_task);
     register_task_function(3, dummy_s3d_stat_task); 
     register_task_function(4, dummy_s3d_topo_task);
     register_task_function(5, dummy_s3d_indexing_task);
 
-    int pool_id = 1;
-    cods_register_executor(pool_id, mpi_nproc, comm);
-    MPI_Barrier(comm);
-
-    struct cods_task t;
-    while (!cods_request_task(&t)) {
-        err = exec_task_function(&t);
-        if (err < 0) {
-            return err;
-        }
-    }
-    communicator_free();
-
+    task_executor_run(comm);
     return 0;
 }
 
 int dummy_dns_les_workflow(MPI_Comm comm)
 {
-    int err;
-    int mpi_rank, mpi_nproc;
-    MPI_Comm_size(comm, &mpi_nproc);
-    MPI_Comm_rank(comm, &mpi_rank);
-
-    communicator_init(comm);
-
     register_task_function(1, dummy_dns_task);
     register_task_function(2, dummy_les_task);
 
-    int pool_id = 1;
-    cods_register_executor(pool_id, mpi_nproc, comm);
-    MPI_Barrier(comm);
+    task_executor_run(comm);
+    return 0;
+}
 
-    struct cods_task t;
-    while (!cods_request_task(&t)) {
-        err = exec_task_function(&t);
-        if (err < 0) {
-            return err;
-        }
-    }
-    communicator_free();
+int dummy_data_hint_example_workflow(MPI_Comm comm)
+{
+    register_task_function(1, dummy_simulation_task);
+    register_task_function(2, dummy_analysis_task);
 
+    task_executor_run(comm);
     return 0;
 }
 
 int s3d_analysis_workflow(MPI_Comm comm)
 {
-    int err;
-    int mpi_rank, mpi_nproc;
-    MPI_Comm_size(comm, &mpi_nproc);
-    MPI_Comm_rank(comm, &mpi_rank);
-
-    communicator_init(comm);
-
     register_task_function(1, s3d_viz_render_task);
     register_task_function(2, s3d_fb_indexing_task);
 
-    int pool_id = 1;
-    cods_register_executor(pool_id, mpi_nproc, comm);
-    MPI_Barrier(comm);
-
-    struct cods_task t;
-    while (!cods_request_task(&t)) {
-        err = exec_task_function(&t);
-        if (err < 0) {
-            return err;
-        }
-    }
-    communicator_free();
-
+    task_executor_run(comm);
     return 0;
 }
