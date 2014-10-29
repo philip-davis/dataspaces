@@ -131,7 +131,7 @@ static int announce_cp_completion_all(struct rpc_server *rpc_s, struct msg_buf *
 	pm = (struct ptlid_map *) msg->msg_data;
 	dc->peer_tab = rpc_s->peer_tab;
 	dc->cn_peers = dc_get_peer(dc, rpc_s->app_minid);
-	peer = rpc_s->peer_tab + (rpc_s->ptlmap.id % dc->num_sp);
+	peer = rpc_s->peer_tab;// + (rpc_s->ptlmap.id % dc->num_sp);
 
 	peer++;
 	pm++;
@@ -317,7 +317,6 @@ static void *dc_listen(void *client)
 //                              printf("Client %d: SYS connect request from %d\n",dc->rpc_s->ptlmap.id,peer->ptlmap.id);
 				con = &peer->sys_conn;
 			} else {
-//                                printf("Client %d: RPC connect request from %d\n",dc->rpc_s->ptlmap.id,peer->ptlmap.id);
 				con = &peer->rpc_conn;
 			}
 			build_context(event_copy.id->verbs, con);
