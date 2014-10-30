@@ -101,6 +101,7 @@ struct cods_var {
     size_t elem_size;
     struct global_dimension gdim;
     struct block_distribution dist_hint;    
+    struct bbox data_hint;
 };
 
 struct cods_task {
@@ -117,6 +118,7 @@ struct task_descriptor {
     uint32_t tid;
     char conf_file[PATH_MAXLEN];
     unsigned char location_hint;
+    struct bbox data_hint; //TODO: write data hint to information space
 };
 
 struct executor_descriptor {

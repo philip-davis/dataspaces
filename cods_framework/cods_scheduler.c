@@ -76,6 +76,12 @@ static struct task_entry* create_new_task(struct task_descriptor *task_desc, int
         goto err_out_free;
     }
 
+    // Set data hint for each variable
+    int i;
+    for (i = 0; i < task->num_vars; i++) {
+        task->vars[i].data_hint = task_desc->data_hint;
+    }    
+
     return task;
  err_out_free:
     free(task);
@@ -824,7 +830,6 @@ static int process_cods_reg_resource(struct pending_msg *p)
     if (bp->num_bucket == bp->bk_tab_size) {
         bk_pool_set_bucket_idle(bp);
         bk_pool_sort_bucket(bp);
-        print_bk_pool(bp);
     } 
 
     if (info_tab) free(info_tab);
@@ -867,6 +872,8 @@ static int callback_cods_submit_task(struct rpc_server *rpc_s, struct rpc_cmd *c
         return 0;
     }
 
+    uloga("sizeof(struct task_descriptor)= %u sizeof(struct bbox)= %u\n",
+            sizeof(struct task_descriptor), sizeof(struct bbox));
     task = create_new_task(task_desc, hdr->src_dart_id);
     if (!task) {
         return 0;
@@ -1444,27 +1451,41 @@ static int parse_task_conf_file(struct task_entry *task, const char *fname)
     return 0;   
 }
 
-static void print_task_info(struct task_entry *task)
+static void print_task_info(struct task_entry *t)
 {
-    if (!task) return;
+    if (!t) return;
     uint64_t gdim[BBOX_MAX_NDIM], dist[BBOX_MAX_NDIM];
+    uint64_t lb[BBOX_MAX_NDIM], ub[BBOX_MAX_NDIM];
     char gdim_str[256], dist_str[256];
+    char data_hint_str[512], lb_str[256], ub_str[256];
     int i, j;
 
     printf("task tid= %u appid= %d size_hint= %d location_hint= %u submitter_dart_id= %d\n",
-        task->tid, task->appid, task->size_hint, task->location_hint, task->submitter_dart_id);
-    for (i = 0; i < task->num_vars; i++) {
-        for (j = 0; j < task->vars[i].gdim.ndim; j++) {
-            gdim[j] = task->vars[i].gdim.sizes.c[j];
+        t->tid, t->appid, t->size_hint, t->location_hint, t->submitter_dart_id);
+    for (i = 0; i < t->num_vars; i++) {
+        for (j = 0; j < t->vars[i].gdim.ndim; j++) {
+            gdim[j] = t->vars[i].gdim.sizes.c[j];
         }
-        for (j = 0; j < task->vars[i].dist_hint.ndim; j++) {
-            dist[j] = task->vars[i].dist_hint.sizes.c[j];
+        for (j = 0; j < t->vars[i].dist_hint.ndim; j++) {
+            dist[j] = t->vars[i].dist_hint.sizes.c[j];
         }
-        int64s_to_str(task->vars[i].gdim.ndim, gdim, gdim_str);
-        int64s_to_str(task->vars[i].dist_hint.ndim, dist, dist_str);
+        for (j = 0; j < t->vars[i].data_hint.num_dims; j++) {
+            lb[j] = t->vars[i].data_hint.lb.c[j];
+            ub[j] = t->vars[i].data_hint.ub.c[j];
+        }
+        int64s_to_str(t->vars[i].gdim.ndim, gdim, gdim_str);
+        int64s_to_str(t->vars[i].dist_hint.ndim, dist, dist_str);
+        int64s_to_str(t->vars[i].data_hint.num_dims, lb, lb_str);
+        int64s_to_str(t->vars[i].data_hint.num_dims, ub, ub_str);
 
-        printf("task tid= %u appid= %d var= '%s': type= '%s' elem_size= %u gdim= (%s) dist_hint= (%s)\n", 
-            task->tid, task->appid, task->vars[i].name, var_type_name[task->vars[i].type], task->vars[i].elem_size, gdim_str, dist_str);
+        data_hint_str[0] = '\0';
+        if (t->vars[i].data_hint.num_dims > 0) {
+            sprintf(data_hint_str, "data_hint= ({%s}, {%s})", lb_str, ub_str);
+        }
+        printf("task tid= %u appid= %d var= '%s' type= '%s' elem_size= %u "
+            "gdim= {%s} dist_hint= {%s} %s\n",
+            t->tid, t->appid, t->vars[i].name, var_type_name[t->vars[i].type],
+            t->vars[i].elem_size, gdim_str, dist_str, data_hint_str);
     }
 }
 
