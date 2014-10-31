@@ -10,6 +10,7 @@
 
 #include "cods_scheduler.h"
 #include "cods_internal.h"
+#include "cods_strutil.h"
 #include "mpi.h"
 
 static struct cods_scheduler *sched = NULL; 
@@ -60,7 +61,7 @@ static void task_list_add_task(struct list_head *list, struct task_entry *task)
 
 static struct task_entry* create_new_task(struct task_descriptor *task_desc, int submitter_dart_id)
 {
-    uloga("%s(): task config file '%s'\n", __func__, task_desc->conf_file);
+    printf("%s(): task config file '%s'\n", __func__, task_desc->conf_file);
     struct task_entry *task = (struct task_entry*)malloc(sizeof(*task));
     if (!task) {
         goto err_out;
@@ -115,7 +116,7 @@ static void task_list_free(struct list_head *list)
 }
 
 /**
-    Workflow executors
+    Bucket management. 
 **/
 static inline void bk_pool_list_init(struct list_head* list)
 {
@@ -143,7 +144,7 @@ static struct bucket_pool* bk_pool_list_create_new(struct list_head* list, int p
     bp->bk_tab = malloc(sizeof(struct bucket) * num_bucket);
     bp->f_bk_reg_done = 0;
 
-    uloga("%s(): create new bk pool with id= %d num_bucket= %d\n", __func__,
+    printf("%s(): create new bk pool id %d num_bucket %d\n", __func__,
             pool_id, num_bucket);
 
     list_add_tail(&bp->entry, list);
@@ -164,7 +165,7 @@ static int bk_pool_add_bucket(struct bucket_pool *bp, int origin_mpi_rank, int d
     bk->origin_mpi_rank = origin_mpi_rank;
     bk->status = bk_none;
     bk->partition_type = DEFAULT_PART_TYPE;
-    if (topo_info) bk->topo_info = *topo_info; 
+    bk->topo_info = *topo_info; 
 
     bp->num_bucket++;
     return 0;
@@ -241,7 +242,7 @@ static void bk_pool_set_bucket_idle(struct bucket_pool *bp)
     }
 
     bp->f_bk_reg_done = 1;
-    uloga("%s(): bucket resource pool %d is ready, num_bucket %d\n",
+    printf("%s(): bucket pool %d is ready, num_bucket %d\n",
         __func__, bp->pool_id, bp->bk_tab_size);
 }
 
@@ -262,7 +263,7 @@ static void print_bk_pool(struct bucket_pool *bp)
 {
     int i;
     for (i = 0; i < bp->bk_tab_size; i++) {
-        uloga("bucket pool_id= %d dart_id= %d nid= %u partition_type= %u\n",
+        printf("bucket pool_id %d dart_id %d nid %u partition_type %u\n",
             bp->bk_tab[i].pool_id, bp->bk_tab[i].dart_id,
             bp->bk_tab[i].topo_info.nid, bp->bk_tab[i].partition_type);
     }
@@ -277,6 +278,24 @@ static void bk_pool_list_free(struct list_head* list)
         if (bp->bk_tab) free(bp->bk_tab);
         free(bp);
     }
+}
+
+static int lookup_node_topo_info(struct list_head* list, int dart_id, struct node_topology_info *out)
+{
+    struct bucket_pool *bp, *t;
+    list_for_each_entry_safe(bp, t, list, struct bucket_pool, entry)
+    {
+        int i;
+        for (i = 0; i < bp->bk_tab_size; i++) {
+            if (bp->bk_tab[i].dart_id == dart_id) {
+                *out = bp->bk_tab[i].topo_info;
+                return 0;
+            }
+        }
+    }
+
+    uloga("%s(): ERROR failed to find bucket with dart_id= %d\n", __func__, dart_id);
+    return -1; 
 }
 
 /**
@@ -297,18 +316,6 @@ static void pending_msg_list_free(struct list_head *list)
         free(p);
         msg_cnt++;
     }
-}
-
-static int idle_bk_count()
-{
-	int cnt = 0;
-	return cnt;
-}
-
-static int busy_bk_count()
-{
-	int cnt = 0;
-	return cnt;
 }
 
 /**
@@ -476,7 +483,7 @@ static int execute_task(struct list_head *list, struct runnable_task *rtask)
 	// uppdate task state
     update_task_status(rtask->task_ref, task_running);
 
-    uloga("%s(): assign task tid= %u to buckets timestamp %lf\n",
+    printf("%s(): assign task tid %u to buckets timestamp %lf\n",
         __func__, rtask->task_ref->tid, timer_read(&tm)-tm_st);
 	return 0;	
 }
@@ -489,25 +496,6 @@ static void rtask_list_free(struct list_head* list)
 		free(rtask);
 	}
 }
-
-/************/
-static int timestamp_ = 0;
-/*
-static void print_rr_count()
-{
-	int num_runnable_task = 0;
-	int num_idle_bucket = 0;
-	int num_busy_bucket = 0;
-
-	num_runnable_task = rtask_list_count();
-	num_idle_bucket = idle_bk_count();
-	num_busy_bucket = busy_bk_count();
-
-	timestamp_++;
-	fprintf(stderr, "EVAL: %d num_runnable_task= %d num_idle_bucket= %d num_busy_bucket= %d\n",
-		timestamp_, num_runnable_task, num_idle_bucket, num_busy_bucket);
-}
-*/
 
 static int notify_task_submitter(struct task_entry *task)
 {
@@ -573,7 +561,7 @@ static int process_framework_state(struct cods_scheduler *scheduler)
 {
     int err = -ENOMEM;
     if (scheduler->framework_state.f_notify_executor_to_exit) return 0;
-    if (scheduler->framework_state.f_done && 0 == busy_bk_count()) {
+    if (scheduler->framework_state.f_done) { // TODO: check number of busy buckets?
         struct msg_buf *msg;
         struct node_id *peer;
         struct hdr_stop_executor *hdr;
@@ -594,7 +582,7 @@ static int process_framework_state(struct cods_scheduler *scheduler)
                 msg->msg_rpc->id = DART_ID;
                 hdr = msg->msg_rpc->pad;
                 hdr->dart_id = bk->dart_id;
-                uloga("%s(): to stop executor #%d via server #%d\n", __func__,
+                printf("%s(): to stop executor #%d via server #%d\n", __func__,
                     bk->dart_id, srv_id);
 
                 err = rpc_send(DART_RPC_S, peer, msg);
@@ -706,32 +694,56 @@ static int test_get_data_location(struct runnable_task *rtask)
 {
     uint64_t lb[BBOX_MAX_NDIM], ub[BBOX_MAX_NDIM], gdim[BBOX_MAX_NDIM];
     struct task_entry *t = rtask->task_ref;
-    int i, j, k;
+    int i, j;
 
     for (i = 0; i < t->num_vars; i++) {
-        if (t->vars[i].type == var_type_get) {
-            for (j = 0; j < t->vars[i].gdim.ndim; j++) {
-                gdim[j] = t->vars[i].gdim.sizes.c[j];
-                lb[j] = 0;
-                ub[j] = t->vars[i].gdim.sizes.c[j]-1;
-            }
-
+        if (t->vars[i].type == var_type_get && 
+            t->vars[i].data_hint.num_dims > 0 &&
+            t->vars[i].data_hint.num_dims == t->vars[i].gdim.ndim)
+        {
+            // Query var location information based on data hint
             int num_tab_entry;
             struct obj_descriptor *tab = NULL; 
+            for (j = 0; j < t->vars[i].data_hint.num_dims; j++) {
+                gdim[j] = t->vars[i].gdim.sizes.c[j];
+                lb[j] = t->vars[i].data_hint.lb.c[j];
+                ub[j] = t->vars[i].data_hint.ub.c[j];
+            }
             dimes_define_gdim(t->vars[i].name, t->vars[i].gdim.ndim, gdim);
             dimes_get_data_location(t->vars[i].name, 0, t->vars[i].elem_size,
                 t->vars[i].gdim.ndim, lb, ub, &num_tab_entry, &tab);
-   
+
+            // Copy var location information
+            struct var_location location_info;
+            location_info.var_ref = &t->vars[i];
+            location_info.num_entry = num_tab_entry;
+            location_info.entry_tab = 
+                malloc(sizeof(struct var_location_entry)*location_info.num_entry);
+             
+            for (j = 0; j < num_tab_entry; j++) {
+                location_info.entry_tab[j].obj_desc = tab[j];
+                // Lookup node topology information
+                lookup_node_topo_info(&sched->bk_pool_list,
+                        location_info.entry_tab[j].obj_desc.owner,
+                        &location_info.entry_tab[j].topo_info);
+            } 
+
             // Debug print
-            for (k = 0; k < num_tab_entry; k++) {
-                printf("%s(): data obj name= %s owner= %d version= %d "
-                    "elem_size= %u bb= ({%llu, %llu, %llu}, {%llu, %llu, %llu})\n",
-                     __func__, tab[k].name, tab[k].owner, tab[k].version, tab[k].size,
-                    tab[k].bb.lb.c[0], tab[k].bb.lb.c[1], tab[k].bb.lb.c[2],
-                    tab[k].bb.ub.c[0], tab[k].bb.ub.c[1], tab[k].bb.ub.c[2]);
+            struct var_location_entry *entry_tab = location_info.entry_tab; 
+            char lb_str[128], ub_str[128];
+            for (j = 0; j < num_tab_entry; j++) {
+                int ndim = entry_tab[j].obj_desc.bb.num_dims;
+                int64s_to_str(ndim, entry_tab[j].obj_desc.bb.lb.c, lb_str);
+                int64s_to_str(ndim, entry_tab[j].obj_desc.bb.ub.c, ub_str);
+            
+                printf("%s(): var '%s' owner_dart_id %d node_id %u "
+                    "bbox ({%s}, {%s})\n",
+                     __func__, entry_tab[j].obj_desc.name, entry_tab[j].obj_desc.owner, 
+                    entry_tab[j].topo_info.nid, lb_str, ub_str);
             }  
 
             if (tab) free(tab);
+            if (location_info.entry_tab) free(location_info.entry_tab);
         }
     } 
 
@@ -757,7 +769,8 @@ static int process_runnable_task(struct cods_scheduler *scheduler)
     }
 
 	// 2. process runnable tasks (if any) 
-	list_for_each_entry_safe(rtask, temp, &scheduler->rtask_list, struct runnable_task, entry) {
+	list_for_each_entry_safe(rtask, temp, &scheduler->rtask_list, struct runnable_task, entry)
+    {
 		if (rtask_is_pending(rtask)) {
 			err = allocate_bk(&scheduler->bk_pool_list, rtask);
             if (err < 0) break;
@@ -779,7 +792,7 @@ static int callback_cods_finish_task(struct rpc_server *rpc_s, struct rpc_cmd *c
 
     struct runnable_task *rtask = rtask_list_lookup(&sched->rtask_list, hdr->tid);
     if (rtask) {
-        uloga("%s(): finish task tid= %u timestamp %lf\n",
+        printf("%s(): finish task tid %u timestamp %lf\n",
             __func__, hdr->tid, timer_read(&tm)-tm_st);
 
         rtask_set_finish(rtask);
@@ -796,7 +809,7 @@ static int callback_cods_finish_task(struct rpc_server *rpc_s, struct rpc_cmd *c
 static int process_cods_reg_resource(struct pending_msg *p)
 {
     struct hdr_register_resource *hdr = (struct hdr_register_resource*)p->cmd.pad;
-    uloga("%s(): got executor pool id= %d num_bucket= %d meta_data_name= %s\n",
+    printf("%s(): got executor pool id %d num_bucket %d meta_data_name '%s'\n",
         __func__, hdr->pool_id, hdr->num_bucket, hdr->meta_data_name);
 
     // Read task executors information from information space.
@@ -823,7 +836,7 @@ static int process_cods_reg_resource(struct pending_msg *p)
         bk_pool_add_bucket(bp, info_tab[i].mpi_rank, info_tab[i].dart_id,
             info_tab[i].pool_id, &info_tab[i].topo_info);
     }
-    uloga("%s(): bp->num_bucket= %d bp->bk_tab_size= %d\n", __func__,
+    printf("%s(): bp->num_bucket %d bp->bk_tab_size %d\n", __func__,
         bp->num_bucket, bp->bk_tab_size);
 
     // Check if all peers of the resource pool have registered
@@ -868,12 +881,10 @@ static int callback_cods_submit_task(struct rpc_server *rpc_s, struct rpc_cmd *c
     struct task_descriptor *task_desc = &hdr->task_desc;
     struct task_entry *task = task_list_lookup_task(&sched->task_list, task_desc->tid);
     if (task) {
-        uloga("ERROR %s: task tid= %d already exist\n", __func__, task_desc->tid);
+        uloga("ERROR %s: task tid %d already exist\n", __func__, task_desc->tid);
         return 0;
     }
 
-    uloga("sizeof(struct task_descriptor)= %u sizeof(struct bbox)= %u\n",
-            sizeof(struct task_descriptor), sizeof(struct bbox));
     task = create_new_task(task_desc, hdr->src_dart_id);
     if (!task) {
         return 0;
@@ -895,7 +906,7 @@ static int callback_add_pending_msg(struct rpc_server *rpc_s, struct rpc_cmd *cm
 
 static int callback_cods_stop_framework(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-    uloga("%s(): got message from #%d.\n", __func__, cmd->id);
+    printf("%s(): got message from #%d.\n", __func__, cmd->id);
     sched->framework_state.f_done = 1;    
     return 0;
 }
@@ -1460,7 +1471,7 @@ static void print_task_info(struct task_entry *t)
     char data_hint_str[512], lb_str[256], ub_str[256];
     int i, j;
 
-    printf("task tid= %u appid= %d size_hint= %d location_hint= %u submitter_dart_id= %d\n",
+    printf("task tid %u appid %d size_hint %d location_hint %u submitter_dart_id %d\n",
         t->tid, t->appid, t->size_hint, t->location_hint, t->submitter_dart_id);
     for (i = 0; i < t->num_vars; i++) {
         for (j = 0; j < t->vars[i].gdim.ndim; j++) {
@@ -1480,87 +1491,11 @@ static void print_task_info(struct task_entry *t)
 
         data_hint_str[0] = '\0';
         if (t->vars[i].data_hint.num_dims > 0) {
-            sprintf(data_hint_str, "data_hint= ({%s}, {%s})", lb_str, ub_str);
+            sprintf(data_hint_str, "data_hint ({%s}, {%s})", lb_str, ub_str);
         }
-        printf("task tid= %u appid= %d var= '%s' type= '%s' elem_size= %u "
-            "gdim= {%s} dist_hint= {%s} %s\n",
+        printf("task tid %u appid %d var '%s' type '%s' elem_size %u "
+            "gdim {%s} dist_hint {%s} %s\n",
             t->tid, t->appid, t->vars[i].name, var_type_name[t->vars[i].type],
             t->vars[i].elem_size, gdim_str, dist_str, data_hint_str);
     }
 }
-
-/*
-int read_emulated_vars_sequence(struct workflow_entry *wf, const char *fname)
-{
-    int err = -1;
-    const size_t MAX_LINE = 4096;
-    const char *DELIM = " \t\n\r";
-    const int MAX_FIELDS = 50;
-
-    FILE *file = fopen(fname, "r");
-    if (!file) {
-        fprintf(stderr, "%s(): unable to open file %s\n", __func__, fname);
-        free(wf);
-        return -1;  
-    }
-
-    char line[MAX_LINE];
-    int i = 1;
-    while (fgets(line, MAX_LINE, file) != NULL) {
-        // Trim the line
-        trim(line, DELIM);
-        i++;
-
-        // Blank line
-        if (strlen(line) == 0)
-            continue;
-
-        // Comment line
-        if (line[0] == '#')
-            continue;
-
-        // Split line into fields
-        int n = 0;
-        char *fields[MAX_FIELDS];
-        char *tok;
-        tok = strtok(line, DELIM);
-        while (tok != NULL) {
-            if (n < MAX_FIELDS) {
-                fields[n] = (char *) malloc(strlen(tok)+1);
-                strcpy(fields[n], tok);         
-                tok = strtok(NULL, DELIM);
-                n++;
-            } else {
-                fprintf(stderr, "Exceeds the max number of fields %d\n",
-                    MAX_FIELDS);
-                break;
-            }
-        }
-
-        // Update the tasks
-        int step = atoi(fields[1]);
-        struct var_descriptor var_desc;
-        strcpy(var_desc.var_name, fields[0]);
-        var_desc.step = step;
-        evaluate_dataflow_by_available_var(wf, &var_desc);
-
-        // Get READY tasks
-        printf("Available var %s step= %d\n", fields[0], step);
-        struct task_instance *ready_tasks[MAX_NUM_TASKS];
-        int num_ready_tasks = 0;
-        get_ready_tasks(wf, ready_tasks, &num_ready_tasks);
-        if (num_ready_tasks > 0) {
-            int j;
-            for (j = 0; j < num_ready_tasks; j++) {
-                printf("Execute tid= %d step= %d\n",
-                    ready_tasks[j]->tid, ready_tasks[j]->step);
-                update_task_instance_status(ready_tasks[j], task_finish);
-            }
-        }
-    }
-
-    fclose(file);
-
-    return 0;
-}
-*/

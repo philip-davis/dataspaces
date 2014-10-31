@@ -4,6 +4,7 @@
 
 #include "common.h"
 #include "cods_api.h"
+#include "cods_strutil.h"
 #include "mpi.h"
 
 /*
@@ -222,7 +223,7 @@ static int generate_data_value(struct cods_var *var, void *data, int version)
     uint64_t num_elem = 1;
 
     if (var->elem_size != sizeof(double)) {
-        uloga("ERROR %s: var->elem_size= %u should equal to sizeof(double)= %u\n",
+        uloga("ERROR %s: var->elem_size is %u but should equal to %u\n",
             __func__, var->elem_size, sizeof(double));
         return -1;
     } 
@@ -379,7 +380,7 @@ static void print_task_info(const struct cods_task *t)
     char data_hint_str[512], lb_str[256], ub_str[256];
     int i, j;
 
-    uloga("task tid= %u appid= %d rank= %d nproc= %d num_vars= %d\n",
+    printf("task tid %u appid %d rank %d nproc %d num_vars %d\n",
         t->tid, t->appid, t->rank, t->nproc, t->num_vars);
     for (i = 0; i < t->num_vars; i++) {
         for (j = 0; j < t->vars[i].gdim.ndim; j++) {
@@ -399,10 +400,10 @@ static void print_task_info(const struct cods_task *t)
 
         data_hint_str[0] = '\0';
         if (t->vars[i].data_hint.num_dims > 0) {
-            sprintf(data_hint_str, "data_hint= ({%s}, {%s})", lb_str, ub_str);
+            sprintf(data_hint_str, "data_hint ({%s}, {%s})", lb_str, ub_str);
         } 
-        uloga("task tid= %u appid= %d var '%s' version %d elem_size %u "
-            "gdim {%s} dist_hint= {%s} %s\n",
+        printf("task tid %u appid %d var '%s' version %d elem_size %u "
+            "gdim {%s} dist_hint {%s} %s\n",
             t->tid, t->appid, t->vars[i].name,
             t->vars[i].version, t->vars[i].elem_size,
             gdim_str, dist_str, data_hint_str);
@@ -414,8 +415,8 @@ static void log_write_var(int rank, const char *var_name, int ndim, int elem_siz
     int64s_to_str(ndim, lb, lb_str);
     int64s_to_str(ndim, ub, ub_str);
     int64s_to_str(ndim, gdim, gdim_str);
-    uloga("rank= %d write var= '%s' ndim= %d elem_size= %u version= %d "
-        "lb= {%s} ub= {%s} gdim= {%s}\n",
+    printf("rank %d write var '%s' ndim %d elem_size %u version %d "
+        "lb {%s} ub {%s} gdim {%s}\n",
         rank, var_name, ndim, elem_size,
         version, lb_str, ub_str, gdim_str);
 }
@@ -425,8 +426,8 @@ static void log_read_var(int rank, const char *var_name, int ndim, int elem_size
     int64s_to_str(ndim, lb, lb_str);
     int64s_to_str(ndim, ub, ub_str);
     int64s_to_str(ndim, gdim, gdim_str);
-    uloga("rank= %d read var= '%s' ndim= %d elem_size= %u version= %d "
-        "lb= {%s} ub= {%s} gdim= {%s}\n",
+    printf("rank %d read var '%s' ndim %d elem_size %u version %d "
+        "lb {%s} ub {%s} gdim {%s}\n",
         rank, var_name, ndim, elem_size,
         version, lb_str, ub_str, gdim_str);
 }
@@ -442,7 +443,7 @@ int dummy_xgc1_task(struct cods_task *t, struct parallel_communicator *comm)
     if (t->rank == 0) print_task_info(t);
     
     // read particle data
-    if (t->rank == 0) uloga("%s(): read particle data\n", __func__);
+    if (t->rank == 0) printf("%s(): read particle data\n", __func__);
 
     // sleep for 1 second
     unsigned int seconds = 1;
@@ -450,16 +451,16 @@ int dummy_xgc1_task(struct cods_task *t, struct parallel_communicator *comm)
     for (ts = 1; ts <= sml_mstep; ts++) {
         sleep(seconds);
         // write turbulence data
-        if (t->rank == 0) uloga("%s(): ts %d write turbulence data\n", __func__, ts);
+        if (t->rank == 0) printf("%s(): ts %d write turbulence data\n", __func__, ts);
     }
 
     // write particle data
-    if (t->rank == 0) uloga("%s(): write particle data\n", __func__);
+    if (t->rank == 0) printf("%s(): write particle data\n", __func__);
 
     MPI_Barrier(comm->comm);
     t2 = MPI_Wtime();
 
-    if (t->rank == 0) uloga("%s(): execution time %lf\n", __func__, t2-t1);
+    if (t->rank == 0) printf("%s(): execution time %lf\n", __func__, t2-t1);
     return 0;
 }
 
@@ -473,24 +474,24 @@ int dummy_xgca_task(struct cods_task *t, struct parallel_communicator *comm)
     if (t->rank == 0) print_task_info(t);
 
     // read particle data
-    if (t->rank == 0) uloga("%s(): read particle data\n", __func__);
+    if (t->rank == 0) printf("%s(): read particle data\n", __func__);
 
     // sleep for 1 second
     unsigned int seconds = 1;
     int ts;
     for (ts = 1; ts <= sml_mstep; ts++) {
         // read turbulence data
-        if (t->rank == 0) uloga("%s(): ts %d read turbulence data\n", __func__, ts);
+        if (t->rank == 0) printf("%s(): ts %d read turbulence data\n", __func__, ts);
         sleep(seconds);
     }
 
     // write particle data
-    if (t->rank == 0) uloga("%s(): write particle data\n", __func__);
+    if (t->rank == 0) printf("%s(): write particle data\n", __func__);
 
     MPI_Barrier(comm->comm);
     t2 = MPI_Wtime();
 
-    if (t->rank == 0) uloga("%s(): execution time %lf\n", __func__, t2-t1);
+    if (t->rank == 0) printf("%s(): execution time %lf\n", __func__, t2-t1);
     return 0;
 }
 
@@ -510,7 +511,7 @@ int dummy_s3d_task(struct cods_task *t,
     int ts;
     uint32_t tid = 2;
     for (ts = 1; ts <= s3d_num_ts; ts++) {
-        if (t->rank == 0) uloga("%s(): ts %d\n", __func__, ts);
+        if (t->rank == 0) printf("%s(): timestep %d\n", __func__, ts);
         sleep(seconds);
 
         if (t->rank == 0) {
@@ -544,7 +545,7 @@ int dummy_s3d_task(struct cods_task *t,
     MPI_Barrier(comm->comm);
     t2 = MPI_Wtime();
 
-    if (t->rank == 0) uloga("%s(): execution time %lf\n", __func__, t2-t1);
+    if (t->rank == 0) printf("%s(): execution time %lf\n", __func__, t2-t1);
     return 0;
 }
 
@@ -564,7 +565,7 @@ int dummy_s3d_viz_task(struct cods_task *t,
 
     MPI_Barrier(comm->comm);
     t2 = MPI_Wtime();
-    if (t->rank == 0) uloga("%s(): execution time %lf\n", __func__, t2-t1);
+    if (t->rank == 0) printf("%s(): execution time %lf\n", __func__, t2-t1);
     return 0;
 }
 
@@ -584,7 +585,7 @@ int dummy_s3d_stat_task(struct cods_task *t,
 
     MPI_Barrier(comm->comm);
     t2 = MPI_Wtime();
-    if (t->rank == 0) uloga("%s(): execution time %lf\n", __func__, t2-t1);
+    if (t->rank == 0) printf("%s(): execution time %lf\n", __func__, t2-t1);
     return 0;
 }
 
@@ -604,7 +605,7 @@ int dummy_s3d_topo_task(struct cods_task *t,
 
     MPI_Barrier(comm->comm);
     t2 = MPI_Wtime();
-    if (t->rank == 0) uloga("%s(): execution time %lf\n", __func__, t2-t1);
+    if (t->rank == 0) printf("%s(): execution time %lf\n", __func__, t2-t1);
     return 0;
 }
 
@@ -624,7 +625,7 @@ int dummy_s3d_indexing_task(struct cods_task *t,
 
     MPI_Barrier(comm->comm);
     t2 = MPI_Wtime();
-    if (t->rank == 0) uloga("%s(): execution time %lf\n", __func__, t2-t1);
+    if (t->rank == 0) printf("%s(): execution time %lf\n", __func__, t2-t1);
     return 0;
 }
 
@@ -645,7 +646,7 @@ int dummy_dns_task(struct cods_task *t,
     int i, ts;
     for (ts = 1; ts <= dns_les_num_ts; ts++) {
         for (i = 1; i <= dns_les_num_sub_step; i++) {
-            if (t->rank == 0) uloga("%s(): ts %d substep %d\n", __func__, ts, i);
+            if (t->rank == 0) printf("%s(): ts %d substep %d\n", __func__, ts, i);
 
             // write variable            
             char var_name[256];
@@ -662,7 +663,7 @@ int dummy_dns_task(struct cods_task *t,
     }
 
     t2 = MPI_Wtime();
-    if (t->rank == 0) uloga("%s(): execution time %lf\n", __func__, t2-t1);
+    if (t->rank == 0) printf("%s(): execution time %lf\n", __func__, t2-t1);
     return 0;
 }
 
@@ -681,7 +682,7 @@ int dummy_les_task(struct cods_task *t,
     int i, ts;
     for (ts = 1; ts <= dns_les_num_ts; ts++) {
         for (i = 1; i <= dns_les_num_sub_step; i++) {
-            if (t->rank == 0) uloga("%s(): ts %d substep %d\n", __func__, ts, i);
+            if (t->rank == 0) printf("%s(): ts %d substep %d\n", __func__, ts, i);
 
             // read variable
             char var_name[256];
@@ -698,7 +699,7 @@ int dummy_les_task(struct cods_task *t,
     }
 
     t2 = MPI_Wtime();
-    if (t->rank == 0) uloga("%s(): execution time %lf\n", __func__, t2-t1);
+    if (t->rank == 0) printf("%s(): execution time %lf\n", __func__, t2-t1);
     return 0;
 }
 
@@ -960,7 +961,7 @@ int s3d_viz_render_task(struct cods_task *t,
     MPI_Barrier(comm->comm);
     t2 = MPI_Wtime();
     if (t->rank == 0) {
-        uloga("%s(): task tid= %d execution time %lf\n", __func__, t->tid, t2-t1);
+        printf("%s(): task tid %d execution time %lf\n", __func__, t->tid, t2-t1);
     }
     return 0;
 }
@@ -1042,12 +1043,12 @@ int s3d_fb_indexing_task(struct cods_task *t,
     if (data) free(data);
     MPI_Barrier(comm->comm);
     t2 = MPI_Wtime();
-    uloga("%s(): task tid= %u rank %d read_data_time %lf\n", __func__,
+    printf("%s(): task tid %u rank %d read_data_time %lf\n", __func__,
         t->tid, t->rank, read_data_time);
-    uloga("%s(): task tid= %u rank %d build_index_time %lf\n", __func__,
+    printf("%s(): task tid %u rank %d build_index_time %lf\n", __func__,
         t->tid, t->rank, build_index_time);
     if (t->rank == 0) {
-        uloga("%s(): task tid= %u execution time %lf\n", __func__, t->tid, t2-t1);
+        printf("%s(): task tid %u execution time %lf\n", __func__, t->tid, t2-t1);
     }
     return 0;
 }
@@ -1065,7 +1066,7 @@ int dummy_simulation_task(struct cods_task *t, struct parallel_communicator *com
     int ts;
     uint32_t tid = 2; 
     for (ts = 0; ts < simulation_num_ts; ts++) {
-        if (t->rank == 0) uloga("%s(): ts %d\n", __func__, ts);
+        if (t->rank == 0) printf("%s(): timestep %d\n", __func__, ts);
         sleep(seconds);
 
         // Write "array_data_var"
@@ -1098,7 +1099,7 @@ int dummy_simulation_task(struct cods_task *t, struct parallel_communicator *com
     t2 = MPI_Wtime();
 
     if (t->rank == 0) {
-        uloga("%s(): execution time %lf\n", __func__, t2-t1);
+        printf("%s(): execution time %lf\n", __func__, t2-t1);
     }        
     return 0;
 }
@@ -1151,10 +1152,10 @@ int dummy_analysis_task(struct cods_task *t, struct parallel_communicator *comm)
     MPI_Reduce(&read_data_time, &read_data_time_max, 1, MPI_DOUBLE,
             MPI_MAX, 0, comm->comm);
 
-    uloga("%s(): task tid= %u rank %d read_data_time %lf\n", __func__,
+    printf("%s(): task tid %u rank %d read_data_time %lf\n", __func__,
         t->tid, t->rank, read_data_time);
     if (t->rank == 0) {
-        uloga("%s(): task tid= %u rank %d read_data_time_max %lf\n", __func__,
+        printf("%s(): task tid %u rank %d read_data_time_max %lf\n", __func__,
             t->tid, t->rank, read_data_time_max);
     }
 

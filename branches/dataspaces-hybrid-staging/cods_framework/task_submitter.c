@@ -73,13 +73,13 @@ int partition_task_executors(
     }
 
     // print executor pool information
-    uloga("pool_id= %d num_node= %d num_executor= %u\n", pool_info->pool_id, pool_info->num_node,
+    printf("pool_id %d num_node %d num_executor %u\n", pool_info->pool_id, pool_info->num_node,
         pool_info->num_executor);
     for (i = 0; i < pool_info->num_node; i++) {
-        uloga("compute node nid= %u node_num_executor= %d\n", pool_info->node_tab[i].topo_info.nid,
+        printf("node nid %u num_executor %d\n", pool_info->node_tab[i].topo_info.nid,
             pool_info->node_tab[i].node_num_executor);
         for (j = 0; j < pool_info->node_tab[i].node_num_executor; j++) {
-            uloga("executor bk_idx= %d dart_id= %d node_id= %u part_type= %u\n", 
+            printf("executor bk_idx %d dart_id %d node_id %u partition_type %u\n", 
                 pool_info->node_tab[i].node_executor_tab[j].bk_idx,
                 pool_info->node_tab[i].node_executor_tab[j].dart_id,
                 pool_info->node_tab[i].node_executor_tab[j].topo_info.nid,
@@ -113,7 +113,7 @@ void epsi_coupling_workflow_driver(MPI_Comm comm)
         cods_wait_task_completion(xgca_task.tid);
     }  
 
-    uloga("%s: finish workflow execution\n", __func__);
+    printf("%s: finish workflow execution\n", __func__);
 }
 
 void dns_les_workflow_driver(MPI_Comm comm)
@@ -130,7 +130,7 @@ void dns_les_workflow_driver(MPI_Comm comm)
     cods_wait_task_completion(dns_task.tid); 
     cods_wait_task_completion(les_task.tid); 
 
-    uloga("%s: finish workflow execution\n", __func__);
+    printf("%s: finish workflow execution\n", __func__);
 }
 
 void s3d_analysis_workflow_driver(MPI_Comm comm)
@@ -144,7 +144,7 @@ void s3d_analysis_workflow_driver(MPI_Comm comm)
     cods_exec_task(&s3d_task);
     cods_wait_task_completion(s3d_task.tid);
 
-    uloga("%s: finish workflow execution\n", __func__);
+    printf("%s: finish workflow execution\n", __func__);
 }
 
 void data_hint_example_workflow_driver(MPI_Comm comm)
@@ -158,7 +158,7 @@ void data_hint_example_workflow_driver(MPI_Comm comm)
     cods_exec_task(&simulation_task);
     cods_wait_task_completion(simulation_task.tid);
 
-    uloga("%s: finish workflow execution\n", __func__);
+    printf("%s: finish workflow execution\n", __func__);
 }
 
 int main(int argc, char **argv)
@@ -193,7 +193,7 @@ int main(int argc, char **argv)
 	MPI_Comm_size(comm, &nproc);
 
     if (rank == 0) {
-        uloga("task submitter: num_submitter= %d example_workflow_id= %u\n", nproc, example_workflow_id);
+        printf("task submitter: num_submitter %d example_workflow_id %u\n", nproc, example_workflow_id);
     }
 	err = cods_init(nproc, appid, cods_submitter); 
 
