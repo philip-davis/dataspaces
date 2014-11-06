@@ -66,15 +66,12 @@ struct bucket_pool {
     int f_bk_reg_done;
 };
 
-struct var_location_entry {
-    struct node_topology_info topo_info;
-    struct obj_descriptor obj_desc;
-};
-
-struct var_location {
-    struct cods_var *var_ref;
-    int num_entry;
-    struct var_location_entry *entry_tab;
+struct node_entry {
+    struct list_head entry;
+    uint32_t nid;
+    int bk_tab_offset;
+    int num_idle_bk;
+    uint64_t available_data_size;
 };
 
 struct cods_scheduler {

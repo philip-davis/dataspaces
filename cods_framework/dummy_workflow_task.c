@@ -168,14 +168,33 @@ static int check_var_dimension(struct cods_var *var) {
     return 0;
 }
 
+static void get_data_hint(struct cods_var *var, uint64_t *lb, uint64_t *ub)
+{
+    int i;
+    if (var->data_hint.num_dims != var->gdim.ndim) {
+        for (i = 0; i < var->gdim.ndim; i++) {
+            lb[i] = 0;
+            ub[i] = var->gdim.sizes.c[i]-1;
+        }
+    } else {
+        for (i = 0; i < var->gdim.ndim; i++) {
+            lb[i] = var->data_hint.lb.c[i];
+            ub[i] = var->data_hint.ub.c[i];
+        }
+    }
+}
+
 static int generate_sp(struct cods_var *var, uint64_t *sp)
 {
     if (check_var_dimension(var) < 0) return -1;
 
+    uint64_t hint_lb[BBOX_MAX_NDIM], hint_ub[BBOX_MAX_NDIM];
+    get_data_hint(var, hint_lb, hint_ub);
+
     int i;
     for (i = 0; i < var->gdim.ndim; i++) {
         if (var->dist_hint.sizes.c[i] != 0) {
-            sp[i] = var->gdim.sizes.c[i]/var->dist_hint.sizes.c[i];
+            sp[i] = (hint_ub[i]-hint_lb[i]+1)/var->dist_hint.sizes.c[i];
         } else {
             uloga("ERROR %s: var->dist_hint.sizes.c[%d]= %u\n", __func__,
                 i, var->dist_hint.sizes.c[i]);
@@ -255,14 +274,16 @@ static void set_bbox(struct cods_task *t, struct cods_var *var,
 {
     int i, j;
     uint64_t np[BBOX_MAX_NDIM], sp[BBOX_MAX_NDIM], offset[BBOX_MAX_NDIM];
+    uint64_t hint_lb[BBOX_MAX_NDIM], hint_ub[BBOX_MAX_NDIM]; 
     if (generate_sp(var, sp) < 0) return;
     if (generate_np(var, np) < 0) return;
+    get_data_hint(var, hint_lb, hint_ub);
 
     for (i = 0; i < var->gdim.ndim; i++) {
         int temp = t->rank;
         for (j = 0; j < i; j++)
             temp /= np[j];
-        offset[i] = temp % np[i] * sp[i]; 
+        offset[i] = hint_lb[i] + temp % np[i] * sp[i]; 
     }
     for (i = 0; i < var->gdim.ndim; i++) {
         lb[i] = offset[i];
@@ -1083,6 +1104,7 @@ int dummy_simulation_task(struct cods_task *t, struct parallel_communicator *com
 
             // provide placement location hint
             analysis_task.location_hint = insitu_colocated_executor;
+
             // provide placement data hint
             analysis_task.data_hint.num_dims = var->gdim.ndim;
             int i;
@@ -1090,6 +1112,9 @@ int dummy_simulation_task(struct cods_task *t, struct parallel_communicator *com
                 analysis_task.data_hint.lb.c[i] = 0;
                 analysis_task.data_hint.ub.c[i] = var->gdim.sizes.c[i]-1;
             }
+            analysis_task.data_hint.lb.c[0] = 350;
+            analysis_task.data_hint.ub.c[0] = 399;
+            
             // execute task and wait for completion
             cods_exec_task(&analysis_task);
             cods_wait_task_completion(analysis_task.tid);
@@ -1130,7 +1155,6 @@ int dummy_analysis_task(struct cods_task *t, struct parallel_communicator *comm)
     sprintf(lock_name, "%s_lock", var->name);
 
     data = allocate_data(var);
-    set_ndim(var, &ndim);
     set_gdim(var, gdim);
     set_bbox(t, var, lb, ub);
 

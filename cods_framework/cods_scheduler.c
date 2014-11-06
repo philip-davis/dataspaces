@@ -30,6 +30,8 @@ static int is_task_finish(struct task_entry *task);
 static void update_task_status(struct task_entry *task, enum cods_task_status status);
 static int parse_task_conf_file(struct task_entry *task, const char *fname);    
 static void print_task_info(struct task_entry *task);
+static int task_has_data_hint(struct task_entry *task);
+static int lookup_node_topo_info(struct list_head* list, int dart_id, struct node_topology_info *out);
 static int process_cods_reg_resource(struct pending_msg *p);
 static int process_cods_build_partition(struct pending_msg *p);
 
@@ -190,38 +192,256 @@ static int satisfy_location_hint(struct bucket *bk, unsigned char location_hint)
     return bk->partition_type == location_hint;
 }
 
-static int* bk_pool_request_bk_allocation(struct bucket_pool *bp, int allocation_size,
-    unsigned char location_hint)
+// Allocate buckets in a simple first-fit manner
+static int request_bk_allocation_first_fit(struct bucket_pool *bp,
+                struct runnable_task *rtask)
 {
+    int allocation_size = rtask->bk_allocation_size;
+    unsigned char location_hint = rtask->task_ref->location_hint;
     if (allocation_size > bp->bk_tab_size) {
         uloga("ERROR %s(): allocation_size is larger than bk_tab_size\n", __func__);
-        return NULL;
+        goto err_out;
     }
 
     int *bk_idx_tab = (int*)malloc(allocation_size*sizeof(int));
-    if (!bk_idx_tab) return NULL;
+    if (!bk_idx_tab) goto err_out;
 
     int i, j;
-    for (i = 0, j = 0; i < bp->bk_tab_size; i++) {
+    for (i = 0, j = 0; i < bp->bk_tab_size && j < allocation_size; i++) {
         if (bp->bk_tab[i].status == bk_idle &&
             satisfy_location_hint(&bp->bk_tab[i], location_hint)) 
         {
             bk_idx_tab[j++] = i;
         }
-        if (j == allocation_size) break;
     }
 
     if (j < allocation_size) {
         // no sufficient idle buckets
         free(bk_idx_tab);
-        return NULL;  
+        goto err_out;
     }
 
     for (i = 0; i < allocation_size; i++) {
         // update status of the bucket
         bp->bk_tab[bk_idx_tab[i]].status = bk_busy;
     }
-    return bk_idx_tab;
+    rtask->bk_idx_tab = bk_idx_tab;
+    rtask->bk_pool_id = bp->pool_id;
+    return 0;
+ err_out:
+    return -1;
+}
+
+static void free_node_list(struct list_head *list)
+{
+    struct node_entry *n, *t;
+    list_for_each_entry_safe(n, t, list, struct node_entry, entry) {
+        list_del(&n->entry);
+        free(n);
+    }
+}
+
+static void build_node_entry_table(struct bucket_pool *bp, 
+  struct runnable_task *rtask, struct node_entry **tab_out, int *num_nodes_out)
+{
+    int allocation_size = rtask->bk_allocation_size;
+    unsigned char location_hint = rtask->task_ref->location_hint;
+
+    int i, num_nodes = 0;
+    struct list_head node_list;
+    INIT_LIST_HEAD(&node_list);
+    int cnt = 0;
+    i = 0;
+    while (i < bp->bk_tab_size) {
+        int bk_tab_offset = i;
+        uint32_t cur_nid = bp->bk_tab[i].topo_info.nid;
+        int num_idle_bk = 0;
+        while (bp->bk_tab[i].topo_info.nid == cur_nid) {
+            if (bp->bk_tab[i].status == bk_idle &&
+                satisfy_location_hint(&bp->bk_tab[i], location_hint)) {
+                num_idle_bk++;
+            }
+            i++;
+        }
+
+        if (num_idle_bk > 0) {
+            struct node_entry *node = malloc(sizeof(*node));
+            node->nid =  cur_nid;
+            node->bk_tab_offset = bk_tab_offset;
+            node->num_idle_bk = num_idle_bk;
+            node->available_data_size = 0;
+            list_add_tail(&node->entry, &node_list);
+            cnt += num_idle_bk;
+            num_nodes++;
+        }
+    }
+
+    if (cnt < allocation_size) {
+        uloga("ERROR %s(): no sufficient task executors with location type as %u\n",
+            __func__, location_hint);
+        free_node_list(&node_list);
+        return;
+    }
+
+    // Build node_entry array.
+    struct node_entry *tab = malloc(sizeof(struct node_entry)*num_nodes);
+    i = 0;
+    struct node_entry *n;
+    list_for_each_entry(n, &node_list, struct node_entry, entry) tab[i++] = *n;
+
+    free_node_list(&node_list); 
+    *num_nodes_out = num_nodes;
+    *tab_out = tab;
+}
+
+static int lookup_node_entry_table(struct node_entry *node_tab, int num_nodes, uint32_t nid,
+                struct node_entry **out)
+{
+    // Binary search.
+    // Note: node_tab is sorted by node id.     
+    int i = 0, j = num_nodes-1;
+    while (i <= j) {
+        int m = (i+j)/2;
+        if (node_tab[m].nid == nid) {
+            *out = &node_tab[m];
+            return 0;
+        } else if (node_tab[m].nid < nid) {
+            i = m+1;
+        } else j = m-1;
+    }
+    uloga("ERROR %s(): failed to find node with id %u\n", __func__, nid);
+    *out = NULL;
+    return -1;
+}
+
+int compare_node_entry_by_avail_data_size(const void *p1, const void *p2)
+{
+    return -(((const struct node_entry*)p1)->available_data_size -
+           ((const struct node_entry*)p2)->available_data_size);
+}
+
+static void reorder_node_entry_table(struct bucket_pool *bp, struct runnable_task *rtask,
+                struct node_entry *node_tab, int num_nodes)
+{
+    uint64_t lb[BBOX_MAX_NDIM], ub[BBOX_MAX_NDIM], gdim[BBOX_MAX_NDIM];
+    struct task_entry *t = rtask->task_ref;
+    int i, j;
+
+    for (i = 0; i < t->num_vars; i++) {
+        if (t->vars[i].type == var_type_get && 
+            t->vars[i].data_hint.num_dims > 0 &&
+            t->vars[i].data_hint.num_dims == t->vars[i].gdim.ndim)
+        {
+            // Query var location information based on data hint
+            int num_tab_entry;
+            struct obj_descriptor *odsc_tab = NULL; 
+            for (j = 0; j < t->vars[i].data_hint.num_dims; j++) {
+                gdim[j] = t->vars[i].gdim.sizes.c[j];
+                lb[j] = t->vars[i].data_hint.lb.c[j];
+                ub[j] = t->vars[i].data_hint.ub.c[j];
+            }
+            dimes_define_gdim(t->vars[i].name, t->vars[i].gdim.ndim, gdim);
+            dimes_get_data_location(t->vars[i].name, 0, t->vars[i].elem_size,
+                t->vars[i].gdim.ndim, lb, ub, &num_tab_entry, &odsc_tab);
+
+            for (j = 0; j < num_tab_entry; j++) {
+                /*
+                  TODO: Improve lookup performance.
+                  Need hashtable: (1) <dart_id, node_id>
+                                  (2) <node_id, node_entry> 
+                */
+                // Lookup node topology information
+                struct node_topology_info topo_info;
+                lookup_node_topo_info(&sched->bk_pool_list,
+                        odsc_tab[j].owner, &topo_info);
+
+                uint64_t data_size = obj_data_size(&odsc_tab[j]);
+                struct node_entry *node;
+                lookup_node_entry_table(node_tab, num_nodes, topo_info.nid, &node);
+                if (node) {
+                    node->available_data_size += data_size;
+                }
+
+                // debug print
+                /*
+                char lb_str[128], ub_str[128];
+                int64s_to_str(odsc_tab[j].bb.num_dims, odsc_tab[j].bb.lb.c, lb_str);
+                int64s_to_str(odsc_tab[j].bb.num_dims, odsc_tab[j].bb.ub.c, ub_str);
+                printf("%s(): var '%s' owner_dart_id %d node_id %u "
+                    "bbox ({%s}, {%s}) data_size %llu\n", __func__, odsc_tab[j].name,
+                    odsc_tab[j].owner, topo_info.nid, lb_str, ub_str, data_size);
+                */
+            } 
+
+            if (odsc_tab) free(odsc_tab);
+        }
+    }
+ 
+    // sort node_tab by available_data_size
+    qsort(node_tab, num_nodes, sizeof(struct node_entry), 
+        compare_node_entry_by_avail_data_size);
+}
+
+// Allocate buckets in locality-aware manner based on data hint
+static int* request_bk_allocation_data_hint(struct bucket_pool *bp,
+                struct runnable_task *rtask)
+{
+    if (rtask->bk_allocation_size > bp->bk_tab_size) {
+        uloga("ERROR %s(): allocation_size is larger than bk_tab_size\n", __func__);
+        goto err_out;
+    }
+
+    int i, j, k, num_nodes = 0;
+    struct node_entry *node_tab = NULL;
+
+    // Step 1: build node_entry table for idle task executors.
+    build_node_entry_table(bp, rtask, &node_tab, &num_nodes);
+    if (!node_tab) goto err_out;
+
+    // Step 2: rank/order compute nodes by available data size.
+    reorder_node_entry_table(bp, rtask, node_tab, num_nodes); 
+
+    // debug print
+    /*
+    printf("num_nodes is %d\n", num_nodes);
+    for (i = 0; i < num_nodes; i++) {
+        printf("compute node %u bk_tab_offset %d num_idle_bk %d available_data_size %llu\n",
+            node_tab[i].nid, node_tab[i].bk_tab_offset, node_tab[i].num_idle_bk,
+            node_tab[i].available_data_size);
+    }
+    */
+
+    // Step 3: allocate task executors.
+    int *bk_idx_tab = (int*)malloc(rtask->bk_allocation_size*sizeof(int));
+    if (!bk_idx_tab) goto err_out;
+    
+    i = j = 0;
+    while (i < num_nodes && j < rtask->bk_allocation_size) {
+        int cnt = 0;
+        k = node_tab[i].bk_tab_offset;
+        while (cnt < node_tab[i].num_idle_bk &&
+               j < rtask->bk_allocation_size)
+        {  
+            if (bp->bk_tab[k].status == bk_idle) {
+                bk_idx_tab[j++] = k;
+                cnt++;
+            }
+            k++;                
+        }
+        i++;    
+    }
+   
+    for (i = 0; i < rtask->bk_allocation_size; i++) {
+        // Update bucket status.
+        bp->bk_tab[bk_idx_tab[i]].status = bk_busy;
+    }
+    rtask->bk_idx_tab = bk_idx_tab;
+    rtask->bk_pool_id = bp->pool_id;
+
+    free(node_tab);
+    return 0;
+ err_out:
+    return -1;
 }
 
 static struct bucket* bk_pool_get_bucket(struct bucket_pool *bp, int origin_mpi_rank)
@@ -246,7 +466,7 @@ static void bk_pool_set_bucket_idle(struct bucket_pool *bp)
         __func__, bp->pool_id, bp->bk_tab_size);
 }
 
-int compare_bucket_nid(const void *p1, const void *p2)
+int compare_bucket_by_nid(const void *p1, const void *p2)
 {
     return ((const struct bucket*)p1)->topo_info.nid -
             ((const struct bucket*)p2)->topo_info.nid;
@@ -256,7 +476,7 @@ static void bk_pool_sort_bucket(struct bucket_pool *bp)
 {
     // sort bk_tab by nid
     qsort(bp->bk_tab, bp->bk_tab_size, sizeof(struct bucket),
-        compare_bucket_nid);
+        compare_bucket_by_nid);
 }
 
 static void print_bk_pool(struct bucket_pool *bp)
@@ -384,6 +604,9 @@ static void free_rtask(struct runnable_task *rtask) {
     free(rtask);
 }
 
+/*
+
+*/
 static int notify_bk(struct bucket *bk, struct task_entry *t, int rank_hint, 
     int nproc_hint, const char *meta_data_name)
 {
@@ -421,17 +644,17 @@ err_out:
 
 static int allocate_bk(struct list_head *list, struct runnable_task *rtask)
 {
-    // allocate buckets in a simple first-fit manner
+    int ret;
     struct bucket_pool *bp;
     list_for_each_entry(bp, list, struct bucket_pool, entry) {
-        rtask->bk_idx_tab = bk_pool_request_bk_allocation(bp, rtask->bk_allocation_size,
-                                rtask->task_ref->location_hint);
-        if (rtask->bk_idx_tab) {
-            rtask->bk_pool_id = bp->pool_id;
-            return 0;
-        } 
+        if (task_has_data_hint(rtask->task_ref)) {    
+            ret = request_bk_allocation_data_hint(bp, rtask);
+        } else {
+            ret = request_bk_allocation_first_fit(bp, rtask);
+        }
+        
+        if (ret == 0) return 0;
     }    
-    
     return -1;
 }
 
@@ -687,66 +910,6 @@ static int process_pending_msg(struct cods_scheduler *scheduler)
             break; // process one msg at a time.
         }
     }
-    return 0;
-}
-
-static int test_get_data_location(struct runnable_task *rtask)
-{
-    uint64_t lb[BBOX_MAX_NDIM], ub[BBOX_MAX_NDIM], gdim[BBOX_MAX_NDIM];
-    struct task_entry *t = rtask->task_ref;
-    int i, j;
-
-    for (i = 0; i < t->num_vars; i++) {
-        if (t->vars[i].type == var_type_get && 
-            t->vars[i].data_hint.num_dims > 0 &&
-            t->vars[i].data_hint.num_dims == t->vars[i].gdim.ndim)
-        {
-            // Query var location information based on data hint
-            int num_tab_entry;
-            struct obj_descriptor *tab = NULL; 
-            for (j = 0; j < t->vars[i].data_hint.num_dims; j++) {
-                gdim[j] = t->vars[i].gdim.sizes.c[j];
-                lb[j] = t->vars[i].data_hint.lb.c[j];
-                ub[j] = t->vars[i].data_hint.ub.c[j];
-            }
-            dimes_define_gdim(t->vars[i].name, t->vars[i].gdim.ndim, gdim);
-            dimes_get_data_location(t->vars[i].name, 0, t->vars[i].elem_size,
-                t->vars[i].gdim.ndim, lb, ub, &num_tab_entry, &tab);
-
-            // Copy var location information
-            struct var_location location_info;
-            location_info.var_ref = &t->vars[i];
-            location_info.num_entry = num_tab_entry;
-            location_info.entry_tab = 
-                malloc(sizeof(struct var_location_entry)*location_info.num_entry);
-             
-            for (j = 0; j < num_tab_entry; j++) {
-                location_info.entry_tab[j].obj_desc = tab[j];
-                // Lookup node topology information
-                lookup_node_topo_info(&sched->bk_pool_list,
-                        location_info.entry_tab[j].obj_desc.owner,
-                        &location_info.entry_tab[j].topo_info);
-            } 
-
-            // Debug print
-            struct var_location_entry *entry_tab = location_info.entry_tab; 
-            char lb_str[128], ub_str[128];
-            for (j = 0; j < num_tab_entry; j++) {
-                int ndim = entry_tab[j].obj_desc.bb.num_dims;
-                int64s_to_str(ndim, entry_tab[j].obj_desc.bb.lb.c, lb_str);
-                int64s_to_str(ndim, entry_tab[j].obj_desc.bb.ub.c, ub_str);
-            
-                printf("%s(): var '%s' owner_dart_id %d node_id %u "
-                    "bbox ({%s}, {%s})\n",
-                     __func__, entry_tab[j].obj_desc.name, entry_tab[j].obj_desc.owner, 
-                    entry_tab[j].topo_info.nid, lb_str, ub_str);
-            }  
-
-            if (tab) free(tab);
-            if (location_info.entry_tab) free(location_info.entry_tab);
-        }
-    } 
-
     return 0;
 }
 
@@ -1460,6 +1623,17 @@ static int parse_task_conf_file(struct task_entry *task, const char *fname)
 
     fclose(file);
     return 0;   
+}
+
+static int task_has_data_hint(struct task_entry *t)
+{
+    if (!t) return 0;
+    int i;
+    for (i = 0; i < t->num_vars; i++) {
+        if (t->vars[i].data_hint.num_dims > 0) return 1;
+    }
+
+    return 0;
 }
 
 static void print_task_info(struct task_entry *t)
