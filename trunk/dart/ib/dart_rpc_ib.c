@@ -16,6 +16,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <ifaddrs.h>
 #include <netdb.h>
 #include <unistd.h>
 #include <rdma/rdma_cma.h>
@@ -857,6 +858,22 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 */
 char *ip_search(void)
 {
+	struct sockaddr_in address;
+	memset(&address, 0, sizeof(address));
+
+	struct ifaddrs *addrs;
+	getifaddrs(&addrs);
+	struct ifaddrs *head = addrs;
+
+	int count =0;
+
+	for (; head != NULL; head = head->ifa_next) {
+        	if (head->ifa_name == NULL || strcmp(IB_INTERFACE, head->ifa_name) == 0){
+               		break;
+		}
+		count++;
+	}
+
 	int sfd, intr;
 	struct ifreq buf[16];
 	struct ifconf ifc;
@@ -870,11 +887,8 @@ char *ip_search(void)
 	intr = ifc.ifc_len / sizeof(struct ifreq);
 	while(intr-- > 0 && ioctl(sfd, SIOCGIFADDR, (char *) &buf[intr]));
 	close(sfd);
-	if(BUILD_FOR_STAMPEDE)
-		return inet_ntoa(((struct sockaddr_in *) (&buf[intr - 1].ifr_addr))->sin_addr);
-	else
-		return inet_ntoa(((struct sockaddr_in *) (&buf[intr].ifr_addr))->sin_addr);
 
+	return inet_ntoa(((struct sockaddr_in *) (&buf[count-1].ifr_addr))->sin_addr);
 }
 
 // Check if the format of IP address is correct. (done)
