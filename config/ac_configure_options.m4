@@ -32,11 +32,11 @@ network operations DIMES can issue for data fetching process. Must be used with 
 	[have_dimes_rdma_max_num_concurrent_read=yes;
 	 DIMES_RDMA_MAX_NUM_CONCURRENT_READ="$withval";])
 
-AC_ARG_WITH(build-for-stampede,
-        [AS_HELP_STRING([--with-build-for-stampede=integer value],
+AC_ARG_WITH(ib-interface,
+        [AS_HELP_STRING([--with-ib-interface=string value],
                 [This option is used to configure DataSpaces for Stampede cluster. Users must Set this value to 1 while configure. The default vaule is 0.])],
-        [have_build_for_stampede=yes;
-         BUILD_FOR_STAMPEDE="$withval";])
+        [have_ib_interface=yes;
+         IB_INTERFACE="$withval";])
 
 AC_ARG_WITH(infiniband-msg-queue-size,                                                                                                [AS_HELP_STRING([--with-infiniband-msg-queue-size=integer value],
                 [This option is used to specify the size of messaging queue for DataSpaces servers in infiniband
@@ -57,10 +57,10 @@ else
     AC_DEFINE_UNQUOTED(DIMES_RDMA_BUFFER_SIZE,64,[Size of rdma memory that can be used for data writes/reads in DIMES])
 fi
 
-if test "x$have_build_for_stampede" = "xyes"; then
-    AC_DEFINE_UNQUOTED(BUILD_FOR_STAMPEDE,$BUILD_FOR_STAMPEDE,[Build for Stampede option])
+if test "x$have_ib_interface" = "xyes"; then
+    AC_DEFINE_UNQUOTED(IB_INTERFACE,"$IB_INTERFACE",[IB Interface option])
 else
-    AC_DEFINE_UNQUOTED(BUILD_FOR_STAMPEDE,0,[Build for Stampede option])
+    AC_DEFINE_UNQUOTED(IB_INTERFACE,"ib0",[IB Interface option])
 fi
 
 if test "x$have_infiniband_msg_queue_size" = "xyes"; then
