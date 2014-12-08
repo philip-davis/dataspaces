@@ -116,12 +116,12 @@ int common_dspaces_init(int num_peers, int appid, void *comm, const char *parame
 		return 0;
 	}
 
-	struct name_value_pair *params, *p;
+        /*struct name_value_pair *params, *p;
 	params = text_to_nv_pairs(parameters);
 	p  = params;
 	while (p) {
 		p = p->next;
-	}
+	}*/
 
 
 	dcg = dcg_alloc(num_peers, appid, comm);
