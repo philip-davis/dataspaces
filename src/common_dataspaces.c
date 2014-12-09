@@ -144,7 +144,7 @@ int common_dspaces_init(int num_peers, int appid, void *comm, const char *parame
     }
 #endif
 
-    free_nv_pairs(params);
+    /*free_nv_pairs(params);*/
 	return 0;
 }
 
