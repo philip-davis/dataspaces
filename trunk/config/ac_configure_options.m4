@@ -45,6 +45,14 @@ AC_ARG_WITH(infiniband-msg-queue-size,                                          
          INFINIBAND_MSG_QUEUE_SIZE="$withval";])
 
 
+AC_ARG_WITH(infiniband-timeout,                                                                                                [AS_HELP_STRING([--with-infiniband-timeout=integer value],
+                [This option is used to specify the timeout for rdma_resolve_addr and rmda_resolve_route in infiniband
+        Default value is set as 300.])],
+        [have_infiniband_timeout=yes;
+         INFINIBAND_TIMEOUT="$withval";])
+
+
+
 if test "x$have_max_num_array_dimension" = "xyes"; then
     AC_DEFINE_UNQUOTED(BBOX_MAX_NDIM,$MAX_NUM_ARRAY_DIMENSION,[Maximum number of array dimension])
 else
@@ -67,6 +75,12 @@ if test "x$have_infiniband_msg_queue_size" = "xyes"; then
     AC_DEFINE_UNQUOTED(INFINIBAND_MSG_QUEUE_SIZE,$INFINIBAND_MSG_QUEUE_SIZE,[Max message queue size for infiniband DataSpaces server])
 else
     AC_DEFINE_UNQUOTED(INFINIBAND_MSG_QUEUE_SIZE,32,[Max message queue size for infiniband DataSpaces server])
+fi
+
+if test "x$have_infiniband_timeout" = "xyes"; then
+    AC_DEFINE_UNQUOTED(INFINIBAND_TIMEOUT,$INFINIBAND_TIMEOUT,[Timeout for RDMA function in IB])
+else
+    AC_DEFINE_UNQUOTED(INFINIBAND_TIMEOUT,300,[Timeout for RDMA function in IB])
 fi
 
 

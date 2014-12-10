@@ -1524,7 +1524,7 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 		printf("rdma_create_id %d in %s.\n", err, __func__);
 		goto err_out;
 	}
-	err = rdma_resolve_addr(peer->rpc_conn.id, NULL, addr->ai_addr, 300);
+	err = rdma_resolve_addr(peer->rpc_conn.id, NULL, addr->ai_addr, INFINIBAND_TIMEOUT);
 	if(err != 0) {
 		printf("rdma_resolve_addr %d in %s.\n", err, __func__);
 		goto err_out;
@@ -1560,7 +1560,7 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 
 //                      printf("I am %d to peer %d done preapreing buffer\n",rpc_s->ptlmap.id,peer->ptlmap.id);
 
-			err = rdma_resolve_route(event_copy.id, 200);
+			err = rdma_resolve_route(event_copy.id, INFINIBAND_TIMEOUT);
 			if(err != 0) {
 				printf("rdma_resolve_route %d in %s.\n", err, __func__);
 				goto err_out;
@@ -1653,7 +1653,7 @@ int sys_connect(struct rpc_server *rpc_s, struct node_id *peer)
 		printf("rdma_create_id %d in %s.\n", err, __func__);
 		goto err_out;
 	}
-	err = rdma_resolve_addr(peer->sys_conn.id, NULL, addr->ai_addr, 300);
+	err = rdma_resolve_addr(peer->sys_conn.id, NULL, addr->ai_addr, INFINIBAND_TIMEOUT);
 	if(err != 0) {
 		printf("rdma_resolve_addr %d in %s.\n", err, __func__);
 		goto err_out;
@@ -1687,7 +1687,7 @@ int sys_connect(struct rpc_server *rpc_s, struct node_id *peer)
 				goto err_out;
 //                      }
 
-			err = rdma_resolve_route(event_copy.id, 200);
+			err = rdma_resolve_route(event_copy.id, INFINIBAND_TIMEOUT);
 			if(err != 0) {
 				printf("rdma_resolve_route %d in %s.\n", err, __func__);
 				goto err_out;
