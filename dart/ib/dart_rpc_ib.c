@@ -2283,13 +2283,18 @@ int rpc_read_config(struct sockaddr_in *address)	////done
 		goto err_out;
 	}
 
-	err = fscanf(f, "P2TNID=%s\nP2TPID=%d\n", tmp_ip, &tmp_port);	////
+        char version[16];
+
+        err = fscanf(f, "P2TNID=%s\nP2TPID=%d\n%s\n", tmp_ip, &tmp_port,version);       ////
+
+        if(strcmp(version,VERSION)!=0)
+                printf("Warning: DataSpaces sever(s) and client(s) have mis-matched version\n");
 
 	address->sin_addr.s_addr = inet_addr(tmp_ip);
 	address->sin_port = htons(tmp_port);
 
 	fclose(f);
-	if(err == 2)
+	if(err == 3)
 		return 0;
 
 	err = -EIO;
@@ -2308,7 +2313,7 @@ int rpc_write_config(struct rpc_server *rpc_s)	////done
 	if(!f)
 		goto err_out;
 
-	err = fprintf(f, "P2TNID=%s\nP2TPID=%d\n", inet_ntoa(rpc_s->ptlmap.address.sin_addr), ntohs(rpc_s->ptlmap.address.sin_port));
+        err = fprintf(f, "P2TNID=%s\nP2TPID=%d\n%s\n", inet_ntoa(rpc_s->ptlmap.address.sin_addr), ntohs(rpc_s->ptlmap.address.sin_port),VERSION);
 
 	if(err < 0)
 		goto err_out_close;
