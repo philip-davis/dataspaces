@@ -8,6 +8,7 @@
 #include "debug.h"
 
 static struct dart_rdma_handle *drh = NULL;
+static int ibv_rdma_error_flag = 0;
 
 static struct dart_rdma_tran *dart_rdma_find_read_tran(int tran_id, struct list_head *tran_list)
 {
@@ -339,13 +340,13 @@ int dart_rdma_check_reads(int tran_id)
 		while(read_tran->avail_rdma_credit <= 0) {
 			err = dart_rdma_process_ibv_cq(read_tran);
 			if(err < 0) {
-				goto err_out;
+				goto err_out_rdma;
 			}
 		}
 
 		err = dart_rdma_get(read_tran, read_op);
 		if(err < 0) {
-			goto err_out;
+			goto err_out_rdma;
 		}
 		read_tran->avail_rdma_credit--;
 		cnt++;
@@ -354,7 +355,7 @@ int dart_rdma_check_reads(int tran_id)
 	while(!list_empty(&read_tran->read_ops_list)) {
 		err = dart_rdma_process_ibv_cq(read_tran);
 		if(err < 0) {
-			goto err_out;
+			goto err_out_rdma;
 		}
 	}
 
@@ -368,12 +369,18 @@ int dart_rdma_check_reads(int tran_id)
 
 	done = 1;
 	return done;
-      err_out:
+  err_out_rdma:
+    ibv_rdma_error_flag = 1;
+  err_out:
 	return done;
 }
 
 int dart_rdma_process_reads()
 {
+    if (ibv_rdma_error_flag) {
+        ibv_rdma_error_flag = 0;
+        return -1;
+    }
 	return 0;
 }
 #endif
