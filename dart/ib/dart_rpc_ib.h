@@ -24,7 +24,8 @@
 #include <rdma/rdma_cma.h>
 #include <rdma/rdma_verbs.h>
 #include "list.h"
-//#include "config.h"
+#include "../../include/bbox.h"
+#include "config.h"
 
 #include "dart_rdma_ib.h"
 
@@ -46,12 +47,12 @@
 }
 
 #define FPTR_DEF  void * _fptr[] = {&malloc, &free, &memset};
-
+/*
 typedef unsigned char __u8;
 typedef unsigned int __u32;
 typedef int __s32;
 typedef uint64_t __u64;
-
+*/
 struct msg_buf;
 struct rpc_server;
 struct rpc_cmd;
