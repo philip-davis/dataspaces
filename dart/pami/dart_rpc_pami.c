@@ -860,9 +860,16 @@ int rpc_read_config(size_t *rank_pami, const char *fname)
                	uloga("%s(): failed.\n", __func__);
                 return -1;
 	}
-        err = fscanf(f, "PAMIRANK=%llu\n",rank_pami);
+
+	char version[16];
+
+        err = fscanf(f, "PAMIRANK=%llu\n%s\n",rank_pami, version);
+
+	if(strcmp(version, VERSION) != 0)
+		printf("Warning: DataSpaces server(s) and client(s) have mis-matched version\n");
+
         fclose(f);
-        if(err==1)
+        if(err==2)
                 return 0;
 
         uloga("'%s()': failed\n", __func__);
@@ -879,13 +886,12 @@ int rpc_write_config(struct rpc_server *rpc_s, const char *fname)
 	sprintf(tmp_name, "%s.tmp", fname);
 	//printf("%s\n", tmp_name);
 	
-        //f = fopen(fname, "wt");
         f = fopen(tmp_name, "wt");
         if (!f)
                 goto err_out;
 
-        err = fprintf(f, "PAMIRANK=%u\n",
-                        rpc_s->ptlmap.rank_pami);
+        err = fprintf(f, "PAMIRANK=%u\n%s\n",
+                        rpc_s->ptlmap.rank_pami, VERSION);
         if (err < 0)
                 goto err_out_close;
         fclose(f);
