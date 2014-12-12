@@ -304,8 +304,10 @@ enum cmd_type {
 	dimes_ss_info_msg,
 	dimes_locate_data_msg,
 	dimes_put_msg,
-	dimes_get_ack_msg,
-	dimes_obj_get_ack_v2_msg,
+#ifdef DS_HAVE_DIMES_SHMEM
+    dimes_shmem_reset_server_msg,
+    dimes_shmem_update_server_msg,
+#endif
 #endif
 	/* Added for CCGrid Demo. */
 	CN_TIMING_AVG,
