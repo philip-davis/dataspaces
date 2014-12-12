@@ -67,7 +67,7 @@ int common_dspaces_put (const char *var_name,
         uint64_t *lb,
         uint64_t *ub,
         void *data);
-int common_dspaces_put (const char *var_name, 
+int common_dspaces_put_location_aware (const char *var_name, 
         unsigned int ver, int size,
         int ndim,
         uint64_t *lb,

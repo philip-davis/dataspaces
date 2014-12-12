@@ -83,10 +83,10 @@ struct dcg_space {
 struct dcg_space * dcg_alloc(int, int, void*);
 int dcg_barrier(struct dcg_space *);
 void dcg_free(struct dcg_space *);
-int dcg_obj_get(struct obj_data *);
-int dcg_get_versions(int **);
 int dcg_obj_put(struct obj_data *);
-int dcg_obj_put_with_server_id(struct obj_data *, int, unsigned int);
+int dcg_obj_get(struct obj_data *);
+int dcg_obj_put_to_server(struct obj_data *, int);
+int dcg_get_versions(int **);
 int dcg_obj_filter(struct obj_data *);
 int dcg_obj_cq_register(struct obj_data *);
 int dcg_obj_cq_update(int);
