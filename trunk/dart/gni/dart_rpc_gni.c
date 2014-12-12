@@ -1387,6 +1387,7 @@ RESEND:
 		    goto err_status;
 		}
 	
+
 		status = GNI_MemRegister(rpc_s->nic_hndl, (uint64_t)rr->msg->msg_data, (uint64_t)(rr->msg->size), NULL, GNI_MEM_READWRITE, -1, &rr->mdh_data);
 		if (status != GNI_RC_SUCCESS)
 		{
@@ -1638,6 +1639,7 @@ static int rpc_process_ack(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
       return -ENOMEM;
     }
 
+
   peer->num_msg_at_peer += RECVCREDIT;
   if (peer->num_msg_at_peer > SENDCREDIT)
     peer->num_msg_at_peer = SENDCREDIT;
@@ -1683,13 +1685,17 @@ int rpc_read_socket(struct sockaddr_in *address)
 		goto err_out;
         }
 
-        err = fscanf(f, "P2TNID=%s\nP2TPID=%d\n", tmp_ip, &tmp_port);
+        char version[16];
+        err = fscanf(f, "P2TNID=%s\nP2TPID=%d\n%s\n", tmp_ip, &tmp_port, version);
+
+        if(strcmp(version,VERSION)!=0)
+                printf("Warning: DataSpaces sever(s) and client(s) have mis-matched version\n");
 
 	address->sin_addr.s_addr = inet_addr(tmp_ip);
 	address->sin_port = htons(tmp_port);
 
         fclose(f);
-        if (err == 2)
+        if (err == 3)
                 return 0;
 
 	err = -EIO;
@@ -1708,7 +1714,7 @@ int rpc_write_socket(struct rpc_server *rpc_s)
         if (!f)
                 goto err_out;
 
-        err = fprintf(f, "P2TNID=%s\nP2TPID=%d\n", inet_ntoa(rpc_s->address.address.sin_addr), ntohs(rpc_s->address.address.sin_port));
+        err = fprintf(f, "P2TNID=%s\nP2TPID=%d\n%s\n", inet_ntoa(rpc_s->address.address.sin_addr), ntohs(rpc_s->address.address.sin_port), VERSION);
 
         if (err < 0)
                 goto err_out_close;
