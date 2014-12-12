@@ -258,20 +258,13 @@ enum cmd_type {
 	rpc_get_finish,
 	rpc_put_finish,
 #ifdef DS_HAVE_DIMES
-        dimes_ss_info_msg,
-        dimes_locate_data_msg,
-        dimes_locate_data_v2_msg,
-        dimes_locate_data_v3_msg,
-        dimes_put_msg,
-        dimes_put_v2_msg,
-        dimes_put_v2_1_msg,        
-        dimes_put_v3_msg,
-        dimes_update_dht_msg,      
-        dimes_get_dht_peers_msg,
-        dimes_get_location_peers_msg,
-        dimes_obj_get_msg,
-        dimes_obj_get_ack_v3_msg,
-	dimes_get_ack_msg,
+    dimes_ss_info_msg,
+    dimes_locate_data_msg,
+    dimes_put_msg,
+#ifdef DS_HAVE_DIMES_SHMEM
+    dimes_shmem_reset_server_msg,
+    dimes_shmem_update_server_msg,
+#endif
 #endif
 	/* Added for CCGrid Demo. */
 	CN_TIMING_AVG,
