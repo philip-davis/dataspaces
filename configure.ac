@@ -128,7 +128,18 @@ else
         AM_CONDITIONAL(BUILD_DIMES, false)
 fi
 
-dnl Check the max array dimension
+dnl Check if DataSpaces location-aware write is enabled
+AC_ARG_ENABLE(dataspaces_location_aware_write,
+    [AS_HELP_STRING([--enable-dataspaces-location-aware-write],
+        [Include experimental feature. DataSpaces client writes data to
+         servers that running on local compute node. This feature is useful
+         when co-locating the execution of DataSpaces servers with application
+         on the same set of compute nodes. By default this is not included.])])
+AM_CONDITIONAL([DATASPACES_LOCATION_AWARE_WRITE], [test "x$enable_dataspaces_location_aware_write" == "xyes"])
+
+if test "x$enable_dataspaces_location_aware_write" == "xyes"; then
+    AC_DEFINE(DS_HAVE_DSPACES_LOCATION_AWARE_WRITE, 1, [DATASPACES location-aware write is enabled])
+fi 
 
 if test -z "${HAVE_UGNI_TRUE}"; then
   DSPACESLIB_CPPFLAGS+=" ${PMI_CPPFLAGS}"
