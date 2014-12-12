@@ -283,6 +283,10 @@ int common_dspaces_put(const char *var_name,
         uint64_t *ub,
         void *data)
 {
+#if defined(DS_HAVE_DSPACES_LOCATION_AWARE_WRITE)
+        return common_dspaces_put_location_aware(var_name, ver, size, ndim,
+                    lb, ub, data);
+#else
         if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) {
             return -EINVAL;
         }
@@ -316,14 +320,6 @@ int common_dspaces_put(const char *var_name,
         // set global dimension
         set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
                              &od->gdim); 
-#ifdef DEBUG
-/*
-        uloga("%s(): %s default_gdim %llu %llu %llu od->gdim %llu %llu %llu\n",
-            __func__, var_name, dcg->default_gdim.sizes.c[0], dcg->default_gdim.sizes.c[1],
-            dcg->default_gdim.sizes.c[2], od->gdim.sizes.c[0], od->gdim.sizes.c[1],
-            od->gdim.sizes.c[2]);
-*/
-#endif
         err = dcg_obj_put(od);
         if (err < 0) {
             obj_data_free(od);
@@ -334,66 +330,11 @@ int common_dspaces_put(const char *var_name,
         sync_op_id = err;
 
         return 0;
-}
-
-int common_dspaces_put_with_server_id(const char *var_name, 
-        unsigned int ver, int size,
-        int ndim,
-        uint64_t *lb,
-        uint64_t *ub,
-        void *data,
-        int server_id)
-{
-        if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) {
-            return -EINVAL;
-        }
-
-        struct obj_descriptor odsc = {
-                .version = ver, .owner = -1, 
-                .st = st,
-                .size = size,
-                .bb = {.num_dims = ndim,}
-        };
-
-        memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
-        memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
-
-        memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
-        memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
-
-        struct obj_data *od;
-        int err = -ENOMEM;
-
-        strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
-        odsc.name[sizeof(odsc.name)-1] = '\0';
-
-        od = obj_data_alloc_with_data(&odsc, data);
-        if (!od) {
-            uloga("'%s()': failed, can not allocate data object.\n", 
-                __func__);
-                return -ENOMEM;
-        }
-
-        // set global dimension
-        set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
-                             &od->gdim);
-        // Do not update dht at the server side.
-        // Application needs to explicitly use dspaces_get_with_server_id() to fetch the data. 
-        unsigned int no_dht_update = 1;
-        err = dcg_obj_put_with_server_id(od, server_id, 0);
-        if (err < 0) {
-            obj_data_free(od);
-            uloga("'%s()': failed with %d, can not put data object.\n", 
-                __func__, err);
-            return err;
-        }
-        sync_op_id = err;
-
-        return 0;
+#endif
 }
 
 #define MAX_NUM_PEER_PER_NODE 64
-int common_dspaces_put_local(const char *var_name, 
+int common_dspaces_put_location_aware(const char *var_name, 
         unsigned int ver, int size,
         int ndim,
         uint64_t *lb,
@@ -448,20 +389,14 @@ int common_dspaces_put_local(const char *var_name,
                 num_local_server++;        
             }
         }
-        //for (i = 0; i < num_local_server; i++) {
-        //    uloga("%s(): my_dart_id= %d num_local_server= %d local_server_dart_id= %d\n",
-        //        __func__, dcg->dc->rpc_s->ptlmap.id, num_local_server, local_server_ids[i]);
-        //} 
 
         if (num_local_server == 0) {
             err = dcg_obj_put(od);
         } else {
             // select on local server to put the data
             int server_id = local_server_ids[dcg->dc->rpc_s->ptlmap.id % num_local_server];
-            // Update dht at the server side.
             // Application can use dspaces_get() to fetch the data.
-            unsigned int no_dht_update = 0;
-            err = dcg_obj_put_with_server_id(od, server_id, no_dht_update);
+            err = dcg_obj_put_to_server(od, server_id);
         }
         if (err < 0) {
             obj_data_free(od);
@@ -472,55 +407,6 @@ int common_dspaces_put_local(const char *var_name,
         sync_op_id = err;
 
         return 0;
-}
-
-int common_dspaces_get_with_server_id(const char *var_name,
-	unsigned int ver, int size,
-	int ndim,
-	uint64_t *lb,
-	uint64_t *ub,
-	void *data,
-    int server_id)
-{
-    if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) {
-        return -EINVAL;
-    }
-
-    struct obj_descriptor odsc = {
-            .version = ver, .owner = -1, 
-            .st = st,
-            .size = size,
-            .bb = {.num_dims = ndim,}
-    };
-    memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
-    memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
-
-    memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
-    memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
-
-    struct obj_data *od;
-    int err = -ENOMEM;
-
-    strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
-    odsc.name[sizeof(odsc.name)-1] = '\0';
-
-    od = obj_data_alloc_no_data(&odsc, data);
-    if (!od) {
-        uloga("'%s()': failed, can not allocate data object.\n", 
-            __func__);
-        return -ENOMEM;
-    }
-
-    // set global dimension
-    set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
-                         &od->gdim);
-    err = dcg_obj_get_with_server_id(od, server_id);
-    obj_data_free(od);
-    if (err < 0 && err != -EAGAIN) 
-        uloga("'%s()': failed with %d, can not get data object.\n",
-            __func__, err);
-
-    return err;
 }
 
 /*
