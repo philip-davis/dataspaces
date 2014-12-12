@@ -301,11 +301,10 @@ enum cmd_type {
 	rpc_get_finish,
 	rpc_put_finish,
 #ifdef DS_HAVE_DIMES
-	dimes_ss_info_msg,
-	dimes_locate_data_msg,
-	dimes_put_msg,
-	dimes_get_ack_msg,
-	dimes_obj_get_ack_v2_msg,
+    dimes_ss_info_msg,
+    dimes_locate_data_msg,
+    dimes_put_msg,
+    dimes_get_ack_msg,
 #endif
 	/* Added for CCGrid Demo. */
 	CN_TIMING_AVG,
