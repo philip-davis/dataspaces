@@ -199,51 +199,6 @@ void FC_FUNC(dspaces_put, DSPACES_PUT) (const char *var_name,
     *err = common_dspaces_put(vname, *ver, *size, *ndim, lb, ub, data);
 }
 
-void FC_FUNC(dspaces_put_local, DSPACES_PUT_LOCAL) (const char *var_name, 
-        unsigned int *ver, int *size, int *ndim,
-        uint64_t *lb, uint64_t *ub, void *data, int *err, int len)
-{
-	char vname[256];
-
-    if (!fstrncpy(vname, var_name, (size_t) len, sizeof(vname))) {
-		uloga("'%s': failed, can not copy Fortran var of len %d.\n",
-			__func__, len);
-		*err = -ENOMEM;
-	}
-
-    *err = common_dspaces_put_local(vname, *ver, *size, *ndim, lb, ub, data);
-}
-
-void FC_FUNC(dspaces_put_with_server_id, DSPACES_PUT_WITH_SERVER_ID) (const char *var_name, 
-        unsigned int *ver, int *size, int *ndim,
-        uint64_t *lb, uint64_t *ub, void *data, int *server_id, int *err, int len)
-{
-	char vname[256];
-
-    if (!fstrncpy(vname, var_name, (size_t) len, sizeof(vname))) {
-		uloga("'%s': failed, can not copy Fortran var of len %d.\n",
-			__func__, len);
-		*err = -ENOMEM;
-	}
-
-    *err = common_dspaces_put_with_server_id(vname, *ver, *size, *ndim, lb, ub, data, *server_id);
-}
-
-void FC_FUNC(dspaces_get_with_server_id, DSPACES_GET_WITH_SERVER_ID) (const char *var_name,
-        unsigned int *ver, int *size, int *ndim,
-        uint64_t *lb, uint64_t *ub, void *data, int *server_id, int *err, int len)
-{
-    char vname[256];
-
-    if (!fstrncpy(vname, var_name, (size_t) len, sizeof(vname))) {
-        uloga("'%s()': failed, can not copy Fortran var of len %d.\n",
-            __func__, len);
-        *err = -ENOMEM;
-    }
-
-    *err = common_dspaces_get_with_server_id(vname, *ver, *size, *ndim, lb, ub, data, *server_id);
-}
-
 /*
 void FC_FUNC(dspaces_select, DSPACES_SELECT)(char *var_name, unsigned int *vers,
         int *xl, int *yl, int *zl,
