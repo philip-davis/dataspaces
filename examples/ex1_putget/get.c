@@ -63,7 +63,7 @@ int main(int argc, char **argv)
 			timestep, data[0], data[1], data[2]);
 		
 		// DataSpaces: Release our lock on the data
-		dspaces_unlock_on_write("my_test_lock", &gcomm);
+		dspaces_unlock_on_read("my_test_lock", &gcomm);
 	}
 
 	// DataSpaces: Finalize and clean up DS process
