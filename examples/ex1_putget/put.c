@@ -32,7 +32,7 @@ int main(int argc, char **argv)
 
 	while(timestep<10){
 		timestep++;
-
+		sleep(2);
 		// DataSpaces: Lock Mechanism
 		// Usage: Prevent other process from modifying 
 		// 	  data at the same time as ours
