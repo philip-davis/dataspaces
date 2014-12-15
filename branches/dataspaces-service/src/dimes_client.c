@@ -244,11 +244,11 @@ static void print_rdma_buffer_usage()
 #endif
 }
 
-
-#define NUM_SYNC_ID 4096
+/*
+#define NUM_SYNC_ID 20000 
 static struct {
 	int next;
-	int sync_ids[NUM_SYNC_ID];
+	unsigned char sync_ids[NUM_SYNC_ID];
 } sync_op_data;
 
 static void syncop_init(void)
@@ -273,7 +273,7 @@ static int syncop_next_sync_id(void)
 	return n;
 }
 
-static int syncop_status(int sid)
+static unsigned char syncop_status(int sid)
 {
     return sync_op_data.sync_ids[sid];
 }
@@ -287,6 +287,20 @@ enum dimes_put_status {
 	DIMES_PUT_OK = 0,
 	DIMES_PUT_PENDING = 1,
 };
+*/
+
+static int sid_seed = 0;
+static void syncop_init()
+{
+    sid_seed = 0;
+}
+
+static int syncop_next_sync_id()
+{
+    sid_seed++;
+    if (sid_seed < 0) sid_seed = 1; // reset if overflow
+    return sid_seed;
+}
 
 struct dimes_memory_obj {
 	struct list_head entry;
@@ -437,8 +451,6 @@ static int storage_free_group(struct dimes_storage_group *group)
     for (i = 0; i < dimes_c->dcg->max_versions; i++) {
         list_for_each_entry_safe(p, t, &group->version_tab[i],
                     struct dimes_memory_obj, entry) {
-            // Set the flag
-            syncop_set_done(p->sync_id);
             dimes_memory_free(&p->rdma_handle);
             // Update rdma buffer usage
             options.rdma_buffer_write_usage -= obj_data_size(&p->obj_desc);
@@ -1254,6 +1266,7 @@ err_out:
 	ERROR_TRACE();
 }
 
+/*
 static int dimes_memory_obj_status(struct dimes_memory_obj *mem_obj)
 {
 	int ret;
@@ -1266,6 +1279,7 @@ static int dimes_memory_obj_status(struct dimes_memory_obj *mem_obj)
 
 	return ret;
 }
+*/
 
 #ifdef HAVE_PAMI
 static int completion_dimes_obj_put(struct rpc_server *rpc_s, struct msg_buf *msg)
