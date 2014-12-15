@@ -629,7 +629,8 @@ static struct sspace *ssd_alloc_v1(struct bbox *bb_domain, int num_nodes, int ma
         for(i = 1; i < bb_domain->num_dims; i++){
                 max_dim = max(bb_domain->ub.c[i], max_dim);
         }
-
+        if (max_dim == 0) max_dim = 1; // Note: max_dim as 0 would not work...
+    
         ssd->max_dim = next_pow_2(max_dim);
         ssd->bpd = compute_bits(ssd->max_dim);
 
