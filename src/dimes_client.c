@@ -310,71 +310,18 @@ static struct sspace* lookup_sspace_dimes(struct dimes_client *d, const struct g
         options.rdma_buffer_read_usage, get_available_rdma_buffer_size());
 #endif
 
-    // Otherwise, search for shared space dht in the linked list.
-    struct sspace_list_entry *ssd_entry = NULL;
-    list_for_each_entry(ssd_entry, &d->sspace_list,
-        struct sspace_list_entry, entry)
-    {
-        if (gd->ndim != ssd_entry->gdim.ndim)
-            continue;
-
-        if (global_dimension_equal(gd, &ssd_entry->gdim))
-            return ssd_entry->ssd;
-    }
-
-    // If not found, create new shared space dht and add it to the linked list.
-    int i, err;
-    struct bbox domain;
-    memset(&domain, 0, sizeof(struct bbox));
-    domain.num_dims = gd->ndim;
-    for (i = 0; i < gd->ndim; i++) {
-        domain.lb.c[i] = 0;
-        domain.ub.c[i] = gd->sizes.c[i] - 1;
-    }
-
-    ssd_entry = malloc(sizeof(struct sspace_list_entry));
-    memcpy(&ssd_entry->gdim, gd, sizeof(struct global_dimension));
-    const int max_versions = 1;
-    ssd_entry->ssd = ssd_alloc(&domain, d->dcg->ss_info.num_space_srv, max_versions,
-                            d->dcg->hash_version);
-    if (!ssd_entry->ssd) {
-        uloga("%s(): ERROR ssd_alloc() failed\n", __func__);
-        return d->default_ssd;
-    }
-}
-
-static int syncop_next_sync_id(void)
+static int sid_seed = 0;
+static void syncop_init()
 {
-	int n;
-	n = sync_op_data.next;
-	// NOTE: this is tricky and error prone; implement a better sync opertation
-	if (sync_op_data.sync_ids[n] != 1) {
-		uloga("%s(): ERROR sync operation overflows.\n", __func__);
-	}
-	sync_op_data.sync_ids[n] = 0;
-	sync_op_data.next = (sync_op_data.next + 1) % NUM_SYNC_ID;
-
-    list_add(&ssd_entry->entry, &d->sspace_list);
-    return ssd_entry->ssd;
+    sid_seed = 0;
 }
 
-// Check if peer has the same DART id as myself.
-static int is_peer_myself(struct node_id *peer)
+static int syncop_next_sync_id()
 {
-    return peer->ptlmap.id == DIMES_CID;
+    sid_seed++;
+    if (sid_seed < 0) sid_seed = 1; // reset if overflow
+    return sid_seed;
 }
-
-// Calculate size (in bytes) of available RDMA memory buffer.
-static size_t get_available_rdma_buffer_size()
-{
-    if (options.rdma_buffer_usage > options.rdma_buffer_size) return 0; 
-    else return options.rdma_buffer_size-options.rdma_buffer_usage;
-}
-
-enum dimes_put_status {
-	DIMES_PUT_OK = 0,
-	DIMES_PUT_PENDING = 1,
-};
 
 struct dimes_memory_obj {
 	struct list_head entry;
@@ -532,8 +479,6 @@ static int storage_free_group(struct dimes_storage_group *group)
     for (i = 0; i < dimes_c->dcg->max_versions; i++) {
         list_for_each_entry_safe(p, t, &group->version_tab[i],
                     struct dimes_memory_obj, entry) {
-            // Set the flag
-            syncop_set_done(p->sync_id);
             dimes_memory_free(&p->rdma_handle);
             // Update rdma buffer usage
             options.rdma_buffer_write_usage -= obj_data_size(&p->obj_desc);
@@ -1367,20 +1312,6 @@ static int dimes_ss_info()
 err_out:
 	ERROR_TRACE();
 }
-
-static int rpc_send_complete(const int *send_flags, int num_send)
-{
-	int ret;
-
-    if (syncop_status(mem_obj->sync_id) == 1) {	
-		ret = DIMES_PUT_OK;
-	} else {
-		ret = DIMES_PUT_PENDING;
-	}
-
-    return 1;
-}
-#endif
 
 // Send update messages to corresponding dht nodes (servers) and add new
 // data object. 
