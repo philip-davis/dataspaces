@@ -6,6 +6,7 @@
 #include "dataspaces.h"
 #include "mpi.h"
 
+//compare function: used to quicksort array values
 int compare (const void * a, const void * b)
 {
   return ( *(int*)a - *(int*)b );
@@ -35,7 +36,7 @@ int main(int argc, char **argv)
 
 	while(timestep<10){
 		timestep++;
-
+		sleep(2);
 		// DataSpaces: Lock Mechanism
 		// Usage: Prevent other process from modifying 
 		// 	  data at the same time as ours
@@ -61,38 +62,17 @@ int main(int argc, char **argv)
 		// Sort array
 		qsort(data, 50, sizeof(int), compare);	
 
+		// We will use 1D
+		int ndim = 1;
+
 		// We want to put 5 values in each bounding box
-		int *temp = malloc(5*sizeof(int));
-		int k, l;
-		const int ndim = 1; 
-		uint64_t lb[3], ub[3];
+		uint64_t lb[3] = {0}, ub[3] = {0};
+		ub[0]=9;
 
- 
-		for(k=0;k<10;k++){
-			for(l=0;l<5;l++){
-				//Populate 5 values into temporary array
-				temp[l] = data[l+(5*k)];
-				
-			}
-				//Lower Bound
-				lb[0] = k;
-				lb[1] = 0;
-				lb[2] = 0;
-			
-				//Upper Bound
-				ub[0] = k;
-				ub[1] = 0;
-				ub[2] = 0;
-				
-				//Put the 5 values into each box
-				dspaces_put(var_name, timestep, 5*sizeof(int), 
-					    ndim, lb, ub, temp);
+		//Put 5 values into each of 10 boxes (0,0,0 to 9,0,0)
+		dspaces_put(var_name, timestep, 5*sizeof(int), ndim, lb, ub, data);
 
-				// Print to user
-				printf("Timestep %d: put data %d %d %d %d %d in Box %d,%d,%d\n", timestep, temp[0], temp[1], temp[2], temp[3], temp[4], lb[0],lb[1],lb[2]);
-		}
-		
-		
+		printf("Finished put 50 values.");
 		
 		// DataSpaces: Release our lock on the data
 		dspaces_unlock_on_write("my_test_lock", &gcomm);

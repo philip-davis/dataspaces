@@ -69,7 +69,7 @@ int main(int argc, char **argv)
 			printf("%d\t", data[i]);
 		}
 		// DataSpaces: Release our lock on the data
-		dspaces_unlock_on_write("my_test_lock", &gcomm);
+		dspaces_unlock_on_read("my_test_lock", &gcomm);
 	}
 
 	// DataSpaces: Finalize and clean up DS process
