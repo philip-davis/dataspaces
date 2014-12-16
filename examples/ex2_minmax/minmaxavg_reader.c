@@ -1,13 +1,16 @@
-/* get.c : Example 1: DataSpaces get tutorial
- *  This example will show you the simplest way 
- *  to get a 1D array of 3 elements out of the DataSpace
- *  and store it in a local variable.
- *  */
+/* minmax_reader.c : Example 2: Min/Max/Average of Array using DataSpace
+ * In this example, we will use a number of processes (specified by -np)
+ * to compute the minimum and maximum element in an array and to compute
+ * the average of all the values in the array.
+ * You will see how DataSpaces accesses the values without reading from disk. 
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include "dataspaces.h"
 #include "mpi.h"
+// Example using array size, 128. 
+// If modifying, MUST change in minmax_writer.c as well.
 #define ARRAY_SIZE 128
 
 int main(int argc, char **argv)
@@ -73,7 +76,8 @@ int main(int argc, char **argv)
 	int local_min=tempDataBuffer[0];
 	int sum; //for avg
 	
-	// Find Max in our local buffer
+	// Find Max and Min in our local buffer
+	// Also, sum the contents of this buffer for averaging purposes
 	for(i=0;i<array_size;i++){
 
 		sum += tempDataBuffer[i];
@@ -93,10 +97,19 @@ int main(int argc, char **argv)
 
 	int global_max, global_min, global_avg;
 
+	// Reduce all local maximums to find the overall maximum in the data
 	MPI_Reduce(&local_max, &global_max, 1, MPI_INT, MPI_MAX, 0, gcomm);
+	// Reduce all local minimums to find the overall minimum in the data
 	MPI_Reduce(&local_min, &global_min, 1, MPI_INT, MPI_MIN, 0, gcomm);
+	// Reduce all local avgs into a global sum, then divide by the number
+	// of processes to get the global average
 	MPI_Reduce(&local_avg, &global_avg, 1, MPI_INT, MPI_SUM, 0, gcomm);
 	global_avg = global_avg/nprocs;
+
+	// Report data to user
+	if(rank==0){
+		printf("Max: %d, Min: %d, Average: %d",global_max,global_min,global_avg);		
+	}
 
 	// DataSpaces: Finalize and clean up DS process
 	dspaces_finalize();

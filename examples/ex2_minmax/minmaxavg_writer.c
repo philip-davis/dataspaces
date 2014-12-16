@@ -1,4 +1,4 @@
-/* put.c : Example 3: DataSpaces put 128 array
+/* minmax_writer.c : Example 3: DataSpaces put 128 array
  * Bounding Box: 0,0,0 - 127,0,0 
  * 1 element at each space in the box
  * */
@@ -7,6 +7,8 @@
 #include <stdint.h>
 #include "dataspaces.h"
 #include "mpi.h"
+// Size of array, if changing
+// MUST also change in minmax_reader.c
 #define ARRAY_SIZE 128
 
 int main(int argc, char **argv)
