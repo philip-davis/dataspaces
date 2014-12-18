@@ -59,16 +59,22 @@ int main(int argc, char **argv)
 	uint64_t lb[3] = {0}, ub[3] = {0};
 	ub[0]=ub[1]=MATRIX_DIM-1;
 
-	dspaces_get(var_name, 0, sizeof(int), ndim, lb, ub, *mat);
+        int i;
+        for(i=0;i<MATRIX_DIM;i++){
+                lb[1] = ub[1]= i;
+		dspaces_get(var_name, 0, sizeof(int), ndim, lb, ub, mat[i]);
+        }
+
+
 		
 	// DataSpaces: Release our lock on the data
 	dspaces_unlock_on_read("my_test_lock", &gcomm);
 
-	int i, j;
+	int j,k;;
 
-	for(i=0;i<MATRIX_DIM;i++){
-		for(j=0;j<MATRIX_DIM;j++){
-			printf("%d\t",mat[i][j]);
+	for(j=0;j<MATRIX_DIM;j++){
+		for(k=0;k<MATRIX_DIM;k++){
+			printf("%d\t",mat[j][k]);
 		}
 		printf("\r\n");
 	}
