@@ -8,6 +8,19 @@
 #include <stdint.h>
 #include "dataspaces.h"
 #include "mpi.h"
+#define MATRIX_DIM 10
+
+int** createMatrix(int xdim, int ydim){
+        int** mat;
+
+        mat = (int**) malloc(xdim*sizeof(int*));
+
+        int i;
+        for(i=0; i<xdim; i++){
+                mat[i] = (int*) malloc(ydim*sizeof(int));
+        }
+
+}
 
 int main(int argc, char **argv)
 {
@@ -26,45 +39,40 @@ int main(int argc, char **argv)
 	// Note: appid for get.c is 2 [for put.c, it was 1]
 	dspaces_init(1, 2, &gcomm, NULL);
 
-	int timestep=0;
 
-	while(timestep<10){
-		timestep++;
+	dspaces_lock_on_read("my_test_lock", &gcomm);
 
-		// DataSpaces: Read-Lock Mechanism
-		// Usage: Prevent other processies from changing the 
-		// 	  data while we are working with it
-		dspaces_lock_on_read("my_test_lock", &gcomm);
+	// Name our data.
+	char var_name[128];
+	sprintf(var_name, "matrix_A");
 
-		// Name our data.
-		char var_name[128];
-		sprintf(var_name, "ex1_sample_data");
+	// Create integer array, size 3
+	// We will store the data we get out of the DataSpace
+	// in this array.
+	int **mat = createMatrix(MATRIX_DIM, MATRIX_DIM);
 
-		// Create integer array, size 3
-		// We will store the data we get out of the DataSpace
-		// in this array.
-		int *data = malloc(3*sizeof(int));
-
-		// Define the dimensionality of the data to be received 
-		int ndim = 1; 
+	// Define the dimensionality of the data to be received 
+	int ndim = 2; 
 		
-		// Prepare LOWER and UPPER bound dimensions
-		uint64_t lb[3] = {0}, ub[3] = {0};
+	// Prepare LOWER and UPPER bound dimensions
+	// 0,0,0 to 9,9,0
+	uint64_t lb[3] = {0}, ub[3] = {0};
+	ub[0]=ub[1]=MATRIX_DIM-1;
 
-		// DataSpaces: Get data array from the space
-		// Usage: dspaces_get(Name of variable, version num, 
-		// size (in bytes of each element), dimensions for bounding box,
-		// lower bound coordinates, upper bound coordinates,
-		// ptr to data buffer 
-		dspaces_get(var_name, timestep, 3*sizeof(int), ndim, 
-			    lb, ub, data);
+	dspaces_get(var_name, 0, sizeof(int), ndim, lb, ub, *mat);
 		
-		printf("Timestep %d: get data %d %d %d\n", 
-			timestep, data[0], data[1], data[2]);
-		
-		// DataSpaces: Release our lock on the data
-		dspaces_unlock_on_read("my_test_lock", &gcomm);
+	// DataSpaces: Release our lock on the data
+	dspaces_unlock_on_read("my_test_lock", &gcomm);
+
+	int i, j;
+
+	for(i=0;i<MATRIX_DIM;i++){
+		for(j=0;j<MATRIX_DIM;j++){
+			printf("%d\t",mat[i][j]);
+		}
+		printf("\r\n");
 	}
+	
 
 	// DataSpaces: Finalize and clean up DS process
 	dspaces_finalize();
