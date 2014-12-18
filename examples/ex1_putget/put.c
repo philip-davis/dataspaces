@@ -78,15 +78,19 @@ int main(int argc, char **argv)
 			
 	// Prepare LOWER and UPPER bound dimensions
 	uint64_t lb[3] = {0}, ub[3] = {0};
-	ub[0] = ub[1] = MATRIX_DIM-1;
+	ub[0] = MATRIX_DIM-1;
 	
 	// DataSpaces: Put data array into the space
 	// Usage: dspaces_put(Name of variable, version num, 
 	// size (in bytes of each element), dimensions for bounding box,
 	// lower bound coordinates, upper bound coordinates,
 	// ptr to data buffer 
-	dspaces_put(var_name, 0, sizeof(int), ndim, lb, ub, *matA);
-		
+	int i,j;
+	for(i=0;i<MATRIX_DIM;i++){
+		lb[1] = ub[1]= i;
+		dspaces_put(var_name, 0, sizeof(int), ndim, lb, ub, matA[i]);
+	}	
+	
 	// DataSpaces: Release our lock on the data
 	dspaces_unlock_on_write("my_test_lock", &gcomm);
 	
