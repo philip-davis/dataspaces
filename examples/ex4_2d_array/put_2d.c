@@ -60,9 +60,11 @@ int main(int argc, char **argv)
 	//Name the Data that will be writen
 	char var_name[128];
 	sprintf(var_name, "matrix_A");
+	sprintf(var_name, "matrix_B");
 
 	// Create our 2D matrix, 10x10
 	int **matA = createMatrix(MATRIX_DIM, MATRIX_DIM);
+	int **matB = createMatrix(MATRIX_DIM, MATRIX_DIM);
 
 	// ndim: Dimensions for application data domain
 	// In this case, our matrix is 2 dimensional
@@ -87,6 +89,9 @@ int main(int argc, char **argv)
 		// ptr to data buffer 
 		dspaces_put(var_name, 0, sizeof(int), ndim, lb, ub, matA[i]);
 	}	
+
+	free(matA);
+	free(matB);	
 	
 	// DataSpaces: Release our lock on the data
 	dspaces_unlock_on_write("my_test_lock", &gcomm);

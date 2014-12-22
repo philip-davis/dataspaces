@@ -61,7 +61,6 @@ int main(int argc, char **argv)
 		dspaces_get(var_name, 0, sizeof(int), ndim, lb, ub, mat[i]);
         }
 
-
 		
 	// DataSpaces: Release our lock on the data
 	dspaces_unlock_on_read("my_test_lock", &gcomm);
@@ -74,6 +73,8 @@ int main(int argc, char **argv)
 		}
 		printf("\r\n");
 	}
+
+	free(mat);
 
 	// DataSpaces: Finalize and clean up DS process
 	dspaces_finalize();
