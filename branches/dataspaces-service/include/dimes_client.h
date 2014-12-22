@@ -65,8 +65,8 @@ struct dimes_client {
     int num_local_peer;
     int node_master_dart_id;
     uint32_t node_id;
+    int node_rank;
     MPI_Comm node_mpi_comm;
-    int node_mpi_rank;
     // TODO: put struct list_head storage; into dimes_client
 #endif
 };
