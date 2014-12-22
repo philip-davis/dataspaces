@@ -91,6 +91,8 @@ int main(int argc, char **argv)
 	}
 
 	int local_avg = sum/i;
+
+	free(tempDataBuffer);
 	
 	// DataSpaces: Release our lock on the data
 	dspaces_unlock_on_read("my_test_lock", &gcomm);

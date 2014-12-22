@@ -71,6 +71,8 @@ int main(int argc, char **argv)
 		// DataSpaces: Put data array into the space
 		// 1 integer in each box, fill boxes 0,0,0 to 127,0,0
 		dspaces_put(var_name, timestep, sizeof(int), ndim, lb, ub, data);
+
+		free(data);
 		
 		// DataSpaces: Release our lock on the data
 		dspaces_unlock_on_write("my_test_lock", &gcomm);
