@@ -68,6 +68,9 @@ int main(int argc, char **argv)
 		for(i=0;i<10;i++){
 			printf("%d\t", data[i]);
 		}
+
+		free(data);
+
 		// DataSpaces: Release our lock on the data
 		dspaces_unlock_on_read("my_test_lock", &gcomm);
 	}

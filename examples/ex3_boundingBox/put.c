@@ -74,6 +74,8 @@ int main(int argc, char **argv)
 
 		printf("Finished put 50 values.");
 		
+		free(data);
+
 		// DataSpaces: Release our lock on the data
 		dspaces_unlock_on_write("my_test_lock", &gcomm);
 	}
