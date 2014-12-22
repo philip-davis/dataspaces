@@ -68,7 +68,7 @@ int main(int argc, char **argv)
 	// size (in bytes of each element), dimensions for bounding box,
 	// lower bound coordinates, upper bound coordinates,
 	// ptr to data buffer 
-	dspaces_get(var_name, 0, sizeof(int), ndim, lb, ub, tempDataBuffer);
+	dspaces_get(var_name, 1, sizeof(int), ndim, lb, ub, tempDataBuffer);
 	
 	int i;	
 	int array_size = sizeof(tempDataBuffer)/sizeof(int);
@@ -79,7 +79,7 @@ int main(int argc, char **argv)
 	// Find Max and Min in our local buffer
 	// Also, sum the contents of this buffer for averaging purposes
 	for(i=0;i<array_size;i++){
-
+		
 		sum += tempDataBuffer[i];
 
 		if(local_max < tempDataBuffer[i]){
