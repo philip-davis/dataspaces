@@ -22,5 +22,5 @@ get_2d: get_2d.o
 .PHONY: clean
 
 clean:
-	rm -f *.o put get
+	rm -f *.o put_2d get_2d
 
