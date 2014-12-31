@@ -40,7 +40,7 @@ struct dart_client {
 
 	int			peer_size;
 	struct node_id		*peer_tab;
-	struct node_id		*cn_peers;// not used for DSaaS
+	struct node_id		*cn_peers;
 
 	int			num_sp, num_cp;
 
@@ -63,25 +63,9 @@ struct dart_client {
 };
 
 // normally, n represents destination id .
-static inline struct node_id * dc_get_peer(struct dart_client *dc, int peer_id)
+static inline struct node_id * dc_get_peer(struct dart_client *dc, int n)
 {
-	int count=0;
-	struct node_id *cur_peer;
-
-	cur_peer = dc->peer_tab;
-
-	while(cur_peer){
-		count = count + cur_peer->peer_num;
-
-		if(peer_id < count)
-			return cur_peer + peer_id - cur_peer->ptlmap.id;
-		else
-			cur_peer = (struct node_id *)(cur_peer + cur_peer->peer_num - 1)->next;	
-
-	}
-
-	printf("%s: cannot find peer in peer_tab error -1.\n", __func__);
-	return NULL;
+		return dc->peer_tab + n;
 }
 
 static inline struct dart_client *dc_ref_from_rpc(struct rpc_server *rpc_s)
