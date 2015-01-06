@@ -18,6 +18,16 @@ int** createMatrix(int xdim, int ydim){
 	return mat;
 }
 
+void freeMatrix(int** mat, int xdim){
+        int i;
+        for(i=0;i<xdim;i++){
+                free(mat[i]);
+        }
+
+        free(mat);
+
+}
+
 int main(int argc, char **argv)
 {
 	int err;
@@ -74,7 +84,7 @@ int main(int argc, char **argv)
 		printf("\r\n");
 	}
 
-	free(mat);
+	freeMatrix(mat, MATRIX_DIM);
 
 	// DataSpaces: Finalize and clean up DS process
 	dspaces_finalize();
