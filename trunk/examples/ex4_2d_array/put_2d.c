@@ -30,6 +30,15 @@ int** createMatrix(int xdim, int ydim){
 	return mat; 
 }
 
+void freeMatrix(int** mat, int xdim){
+	int i;
+	for(i=0;i<xdim;i++){
+		free(mat[i]);
+	}
+
+	free(mat);
+
+}	
 
 int main(int argc, char **argv)
 {
@@ -90,8 +99,8 @@ int main(int argc, char **argv)
 		dspaces_put(var_name, 0, sizeof(int), ndim, lb, ub, matA[i]);
 	}	
 
-	free(matA);
-	free(matB);	
+	freeMatrix(matA, MATRIX_DIM);
+	freeMatrix(matB, MATRIX_DIM);	
 	
 	// DataSpaces: Release our lock on the data
 	dspaces_unlock_on_write("my_test_lock", &gcomm);
