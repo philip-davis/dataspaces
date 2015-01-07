@@ -83,7 +83,7 @@ int main(int argc, char **argv)
 	dspaces_finalize();
 
 	MPI_Barrier(gcomm);
-	MPI_Finalize;
+	MPI_Finalize();
 
 	return 0;
 }
