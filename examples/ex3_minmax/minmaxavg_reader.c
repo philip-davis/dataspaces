@@ -110,7 +110,7 @@ int main(int argc, char **argv)
 
 	// Report data to user
 	if(rank==0){
-		printf("Max: %d, Min: %d, Average: %d",global_max,global_min,global_avg);		
+		printf("Max: %d, Min: %d, Average: %d\n",global_max,global_min,global_avg);		
 	}
 
 	// DataSpaces: Finalize and clean up DS process
