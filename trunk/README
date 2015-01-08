@@ -263,3 +263,7 @@ dimes_get() queries. In this case, the total size of application data does not
 affect the number of servers. However, because the application processes still
 need to interact with the servers, the second factor (above) still needs to be
 considered.
+
+For more information on installing DataSpaces and running the examples, or
+if you have any other questions, please visit the following web page:
+http://personal.cac.rutgers.edu/TASSL/projects/data/support.html

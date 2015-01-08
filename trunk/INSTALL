@@ -36,7 +36,7 @@ $ ./configure CC=/bgsys/drivers/ppcfloor/comm/xl/bin/mpixlc_r FC=/bgsys/drivers/
    DIMES feature uses local RDMA memory buffers across application processes to build
    a virtual shared data space in-situ, which can be queried and directly accessed by 
    other applications in a data coupling workflow. Currently this feature is only 
-   supported on Cray Gemini networks, Infiniband cluster and on IBM BG/P and BG/Q systems. 
+   supported on Cray Gemini networks, Infiniband cluster and on IBM BG/P and BG/Q systems.
 
  --with-dimes-rdma-buffer-size=integer value for megabytes
    This option specifies the maximum amount of RDMA memory buffer that
@@ -54,7 +54,6 @@ $ ./configure CC=/bgsys/drivers/ppcfloor/comm/xl/bin/mpixlc_r FC=/bgsys/drivers/
   increase the size of the messaging queue.
 
 
-
    For applications using DIMES, dimes_put_sync_all() or dimes_put_sync_group()
    API functions (see dimes_interface.h for detailed documentation) should be
    called periodically to free data objects cached in DIMES. Where there is no
@@ -64,3 +63,7 @@ $ ./configure CC=/bgsys/drivers/ppcfloor/comm/xl/bin/mpixlc_r FC=/bgsys/drivers/
 # Under project top directory
 $ make
 $ make install
+
+For more information on installing DataSpaces and running the examples, or 
+if you have any other questions, please visit the following web page:
+http://personal.cac.rutgers.edu/TASSL/projects/data/support.html 
