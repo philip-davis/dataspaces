@@ -1,7 +1,10 @@
-/* put.c : Example 1: DataSpaces put tutorial 
- * This example will show you the simplest way 
- * to put a 1D array of 3 elements into the DataSpace.
- * */
+/* put.c : Example 5: Matrix Multiplication
+ * In this example, we will put a 2D array into the DS.
+ * The array is designed as a series of pointers to pointers.
+ * NOTE: This example is designed to work with 1-2 processors ONLY.
+ * It will show you how to put two matrices into the same DS, with
+ * different variable names.
+* */
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -9,6 +12,7 @@
 #include "mpi.h"
 #define MATRIX_DIM 5
 
+//Function to create the pointer array
 int** createMatrix(int xdim, int ydim, int rank){
 
 	if(xdim != ydim){
@@ -28,6 +32,8 @@ int** createMatrix(int xdim, int ydim, int rank){
 	
 	srand(time(NULL)+rank);
 
+	
+	//Populate the array with random numbers between 0-9
 	for(j=0;j<xdim;j++){
 		for(k=0;k<ydim;k++){
 			mat[j][k] = rand()%10;
@@ -37,6 +43,7 @@ int** createMatrix(int xdim, int ydim, int rank){
 	return mat; 
 }
 
+// Memory clean up
 void freeMatrix(int** mat, int xdim){
 	int i;
 
@@ -77,7 +84,7 @@ int main(int argc, char **argv)
 		char var_name[128];
 		sprintf(var_name, "matrix_A");
 
-		// Create our 2D matrix, 500x500
+		// Create our 2D matrix
 		int** matA = createMatrix(MATRIX_DIM, MATRIX_DIM, rank);
 
 		// ndim: Dimensions for application data domain
@@ -94,13 +101,14 @@ int main(int argc, char **argv)
 		// lower bound coordinates, upper bound coordinates,
 		// ptr to data buffer
 		int i;
+
+		//Because we are using int**, we will need to put each row in individually
+		//Loop over rows
 		for(i=0;i<MATRIX_DIM;i++){
                 	lb[1] = ub[1]= i;
    			dspaces_put(var_name, 0, sizeof(int), ndim, lb, ub, matA[i]);
 		}
 
-		//dspaces_put(var_name, 0, sizeof(int), ndim, lb, ub, matA);
-	
 		printf("Matrix A, Put into DataSpace.\n");
 		int j;
 		for(i=0;i<MATRIX_DIM;i++){
@@ -134,7 +142,6 @@ int main(int argc, char **argv)
 		// size (in bytes of each element), dimensions for bounding box,
 		// lower bound coordinates, upper bound coordinates,
 		// ptr to data buffer 
-		//dspaces_put(var_name, 0, sizeof(int), ndim, lb, ub, matB);
 		int i;
 		for(i=0;i<MATRIX_DIM;i++){
                 	lb[1] = ub[1]= i;

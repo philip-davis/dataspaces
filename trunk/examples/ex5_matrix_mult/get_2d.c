@@ -6,9 +6,10 @@
 #include "dataspaces.h"
 #include "mpi.h"
 #define MATRIX_DIM 5
-
+// Define resultant matrix container
 int resultMat[MATRIX_DIM][MATRIX_DIM];
 
+// Create 2D array
 int** createMatrix(int xdim, int ydim){
         int** mat = malloc(xdim*sizeof(int*));
 
@@ -20,6 +21,7 @@ int** createMatrix(int xdim, int ydim){
 	return mat;
 }
 
+// clean up memory
 void freeMatrix(int** mat, int xdim){
 	int i;
 
@@ -42,8 +44,6 @@ int main(int argc, char **argv)
 	MPI_Barrier(MPI_COMM_WORLD);
 	gcomm = MPI_COMM_WORLD;
 
-//	int** resultMat = createMatrix(MATRIX_DIM, MATRIX_DIM);	
-
 	// DataSpaces: Initalize and identify application
 	// Usage: dspaces_init(num_peers, appid, Ptr to MPI comm, parameters)
 	// Note: appid for get.c is 2 [for put.c, it was 1]
@@ -51,7 +51,7 @@ int main(int argc, char **argv)
 
 	dspaces_lock_on_read("my_test_lock", &gcomm);
 
-	// Name our data.
+	// Each process will retrieve a full copy of MatB.
 	char var_name[128];
 	sprintf(var_name, "matrix_B");
 
@@ -66,11 +66,13 @@ int main(int argc, char **argv)
 
         int i;
 	
+	//Retrive matB, row by row
         for(i=0;i<MATRIX_DIM;i++){
                 lb[1] = ub[1]= i;
 		dspaces_get(var_name, 0, sizeof(int), ndim, lb, ub, matB[i]);
         }
 	
+	// Sanity check, print contents of B for users.
 	if(rank==0){
 		printf("Matrix B retrieved from DataSpace.\n");
 		int y, z;
@@ -97,26 +99,8 @@ int main(int argc, char **argv)
 		upper_bound = lower_bound+portion;
 	}
 	
+	// We will now retrieve the portion of matrix A used for calc.
 	sprintf(var_name, "matrix_A");
-	/*int** matA = createMatrix(MATRIX_DIM, MATRIX_DIM);
-	lb[0]=lb[1]=lb[2]=0;
-	ub[0]=MATRIX_DIM-1;
-
-        for(i=0;i<MATRIX_DIM;i++){
-                lb[1] = ub[1]= i;
-		dspaces_get(var_name, 0, sizeof(int), ndim, lb, ub, matA[i]);
-        }
-	
-	if(rank==0){
-		printf("Matrix A retrieved from DataSpace.\n");
-		int y, z;
-		for(y=0;y<MATRIX_DIM;y++){
-			for(z=0;z<MATRIX_DIM;z++){
-				printf("%d\t",matA[y][z]);
-			}
-			printf("\n");
-		}
-	}*/
 
 	//Reset vars.
 	lb[0] = lb[1] = lb[2] = 0;
@@ -124,24 +108,29 @@ int main(int argc, char **argv)
 	ub[0] = MATRIX_DIM-1;
 
 	int k;
-	
+
+	// We can retrieve an individual row from DS, operate on it,
+	// then retrieve the next row	
 	int* rowA = malloc(MATRIX_DIM*sizeof(int));
+
 	// Populate the portion of matA that will be used for this calculation
 	ndim = 2;
 
+	printf("Retrieving Matrix A.\n");
 	for(i=lower_bound;i<upper_bound;i++){
+		//Select row using bounding box: 0,i,0 - MAT_DIM, i, 0	
 		lb[1] = ub[1]= i;
-		//0,i,0 - MAT_DIM, i, 0	
 		dspaces_get(var_name, 0, sizeof(int), ndim, lb, ub, rowA);
 
 		int y;
-		printf("Rank: %d\n",rank);
+		printf("Row %d of A, retrived by process %d\n",i,rank);
 		for(y=0;y<MATRIX_DIM;y++){
-		//	printf("mat: %d\t",matA[i][y]);
-			printf("rowA: %d\t",rowA[y]);
+			printf("%d\t",rowA[y]);
 		}
 		printf("\n");
 
+		//Each process performs matrix multiplication. One row versus
+		//all values of B. Stores result in resultant matrix.
 		for(j=0;j<MATRIX_DIM;j++){ //cols B
 			resultMat[i][j] = 0;
 			for(k=0;k<MATRIX_DIM;k++){//rows B
@@ -150,9 +139,14 @@ int main(int argc, char **argv)
 		}
 	}
 	
+	// Each process cleans up memory
+	free(rowA);
+	freeMatrix(matB, MATRIX_DIM);
 	
+	// Gather all of the individual results from each process, store in final resultant matrix
 	MPI_Gather(resultMat[lower_bound],MATRIX_DIM*MATRIX_DIM/nprocs, MPI_INT, resultMat, MATRIX_DIM*MATRIX_DIM/nprocs, MPI_INT, 0, gcomm);
 
+	// Print results to user for verification purposes
 	if(rank==0){
 		printf("Resultant Matrix, C\n");
 		int l, m;
@@ -163,13 +157,9 @@ int main(int argc, char **argv)
 			printf("\n");
 		}
 	}
-
-	free(rowA);
-	freeMatrix(matB, MATRIX_DIM);
 	
 	// DataSpaces: Release our lock on the data
 	dspaces_unlock_on_read("my_test_lock", &gcomm);
-
 
 	// DataSpaces: Finalize and clean up DS process
 	dspaces_finalize();
