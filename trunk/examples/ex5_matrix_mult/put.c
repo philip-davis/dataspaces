@@ -7,17 +7,16 @@
 #include <stdint.h>
 #include "dataspaces.h"
 #include "mpi.h"
-#define MATRIX_DIM 500
+#define MATRIX_DIM 5
 
 int** createMatrix(int xdim, int ydim, int rank){
-	int** mat;
 
 	if(xdim != ydim){
 		printf("ERROR: Only square matrices supported.");
 		exit(1);
 	}
 
-	mat = (int**) malloc(xdim*sizeof(int*));
+	int** mat = (int**) malloc(xdim*sizeof(int*));
 
 	int i;
 	for(i=0; i<xdim; i++){
@@ -31,13 +30,22 @@ int** createMatrix(int xdim, int ydim, int rank){
 
 	for(j=0;j<xdim;j++){
 		for(k=0;k<ydim;k++){
-			mat[j][k] = rand()%32768;
+			mat[j][k] = rand()%10;
 		}
 	}
 
 	return mat; 
 }
 
+void freeMatrix(int** mat, int xdim){
+	int i;
+
+	for(i=0;i<xdim;i++){
+		free(mat[i]);
+	}
+
+	free(mat);
+}
 
 int main(int argc, char **argv)
 {
@@ -65,13 +73,12 @@ int main(int argc, char **argv)
 	dspaces_lock_on_write("my_test_lock", &gcomm);
 
 	if(rank==0){
-
 		//Name the Data that will be writen
 		char var_name[128];
 		sprintf(var_name, "matrix_A");
 
 		// Create our 2D matrix, 500x500
-		int **matA = createMatrix(MATRIX_DIM, MATRIX_DIM, rank);
+		int** matA = createMatrix(MATRIX_DIM, MATRIX_DIM, rank);
 
 		// ndim: Dimensions for application data domain
 		// In this case, our matrix is 2 dimensional
@@ -79,17 +86,34 @@ int main(int argc, char **argv)
 			
 		// Prepare LOWER and UPPER bound dimensions
 		uint64_t lb[3] = {0}, ub[3] = {0};
-		ub[1] = ub[2] = MATRIX_DIM;
+		ub[0] = MATRIX_DIM-1;
 	
 		// DataSpaces: Put data array into the space
 		// Usage: dspaces_put(Name of variable, version num, 
 		// size (in bytes of each element), dimensions for bounding box,
 		// lower bound coordinates, upper bound coordinates,
-		// ptr to data buffer 
-		dspaces_put(var_name, 0, sizeof(int), ndim, lb, ub, matA);
+		// ptr to data buffer
+		int i;
+		for(i=0;i<MATRIX_DIM;i++){
+                	lb[1] = ub[1]= i;
+   			dspaces_put(var_name, 0, sizeof(int), ndim, lb, ub, matA[i]);
+		}
+
+		//dspaces_put(var_name, 0, sizeof(int), ndim, lb, ub, matA);
+	
+		printf("Matrix A, Put into DataSpace.\n");
+		int j;
+		for(i=0;i<MATRIX_DIM;i++){
+			for(j=0;j<MATRIX_DIM;j++){
+				printf("%d\t",matA[i][j]);
+			}
+			printf("\n");
+		}		
 		
-		free(matA);
-	}else if(rank==1 || nprocs==1){
+		freeMatrix(matA, MATRIX_DIM);
+	}
+
+	if(rank==1 || nprocs==1){	
 		//Name the Data that will be writen
 		char var_name[128];
 		sprintf(var_name, "matrix_B");
@@ -103,20 +127,34 @@ int main(int argc, char **argv)
 		
 		// Prepare LOWER and UPPER bound dimensions
 		uint64_t lb[3] = {0}, ub[3] = {0};
-		ub[1] = ub[2] = MATRIX_DIM;
+		ub[0] = MATRIX_DIM-1;
 	
 		// DataSpaces: Put data array into the space
 		// Usage: dspaces_put(Name of variable, version num, 
 		// size (in bytes of each element), dimensions for bounding box,
 		// lower bound coordinates, upper bound coordinates,
 		// ptr to data buffer 
-		dspaces_put(var_name, 0, sizeof(int), ndim, lb, ub, matB);
+		//dspaces_put(var_name, 0, sizeof(int), ndim, lb, ub, matB);
+		int i;
+		for(i=0;i<MATRIX_DIM;i++){
+                	lb[1] = ub[1]= i;
+   			dspaces_put(var_name, 0, sizeof(int), ndim, lb, ub, matB[i]);
+		}
 	
-		free(matB);
-	}else{
-		printf("ERROR: Currently only works with 2 processes");
+		printf("Matrix B, Put into DataSpace.\n");
+		int j;
+		for(i=0;i<MATRIX_DIM;i++){
+			for(j=0;j<MATRIX_DIM;j++){
+				printf("%d\t",matB[i][j]);
+			}
+			printf("\n");
+		}
+		
+		freeMatrix(matB, MATRIX_DIM);
 	}
 
+	printf("\n");
+	printf("\n");
 
 	// DataSpaces: Release our lock on the data
 	dspaces_unlock_on_write("my_test_lock", &gcomm);
