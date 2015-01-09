@@ -81,7 +81,7 @@ int main(int argc, char **argv)
 		for(k=0;k<MATRIX_DIM;k++){
 			printf("%d\t",mat[j][k]);
 		}
-		printf("\r\n");
+		printf("\n");
 	}
 
 	freeMatrix(mat, MATRIX_DIM);
