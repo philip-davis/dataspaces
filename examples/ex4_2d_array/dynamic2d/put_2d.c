@@ -1,4 +1,5 @@
 /* put_2d.c : Example 4: Put a 2D array into the DataSpace
+ * when memory is not allocated in a contiguous manner.
  * */
 #include <stdio.h>
 #include <stdlib.h>
