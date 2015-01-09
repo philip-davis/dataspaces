@@ -1,4 +1,5 @@
 /* get_2d.c : Example 4: Get a 2D array from the DataSpace
+ * for a static array
  *  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,27 +7,6 @@
 #include "dataspaces.h"
 #include "mpi.h"
 #define MATRIX_DIM 10
-
-int** createMatrix(int xdim, int ydim){
-        int** mat = malloc(xdim*sizeof(int*));
-
-        int i;
-        for(i=0; i<xdim; i++){
-                mat[i] = malloc(ydim*sizeof(int));
-        }
-
-	return mat;
-}
-
-void freeMatrix(int** mat, int xdim){
-        int i;
-        for(i=0;i<xdim;i++){
-                free(mat[i]);
-        }
-
-        free(mat);
-
-}
 
 int main(int argc, char **argv)
 {
@@ -55,23 +35,18 @@ int main(int argc, char **argv)
 	// Create integer array, size 3
 	// We will store the data we get out of the DataSpace
 	// in this array.
-	int **mat = createMatrix(MATRIX_DIM, MATRIX_DIM);
-
+	double mat[MATRIX_DIM][MATRIX_DIM];
+	
 	// Define the dimensionality of the data to be received 
 	int ndim = 2; 
 		
 	// Prepare LOWER and UPPER bound dimensions
 	// 0,0,0 to 9,9,0
 	uint64_t lb[3] = {0}, ub[3] = {0};
-	ub[0]=MATRIX_DIM-1;
+	ub[0]=ub[1]=MATRIX_DIM-1;
 
-        int i;
-        for(i=0;i<MATRIX_DIM;i++){
-                lb[1] = ub[1]= i;
-		dspaces_get(var_name, 0, sizeof(int), ndim, lb, ub, mat[i]);
-        }
-
-		
+	dspaces_get(var_name, 0, sizeof(double), ndim, lb, ub, mat);
+        
 	// DataSpaces: Release our lock on the data
 	dspaces_unlock_on_read("my_test_lock", &gcomm);
 
@@ -79,12 +54,10 @@ int main(int argc, char **argv)
 	int j,k;
 	for(j=0;j<MATRIX_DIM;j++){
 		for(k=0;k<MATRIX_DIM;k++){
-			printf("%d\t",mat[j][k]);
+			printf("%f\t",mat[j][k]);
 		}
 		printf("\n");
 	}
-
-	freeMatrix(mat, MATRIX_DIM);
 
 	// DataSpaces: Finalize and clean up DS process
 	dspaces_finalize();
