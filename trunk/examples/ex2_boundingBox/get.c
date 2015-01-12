@@ -61,7 +61,7 @@ int main(int argc, char **argv)
 			    lb, ub, data);
 	
 			
-		printf("Timestep %d: get data in Bounding Box: LB: %d,%d,%d UB: %d,%d,%d\n", timestep, lb[0],lb[1],lb[2], ub[0],ub[1],ub[2]);
+		printf("Timestep %d: get data in Bounding Box: LB: %d,%d,%d UB: %d,%d,%d\n", timestep, (int)lb[0],(int)lb[1],(int)lb[2], (int)ub[0],(int)ub[1],(int)ub[2]);
 
 		printf("Data:\n");
 		int i;
