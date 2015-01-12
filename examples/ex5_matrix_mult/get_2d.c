@@ -123,7 +123,7 @@ int main(int argc, char **argv)
 		dspaces_get(var_name, 0, sizeof(int), ndim, lb, ub, rowA);
 
 		int y;
-		printf("Row %d of A, retrived by process %d\n",i,rank);
+		printf("Row %d of A, retrieved by process %d\n",i,rank);
 		for(y=0;y<MATRIX_DIM;y++){
 			printf("%d\t",rowA[y]);
 		}
