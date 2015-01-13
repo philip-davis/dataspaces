@@ -72,7 +72,7 @@ int main(int argc, char **argv)
 		//Put 5 values into each of 10 boxes (0,0,0 to 9,0,0)
 		dspaces_put(var_name, timestep, 5*sizeof(int), ndim, lb, ub, data);
 
-		printf("Finished put 50 values.");
+		printf("Finished put 50 values.\n");
 		
 		free(data);
 
