@@ -68,6 +68,7 @@ int main(int argc, char **argv)
 		for(i=0;i<10;i++){
 			printf("%d\t", data[i]);
 		}
+		printf("\n");
 
 		free(data);
 
