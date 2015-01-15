@@ -587,14 +587,15 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *comm, void *dart_re
 	rpc_add_service(sp_announce_cp, dcrpc_announce_cp);
 	rpc_add_service(sp_announce_cp_all, dcrpc_announce_cp_all);
 
-
-	MPI_Comm dup_comm;
-	err = MPI_Comm_dup(*(MPI_Comm *) comm, &dc->comm);
-	if(err < 0) {
-		printf("MPI_Comm_dup failed\n");
-		goto err_out;
+	if(comm!=NULL){
+		printf("Why here\n");
+		MPI_Comm dup_comm;
+		err = MPI_Comm_dup(*(MPI_Comm *) comm, &dc->comm);
+		if(err < 0) {
+			printf("MPI_Comm_dup failed\n");
+			goto err_out;
+		}
 	}
-
 
 	dc->rpc_s = rpc_server_init(0, NULL, 0, 10, num_peers, dc, DART_CLIENT);
 	if(!dc->rpc_s) {
