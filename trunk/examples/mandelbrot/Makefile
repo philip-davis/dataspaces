@@ -1,6 +1,6 @@
-DATASPACES_DIR=/sw/redhat6/dataspaces/1.3.0/rhel6_pgi13.4
-DATASPACES_INC=-I/sw/redhat6/dataspaces/1.3.0/rhel6_pgi13.4/include
-DATASPACES_LIB=-L/sw/redhat6/dataspaces/1.3.0/rhel6_pgi13.4/lib -ldspaces -ldscommon -ldart -lrdmacm
+DATASPACES_DIR=/home/user/software/dataspaces-1.5.0/bin
+DATASPACES_INC=-I/home/user/software/dataspaces-1.5.0/include
+DATASPACES_LIB=-L/home/user/software/dataspaces-1.5.0/lib -ldspaces -ldscommon -ldart -lrdmacm -libverbs -lm
 CC=mpicc
 
 DEPS=bitmap.h bitmap.c testw.c testr.c
