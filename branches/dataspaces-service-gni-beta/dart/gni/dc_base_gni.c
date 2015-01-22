@@ -1045,22 +1045,35 @@ void dc_free(struct dart_client *dc)
 	int track;
 	int f_unregister = 1;
 
+   
 	while(dc->rpc_s->rr_num != 0){
-	    err = rpc_process_event(dc->rpc_s);
+	  err = rpc_process_event(dc->rpc_s);
             if (err < 0){
 	      printf("'%s()': failed with %d.\n", __func__, err);
 	      //return -1;
 	    }
 	}
+
 	
-	
+        err = PMI_Barrier();
+        assert(err == PMI_SUCCESS);
+		
 	if(dc->cp_min_rank == dc->rpc_s->ptlmap.id){
+
 		err = dc_unregister(dc);
 		if(err!=0)
 		    printf("Rank %d: dc_unregister failed with err %d.\n", dc->self->ptlmap.id, err);
 
+		while(dc->rpc_s->rr_num != 0){
+		  err = rpc_process_event(dc->rpc_s);
+		  if (err < 0){
+		    printf("'%s()': failed with %d.\n", __func__, err);
+	      	}
 	}
 
+	}
+
+	
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);
 
