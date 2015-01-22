@@ -977,6 +977,8 @@ static struct node_id *rpc_get_peer(struct rpc_server *rpc_s, int peer_id) //DSa
 
 	}
 
+	printf("Rank %d: WARNING cannot find peer id %d.\n", rpc_s->ptlmap.id, peer_id);
+
 	return NULL;
 }
 
@@ -1731,8 +1733,9 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	  peer = rpc_get_peer(rpc_s, (int)event_id-INDEX_COUNT);
 	  if(peer == NULL)
 	    {
-	      printf("(%s): rpc_get_peer err.\n", __func__);
-	      return -ENOMEM;
+	      //printf("(%s): rpc_get_peer err.\n", __func__);
+	      return 0;
+	      //return -ENOMEM;
 	    }
 
 	  rr->msg->msg_rpc = calloc(1, sizeof(struct rpc_cmd));
@@ -1846,7 +1849,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	    peer = rpc_get_peer(rpc_s, (int)event_id);
 	    if(peer == NULL)
 	      {
-		printf("(%s): rpc_get_peer err.\n", __func__);
+		printf("(%s): rpc_get_peer err for n 2.\n", __func__);
 		return -ENOMEM;
 	      }
 	    do
