@@ -624,21 +624,6 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 	app = app_find(ds, hreg->pm_cp.appid);
 
-	//Temp: ToDo DSaaS: not sure ...
-	/*
-	peer = app->app_peer_tab;
-	for(i=0;i<app->app_num_peers; i++, peer++){
-	  while(peer->num_req)
-	  {
-	    err = rpc_process_event(rpc_s);
-	    if (err!=0)
-	      printf("'%s()': encountered an error %d, skipping.\n", __func__, err);
-	  }
-
-	  }*/
-	
-
-
 	if(ds->rpc_s->ptlmap.id == 0){
 
 		peer = ds_get_peer(ds, hreg->pm_cp.id);
@@ -731,6 +716,23 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 
 	//Temp: ToDo DSaaS: not sure ...	
+	/*peer = app->app_peer_tab;
+	for(i=0;i<app->app_num_peers; i++, peer++){
+	  while(peer->num_req)
+	  {
+	    err = rpc_process_event(rpc_s);
+	    if (err!=0)
+	      printf("'%s()': encountered an error %d, skipping.\n", __func__, err);
+	  }
+	  }*/
+
+	for(i=0;i<100;i++)
+	  {
+	    err = rpc_process_event(rpc_s);
+	    if (err!=0)
+	      printf("'%s()': encountered an error %d, skipping.\n", __func__, err);
+	  }
+
 	err = ds_free_app(ds, app);
 	if (err != 0) 
 		goto err_out;
