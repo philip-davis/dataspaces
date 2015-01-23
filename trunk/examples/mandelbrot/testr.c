@@ -8,6 +8,7 @@
 #include "mpi.h"
 #include "bitmap.h"
 #define MATRIX_DIM 512
+#define IMAGES 50
 
 int main(int argc, char **argv)
 {
@@ -26,7 +27,7 @@ int main(int argc, char **argv)
 	// DataSpaces: Initalize and identify application
 	// Usage: dspaces_init(num_peers, appid, Ptr to MPI comm, parameters)
 	// Note: appid for get.c is 2 [for put.c, it was 1]
-	dspaces_init(1, 2, &gcomm, NULL);
+	dspaces_init(nprocs, 2, &gcomm, NULL);
 
 	// Name our data.
 	char var_name[128];
@@ -48,10 +49,22 @@ int main(int argc, char **argv)
 	uint64_t lb[3] = {0}, ub[3] = {0};
 	ub[0]=ub[1]=MATRIX_DIM-1;
 
-	dspaces_lock_on_read("my_test_lock", &gcomm);
-	dspaces_get(var_name, 0, sizeof(int), ndim, lb, ub, bitmap);
-	// DataSpaces: Release our lock on the data
-	dspaces_unlock_on_read("my_test_lock", &gcomm);
+	int per_proc = IMAGES/nprocs;
+        int remainder = IMAGES%nprocs;
+        int start, stop;
+        if(rank<remainder){
+                start = rank*(per_proc+1);
+                stop = start + per_proc;
+        }else{
+                start = rank*per_proc+remainder;
+                stop = start+per_proc-1;
+        }
+	int k;
+	for(k=start;k<stop;k++){
+		dspaces_lock_on_read("my_test_lock", &gcomm);
+		dspaces_get(var_name, k, sizeof(int), ndim, lb, ub, bitmap);
+		// DataSpaces: Release our lock on the data
+		dspaces_unlock_on_read("my_test_lock", &gcomm);
 
 /*	printf("Matrix retrieved from the DataSpace.\n");
 	int k;
@@ -62,16 +75,18 @@ int main(int argc, char **argv)
 		printf("\n");
 	}*/
 
-	for(j=0;j<MATRIX_DIM;j++){
-		for(i=0;i<MATRIX_DIM;i++){
-			int gray = 255*bitmap[j][i]/max;
-			int color = MAKE_RGBA(gray,gray,gray,0);
-			bitmap_set(bm,i,j,color);
+		for(j=0;j<MATRIX_DIM;j++){
+			for(i=0;i<MATRIX_DIM;i++){
+				int gray = 255*bitmap[j][i]/max;
+				int color = MAKE_RGBA(gray,gray,gray,0);
+				bitmap_set(bm,i,j,color);
+			}
 		}
+		
+		char mandel_name[128];
+		sprintf(mandel_name, "mandel%d.bmp", k);
+		bitmap_save(bm, mandel_name);
 	}
-
-	bitmap_save(bm, "mandel1.bmp");
-
 	// DataSpaces: Finalize and clean up DS process
 	dspaces_finalize();
 
