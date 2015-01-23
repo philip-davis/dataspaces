@@ -46,9 +46,8 @@ int main(int argc, char **argv)
 	gcomm = MPI_COMM_WORLD;
 
 	double  xcenter = 0.286932;
-//        double  ycenter = 0.014287;
-//        double scale_inc = (2-0.0005)/nprocs;
 	double ycenter = 0.0142905;  
+//        double scale_inc = (2-0.0005)/nprocs;
 	double scale_inc = (2-0.000001)/nprocs;
       	int     max = 1000;
 	
@@ -71,8 +70,6 @@ int main(int argc, char **argv)
 		stop = start+per_proc-1;
 	}
 		
-	printf("Start: %d, Stop %d\n",start,stop);
-
 	double scale, xmin, ymin, xmax, ymax;
 	int bitmap[MATRIX_DIM][MATRIX_DIM];	
 	int i, j, k;
