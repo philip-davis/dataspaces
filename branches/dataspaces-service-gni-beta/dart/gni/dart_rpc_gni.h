@@ -444,17 +444,14 @@ enum cmd_type {
 	dimes_ss_info_msg,
 	dimes_locate_data_msg,
 	dimes_put_msg,
-	dimes_get_ack_msg,
+#ifdef DS_HAVE_DIMES_SHMEM
+    dimes_shmem_reset_server_msg,
+    dimes_shmem_update_server_msg,
 #endif
-
-	ss_obj_put_no_dht_update,
-
+#endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,
 	_CMD_COUNT
-
-
-
 };
 
 enum lock_type {

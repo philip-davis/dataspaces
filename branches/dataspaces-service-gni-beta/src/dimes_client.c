@@ -1351,7 +1351,6 @@ static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
 		hdr = (struct hdr_dimes_put *)msg->msg_rpc->pad;
 		hdr->odsc = mem_obj->obj_desc;
 		hdr->sync_id = mem_obj->sync_id;
-		hdr->has_rdma_data = 1;
 #ifdef DS_HAVE_DIMES_SHMEM
         hdr->has_shmem_data = 0;
         if (options.enable_shmem_buffer) {
@@ -3209,7 +3208,6 @@ int dimes_client_shmem_update_server_state()
                     hdr = (struct hdr_dimes_put*)msg->msg_rpc->pad;
                     hdr->odsc = mem_obj->obj_desc;
                     hdr->sync_id = mem_obj->sync_id;
-                    hdr->has_rdma_data = 1;
                     hdr->has_shmem_data = 1;
                     hdr->shmem_desc = mem_obj->shmem_desc;
 

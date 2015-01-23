@@ -2112,23 +2112,6 @@ int dsg_barrier(struct ds_gspace *dsg)
         return ds_barrier(dsg->ds);
 }
 
-#ifdef DART_UGNI_AS_SERVICE
-// Note: num_sp can NOT change, reuse the existing value.
-int dsg_reset(struct ds_gspace *dsg, int num_cp)
-{
-    uloga("%s: num_cp= %d start.\n", __func__, num_cp);
-    int num_sp = dsg->ds->num_sp;
-    ds_free(dsg->ds);
-    dsg->ds = ds_alloc(num_sp, num_cp, dsg);
-    if (!dsg->ds) {
-        uloga("%s: ERROR failed with ds_alloc().\n", __func__);
-        return -1;
-    }
-    uloga("%s: num_cp= %d done.\n", __func__, num_cp);
-    return 0;
-}
-#endif
-
 /*
   Helper function  to enable a local  process to add an  object to the
   space.  The  reference to "od"  should be on  the heap, and  will be
