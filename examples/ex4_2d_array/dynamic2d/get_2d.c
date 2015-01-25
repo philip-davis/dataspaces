@@ -54,7 +54,7 @@ int main(int argc, char **argv)
 	char var_name[128];
 	sprintf(var_name, "matrix_A");
 
-	// Create integer array, size 3
+	// Create 2D integer array, size 10x10
 	// We will store the data we get out of the DataSpace
 	// in this array.
 	int **mat = createMatrix(MATRIX_DIM, MATRIX_DIM);
