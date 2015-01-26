@@ -156,10 +156,8 @@ static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 #ifdef DEBUG    
 	uloga("%s(): get request from peer #%d "
-				"has_rdma_data= %d "
-				"name= %s version= %d data_size= %u\n",
-					__func__, cmd->id, hdr->has_rdma_data,
-					odsc->name, odsc->version, obj_data_size(odsc));
+           "name= %s version= %d data_size= %u\n",
+            __func__, cmd->id, odsc->name, odsc->version, obj_data_size(odsc));
 #ifdef DS_HAVE_DIMES_SHMEM
     if (hdr->has_shmem_data) {
         uloga("%s(): #%d get update from peer #%d shmem_desc: size= %u "

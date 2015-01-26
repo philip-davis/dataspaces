@@ -1047,6 +1047,9 @@ static void qt_free_obj_data_d(struct query_tran_entry_d *qte)
     struct fetch_entry *fetch, *t;
     list_for_each_entry_safe(fetch,t,&qte->fetch_list,struct fetch_entry,entry)
     {
+#ifdef HAVE_UGNI
+        dart_rdma_delete_remote_peer(fetch->read_tran->remote_peer);
+#endif
         dart_rdma_delete_read_tran(fetch->read_tran->tran_id);
         list_del(&fetch->entry);
         free(fetch);
@@ -1057,19 +1060,22 @@ static void qt_free_obj_data_d(struct query_tran_entry_d *qte)
 static int qt_add_obj_with_cmd_d(struct query_tran_entry_d *qte,
                 struct obj_descriptor *odsc, struct rpc_cmd *cmd)
 {
-    struct hdr_dimes_put *hdr;
+    struct hdr_dimes_put *hdr = (struct hdr_dimes_put*)cmd->pad;
     struct node_id *peer;
     struct fetch_entry *fetch;
     fetch = (struct fetch_entry*)malloc(sizeof(*fetch));
 
+#ifdef HAVE_UGNI
+    peer = dart_rdma_create_remote_peer(&hdr->ptlmap);
+#else
     // Lookup the owner peer of the remote data object
     peer = dc_get_peer(DC, odsc->owner);
+#endif
 
     // Creat read transaction
     dart_rdma_create_read_tran(peer, &fetch->read_tran);
 
     // Set source and destination object descriptors
-    hdr = (struct hdr_dimes_put*)cmd->pad;
     fetch->remote_sync_id = hdr->sync_id;
     fetch->src_odsc = hdr->odsc;
     fetch->dst_odsc = *odsc;
@@ -1349,6 +1355,7 @@ static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
 		dart_rdma_set_memregion_to_cmd(&mem_obj->rdma_handle, msg->msg_rpc);	
 
 		hdr = (struct hdr_dimes_put *)msg->msg_rpc->pad;
+        hdr->ptlmap = dimes_c->dcg->dc->rpc_s->ptlmap; 
 		hdr->odsc = mem_obj->obj_desc;
 		hdr->sync_id = mem_obj->sync_id;
 #ifdef DS_HAVE_DIMES_SHMEM
@@ -2546,7 +2553,9 @@ static int local_search_mem_obj_list(struct list_head *mem_obj_list,
             uloga("%s(): ERROR data is not on local node.\n", __func__);
             continue;
         }
-
+#ifdef HAVE_UGNI
+        peer = dart_rdma_create_remote_peer(&peer->ptlmap);
+#endif
         struct fetch_entry *fetch = (struct fetch_entry*)malloc(sizeof(*fetch));
         dart_rdma_create_read_tran(peer, &fetch->read_tran);
         fetch->remote_sync_id = mem_obj->sync_id;
