@@ -1048,7 +1048,10 @@ static void qt_free_obj_data_d(struct query_tran_entry_d *qte)
     list_for_each_entry_safe(fetch,t,&qte->fetch_list,struct fetch_entry,entry)
     {
 #ifdef HAVE_UGNI
-        dart_rdma_delete_remote_peer(fetch->read_tran->remote_peer);
+        if (fetch->read_tran->remote_peer->ptlmap.appid != dimes_c->dcg->dc->self->ptlmap.appid)
+        { 
+            dart_rdma_delete_remote_peer(fetch->read_tran->remote_peer);
+        }
 #endif
         dart_rdma_delete_read_tran(fetch->read_tran->tran_id);
         list_del(&fetch->entry);
@@ -1066,7 +1069,11 @@ static int qt_add_obj_with_cmd_d(struct query_tran_entry_d *qte,
     fetch = (struct fetch_entry*)malloc(sizeof(*fetch));
 
 #ifdef HAVE_UGNI
-    peer = dart_rdma_create_remote_peer(&hdr->ptlmap);
+    if (hdr->ptlmap.appid != dimes_c->dcg->dc->self->ptlmap.appid) {
+        peer = dart_rdma_create_remote_peer(&hdr->ptlmap);
+    } else {
+        peer = dc_get_peer(DC, odsc->owner);
+    }
 #else
     // Lookup the owner peer of the remote data object
     peer = dc_get_peer(DC, odsc->owner);
@@ -2554,7 +2561,9 @@ static int local_search_mem_obj_list(struct list_head *mem_obj_list,
             continue;
         }
 #ifdef HAVE_UGNI
-        peer = dart_rdma_create_remote_peer(&peer->ptlmap);
+        if (peer->ptlmap.appid != dimes_c->dcg->dc->self->ptlmap.appid) {
+            peer = dart_rdma_create_remote_peer(&peer->ptlmap);
+        }
 #endif
         struct fetch_entry *fetch = (struct fetch_entry*)malloc(sizeof(*fetch));
         dart_rdma_create_read_tran(peer, &fetch->read_tran);

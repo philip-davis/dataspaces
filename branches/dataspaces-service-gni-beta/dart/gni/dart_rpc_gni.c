@@ -805,14 +805,14 @@ static int sys_cleanup (struct rpc_server *rpc_s)
 		status = GNI_EpUnbind(rpc_s->peer_tab[i].sys_ep_hndl);
 		if (status != GNI_RC_NOT_DONE && status != GNI_RC_SUCCESS) 
 		{
-		  printf("(%d)Fail: GNI_EpUnbind(%d) returned error. %d.\n", rank_id_pmi, rpc_s->peer_tab[i].ptlmap.id, status);
+		    printf("%s(): (%d)Fail: GNI_EpUnbind(%d) returned error. %d.\n", __func__, rank_id_pmi, rpc_s->peer_tab[i].ptlmap.id, status);
 			goto err_out;
 		}
 
 		status = GNI_EpDestroy(rpc_s->peer_tab[i].sys_ep_hndl); 
 		if (status != GNI_RC_SUCCESS) 
 		{
-			printf("Fail: GNI_EpDestroy returned error. %d.\n", status);
+			printf("%s(): Fail: GNI_EpDestroy returned error. %d.\n", __func__, status);
 			goto err_out;
 		}
 	}
@@ -820,7 +820,7 @@ static int sys_cleanup (struct rpc_server *rpc_s)
 	status = GNI_CqDestroy(rpc_s->sys_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
-		printf("Fail: GNI_CqDestroy returned error. %d.\n", status);
+		printf("%s(): Fail: GNI_CqDestroy returned error. %d.\n", __func__, status);
 		goto err_out;
 	}
 
@@ -2127,7 +2127,7 @@ int rpc_server_free(struct rpc_server *rpc_s)//ToDo: DSaaS working ...
 		status = GNI_MemDeregister(rpc_s->nic_hndl, &cur_attr_info->local_smsg_attr.mem_hndl);
 		if (status != GNI_RC_SUCCESS)
 		{
-			printf("Fail: GNI_MemDeregister returned error. %d.\n", status);
+			printf("%s(): Fail: GNI_MemDeregister returned error. %d.\n", __func__, status);
 			goto err_out;
 		}	
 	
@@ -2152,13 +2152,13 @@ int rpc_server_free(struct rpc_server *rpc_s)//ToDo: DSaaS working ...
 			status = GNI_EpUnbind(peer->ep_hndl); //Unbind the remote address from the endpoint handler.
 			if (status != GNI_RC_SUCCESS && status != GNI_RC_NOT_DONE) 
 			{
-				printf("Fail: GNI_EpUnbind returned error. %d.\n", status);
+				printf("%s(): Fail: GNI_EpUnbind returned error. %d.\n", __func__, status);
 				goto err_out;
 			}
 			status = GNI_EpDestroy(peer->ep_hndl); //You must do an EpDestroy for each endpoint pair.
 			if (status != GNI_RC_SUCCESS) 
 			{
-				printf("Fail: GNI_EpDestroy returned error. %d.\n", status);
+				printf("%s(): Fail: GNI_EpDestroy returned error. %d.\n", __func__, status);
 				goto err_out;
 			}
 		}
@@ -2172,14 +2172,14 @@ int rpc_server_free(struct rpc_server *rpc_s)//ToDo: DSaaS working ...
 	status = GNI_CqDestroy(rpc_s->src_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
-		printf("Fail: GNI_MemDestory returned error. %d.\n", status);
+		printf("%s(): Fail: GNI_CqDestroy returned error. %d.\n", __func__, status);
 		goto err_out;
 	}
 
 	status = GNI_CqDestroy(rpc_s->dst_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
-		printf("Fail: GNI_MemDestory returned error. %d.\n", status);
+		printf("%s(): Fail: GNI_CqDestroy returned error. %d.\n", __func__, status);
 		goto err_out;
 	}
 
@@ -2495,31 +2495,21 @@ void rpc_server_find_local_peers(struct rpc_server *rpc_s, struct node_id **peer
 
   // find all peers (include current peer itself) that reside on the
   // same compute node as current peer
-
   struct node_id *peer, *cur_peer;
   int i, j=0;
 
   peer = rpc_s->peer_tab;
-  while(peer){
-    cur_peer = (struct node_id *)(cur_peer + cur_peer->peer_num - 1);
-
-    //printf("%s(): num_peers %d local dart_id %d local nid %u remote dart_id %d remote nid %u\n",
-    //    __func__, rpc_s->num_peers, rpc_s->ptlmap.id, rpc_s->ptlmap.nid, rpc_s->peer_tab[i].ptlmap.id,
-    //    rpc_s->peer_tab[i].ptlmap.nid); 
-
-    for(i=0;i<peer->peer_num;i++, peer++){
+  while (peer) {
+    cur_peer = (struct node_id *)(peer+peer->peer_num-1);
+    for(i=0;i<peer->peer_num;i++,peer++){
       if (rpc_s->ptlmap.nid == peer->ptlmap.nid){
-	    peer_tab[j++] = peer;
-	    j++;
+        peer_tab[j++] = peer;
       }
     }
-
     peer = cur_peer->next;
-
   } 
 
   *num_local_peer = j;
-
 }
 
 

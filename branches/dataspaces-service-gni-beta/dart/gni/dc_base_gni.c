@@ -39,6 +39,84 @@
 
 static int connectfd;
 
+static struct node_id* create_app_peer_tab(const struct ptlid_map* buffer, struct dart_client *dc)
+{
+    // Format of 'buffer':
+    // | peers info of dataspaces servers | peers info of current application |
+    struct node_id* peer_tab = malloc(sizeof(struct node_id)*dc->num_cp);
+    if (!peer_tab) goto err_out;
+    memset(peer_tab, 0, sizeof(struct node_id)*dc->num_cp);
+
+    gni_return_t status;
+    struct node_id* peer = peer_tab;
+    int i = dc->num_sp; // Starting index for peers info of current application
+    for(; i < dc->peer_size; i++, peer++) {
+        INIT_LIST_HEAD(&peer->req_list);
+        peer->num_msg_at_peer = dc->rpc_s->max_num_msg;
+        peer->num_msg_recv = 0;
+        peer->num_msg_ret = 0;
+        peer->sys_msg_recv = 0;
+        peer->sys_msg_at_peer = dc->rpc_s->max_num_msg;
+        peer->sys_msg_ret = 0;
+
+        peer->ptlmap.nid = buffer[i].nid;
+        peer->ptlmap.pid = buffer[i].pid;
+        peer->ptlmap.appid = buffer[i].appid;
+        peer->ptlmap.id = buffer[i].id;
+        peer->next = NULL;
+        peer->peer_rank = peer->ptlmap.id;
+        peer->peer_num = dc->num_cp;
+
+        if (peer->ptlmap.id == dc->rpc_s->ptlmap.id) continue;
+ 
+        status = GNI_EpCreate(dc->rpc_s->nic_hndl, dc->rpc_s->src_cq_hndl, &peer->ep_hndl);
+        if (status != GNI_RC_SUCCESS)
+        {
+            uloga("%s(): ERROR! GNI_EpCreate returned %d.\n", __func__, status);
+            goto err_out;
+        }
+        status = GNI_EpBind(peer->ep_hndl, peer->ptlmap.nid, peer->ptlmap.id);
+        if (status != GNI_RC_SUCCESS)
+        {
+            uloga("%s(): ERROR! GNI_EpBind returned %d.\n", __func__, status);
+            goto err_out;
+        }
+    /*
+        status = GNI_EpCreate(dc->rpc_s->nic_hndl, dc->rpc_s->sys_cq_hndl, &peer->sys_ep_hndl);
+        if (status != GNI_RC_SUCCESS)
+        {
+            uloga("%s(): ERROR! Rank %d GNI_EpCreate SYS returned %d.\n", __func__, dc->rpc_s->ptlmap.id, status);
+            goto err_out;
+        }
+        status = GNI_EpBind(peer->sys_ep_hndl, peer->ptlmap.nid, peer->ptlmap.id);
+        if (status != GNI_RC_SUCCESS)
+        {
+            uloga("%s(): ERROR! Rank %d GNI_EpBind SYS returned %d.\n", __func__, dc->rpc_s->ptlmap.id, status);
+            goto err_out;
+        }
+    */
+    }
+
+    return peer_tab;
+ err_out:
+    if (peer_tab) free(peer_tab);
+    uloga("%s(): failed.\n", __func__);
+    return NULL;
+}
+
+static void peer_tab_list_push_back(struct node_id* head_peer_tab, struct node_id* new_peer_tab)
+{
+    struct node_id *peer = head_peer_tab+head_peer_tab->peer_num-1; // Move to the last peer of head_peer_tab
+    while (1) {
+        if (!peer->next) {
+            peer->next = new_peer_tab;
+            break;
+        } else {
+            peer = peer->next + peer->next->peer_num - 1;
+        }
+    } 
+}
+
 static int barrier_broadcast(struct dart_client *dc)
 {
 	struct msg_buf *msg;
@@ -450,6 +528,12 @@ static int dc_master_init(struct dart_client *dc) //working
 		goto err_out;
 	}
 
+    // Create peer_tab for all peers of current application
+    struct node_id* app_peer_tab = create_app_peer_tab(recv_buffer, dc);
+    if (app_peer_tab) {
+        // Add peer_tab to the end of the linked list chained into dc->peer_tab  
+        peer_tab_list_push_back(dc->peer_tab, app_peer_tab);
+    }
 	free(recv_buffer);
 
 	// 3. EpCreate+Epbind+smsg_init(rpc) 
@@ -795,6 +879,12 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 
 	}
 
+    // Create peer_tab for all peers of current application
+    struct node_id* app_peer_tab = create_app_peer_tab(recv_buffer, dc);
+    if (app_peer_tab) {
+        // Add peer_tab to the end of the linked list chained into dc->peer_tab  
+        peer_tab_list_push_back(dc->peer_tab, app_peer_tab);
+    }
 	free(recv_buffer);
 
 	for(i=0;i<dc->rpc_s->num_rpc_per_buff; i++){
