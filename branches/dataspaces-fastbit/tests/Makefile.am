@@ -1,1 +1,0 @@
-SUBDIRS=fastspace_c
