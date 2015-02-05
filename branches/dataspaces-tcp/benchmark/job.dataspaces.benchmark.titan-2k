@@ -1,0 +1,219 @@
+#!/bin/bash
+#PBS -A csc025ewk 
+#PBS -N dataspaces_benchmark 
+#PBS -j oe
+#PBS -q batch 
+#PBS -l walltime=01:30:00
+#PBS -l nodes=144
+
+cd $PBS_O_WORKDIR
+
+APP1_PROC=2048
+APP1_NPX=64
+APP1_NPY=32
+APP1_NPZ=1
+
+# Number of staging servers
+NUM_SP=32
+NUM_SP_PER_NODE=4
+
+APP2_PROC=128
+APP2_NPX=16
+APP2_NPY=8
+APP2_NPZ=1
+
+METHOD="DATASPACES"
+NUM_TS=100
+
+# Global dimension (weak scaling) for dataspaces.conf
+NDIM_WS=2
+DIMX_WS=32768
+DIMY_WS=32768
+DIMZ_WS=1
+
+# Global dimension (strong scaling) for dataspaces.conf
+NDIM_SS=2
+DIMX_SS=32768
+DIMY_SS=16384
+DIMZ_SS=1
+
+#######################################################
+## Setup 1 - weak scaling experiment
+rm -f conf dataspaces.conf
+
+# Prepare config file for DataSpaces
+echo "## Config file for DataSpaces
+ndim = $NDIM_WS 
+dimx = $DIMX_WS 
+dimy = $DIMY_WS
+dimz = $DIMZ_WS
+
+max_versions = 1
+lock_type = 2
+" > dataspaces.conf
+
+# Run server
+let "NUM_CP=APP1_PROC+APP2_PROC"
+echo "aprun -N $NUM_SP_PER_NODE -n $NUM_SP ./dataspaces_server -s $NUM_SP -c $NUM_CP"
+aprun -N $NUM_SP_PER_NODE -n $NUM_SP ./dataspaces_server -s $NUM_SP -c $NUM_CP >& log.server &
+
+sleep 1s
+while [ ! -f conf ]; do
+    #echo "-- File conf is not yet available from server. Sleep more"
+    sleep 1s
+done
+sleep 10s  # wait server to fill up the conf file
+
+# Start WRITER
+let "APP1_SPX=DIMX_WS/APP1_NPX"
+let "APP1_SPY=DIMY_WS/APP1_NPY"
+let "APP1_SPZ=DIMZ_WS/APP1_NPZ"
+echo "aprun -n $APP1_PROC ./test_writer $METHOD $APP1_PROC $APP1_NPX $APP1_NPY $APP1_NPZ $APP1_SPX $APP1_SPY $APP1_SPZ $NUM_TS"
+aprun -n $APP1_PROC ./test_writer $METHOD $APP1_PROC $APP1_NPX $APP1_NPY $APP1_NPZ $APP1_SPX $APP1_SPY $APP1_SPZ $NUM_TS >& log.writer &
+
+# Start READER
+let "APP2_SPX=DIMX_WS/APP2_NPX"
+let "APP2_SPY=DIMY_WS/APP2_NPY"
+let "APP2_SPZ=DIMZ_WS/APP2_NPZ"
+echo "aprun -n $APP2_PROC ./test_reader $METHOD $APP2_PROC $APP2_NPX $APP2_NPY $APP2_NPZ $APP2_SPX $APP2_SPY $APP2_SPZ $NUM_TS"
+aprun -n $APP2_PROC ./test_reader $METHOD $APP2_PROC $APP2_NPX $APP2_NPY $APP2_NPZ $APP2_SPX $APP2_SPY $APP2_SPZ $NUM_TS >& log.reader &
+
+wait
+mkdir logdir_setup1_weak_scaling
+mv log.server log.writer log.reader ./logdir_setup1_weak_scaling
+
+
+#######################################################
+## Setup 1 - strong scaling experiment
+rm -f conf dataspaces.conf
+
+# Prepare config file for DataSpaces
+echo "## Config file for DataSpaces
+ndim = $NDIM_SS 
+dimx = $DIMX_SS 
+dimy = $DIMY_SS
+dimz = $DIMZ_SS
+
+max_versions = 1
+lock_type = 2
+" > dataspaces.conf
+
+# Run server
+let "NUM_CP=APP1_PROC+APP2_PROC"
+echo "aprun -N $NUM_SP_PER_NODE -n $NUM_SP ./dataspaces_server -s $NUM_SP -c $NUM_CP"
+aprun -N $NUM_SP_PER_NODE -n $NUM_SP ./dataspaces_server -s $NUM_SP -c $NUM_CP >& log.server &
+
+sleep 1s
+while [ ! -f conf ]; do
+    #echo "-- File conf is not yet available from server. Sleep more"
+    sleep 1s
+done
+sleep 10s  # wait server to fill up the conf file
+
+# Start WRITER
+let "APP1_SPX=DIMX_SS/APP1_NPX"
+let "APP1_SPY=DIMY_SS/APP1_NPY"
+let "APP1_SPZ=DIMZ_SS/APP1_NPZ"
+echo "aprun -n $APP1_PROC ./test_writer $METHOD $APP1_PROC $APP1_NPX $APP1_NPY $APP1_NPZ $APP1_SPX $APP1_SPY $APP1_SPZ $NUM_TS"
+aprun -n $APP1_PROC ./test_writer $METHOD $APP1_PROC $APP1_NPX $APP1_NPY $APP1_NPZ $APP1_SPX $APP1_SPY $APP1_SPZ $NUM_TS >& log.writer &
+
+# Start READER
+let "APP2_SPX=DIMX_SS/APP2_NPX"
+let "APP2_SPY=DIMY_SS/APP2_NPY"
+let "APP2_SPZ=DIMZ_SS/APP2_NPZ"
+echo "aprun -n $APP2_PROC ./test_reader $METHOD $APP2_PROC $APP2_NPX $APP2_NPY $APP2_NPZ $APP2_SPX $APP2_SPY $APP2_SPZ $NUM_TS"
+aprun -n $APP2_PROC ./test_reader $METHOD $APP2_PROC $APP2_NPX $APP2_NPY $APP2_NPZ $APP2_SPX $APP2_SPY $APP2_SPZ $NUM_TS >& log.reader &
+
+wait
+mkdir logdir_setup1_strong_scaling
+mv log.server log.writer log.reader ./logdir_setup1_strong_scaling
+
+#######################################################
+## Setup 2 - weak scaling experiment
+rm -f conf dataspaces.conf
+
+# Prepare config file for DataSpaces
+echo "## Config file for DataSpaces
+ndim = $NDIM_WS 
+dimx = $DIMX_WS 
+dimy = $DIMY_WS
+dimz = $DIMZ_WS
+
+max_versions = 1
+lock_type = 2
+" > dataspaces.conf
+
+# Run server
+let "NUM_CP=APP1_PROC+APP2_PROC"
+echo "aprun -N $NUM_SP_PER_NODE -n $NUM_SP ./dataspaces_server -s $NUM_SP -c $NUM_CP"
+aprun -N $NUM_SP_PER_NODE -n $NUM_SP ./dataspaces_server -s $NUM_SP -c $NUM_CP >& log.server &
+
+sleep 1s
+while [ ! -f conf ]; do
+    #echo "-- File conf is not yet available from server. Sleep more"
+    sleep 1s
+done
+sleep 10s  # wait server to fill up the conf file
+
+# Start READER 
+let "APP1_SPX=DIMX_WS/APP1_NPX"
+let "APP1_SPY=DIMY_WS/APP1_NPY"
+let "APP1_SPZ=DIMZ_WS/APP1_NPZ"
+echo "aprun -n $APP1_PROC ./test_reader $METHOD $APP1_PROC $APP1_NPX $APP1_NPY $APP1_NPZ $APP1_SPX $APP1_SPY $APP1_SPZ $NUM_TS"
+aprun -n $APP1_PROC ./test_reader $METHOD $APP1_PROC $APP1_NPX $APP1_NPY $APP1_NPZ $APP1_SPX $APP1_SPY $APP1_SPZ $NUM_TS >& log.reader &
+
+# Start WRITER 
+let "APP2_SPX=DIMX_WS/APP2_NPX"
+let "APP2_SPY=DIMY_WS/APP2_NPY"
+let "APP2_SPZ=DIMZ_WS/APP2_NPZ"
+echo "aprun -n $APP2_PROC ./test_writer $METHOD $APP2_PROC $APP2_NPX $APP2_NPY $APP2_NPZ $APP2_SPX $APP2_SPY $APP2_SPZ $NUM_TS"
+aprun -n $APP2_PROC ./test_writer $METHOD $APP2_PROC $APP2_NPX $APP2_NPY $APP2_NPZ $APP2_SPX $APP2_SPY $APP2_SPZ $NUM_TS >& log.writer &
+
+wait
+mkdir logdir_setup2_weak_scaling
+mv log.server log.writer log.reader ./logdir_setup2_weak_scaling
+
+#######################################################
+## Setup 2 - strong scaling experiment
+rm -f conf dataspaces.conf
+
+# Prepare config file for DataSpaces
+echo "## Config file for DataSpaces
+ndim = $NDIM_SS 
+dimx = $DIMX_SS 
+dimy = $DIMY_SS
+dimz = $DIMZ_SS
+
+max_versions = 1
+lock_type = 2
+" > dataspaces.conf
+
+# Run server
+let "NUM_CP=APP1_PROC+APP2_PROC"
+echo "aprun -N $NUM_SP_PER_NODE -n $NUM_SP ./dataspaces_server -s $NUM_SP -c $NUM_CP"
+aprun -N $NUM_SP_PER_NODE -n $NUM_SP ./dataspaces_server -s $NUM_SP -c $NUM_CP >& log.server &
+
+sleep 1s
+while [ ! -f conf ]; do
+    #echo "-- File conf is not yet available from server. Sleep more"
+    sleep 1s
+done
+sleep 10s  # wait server to fill up the conf file
+
+# Start READER 
+let "APP1_SPX=DIMX_SS/APP1_NPX"
+let "APP1_SPY=DIMY_SS/APP1_NPY"
+let "APP1_SPZ=DIMZ_SS/APP1_NPZ"
+echo "aprun -n $APP1_PROC ./test_reader $METHOD $APP1_PROC $APP1_NPX $APP1_NPY $APP1_NPZ $APP1_SPX $APP1_SPY $APP1_SPZ $NUM_TS"
+aprun -n $APP1_PROC ./test_reader $METHOD $APP1_PROC $APP1_NPX $APP1_NPY $APP1_NPZ $APP1_SPX $APP1_SPY $APP1_SPZ $NUM_TS >& log.reader &
+
+# Start WRITER 
+let "APP2_SPX=DIMX_SS/APP2_NPX"
+let "APP2_SPY=DIMY_SS/APP2_NPY"
+let "APP2_SPZ=DIMZ_SS/APP2_NPZ"
+echo "aprun -n $APP2_PROC ./test_writer $METHOD $APP2_PROC $APP2_NPX $APP2_NPY $APP2_NPZ $APP2_SPX $APP2_SPY $APP2_SPZ $NUM_TS"
+aprun -n $APP2_PROC ./test_writer $METHOD $APP2_PROC $APP2_NPX $APP2_NPY $APP2_NPZ $APP2_SPX $APP2_SPY $APP2_SPZ $NUM_TS >& log.writer &
+
+wait
+mkdir logdir_setup2_strong_scaling
+mv log.server log.writer log.reader ./logdir_setup2_strong_scaling

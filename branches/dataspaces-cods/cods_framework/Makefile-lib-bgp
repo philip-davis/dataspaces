@@ -1,0 +1,40 @@
+SHELL   = /bin/sh
+CC = mpixlc 
+FTN = mpixlf90 
+DSPACES_DIR = /home/fzhang/DataSpaces/branches/dataspaces-hybrid-staging
+DCMF_DIR = /bgsys/dirvers/ppcfloor
+DCMF_CFLAGS = -I$(DCMF_DIR)/arch/include \
+			-I$(DCMF_DIR)/comm/include
+DCMF_LIBS = -L$(DCMF_DIR)/comm/lib -L$(DCMF_DIR)/runtime/SPI -ldcmf.cnk -ldcmfcoll.cnk -lpthread -lrt -lSPI.cna
+
+INCLUDES=-I. \
+		-I$(DSPACES_DIR) \
+		-I$(DSPACES_DIR)/include \
+		-I$(DSPACES_DIR)/dart \
+		-I$(DSPACES_DIR)/dart/dcmf \
+		${DCMF_CFLAGS}
+
+LIBS= ${DCMF_LIBS} 
+
+CFLAGS= -g ${DCMF_CFLAGS} -DDS_HAVE_HYBRID_STAGING
+
+SRC1 =  hybrid_staging_api.c \
+        hstaging_strutil.c \
+        hstaging_def.c \
+		hstaging_scheduler_parallel_job.c 
+
+OBJ1 = $(SRC1:.c=.o)
+
+OUT1 = ./libhstaging.a
+
+default: $(OUT1)
+
+.c.o:
+	$(CC) $(INCLUDES) $(CFLAGS) -c $< -o $@
+
+$(OUT1): $(OBJ1)
+	ar rcs $(OUT1) $(OBJ1)
+
+clean:
+	rm -f $(OUT1) $(OBJ1) 
+

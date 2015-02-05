@@ -1,0 +1,20 @@
+#!/bin/sh
+#PBS -N test-dspaces-Titan 
+#PBS -A XXXX 
+#PBS -q debug 
+#PBS -j oe
+#PBS -l walltime=00:05:00
+#PBS -l nodes=3
+
+cd $PBS_O_WORKDIR
+
+rm -f conf log.*
+
+aprun -n 2 ./dataspaces_server -s 2 -c 20  >& log.server &
+sleep 10
+
+aprun -n 16 ./test_put 16 3 4 4 1 32 16 64 50 1 >& log.writer &
+
+aprun -n 4 ./test_get 4 3 2 2 1 64 32 64 50 2 >& log.reader &
+
+wait

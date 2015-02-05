@@ -1,0 +1,73 @@
+SHELL   = /bin/sh
+CC = mpixlc 
+FTN = mpixlf90
+DSPACES_DIR = /home/fzhang/DataSpaces/branches/dataspaces-hybrid-staging
+DCMF_DIR = /bgsys/dirvers/ppcfloor
+DCMF_CFLAGS = -I$(DCMF_DIR)/arch/include \
+            -I$(DCMF_DIR)/comm/include
+DCMF_LIBS = -L$(DCMF_DIR)/comm/lib -L$(DCMF_DIR)/runtime/SPI -ldcmf.cnk -ldcmfcoll.cnk -lpthread -lrt -lSPI.cna
+
+INCLUDES=-I. \
+	-I$(DSPACES_DIR) \
+	-I$(DSPACES_DIR)/include \
+	-I$(DSPACES_DIR)/dart \
+	-I$(DSPACES_DIR)/dart/dcmf \
+	${DCMF_CFLAGS}
+
+LIBS= -L./ -lhstaging \
+	-L$(DSPACES_DIR)/src -ldspaces -ldscommon \
+	-L$(DSPACES_DIR)/dart -ldart \
+	${DCMF_LIBS}
+
+CFLAGS= -g ${DCMF_CFLAGS} -DDEBUG -DDS_HAVE_HYBRID_STAGING
+
+SRC = common.c hstaging_partition.c dummy_simulation_worker.c dummy_staging_worker.c
+SRC1 = intransit_driver.c 
+SRC2 = scheduler_driver.c
+SRC3 = insitu_driver.c
+SRC4 = simulation_driver.c
+SRC5 = insitu_staging_driver.c
+SRC6 = intransit_staging_driver.c 
+
+OBJ = $(SRC:.c=.o)
+OBJ1 = $(SRC1:.c=.o)
+OBJ2 = $(SRC2:.c=.o)
+OBJ3 = $(SRC3:.c=.o)
+OBJ4 = $(SRC4:.c=.o)
+OBJ5 = $(SRC5:.c=.o)
+OBJ6 = $(SRC6:.c=.o)
+
+OUT1 = ./intransit_driver
+OUT2 = ./scheduler_driver
+OUT3 = ./insitu_driver
+OUT4 = ./simulation_driver
+OUT5 = ./insitu_staging_driver
+OUT6 = ./intransit_staging_driver
+
+#default: $(OUT1) $(OUT2) $(OUT3)
+default: $(OUT2) $(OUT4) $(OUT5) $(OUT6)
+
+.c.o:
+	$(CC) $(INCLUDES) $(CFLAGS) -c $< -o $@
+
+$(OUT1): $(OBJ1) $(OBJ)
+	$(CC) $(CFLAGS) $(INCLUDES) $(OBJ1) $(OBJ) -o $(OUT1) $(LIBS)
+
+$(OUT2): $(OBJ2) $(OBJ)
+	$(CC) $(CFLAGS) $(INCLUDES) $(OBJ2) $(OBJ) -o $(OUT2) $(LIBS)
+
+$(OUT3): $(OBJ3) $(OBJ)
+	$(CC) $(CFLAGS) $(INCLUDES) $(OBJ3) $(OBJ) -o $(OUT3) $(LIBS)
+
+$(OUT4): $(OBJ4) $(OBJ)
+	$(CC) $(CFLAGS) $(INCLUDES) $(OBJ4) $(OBJ) -o $(OUT4) $(LIBS)
+
+$(OUT5): $(OBJ5) $(OBJ)
+	$(CC) $(CFLAGS) $(INCLUDES) $(OBJ5) $(OBJ) -o $(OUT5) $(LIBS)
+
+$(OUT6): $(OBJ6) $(OBJ)
+	$(CC) $(CFLAGS) $(INCLUDES) $(OBJ6) $(OBJ) -o $(OUT6) $(LIBS)
+
+clean:
+	rm -f $(OBJ) $(OBJ2) $(OBJ4) $(OBJ5) $(OBJ6) $(OUT2) $(OUT4) $(OUT5) $(OUT6)
+

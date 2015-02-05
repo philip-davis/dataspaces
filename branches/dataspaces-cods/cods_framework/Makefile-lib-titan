@@ -1,0 +1,42 @@
+SHELL   = /bin/sh
+CC = cc 
+FTN = ftn
+DSPACES_DIR = /ccs/home/zhangfan/dataspaces-hybrid-staging
+INCLUDES=-I. \
+		-I$(DSPACES_DIR) \
+		-I$(DSPACES_DIR)/include \
+		-I$(DSPACES_DIR)/dart \
+		-I$(DSPACES_DIR)/dart/gni \
+        -I/opt/cray/rca/default/include \
+        -I/opt/cray-hss-devel/default/include     \
+        -I/opt/cray/krca/default/include
+
+PMI_CFLAGS = $(shell pkg-config --cflags cray-pmi)
+PMI_LIBS = $(shell pkg-config --libs cray-pmi)
+UGNI_CFLAGS = $(shell pkg-config --cflags cray-ugni)
+UGNI_LIBS = $(shell pkg-config --libs cray-ugni)
+LIBS=${PMI_LIBS} ${UGNI_LIBS} \
+        -L/opt/cray/rca/default/lib64 -lrca
+
+CFLAGS= -g ${UGNI_CFLAGS} ${PMI_CLFASG} -DHAVE_UGNI -DDS_HAVE_DIMES -DDS_HAVE_CODS
+
+SRC1 =  cods_api.c \
+		cods_strutil.c \
+		cods_internal.c \
+		cods_scheduler.c 
+
+OBJ1 = $(SRC1:.c=.o)
+
+OUT1 = ./libcods.a
+
+default: $(OUT1)
+
+.c.o:
+	$(CC) $(INCLUDES) $(CFLAGS) -c $< -o $@
+
+$(OUT1): $(OBJ1)
+	ar rcs $(OUT1) $(OBJ1)
+
+clean:
+	rm -f $(OUT1) $(OBJ1) 
+
