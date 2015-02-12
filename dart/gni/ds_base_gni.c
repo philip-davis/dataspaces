@@ -577,7 +577,7 @@ static int ds_master_init(struct dart_server *ds)//testing
 
 		err = rpc_smsg_init(ds->rpc_s, ds->peer_size);
 		if (err != 0){
-			printf("Rank 0: failed for rpc_smsg_init %d. (%d)\n", peer->ptlmap.id, err);
+			printf("Rank %d: failed for rpc_smsg_init. (%d)\n", ds->rpc_s->ptlmap.id, err);
 			goto err_out;
 		}
 
@@ -945,7 +945,7 @@ static int ds_boot_slave(struct dart_server *ds)
 
 		err = rpc_smsg_init(ds->rpc_s, ds->peer_size);
 		if (err != 0){
-			printf("Rank 0: failed for rpc_smsg_init %d. (%d)\n", peer->ptlmap.id, err);
+			printf("Rank %d: failed for rpc_smsg_init. (%d)\n", ds->rpc_s->ptlmap.id, err);
 			goto err_out;
 		}
 		/*
