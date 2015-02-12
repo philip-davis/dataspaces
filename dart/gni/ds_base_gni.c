@@ -525,55 +525,13 @@ static int ds_master_init(struct dart_server *ds)//testing
                         printf("Rank %d: Fail GNI_EpBind SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
                         goto err_out;
                 }
-/*
-
-		status = GNI_EpCreate(ds->rpc_s->nic_hndl, ds->rpc_s->src_cq_hndl, &peer->ep_hndl);
-		if (status != GNI_RC_SUCCESS)
-		{
-			uloga("Fail: GNI_EpCreate returned error. %d.\n", status);
-			goto err_free;
-		}
-
-		status = GNI_EpBind(peer->ep_hndl, peer->ptlmap.nid, peer->ptlmap.id);
-		if (status != GNI_RC_SUCCESS)
-		{
-			uloga("Fail: GNI_EpBind returned error. %d.\n", status);
-			goto err_free;
-		}
-
-		status = GNI_EpCreate(ds->rpc_s->nic_hndl, ds->rpc_s->sys_cq_hndl, &peer->sys_ep_hndl);
-		if (status != GNI_RC_SUCCESS)
-		{
-			uloga("Rank %d: Fail GNI_EpCreate SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
-			goto err_out;
-		}
-		status = GNI_EpBind(peer->sys_ep_hndl, peer->ptlmap.nid, peer->ptlmap.pid);
-		if (status != GNI_RC_SUCCESS)
-		{
-			uloga("Rank %d: Fail GNI_EpBind SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
-			goto err_out;
-		}
-*/
 	}
 
 		err = rpc_smsg_init(ds->rpc_s, ds->peer_size);
 		if (err != 0){
-			uloga("Rank 0: failed for rpc_smsg_init %d. (%d)\n", peer->ptlmap.id, err);
+			printf("Rank %d: failed for rpc_smsg_init. (%d)\n", ds->rpc_s->ptlmap.id, err);
 			goto err_out;
 		}
-
-		//debug
-		//rpc_smsg_check(ds->rpc_s);
-
-		/*
-		err = sys_smsg_init(ds->rpc_s, ds->peer_size);
-		if (err != 0){
-			uloga("Rank 0: failed for sys_smsg_init. (%d)\n", err);
-			goto err_out;
-		}
-		*///SCA SYS
-		//debug
-		//sys_smsg_check(ds->rpc_s);
 
 	
 	//4. allgather APP smsg_attr[rpc+sys]
@@ -961,7 +919,7 @@ static int ds_boot_slave(struct dart_server *ds)
 
 		err = rpc_smsg_init(ds->rpc_s, ds->peer_size);
 		if (err != 0){
-			uloga("Rank 0: failed for rpc_smsg_init %d. (%d)\n", peer->ptlmap.id, err);
+			printf("Rank %d: failed for rpc_smsg_init. (%d)\n", ds->rpc_s->ptlmap.id, err);
 			goto err_out;
 		}
 
