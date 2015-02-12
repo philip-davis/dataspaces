@@ -336,6 +336,80 @@ int common_dspaces_put(const char *var_name,
         return 0;
 }
 
+/* PUT API with multiple replications */
+int common_dspaces_put_with_replica(const char *var_name,
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        void *data,
+        int num_replica, int *server_id)
+{
+        int i, err;
+
+        /*FOR TEST with one replica, can use default placement
+        if(server_id == NULL)
+                err = common_dspaces_put(var_name, ver, size, ndim, lb, ub, data);
+        else    */
+
+        for(i = 0; i < num_replica; i++){
+                err = common_dspaces_put_with_server_id(var_name, ver, size, ndim, lb, ub, data, server_id[i]);
+                common_dspaces_put_sync();
+        }
+}
+
+int common_dspaces_put_with_server_id(const char *var_name,
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        void *data,
+        int server_id)
+{
+        if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) {
+            return -EINVAL;
+        }
+
+        struct obj_descriptor odsc = {
+                .version = ver, .owner = -1,
+                .st = st,
+                .size = size,
+                .bb = {.num_dims = ndim,}
+        };
+
+        memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+        memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+
+        memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
+        memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
+
+        struct obj_data *od;
+        int err = -ENOMEM;
+
+        strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
+        odsc.name[sizeof(odsc.name)-1] = '\0';
+
+        od = obj_data_alloc_with_data(&odsc, data);
+        if (!od) {
+            uloga("'%s()': failed, can not allocate data object.\n",
+                __func__);
+                return -ENOMEM;
+        }
+
+        // set global dimension
+        set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
+                        &od->gdim);
+        err = dcg_obj_put_with_server_id(od, server_id);
+        if (err < 0) {
+            obj_data_free(od);
+            uloga("'%s()': failed with %d, can not put data object.\n",
+                __func__, err);
+            return err;
+        }
+        sync_op_id = err;
+
+        return 0;
+}
 /*
 int common_dspaces_select(char *var_name, unsigned int vers,
 	int ndim,
