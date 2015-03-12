@@ -69,9 +69,6 @@ int common_get (const char *var_name,
         void *data, enum transport_type type); 
 int common_put_sync(enum transport_type type); 
 int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gcomm);
-#ifdef DART_UGNI_AS_SERVICE
-int common_run_server_as_service(int num_sp, int num_cp, enum transport_type type, void* gcomm);
-#endif
 
 void check_data(const char *var_name, double *buf, int num_elem, int rank, int ts);
 

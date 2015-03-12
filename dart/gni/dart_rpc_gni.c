@@ -523,8 +523,8 @@ static uint32_t rpc_get_index(void)
 		free(ri);
 		break;
 	}
-	//	uloga("Rank %d: get index %d.\n", rpc_s_instance->ptlmap.id, current_index);
-	return current_index;
+	
+    return current_index;
 }
 
 static int rpc_free_index(int index)
@@ -539,8 +539,6 @@ static int rpc_free_index(int index)
 
 	ri->index = index;
 	list_add_tail(&ri->index_entry, &index_list);
-
-	//	uloga("Rank %d: free index %d.\n", rpc_s_instance->ptlmap.id, index);
 	
 	return 0;
 }
@@ -1000,39 +998,38 @@ static int sys_cleanup (struct rpc_server *rpc_s)
 	}
 #endif
 
-        for(i=0; i < rpc_s->num_rpc_per_buff; i++)
-        { 
-          if(rpc_s->peer_tab[i].ptlmap.id==rpc_s->ptlmap.id)
-            continue;
+	for(i=0; i < rpc_s->num_rpc_per_buff; i++)
+	{
+	  if(rpc_s->peer_tab[i].ptlmap.id==rpc_s->ptlmap.id)
+	    continue;
 
+	  
+		status = GNI_EpUnbind(rpc_s->peer_tab[i].sys_ep_hndl);
+		if (status != GNI_RC_NOT_DONE && status != GNI_RC_SUCCESS) 
+		{
+		    printf("%s(): (%d)Fail: GNI_EpUnbind(%d) returned error. %d.\n", __func__, rank_id_pmi, rpc_s->peer_tab[i].ptlmap.id, status);
+			goto err_out;
+		}
 
-                status = GNI_EpUnbind(rpc_s->peer_tab[i].sys_ep_hndl);
-                if (status != GNI_RC_NOT_DONE && status != GNI_RC_SUCCESS)
-                { 
-                  printf("(%d)Fail: GNI_EpUnbind(%d) returned error. %d.\n", rank_id_pmi, rpc_s->peer_tab[i].ptlmap.id, status);
-                        goto err_out;
-                }
+		status = GNI_EpDestroy(rpc_s->peer_tab[i].sys_ep_hndl); 
+		if (status != GNI_RC_SUCCESS) 
+		{
+			printf("%s(): Fail: GNI_EpDestroy returned error. %d.\n", __func__, status);
+			goto err_out;
+		}
+	}
 
-                status = GNI_EpDestroy(rpc_s->peer_tab[i].sys_ep_hndl);
-                if (status != GNI_RC_SUCCESS)
-                {
-                        printf("Fail: GNI_EpDestroy returned error. %d.\n", status);
-                        goto err_out;
-                }
-        }
+	status = GNI_CqDestroy(rpc_s->sys_cq_hndl);
+	if (status != GNI_RC_SUCCESS) 
+	{
+		printf("%s(): Fail: GNI_CqDestroy returned error. %d.\n", __func__, status);
+		goto err_out;
+	}
 
-        status = GNI_CqDestroy(rpc_s->sys_cq_hndl);
-        if (status != GNI_RC_SUCCESS)
-        {
-                printf("Fail: GNI_CqDestroy returned error. %d.\n", status);
-                goto err_out;
-        }
-
-        return 0;
+	return 0;
 err_out:
-        printf("(%s): failed. (%d)\n",__func__, status);
-        return status;
-
+	printf("(%s): failed. (%d)\n",__func__, status);
+	return status;
 }
 
 
@@ -1087,6 +1084,9 @@ struct node_id *gather_node_id(int appid, void *comm)
 	local_addr.ptlmap.nid = get_gni_nic_address(0);
 	local_addr.ptlmap.pid = getpid();
 	local_addr.ptlmap.appid = appid;
+	local_addr.peer_rank = local_addr.ptlmap.id;
+	local_addr.peer_num = size;
+	local_addr.next = NULL;
     
 	addr_len = sizeof(struct node_id);
 
@@ -1100,7 +1100,7 @@ struct node_id *gather_node_id(int appid, void *comm)
 	return (struct node_id *)all_addrs;
 }
 
-int rpc_smsg_init(struct rpc_server *rpc_s, int num)
+int rpc_smsg_init(struct rpc_server *rpc_s, struct gni_smsg_attr_info *attr_info, int num)
 {
 	int i, j, err = -ENOMEM;
 	gni_return_t status;
@@ -1111,28 +1111,27 @@ int rpc_smsg_init(struct rpc_server *rpc_s, int num)
 	unsigned int bytes_per_mbox;
 
 	// Allocate memory for rpc message
-	rpc_s->rpc_mem = calloc(rpc_s->num_buf * num, sizeof(struct rpc_cmd) + RECVHEADER);
-	if(!rpc_s->rpc_mem)
+	attr_info->rpc_mem = calloc(rpc_s->num_buf * num, sizeof(struct rpc_cmd) + RECVHEADER);
+	if(!attr_info->rpc_mem)
 	{
 		uloga("Fail: RPC MSG MAILBOX calloc error.\n");
 		err =  -ENOMEM;
 		goto err_free;
 	}
 
-	status = GNI_MemRegister(rpc_s->nic_hndl, (uint64_t)rpc_s->rpc_mem, (uint64_t)(rpc_s->num_buf * num * (sizeof(struct rpc_cmd) + RECVHEADER)), rpc_s->dst_cq_hndl, GNI_MEM_READWRITE, -1, &rpc_local_memory_handle);
+	status = GNI_MemRegister(rpc_s->nic_hndl, (uint64_t)attr_info->rpc_mem, (uint64_t)(rpc_s->num_buf * num * (sizeof(struct rpc_cmd) + RECVHEADER)), rpc_s->dst_cq_hndl, GNI_MEM_READWRITE, -1, &attr_info->local_smsg_attr.mem_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
 		uloga("Fail: GNI_MemRegister RPC returned error. %d.\n", status);
 		goto err_out;
 	}	
 
-	rpc_s->local_smsg_attr.msg_type = GNI_SMSG_TYPE_MBOX_AUTO_RETRANSMIT;
-	rpc_s->local_smsg_attr.mbox_maxcredit = rpc_s->num_buf;
-	rpc_s->local_smsg_attr.msg_maxsize = sizeof(struct rpc_cmd) + RECVHEADER;
-	rpc_s->local_smsg_attr.msg_buffer = rpc_s->rpc_mem;
-	rpc_s->local_smsg_attr.buff_size = rpc_s->num_buf * (sizeof(struct rpc_cmd) + RECVHEADER);
-	rpc_s->local_smsg_attr.mem_hndl = rpc_local_memory_handle;
-	rpc_s->local_smsg_attr.mbox_offset = 0; // At the beginning of SMSG init, we put offset as 0. It changes while configuring the real peer.
+	attr_info->local_smsg_attr.msg_type = GNI_SMSG_TYPE_MBOX_AUTO_RETRANSMIT;
+	attr_info->local_smsg_attr.mbox_maxcredit = rpc_s->num_buf;
+	attr_info->local_smsg_attr.msg_maxsize = sizeof(struct rpc_cmd) + RECVHEADER;
+	attr_info->local_smsg_attr.msg_buffer = attr_info->rpc_mem;
+	attr_info->local_smsg_attr.buff_size = rpc_s->num_buf * (sizeof(struct rpc_cmd) + RECVHEADER);
+	attr_info->local_smsg_attr.mbox_offset = 0; // At the beginning of SMSG init, we put offset as 0. It changes while configuring the real peer.
 
 	return 0;
 
@@ -1144,19 +1143,15 @@ err_out:
         return status;
 }
 
-int rpc_smsg_config(struct rpc_server *rpc_s, struct node_id *peer)
+int rpc_smsg_config(struct rpc_server *rpc_s, struct gni_smsg_attr_info *attr_info, struct node_id *peer)
 {
 	int err = -ENOMEM;
 	gni_return_t status;
 
-	//configure the ep for RPC messages; rpc_msg init.
+	attr_info->local_smsg_attr.mbox_offset = rpc_s->num_buf * sizeof(struct rpc_cmd) * peer->peer_rank; // DSaaS
+	peer->remote_smsg_attr.mbox_offset = rpc_s->num_buf * sizeof(struct rpc_cmd) * (id2rank(rpc_s,rpc_s->ptlmap.id)); // DSaaS
 
-	rpc_s->local_smsg_attr.mbox_offset = rpc_s->num_buf * sizeof(struct rpc_cmd) * peer->ptlmap.id; 
-	peer->remote_smsg_attr.mbox_offset = rpc_s->num_buf * sizeof(struct rpc_cmd) * rpc_s->ptlmap.id; 
-
-	//peer_smsg_check(rpc_s, peer, &peer->remote_smsg_attr);
-
-	status = GNI_SmsgInit(peer->ep_hndl, &rpc_s->local_smsg_attr, &(peer->remote_smsg_attr));
+	status = GNI_SmsgInit(peer->ep_hndl, &(attr_info->local_smsg_attr), &(peer->remote_smsg_attr));
 	if (status != GNI_RC_SUCCESS) 
 	{
 		uloga("Fail: GNI_SmsgInit RPC returned error. %d.\n", status);
@@ -1173,47 +1168,24 @@ err_out:
         return status;
 }
 
-int rpc_ep_smsg_config(struct rpc_server *rpc_s, struct node_id *peer)
+
+// this function can only be used after rpc_server is fully initiated 
+static struct node_id *rpc_get_peer(struct rpc_server *rpc_s, int peer_id) //DSaaS
 {
-	int err = -ENOMEM;
-	gni_return_t status;
+	int count=0;
+	struct node_id *cur_peer;
 
-	status = GNI_EpCreate(rpc_s->nic_hndl, rpc_s->src_cq_hndl, &peer->ep_hndl);
-	if (status != GNI_RC_SUCCESS)
-	{
-		uloga("Rank %d: Fail GNI_EpCreate returned error. %d.\n", rpc_s->ptlmap.id, status);
-		goto err_free;
+	cur_peer = rpc_s->peer_tab;
+	while(cur_peer){
+	  if((peer_id < (cur_peer->ptlmap.id + cur_peer->peer_num)) && (peer_id > (cur_peer->ptlmap.id - 1)))
+			return cur_peer + peer_id - cur_peer->ptlmap.id;
+		else
+			cur_peer = (struct node_id *)(cur_peer + cur_peer->peer_num - 1)->next;	
 	}
 
-	status = GNI_EpBind(peer->ep_hndl, peer->ptlmap.nid, peer->ptlmap.id);
-	if (status != GNI_RC_SUCCESS)
-	{
-		uloga("Rank %d: Fail GNI_EpBind returned error. %d.\n", rpc_s->ptlmap.id, status);
-		goto err_free;
-	}
+	uloga("Rank %d: WARNING cannot find peer id %d.\n", rpc_s->ptlmap.id, peer_id);
 
-	err = rpc_smsg_config(rpc_s, peer);
-	if (err != 0){
-		uloga("Rank %d: Fail for config SMSG for %d. (%d)\n", rpc_s->ptlmap.id, peer->ptlmap.id, err);
-		goto err_out;
-	}
-
-	return 0;
-
-err_free:
-	uloga("'%s()': failed with %d.\n", __func__, err);
-        return err;
-err_out:
-	uloga("'%s()': failed with %d.\n", __func__, status);
-        return status;
-
-}
-
-// this function can only be used after rpc_server is fully initiated
-static struct node_id *rpc_get_peer(struct rpc_server *rpc_s, int peer_id)
-{
-		return rpc_s->peer_tab + peer_id;
-//	return rpc_server_find(rpc_s,peer_id);
+	return NULL;
 }
 
 /* 
@@ -1226,11 +1198,7 @@ static int rpc_cb_decode(struct rpc_server *rpc_s, struct rpc_request *rr)
 	struct rpc_cmd *cmd;
 	int err, i;
 
-
-
-
 	cmd = (struct rpc_cmd *) (rr->msg->msg_rpc);
-
 	for (i = 0; i < num_service; i++) 
 	{
 		if (cmd->cmd == rpc_commands[i].rpc_cmd) 
@@ -1388,13 +1356,13 @@ static int rpc_post_request(struct rpc_server *rpc_s, struct node_id *peer, stru
 	gni_return_t status = GNI_RC_SUCCESS;
 	gni_post_descriptor_t *rdma_data_desc;
 	uint32_t local, remote;
+	struct gni_smsg_attr_info *cur_attr_info = rpc_s->attr_info_start;
 
 	local = rr->index;
 
 	uint32_t hdr_size = hs ? (uint32_t)(sizeof(struct hdr_sys)) : 0;
 
 RESEND:
-
 	if (rr->type == 0)
 	{
 		remote = rpc_s->ptlmap.id+INDEX_COUNT;
@@ -1406,8 +1374,11 @@ RESEND:
 		        goto err_status;
 	        }
 
-		rr->mdh_rpc = rpc_s->local_smsg_attr.mem_hndl;
+		while(cur_attr_info->appid != peer->ptlmap.appid){
+			cur_attr_info = cur_attr_info->next;
+		}
 
+		rr->mdh_rpc = cur_attr_info->local_smsg_attr.mem_hndl;//DSaaS
 		status = GNI_SmsgSend(peer->ep_hndl, NULL, 0, (void *)rr->data, (uint32_t)rr->size, rr->index);// MSG_ID (last parameter) uses address of rr as reference
 		if((status != GNI_RC_SUCCESS) && (status != GNI_RC_NOT_DONE))
 		{
@@ -1417,7 +1388,6 @@ RESEND:
 		}
 
         if (status == GNI_RC_NOT_DONE) {
-            // uloga("%s(): GNI_SmsgSend returns GNI_RC_NOT_DONE but peer->num_msg_at_peer is %d\n", __func__, peer->num_msg_at_peer);
             if (rpc_s->cmp_type == DART_SERVER) {
                 uloga("%s(): GNI_RC_NOT_DONE should not happen on server\n",
                         __func__, peer->num_msg_at_peer);
@@ -1438,6 +1408,7 @@ RESEND:
                 }
             }
         }
+
 	}
 
     if (rr->type == 1 && rr->f_use_prealloc_rdma_mem) {
@@ -1458,8 +1429,7 @@ RESEND:
             err = -1;
             goto err_out;
         }
-        //printf("%s(): original_msg_data= %llu msg_data= %llu size= %u\n",
-        //        __func__, rr->msg->original_msg_data, rr->msg->msg_data, rr->msg->size);
+
         memcpy(rr->msg->msg_data, rr->msg->original_msg_data, rr->msg->size);
 
         rdma_data_desc.type = GNI_POST_RDMA_PUT;
@@ -1488,8 +1458,6 @@ RESEND:
 		    uloga("(%s) 2 Fail: GNI_EpSetEventData returned error. (%d)\n", __func__, status);
 		    goto err_status;
 		}
-	
-
 		status = GNI_MemRegister(rpc_s->nic_hndl, (uint64_t)rr->msg->msg_data, (uint64_t)(rr->msg->size), NULL, GNI_MEM_READWRITE, -1, &rr->mdh_data);
 		if (status != GNI_RC_SUCCESS)
 		{
@@ -1557,8 +1525,6 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
                 err = -1;
                 goto err_out;
             }                        
-            //printf("%s(): original_msg_data= %llu msg_data= %llu size= %u\n",
-            //    __func__, rr->msg->original_msg_data, rr->msg->msg_data, rr->msg->size);
 
             rdma_data_desc.type = GNI_POST_RDMA_GET;
             rdma_data_desc.cq_mode = GNI_CQMODE_GLOBAL_EVENT | GNI_CQMODE_REMOTE_EVENT; //?reconsider, need some tests.
@@ -1583,7 +1549,7 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
             }
 #endif
         } else {
-            status = GNI_MemRegister(rpc_s->nic_hndl, (uint64_t)rr->msg->msg_data, (uint64_t)rr->msg->size, NULL, GNI_MEM_READWRITE, -1, &rr->mdh_data);
+	  status = GNI_MemRegister(rpc_s->nic_hndl, (uint64_t)(rr->msg->msg_data), (uint64_t)(rr->msg->size), NULL, GNI_MEM_READWRITE, -1, &rr->mdh_data);
             if (status != GNI_RC_SUCCESS)
             {
               printf("Fail: GNI_MemRegister returned error with %d.\n", status);
@@ -1641,7 +1607,6 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 	      err = rpc_process_event_with_timeout(rpc_s, 1);
 	      if (err < 0 && err != GNI_RC_TIMEOUT)
             goto err_out;
-	    
 
 	      continue;
 	    }
@@ -1655,15 +1620,12 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 			err = rpc_prepare_buffers(rpc_s, peer, rr, rr->iodir);
 			if (err != 0)
 				goto err_out;
-
-			/*if (rr->f_vec)
-			  rr->f_vec = unset;*/
 		}
 
-		// post request
 		err = rpc_post_request(rpc_s, peer, rr, 0);
 		if (err != 0)
 			goto err_out;
+
 
 		// Message is sent, consume one credit. 
 		peer->num_msg_at_peer--;
@@ -2233,7 +2195,6 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	status = GNI_CqVectorWaitEvent(cq_array, 3, (uint64_t)timeout, &event_data, &n); 
 	if (status == GNI_RC_TIMEOUT)
 		return status;
-
 	else if (status != GNI_RC_SUCCESS)
 	{
 		uloga("(%s): GNI_CqVectorWaitEvent PROCESSING ERROR.\n", __func__);
@@ -2245,6 +2206,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 
 	if(GNI_CQ_STATUS_OK(event_data) == 0)
 		uloga("Rank %d: receive event_id (%d) not done.\n",rank_id, event_id);
+
 
   if(n == 0)
     {
@@ -2310,12 +2272,11 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	      uloga("rr_comm_alloc err (%d).\n", err);
 	      goto err_out;
 	    }
-	  
 	  peer = rpc_get_peer(rpc_s, (int)event_id-INDEX_COUNT);
 	  if(peer == NULL)
 	    {
 	      uloga("(%s): rpc_get_peer err.\n", __func__);
-	      return -ENOMEM;
+	      return 0;
 	    }
 
 	  rr->msg->msg_rpc = calloc(1, sizeof(struct rpc_cmd));
@@ -2329,7 +2290,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	    {
 	      status = GNI_SmsgGetNext(peer->ep_hndl, (void **) &tmpcmd);
 	      cnt++;
-	    } while(status == GNI_RC_NOT_DONE);
+	    }while(status == GNI_RC_NOT_DONE);
 
 	  cnt=0;
 
@@ -2343,7 +2304,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	      cnt=0;
 	      uloga("Rank %d: receive wrong event.\n", rank_id);//debug
 	      free(rr);
-	      goto err_out;
+	      goto err_status;
 	    }
 
 	  memcpy(rr->msg->msg_rpc, tmpcmd, sizeof(struct rpc_cmd));
@@ -2357,6 +2318,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 			  goto err_status;
 		}
 	    }while(status == GNI_RC_NOT_DONE);
+
 
       if (rr->msg->msg_rpc->cmd != cn_ack_credit) {
         peer->num_msg_recv++;
@@ -2376,7 +2338,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 
 	  free(rr->msg->msg_rpc);
 	  free(rr);
-	  }
+	}
 
 	 if( event_id < INDEX_COUNT )
 	   {
@@ -2480,7 +2442,6 @@ int rpc_process_msg_resend(struct rpc_server *rpc_s, struct node_id *peer_tab, i
     int i;
     for (i = 0; i < num_peer; i++) {
         peer = peer_tab + i;
-//      peer = rpc_server_find(rpc_s, i);
         if (peer->num_req > 0 && peer->num_msg_at_peer > 0) {
             peer_process_send_list(rpc_s, peer);
         }
@@ -2567,41 +2528,14 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 	if (err != 0)
 		goto err_free;
 
-    INIT_LIST_HEAD(&rpc_s->peer_list);
+	//DSaaS: inital gni_smsg_attr_info list for smsg
+	rpc_s->attr_info_start=NULL;
 
 
-	rpc_s->peer_tab = gather_node_id(appid);
+	rpc_s->peer_tab = gather_node_id(appid);////DSaaS (num of peer in self-app)
 	if(rpc_s->peer_tab == NULL)
 		goto err_free;
 
-	int size;
-	int rc = PMI_Get_size(&size);
-
-	// printf("ID %d size %d\n",rpc_s->ptlmap.id, size);
-
-	if(appid==0 && rpc_s->ptlmap.id==0){
-
-    int i;
-	for(i =0;i<size;i++){
-		struct node_id *temp_peer = calloc(1, sizeof(struct node_id));
-		
-	        temp_peer->ptlmap.nid = rpc_s->peer_tab[i].ptlmap.nid;
-	        temp_peer->ptlmap.pid = rpc_s->peer_tab[i].ptlmap.pid;
-		temp_peer->ptlmap.appid = rpc_s->peer_tab[i].ptlmap.appid;
-                temp_peer->ptlmap.id = rpc_s->peer_tab[i].ptlmap.id;
-
-		list_add(&temp_peer->peer_entry,&rpc_s->peer_list);
-
-	}
-
-
-	if(rpc_s->ptlmap.id==0){
-		struct node_id *temp_peer;
-        	list_for_each_entry(temp_peer, &rpc_s->peer_list, struct node_id, peer_entry) {
-			printf("%d %d %d %d \n",temp_peer->ptlmap.nid, temp_peer->ptlmap.pid, temp_peer->ptlmap.id, temp_peer->ptlmap.appid);
-        	}
-		}
-	}
 
         status = GNI_CqCreate(rpc_s->nic_hndl, ENTRY_COUNT, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->sys_cq_hndl);
         if (status != GNI_RC_SUCCESS)
@@ -2637,13 +2571,13 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 	if (err != 0)
 		goto err_free;
 
-    // TODO: do NOT need to allocate memory for bar_tab
-	rpc_s->bar_tab = malloc(sizeof(*rpc_s->bar_tab) * num_rpc_per_buff);
+
+	rpc_s->bar_tab = malloc(sizeof(*rpc_s->bar_tab) * num_rpc_per_buff);////DSaaS? seem not use anymore
 	if (!rpc_s->bar_tab) {
 		err = -ENOMEM;
 		goto err_free;
 	}
-	memset(rpc_s->bar_tab, 0, sizeof(*rpc_s->bar_tab) * num_rpc_per_buff);
+	memset(rpc_s->bar_tab, 0, sizeof(*rpc_s->bar_tab) * num_rpc_per_buff);////DSaaS? seem not use anymore
 
 	rpc_add_service(cn_ack_credit, rpc_process_ack);
 
@@ -2657,7 +2591,7 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
     }
 #endif
 
-	// Init succeeded, set the instance reference here
+	// Init succeeded, set the instance reference here.
 	rpc_s_instance = rpc_s;
 	return rpc_s;
 
@@ -2674,27 +2608,39 @@ err_out:
 static int rpc_server_finish(struct rpc_server *rpc_s)
 {
 	struct node_id *peer;
+	struct node_id *cur_peer;
 	int i, err;
 	
-	list_for_each_entry(peer, &rpc_s->peer_list, struct node_id, peer_entry) {
-		while (peer->num_req)
-		{
-			err = peer_process_send_list(rpc_s, peer);
-			if (err<0)
-				uloga("'%s()': encountered an error %d, skipping.\n", __func__, err);
+	peer = rpc_s->peer_tab;
+	while(peer){
+	  cur_peer = (struct node_id *)(peer + peer->peer_num -1);		
+
+		for(i=0;i<peer->peer_num;i++, peer++){
+			while (peer->num_req)
+			{
+				err = peer_process_send_list(rpc_s, peer);
+				if (err<0)
+					printf("'%s()': encountered an error %d, skipping.\n", __func__, err);
+			}
+
 		}
+
+		peer = cur_peer->next;
+
 	}
+
+
 	return 0;
 }
-
 
 int rpc_server_free(struct rpc_server *rpc_s, void *comm)
 {
 	gni_return_t status;
 	struct rpc_request *rr, *tmp;
-	struct node_id *peer;
+	struct node_id *peer, *cur_peer;
 	int err, i;
 	struct rr_index *ri, *ri_tmp;
+        struct gni_smsg_attr_info *cur_attr_info, *attr_info;
 
 	rpc_server_finish(rpc_s);
 
@@ -2728,36 +2674,57 @@ int rpc_server_free(struct rpc_server *rpc_s, void *comm)
         sys_cleanup(rpc_s);
 
 	// Clean rpc_smsg_init
-	status = GNI_MemDeregister(rpc_s->nic_hndl, &rpc_s->local_smsg_attr.mem_hndl);
-        if (status != GNI_RC_SUCCESS)
-	  {
-	    uloga("Fail: GNI_MemDeregister returned error. %d.\n", status);
-	    goto err_out;
-	  }	
-	free(rpc_s->rpc_mem);
+	cur_attr_info = rpc_s->attr_info_start;
+	while(cur_attr_info){
+		status = GNI_MemDeregister(rpc_s->nic_hndl, &cur_attr_info->local_smsg_attr.mem_hndl);
+		if (status != GNI_RC_SUCCESS)
+		{
+			printf("%s(): Fail: GNI_MemDeregister returned error. %d.\n", __func__, status);
+			goto err_out;
+		}	
+	
+		free(cur_attr_info->rpc_mem);
 
-        for(i=0; i < rpc_s->num_rpc_per_buff; i++)
-        { 
-          if(rpc_s->peer_tab[i].ptlmap.id==rpc_s->ptlmap.id)
-            continue;
+		if(cur_attr_info->remote_smsg_attr)
+			free(cur_attr_info->remote_smsg_attr);
 
-                status = GNI_EpUnbind(rpc_s->peer_tab[i].ep_hndl); //Unbind the remote address from the endpoint handler.
-                if (status != GNI_RC_SUCCESS && status != GNI_RC_NOT_DONE)
-                {
-                        printf("Fail: GNI_EpUnbind returned error. %d.\n", status);
-                        goto err_out;
-                }
-                status = GNI_EpDestroy(rpc_s->peer_tab[i].ep_hndl); //You must do an EpDestroy for each endpoint pair.
-                if (status != GNI_RC_SUCCESS)
-                {
-                        printf("Fail: GNI_EpDestroy returned error. %d.\n", status);
-                        goto err_out;
-                }
-        }
+		attr_info = cur_attr_info;
+		cur_attr_info = cur_attr_info->next;
+		free(attr_info);
+	}
+
+	peer = rpc_s->peer_tab;
+	while(peer){
+		cur_peer = peer;		
+
+		for(i=0;i<peer->peer_num;i++, peer++){
+			if(peer->ptlmap.id==rpc_s->ptlmap.id)
+				continue;
+
+			status = GNI_EpUnbind(peer->ep_hndl); //Unbind the remote address from the endpoint handler.
+			if (status != GNI_RC_SUCCESS && status != GNI_RC_NOT_DONE) 
+			{
+				printf("%s(): Fail: GNI_EpUnbind returned error. %d.\n", __func__, status);
+				goto err_out;
+			}
+			status = GNI_EpDestroy(peer->ep_hndl); //You must do an EpDestroy for each endpoint pair.
+			if (status != GNI_RC_SUCCESS) 
+			{
+				printf("%s(): Fail: GNI_EpDestroy returned error. %d.\n", __func__, status);
+				goto err_out;
+			}
+		}
+
+		peer = cur_peer + cur_peer->peer_num -1;
+		peer = peer->next;
+		free(cur_peer);
+	}
+	rpc_s->peer_tab = NULL;
+
 	status = GNI_CqDestroy(rpc_s->src_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
-		uloga("Fail: GNI_MemDestory returned error. %d.\n", status);
+		printf("%s(): Fail: GNI_CqDestroy returned error. %d.\n", __func__, status);
 		goto err_out;
 	}
 
@@ -2770,18 +2737,6 @@ int rpc_server_free(struct rpc_server *rpc_s, void *comm)
 
 	// Clean GNI related
         clean_gni(rpc_s);
-
-    // Free peer list
-    struct node_id *temp_peer;
-    list_for_each_entry_safe(peer, temp_peer, &rpc_s->peer_list, struct node_id,
-            peer_entry)
-    {
-        list_del(&peer->peer_entry);
-        free(peer);
-    }
-    // Free bar_tab
-    if (rpc_s->bar_tab) free(rpc_s->bar_tab);
-    // Free memory allocated for rpc server
         free(rpc_s);
 	if(comm) {
 	    err = MPI_Barrier(*(MPI_Comm *)comm);
@@ -2792,28 +2747,13 @@ int rpc_server_free(struct rpc_server *rpc_s, void *comm)
 
 	PMI_Finalize();
 
-    rpc_s_instance  = NULL;
 	return 0;
 
 err_out:
 	return status;
 }
 
-/*
-static void list_credits(struct rpc_server *rpc_s)
-{
-	struct node_id *peer;
-	int i;
-
-	for (i=0; i < rpc_s->num_peers; i++)
-	{
-		peer = rpc_s->peer_tab + i;
-		uloga("Peer %d : credits for remote Peer %d: {send = %d, return %d}\n", rpc_s->ptlmap.id, peer->ptlmap.id, peer->num_msg_at_peer, peer->num_msg_ret);
-	}
-}
-
-*/////
-
+>>>>>>> 05e7a80... Merged from r1834@svn://cac.rutgers.edu/DataIO/DataSpaces/branches/dataspaces-service-gni-beta
 struct rpc_server *rpc_server_get_instance(void)
 {
 	/* Blindly  get  the  rpc_server   reference;  if  it  is  not
@@ -2858,62 +2798,17 @@ int rpc_barrier(struct rpc_server *rpc_s)
   return err;
 }
 
-// original barrier
-/*
-int rpc_barrier(struct rpc_server *rpc_s)
-{
-	//	struct node_id *peer;
-	int round, np;
-	int next, prev;
-	int err;
-
-	np = log2_ceil(rpc_s->app_num_peers);
-	round = -1;
-
-	rpc_s->bar_num = (rpc_s->bar_num + 1) & 0xFF;
-
-	while (round < np-1) 
-	{
-		round = round + 1;
-
-		next = (myrank(rpc_s) + (1 << round)) % rpc_s->app_num_peers;
-		prev = (rpc_s->app_num_peers + myrank(rpc_s) - (1 << round)) % rpc_s->app_num_peers;
-
-		err = sys_bar_send(rpc_s, rank2id(rpc_s, next));////
-		if (err != 0)
-			goto err_out;
-
-		SYS_WAIT_COMPLETION(rpc_s->bar_tab[prev] == rpc_s->bar_num || rpc_s->bar_tab[prev] == ((rpc_s->bar_num+1) & 0xFF))
-	}
-
-	return 0;
-
- err_out:
-	uloga("Rank %d: (%s) failed (%d).\n", rank_id, __func__, err);
-	return err;
-}
-*/
-
 //rpc operation
 void rpc_add_service(enum cmd_type rpc_cmd, rpc_service rpc_func)
 {
-    // check if the rpc callback function has been added
-    int i;
-    for (i = 0; i < num_service; i++) {
-        if (rpc_commands[i].rpc_cmd == rpc_cmd) return;
-    }
-
 	rpc_commands[num_service].rpc_cmd = rpc_cmd;
 	rpc_commands[num_service].rpc_func = rpc_func;
 	num_service++;
 }
 
-//Added by Tong: to decouple DART layer and DataSpaces layer
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd)
 {
   peer->mdh_addr = cmd->mdh_addr;
-  //debug SCA
-  // uloga("Rank %d: peer mdh_addr index is %d, cmd->mdh_addr->index is %d.\n", rpc_s_instance->ptlmap.id, peer->mdh_addr.index, cmd->mdh_addr.index);
 }
 
 void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg,
@@ -2965,6 +2860,8 @@ int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg
 	rr->cb = (async_callback)rpc_cb_req_completion;
 	rr->data = msg->msg_rpc;
 	rr->size = sizeof(*msg->msg_rpc);
+
+
 #ifdef DART_UGNI_PREALLOC_RDMA
     rr->f_use_prealloc_rdma_mem = 1;
     rr->rr_type = DART_RPC_SEND;
@@ -2981,6 +2878,7 @@ int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg
 	err = peer_process_send_list(rpc_s, peer);
 	if(err == 0)
 		return 0;
+
 err_out:
 	uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
@@ -3139,48 +3037,106 @@ int rpc_receivev(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf 
 {
 	return 0;
 }
-/*
-struct node_id *rpc_server_find(struct rpc_server *rpc_s, int nodeid)
-{
-        struct node_id *temp_peer;
-        list_for_each_entry(temp_peer, &rpc_s->peer_list, struct node_id, peer_entry) {
-                if(temp_peer->ptlmap.id == nodeid)
-                        return temp_peer;
-        }
-        return 0;
-}
-*/
+
 
 uint32_t rpc_server_get_nid(struct rpc_server *rpc_s)
 {
-    return rpc_s->ptlmap.nid;
+  return rpc_s->ptlmap.nid;
 }
 
-void rpc_server_find_local_peers(struct rpc_server *rpc_s,
-    struct node_id **peer_tab, int *num_local_peer, int peer_tab_size)
+void rpc_server_find_local_peers(struct rpc_server *rpc_s, struct node_id **peer_tab, int *num_local_peer, int peer_tab_size)
 {
-    // find all peers (include current peer itself) that reside on the
-    // same compute node as current peer
-	int i;
-	int j=0;
-    for(i=0; i < rpc_s->num_rpc_per_buff; i++) {
-        if(rpc_s->peer_tab[i].ptlmap.nid==rpc_s->ptlmap.nid){
-            peer_tab[j++] = &(rpc_s->peer_tab[i]);
-        }
+
+  // find all peers (include current peer itself) that reside on the
+  // same compute node as current peer
+  struct node_id *peer, *cur_peer;
+  int i, j=0;
+
+  peer = rpc_s->peer_tab;
+  while (peer) {
+    cur_peer = (struct node_id *)(peer+peer->peer_num-1);
+    for(i=0;i<peer->peer_num;i++,peer++){
+      if (rpc_s->ptlmap.nid == peer->ptlmap.nid){
+        peer_tab[j++] = peer;
+      }
     }
+    peer = cur_peer->next;
+  } 
 
-    *num_local_peer = j;
+  *num_local_peer = j;
 }
 
-// for debug:
-void rpc_smsg_check(struct rpc_server *rpc_s){
-  uloga("Rank %d: rpc_s->local_smsg_attr[type(%d),maxcredit(%d),maxsize(%d),buffer(%d),buff_size(%d), mem_hndl(%ld,%ld), offset(%d)]\n", rpc_s->ptlmap.id, rpc_s->local_smsg_attr.msg_type, rpc_s->local_smsg_attr.mbox_maxcredit, rpc_s->local_smsg_attr.msg_maxsize, rpc_s->local_smsg_attr.msg_buffer, rpc_s->local_smsg_attr.buff_size, rpc_s->local_smsg_attr.mem_hndl.qword1, rpc_s->local_smsg_attr.mem_hndl.qword2, rpc_s->local_smsg_attr.mbox_offset);
+//Added for DSaaS:
+int rpc_peer_cleanup(struct rpc_server *rpc_s, struct node_id *peer)
+{
+        int err = 0;
+        int i;
+	gni_return_t status;
+
+	status = GNI_EpUnbind(peer->ep_hndl); //Unbind the remote address from the endpoint handler.
+	if (status != GNI_RC_SUCCESS && status != GNI_RC_NOT_DONE) 
+	{
+		printf("Fail: GNI_EpUnbind returned error. %d.\n", status);
+		goto err_status;
+	}
+
+	status = GNI_EpDestroy(peer->ep_hndl); //You must do an EpDestroy for each endpoint pair.
+	if (status != GNI_RC_SUCCESS) 
+	{
+		printf("Fail: GNI_EpDestroy returned error. %d.\n", status);
+		goto err_status;
+	}
+
+
+	return 0;
+
+err_status:
+	printf("Rank %d: (%s): status (%d).\n", rpc_s->ptlmap.id, __func__, status);
+  return status;
 }
 
-void sys_smsg_check(struct rpc_server *rpc_s){
-  uloga("Rank %d: rpc_s->sys_local_smsg_attr[type(%d),maxcredit(%d),maxsize(%d),buffer(%d),buff_size(%d), mem_hndl(%ld,%ld), offset(%d)]\n", rpc_s->ptlmap.id, rpc_s->sys_local_smsg_attr.msg_type, rpc_s->sys_local_smsg_attr.mbox_maxcredit, rpc_s->sys_local_smsg_attr.msg_maxsize, rpc_s->sys_local_smsg_attr.msg_buffer, rpc_s->sys_local_smsg_attr.buff_size, rpc_s->sys_local_smsg_attr.mem_hndl.qword1, rpc_s->sys_local_smsg_attr.mem_hndl.qword2, rpc_s->sys_local_smsg_attr.mbox_offset);
+int rpc_attr_cleanup(struct rpc_server *rpc_s, struct gni_smsg_attr_info *cur_attr_info)
+{
+        int i;
+	gni_return_t status;
+
+	status = GNI_MemDeregister(rpc_s->nic_hndl, &cur_attr_info->local_smsg_attr.mem_hndl);
+	if (status != GNI_RC_SUCCESS)
+	{
+		printf("Fail: GNI_MemDeregister returned error. %d.\n", status);
+		goto err_status;
+	}	
+
+	free(cur_attr_info->rpc_mem);
+
+	if(cur_attr_info->remote_smsg_attr)
+		free(cur_attr_info->remote_smsg_attr);
+
+	return 0;
+
+err_status:
+  printf("Rank %d: (%s): status (%d).\n", rpc_s->ptlmap.id, __func__, status);
+  return status;
 }
+
 
 void peer_smsg_check(struct rpc_server *rpc_s, struct node_id *peer, gni_smsg_attr_t *smsg_attr){
   uloga("Rank %d: peer(%d) [type(%d),maxcredit(%d),maxsize(%d),buffer(%d),buff_size(%d), mem_hndl(%ld,%ld), offset(%d)]\n", rpc_s->ptlmap.id, peer->ptlmap.id, smsg_attr->msg_type, smsg_attr->mbox_maxcredit, smsg_attr->msg_maxsize, smsg_attr->msg_buffer, smsg_attr->buff_size, smsg_attr->mem_hndl.qword1, smsg_attr->mem_hndl.qword2, smsg_attr->mbox_offset);
+  }
+
+void rpc_peer_check(struct rpc_server *rpc_s){
+  int i;
+  struct node_id *peer, *tmp_peer;
+
+  peer = rpc_s->peer_tab;
+  
+  while(peer){
+    for(i=0;i<peer->peer_num;i++, peer++){
+      printf("Rank %d: peer is %d.\n", rpc_s->ptlmap.id, peer->ptlmap.id);
+      tmp_peer = peer;
+    }
+    peer = tmp_peer->next;
+  }
+
+>>>>>>> 05e7a80... Merged from r1834@svn://cac.rutgers.edu/DataIO/DataSpaces/branches/dataspaces-service-gni-beta
 }
