@@ -71,9 +71,6 @@ struct ds_gspace *dsg_alloc(int, int, char *, void *);
 void dsg_free(struct ds_gspace *);
 int dsg_process(struct ds_gspace *);
 int dsg_complete(struct ds_gspace *);
-#ifdef DART_UGNI_AS_SERVICE
-int dsg_reset(struct ds_gspace *dsg, int num_cp);
-#endif
 
 int dsghlp_obj_put(struct ds_gspace *, struct obj_data *);
 int dsghlp_get_rank(struct ds_gspace *);

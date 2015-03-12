@@ -136,10 +136,12 @@ struct obj_data_wrapper {
 	int q_id;
 };
 
+
 // Header structure for dimes_put request.
 struct hdr_dimes_put { // TODO: more comments
     struct ptlid_map ptlmap;
 	struct dimes_obj_id obj_id;
+	int sync_id;
 	struct obj_descriptor odsc;
 #ifdef DS_HAVE_DIMES_SHMEM
     __u8 has_shmem_data;

@@ -1092,6 +1092,12 @@ static void qt_free_obj_data_d(struct query_tran_entry_d *qte)
     struct fetch_entry *fetch, *t;
     list_for_each_entry_safe(fetch,t,&qte->fetch_list,struct fetch_entry,entry)
     {
+#ifdef HAVE_UGNI
+        if (fetch->read_tran->remote_peer->ptlmap.appid != dimes_c->dcg->dc->self->ptlmap.appid)
+        { 
+            dart_rdma_delete_remote_peer(fetch->read_tran->remote_peer);
+        }
+#endif
         dart_rdma_delete_read_tran(fetch->read_tran->tran_id);
         list_del(&fetch->entry);
         free(fetch);
@@ -1107,14 +1113,22 @@ static int qt_add_obj_with_cmd_d(struct query_tran_entry_d *qte,
     struct fetch_entry *fetch;
     fetch = (struct fetch_entry*)malloc(sizeof(*fetch));
 
+#ifdef HAVE_UGNI
+    if (hdr->ptlmap.appid != dimes_c->dcg->dc->self->ptlmap.appid) {
+        peer = dart_rdma_create_remote_peer(&hdr->ptlmap);
+    } else {
+        peer = dc_get_peer(DC, odsc->owner);
+    }
+#else
     // Lookup the owner peer of the remote data object
-    peer = dc_get_peer(DART_CLIENT_PTR, hdr->odsc.owner);
+    peer = dc_get_peer(DC, odsc->owner);
+#endif
 
     // Creat read transaction
     dart_rdma_create_read_tran(peer, &fetch->read_tran);
 
     // Set source and destination object descriptors
-    fetch->remote_obj_id = hdr->obj_id;
+    fetch->remote_sync_id = hdr->sync_id;
     fetch->src_odsc = hdr->odsc;
     fetch->dst_odsc = *odsc;
 #ifdef DS_HAVE_DIMES_SHMEM
@@ -1386,7 +1400,6 @@ static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
         hdr->ptlmap = dimes_c->dcg->dc->rpc_s->ptlmap; 
 		hdr->odsc = mem_obj->obj_desc;
 		hdr->sync_id = mem_obj->sync_id;
-		hdr->has_rdma_data = 1;
 #ifdef DS_HAVE_DIMES_SHMEM
         hdr->has_shmem_data = 0;
         if (options.enable_shmem_buffer) {
@@ -2500,7 +2513,11 @@ static int local_search_mem_obj_list(struct list_head *mem_obj_list,
             uloga("%s(): ERROR data is not on local node.\n", __func__);
             continue;
         }
-
+#ifdef HAVE_UGNI
+        if (peer->ptlmap.appid != dimes_c->dcg->dc->self->ptlmap.appid) {
+            peer = dart_rdma_create_remote_peer(&peer->ptlmap);
+        }
+#endif
         struct fetch_entry *fetch = (struct fetch_entry*)malloc(sizeof(*fetch));
         dart_rdma_create_read_tran(peer, &fetch->read_tran);
         fetch->remote_sync_id = mem_obj->sync_id;
@@ -3162,7 +3179,6 @@ int dimes_client_shmem_update_server_state()
                     hdr = (struct hdr_dimes_put*)msg->msg_rpc->pad;
                     hdr->odsc = mem_obj->obj_desc;
                     hdr->sync_id = mem_obj->sync_id;
-                    hdr->has_rdma_data = 1;
                     hdr->has_shmem_data = 1;
                     hdr->shmem_desc = mem_obj->shmem_desc;
 
