@@ -152,16 +152,12 @@ static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	struct obj_descriptor *odsc = &hdr->odsc;
 	// odsc->owner = cmd->id;
 	
-	if (hdr->has_rdma_data) {
-        metadata_s_add_obj_location(dimes_s->meta_store, cmd);
-	}
+    metadata_s_add_obj_location(dimes_s->meta_store, cmd);
 
 #ifdef DEBUG    
 	uloga("%s(): get request from peer #%d "
-				"has_rdma_data= %d "
-				"name= %s version= %d data_size= %u\n",
-					__func__, cmd->id, hdr->has_rdma_data,
-					odsc->name, odsc->version, obj_data_size(odsc));
+           "name= %s version= %d data_size= %u\n",
+            __func__, cmd->id, odsc->name, odsc->version, obj_data_size(odsc));
 #ifdef DS_HAVE_DIMES_SHMEM
     if (hdr->has_shmem_data) {
         uloga("%s(): #%d get update from peer #%d shmem_desc: size= %u "
@@ -191,9 +187,7 @@ static int dsgrpc_dimes_shmem_reset_server(struct rpc_server *rpc_s, struct rpc_
 static int dsgrpc_dimes_shmem_update_server(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     struct hdr_dimes_put *hdr = (struct hdr_dimes_put*)cmd->pad;
-    if (hdr->has_rdma_data) {
-        metadata_s_add_obj_location(dimes_s->meta_store, cmd);
-    }
+    metadata_s_add_obj_location(dimes_s->meta_store, cmd);
     return 0;
 }
 #endif
@@ -264,12 +258,5 @@ int dimes_server_barrier(struct dimes_server *dimes_s_l)
 {
     return dsg_barrier(dimes_s_l->dsg);
 }
-
-#ifdef DART_UGNI_AS_SERVICE
-int dimes_server_reset(struct dimes_server *dimes_s_l, int num_cp)
-{
-    return dsg_reset(dimes_s_l->dsg, num_cp);
-}
-#endif
 
 #endif // end of #ifdef DS_HAVE_DIMES

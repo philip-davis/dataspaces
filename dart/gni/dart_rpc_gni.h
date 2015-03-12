@@ -213,6 +213,24 @@ enum io_dir {
 	io_count
 };
 
+////DSaaS
+struct gni_smsg_attr_info {
+	void *rpc_mem;
+        gni_smsg_attr_t   local_smsg_attr;
+
+	int appid;
+
+	gni_smsg_attr_t     *remote_smsg_attr; // temp cache the remote_smsg_attr of same app for another certain app.
+	int tmp_num; // used to track the number of attr in list of *remote_smsg_attr
+
+  //void *sys_mem;
+  //gni_smsg_attr_t     *sys_remote_smsg_attr;
+
+  //	gni_smsg_attr_t     *tmp_remote_smsg_attr; // temp cache the smsg attr from other app: e.g. master server caches smsg_attr list from one app.
+
+  struct gni_smsg_attr_info  *next;
+};
+
 struct rpc_cmd {
 	__u8			cmd;            // type of command
 	__u32			srcnid;		// nid means node address in GNI
@@ -227,10 +245,10 @@ struct rpc_cmd {
 };
 
 struct node_id {
-
-        struct list_head peer_entry;
-
 	struct ptlid_map	ptlmap;
+	int	peer_rank; // used for DSaaS, which is the rank for this peer in its application.
+	int	peer_num; // used for DSaaS, which is the number of peers in this continous peer_tab/application.
+
 	struct mdh_addr_t	mdh_addr;
 
 	gni_ep_handle_t		ep_hndl;
@@ -241,6 +259,8 @@ struct node_id {
 
 	uint32_t                mbox_offset;
 	uint32_t                sys_mbox_offset;
+
+
 
 	// List of pending requests.
 	struct list_head	req_list;
@@ -265,7 +285,11 @@ struct node_id {
 
 	// Number of SYS message I received from this peer (Add in Gemini Version)
 	int			sys_msg_recv;
+	 
 
+  //list for DSaaS
+  struct node_id *next;
+  //void *next;
 };
 
 struct msg_buf {
@@ -329,6 +353,7 @@ enum rpc_component {
 	DART_CLIENT
 };
 
+
 //RPC Server
 struct rpc_server{
 	struct ptlid_map	ptlmap;
@@ -339,29 +364,24 @@ struct rpc_server{
 	gni_cq_handle_t		src_cq_hndl;
 	gni_cq_handle_t		dst_cq_hndl;
 
-	gni_smsg_attr_t		local_smsg_attr;
-    // TODO: following field is NOT used in the source code
-	//gni_smsg_attr_t		*remote_smsg_attr;
+	//gni_smsg_attr_t		local_smsg_attr;
+  	//gni_smsg_attr_t		*remote_smsg_attr;//DSaaS
+
+        struct gni_smsg_attr_info      *attr_info_start;//DSaaS
 
 	gni_cq_handle_t		sys_cq_hndl;		// completion queue for system message
 	gni_smsg_attr_t		sys_local_smsg_attr;	// local system message attributes
 
+        gni_mem_handle_t        dart_mem_mdh;
+	unsigned int		*all_nic_addresses;
 
-        struct list_head peer_list;     //list of peers(servers and clients)
-
-
-    gni_mem_handle_t    dart_mem_mdh;
-
-    // TODO: following field is NOT used in the source code
-	//unsigned int		*all_nic_addresses;
-
-	void			*sys_mem;
-	void			*rpc_mem;
+  //	void			*sys_mem;//DSaaS
+  //	void			*rpc_mem;//DSaaS
 
 	struct list_head	rpc_list;
 	int			rr_num;
 
-	int			num_rpc_per_buff;
+	int			num_rpc_per_buff; //  DSaaS: number of peers for peer_tab. For app, it is num_sp; for server, it is the total number of peers that have been registered.
 	int			num_buf;
 
 	int			num_peers;	// total number of peers
@@ -382,6 +402,9 @@ struct rpc_server{
 
 	// socket address for init connection
 	struct sock_addr 	address;
+
+  //pthread_t comm_thread;
+  //int thread_alive;
 };
 
 enum cmd_type { 
@@ -399,7 +422,7 @@ enum cmd_type {
 	sp_announce_cp,
 	cn_timing,
 	// Upper layer credit control Added in Gemini Version
-	cn_ack_credit,
+	cn_ack_credit,//14
 	// Synchronization primitives.
 	cp_barrier,
 	cp_lock,
@@ -411,7 +434,7 @@ enum cmd_type {
 	ss_obj_query,
 	ss_obj_cq_register,
 	ss_obj_cq_notify,
-	ss_obj_get,
+	ss_obj_get,//24
 	ss_obj_filter,
 	ss_obj_info,
 	ss_info,
@@ -453,15 +476,15 @@ static int default_completion_with_data_callback(struct rpc_server *rpc_s, struc
 }
 
 //------------------
-int rpc_smsg_init(struct rpc_server *rpc_s, int num);
-int rpc_smsg_config(struct rpc_server *rpc_s, struct node_id *peer);
-int rpc_ep_smsg_init(struct rpc_server *rpc_s, struct node_id *peer);
-void rpc_smsg_check(struct rpc_server *rpc_s);
+int rpc_smsg_init(struct rpc_server *rpc_s, struct gni_smsg_attr_info *attr_info, int num);
+int rpc_smsg_config(struct rpc_server *rpc_s, struct gni_smsg_attr_info *attr_info, struct node_id *peer);
+//int rpc_ep_smsg_init(struct rpc_server *rpc_s, struct node_id *peer);
+//void rpc_smsg_check(struct rpc_server *rpc_s);
 
-int sys_smsg_init(struct rpc_server *rpc_s, int num);
-int sys_smsg_config(struct rpc_server *rpc_s, struct node_id *peer);
-int sys_ep_smsg_init(struct rpc_server *rpc_s, struct node_id *peer);
-void sys_smsg_check(struct rpc_server *rpc_s);
+//int sys_smsg_init(struct rpc_server *rpc_s, int num);
+//int sys_smsg_config(struct rpc_server *rpc_s, struct node_id *peer);
+//int sys_ep_smsg_init(struct rpc_server *rpc_s, struct node_id *peer);
+//void sys_smsg_check(struct rpc_server *rpc_s);
 
 void peer_smsg_check(struct rpc_server *rpc_s, struct node_id *peer, gni_smsg_attr_t *smsg_attr);
 //------------------
@@ -498,13 +521,17 @@ int rpc_receivev(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf 
 void rpc_report_md_usage(struct rpc_server *rpc_s);
 struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *peer, int num_rpcs);
 
-//struct node_id *rpc_server_find(struct rpc_server *rpc_s, int nodeid);
-
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 
-void rpc_server_find_local_peer(struct rpc_server *rpc_s,
-    struct node_id **peer_tab, int *num_local_peer, int peer_tab_size);
+
+void rpc_server_find_local_peer(struct rpc_server *rpc_s, struct node_id **peer_tab, int *num_local_peer, int peer_tab_size);
 uint32_t rpc_server_get_nid(struct rpc_server *rpc_s);
+
+
+int rpc_peer_cleanup(struct rpc_server *rpc_s, struct node_id *peer);
+int rpc_attr_cleanup(struct rpc_server *rpc_s, struct gni_smsg_attr_info *cur_attr_info);
+
+void rpc_peer_check(struct rpc_server *rpc_s);
 
 #endif

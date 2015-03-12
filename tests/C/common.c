@@ -220,62 +220,6 @@ int common_put_sync(enum transport_type type) {
         return 0;
 }
 
-
-#ifdef DART_UGNI_AS_SERVICE
-int common_run_server_as_service(int num_sp, int num_cp, enum transport_type type, void *gcomm)
-{
-    int err;
-    if (type == USE_DSPACES) {
-        struct ds_gspace *dsg;
-        dsg = dsg_alloc(num_sp, num_cp, "dataspaces.conf");
-        if (!dsg) return -1;
-
-        int stay_in_loop = 1;
-        do {
-            while (!dsg_complete(dsg)) {
-                err = dsg_process(dsg);
-                if (err < 0) break;
-            }
-            if (err < 0) break;
-            dsg_reset(dsg, num_cp);
-        } while (stay_in_loop);
-        
-        MPI_Barrier(*(MPI_Comm*)gcomm);
-        dsg_free(dsg);
-        if (err == 0)
-            uloga("All ok.\n");
-        return 0;
-    } else if (type == USE_DIMES) {
-#ifdef DS_HAVE_DIMES
-        struct dimes_server *dsg;
-        dsg = dimes_server_alloc(num_sp, num_cp, "dataspaces.conf");
-        if (!dsg) return -1;
-
-        int stay_in_loop = 1;
-        do {
-            while (!dimes_server_complete(dsg)) {
-                err = dimes_server_process(dsg);
-                if (err < 0) break;
-            }
-            if (err < 0) break; 
-            
-            dimes_server_reset(dsg, num_cp);
-        } while (stay_in_loop);
-
-        MPI_Barrier(*(MPI_Comm*)gcomm);
-        dimes_server_free(dsg);
-        if (err == 0)
-            uloga("All ok.\n");
-        return 0;
-#else
-        uloga("%s(): Dataspaces DIMES is not enabled!\n", __func__);
-        return -1;
-#endif
-    }
-    return 0;
-}
-#endif
-
 int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gcomm) {
         int err;
         if (type == USE_DSPACES) {

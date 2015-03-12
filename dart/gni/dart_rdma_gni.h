@@ -108,6 +108,9 @@ int dart_rdma_process_reads();
 int dart_rdma_check_reads(int tran_id);
 
 int dart_rdma_perform_reads_local(int tran_id);
+
+struct node_id* dart_rdma_create_remote_peer(struct ptlid_map *ptlmap);
+int dart_rdma_delete_remote_peer(struct node_id* peer);
 /*
 int dart_rdma_create_write_tran(struct node_id *remote_peer,
                 struct dart_rdma_tran **pp);
