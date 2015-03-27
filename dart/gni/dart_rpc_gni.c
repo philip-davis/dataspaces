@@ -101,340 +101,6 @@ static struct {
 	Public APIs
  =====================================================*/
 
-#ifdef DART_UGNI_PREALLOC_RDMA 
-size_t dart_buffer_size = 0;
-//Starting pointer to the memory buffer
-uint64_t dart_buffer_ptr = 0;
-
-/*linked list for free dart_buf_block. And the blocks in the list
-are sorted by block_size in ascending order.
-*/
-struct list_head free_blocks_list;
-
-/*linked list for in use dart_buf_block. And the blocks in the list
-are sorted by block_size in ascending order.
-*/
-struct list_head used_blocks_list;
-
-enum mem_block_status {
-    free_block,
-    used_block
-};
-
-/*dynamic mem block data structure*/
-struct dart_buf_block {
-    struct list_head mem_block_entry;
-    size_t block_size;
-    uint64_t block_ptr;
-    enum mem_block_status block_status;
-};
-
-#define SIZE_DART_MEM_BLOCK sizeof(struct dart_buf_block)
-
-//
-// Cleanup a blocks list
-//
-static void dart_buf_cleanup_list(struct list_head* blocks_list)
-{
-    struct dart_buf_block * mb, *tmp;
-    list_for_each_entry_safe(mb, tmp, blocks_list, struct dart_buf_block, mem_block_entry) {
-        list_del(&mb->mem_block_entry);
-        free(mb);//free the memory
-    }
-}
-
-//
-// Insert a memory block into the list that sorted by block_size.
-//
-static void dart_buf_insert_block(
-    struct dart_buf_block *block,
-    struct list_head* blocks_list)
-{
-    struct dart_buf_block *mb, *tmp;
-    int inserted = 0;
-
-    list_for_each_entry_safe(mb, tmp, blocks_list, struct dart_buf_block, mem_block_entry) {
-        if(block->block_size <= mb->block_size) {
-            //add the block befor the position of mb in the list.
-            list_add_before_pos(&block->mem_block_entry, &mb->mem_block_entry);
-            inserted = 1;
-            break;
-        }
-    }
-
-    //add the block to the tail
-    if (!inserted)
-        list_add_tail(&block->mem_block_entry, blocks_list);
-}
-
-/* 
-   Insert a memory  block into the  free blocks list,  and merge
-   contiguous free blocks into larger new one.
-*/
-static void dart_buf_insert_block_to_freelist(
-    struct dart_buf_block *block,
-    struct list_head *blocks_list)
-{
-    /*    low_memory_addresses ------->  high_memory_addresses
-    |             |    |                         |
-    | contiguous_block_before |  block |  contiguous_block_after | 
-    |                         |        |                 |
-    */
-    //the contiguous free block before 'block' in the buffer
-    struct dart_buf_block *contiguous_block_before = NULL;
-    //the contiguous free block after 'block' in the buffer
-    struct dart_buf_block *contiguous_block_after = NULL;
-
-    struct dart_buf_block * mb, *tmp;
-    list_for_each_entry_safe(mb, tmp, blocks_list, struct dart_buf_block, mem_block_entry) {
-        if(block->block_ptr == (mb->block_ptr + mb->block_size) )
-            contiguous_block_before = mb;
-        if(mb->block_ptr == (block->block_ptr + block->block_size) )
-            contiguous_block_after = mb;
-    }
-
-    if(contiguous_block_after) {
-        //update the size of the merged new free block
-        block->block_size = block->block_size + contiguous_block_after->block_size;
-        //the starting address of the merged new free block does NOT change
-
-        //remove from free blocks list
-        list_del(&contiguous_block_after->mem_block_entry);
-        free(contiguous_block_after);
-    }
-
-    if(contiguous_block_before) {
-        //update the size of the merged new free block
-        block->block_size = block->block_size + contiguous_block_before->block_size;
-        //update the starting address of the merged new free block  
-        block->block_ptr = contiguous_block_before->block_ptr;
-
-        //remove from free blocks list
-        list_del(&contiguous_block_before->mem_block_entry);
-        free(contiguous_block_before);
-    }
-
-    //add the new free block into list
-    block->block_status = free_block;
-    dart_buf_insert_block(block, blocks_list);
-}
-
-//
-// Initialize DART Buffer
-//
-int dart_buffer_init(uint64_t base_addr, size_t size)
-{
-    INIT_LIST_HEAD(&free_blocks_list);
-    INIT_LIST_HEAD(&used_blocks_list);
-
-    dart_buffer_ptr = base_addr;
-    if (dart_buffer_ptr != 0) {
-        dart_buffer_size = size;
-
-        //create the first free block
-        struct dart_buf_block *block;
-        block = (struct dart_buf_block*)malloc(SIZE_DART_MEM_BLOCK);
-        block->block_size = size;
-        block->block_ptr = dart_buffer_ptr;
-        block->block_status = free_block;
-
-        //add the block into free blocks list 
-        dart_buf_insert_block(block, &free_blocks_list);
-
-        return 0;
-    }
-    else    return -1;
-}
-
-//
-// Finalize DART Buffer 
-//
-int dart_buffer_finalize()
-{
-    //cleanup the free_blocks_list
-    dart_buf_cleanup_list(&free_blocks_list);
-
-    //cleanup the used_blocks_list
-    dart_buf_cleanup_list(&used_blocks_list);
-
-    return 0;
-}
-
-size_t dart_buffer_total_size()
-{
-    return dart_buffer_size;
-}
-
-void dart_buffer_alloc(size_t size, uint64_t *ptr)
-{
-    //If requested buffer size exceeds the total available
-    if (size > dart_buffer_size)
-        goto err_out;
-
-    //Search for usable free block with the smallest data size
-    struct dart_buf_block * mb, *tmp;
-    int found = 0;
-    list_for_each_entry_safe(mb, tmp, &free_blocks_list, struct dart_buf_block, 
-mem_block_entry){
-        if(mb->block_size >= size) {
-            //Usable free block found
-            found = 1;
-            break;
-        }
-    }
-
-    if (found) {
-        /*Usable free block 'mb' found*/
-
-        //new_free_mb is the new free memory block after allocating space from 'mb'
-        //new_used_mb is the new in_use memory block after allocating space from 'mb'
-        struct dart_buf_block * new_free_mb, * new_used_mb;
-
-        //remove 'mb' from free blocks list
-        list_del(&mb->mem_block_entry);
-
-        if(mb->block_size == size){
-            new_free_mb = NULL;
-            new_used_mb = mb;
-            new_used_mb->block_status = used_block;
-        }
-
-        if(mb->block_size > size){
-            new_free_mb = (struct dart_buf_block*)malloc(SIZE_DART_MEM_BLOCK);
-            new_free_mb->block_status = free_block;
-            new_free_mb->block_ptr = mb->block_ptr + size;
-            new_free_mb->block_size = mb->block_size - size;
-            new_used_mb = mb;
-            new_used_mb->block_status = used_block;
-            new_used_mb->block_size = size;
-        }
-
-        //add 'new_free_mb'  into free blocks list
-        if(new_free_mb != NULL)
-            dart_buf_insert_block(new_free_mb, &free_blocks_list);
-        //add 'new_used_mb' into used blocks list 
-        if(new_used_mb != NULL)
-            dart_buf_insert_block(new_used_mb, &used_blocks_list);
-
-        *ptr = (uint64_t)new_used_mb->block_ptr;
-        return;
-    }
-    else {
-        /*Could not find usable free block*/
-        fprintf(stderr, "%s: failed! no space\n", __func__);
-        goto err_out;
-    }
-
- err_out:
-    *ptr = (uint64_t)0;
-    return;
-}
-
-void dart_buffer_free(uint64_t ptr)
-{
-    /*test if the value of ptr is valid*/
-    if (ptr == 0 || dart_buffer_ptr == 0)
-        return;
-
-    uint64_t start_ptr = dart_buffer_ptr;
-    uint64_t end_ptr = dart_buffer_ptr + dart_buffer_size - 1;
-    if ( ptr < start_ptr || ptr > end_ptr) {
-        fprintf(stderr, "%s(): error invalid address! start_ptr %llx end_ptr %llx ptr %llx\n", __func__, start_ptr, end_ptr, ptr);
-        return;
-    }
-
-    /*search for the corresponding in_use memory block for ptr*/
-    struct dart_buf_block * mb, *tmp;
-    unsigned int found = 0;//flag value init as 0!
-    list_for_each_entry_safe(mb, tmp, &used_blocks_list, struct dart_buf_block, mem_block_entry){
-        if(mb->block_ptr == ptr) {
-            found = 1;
-            break;
-        }
-    }
-
-    if (found) {
-
-        //remove 'mb' from used blocks list
-        list_del(&mb->mem_block_entry);
-
-        //add back 'mb' into free blocks list
-        dart_buf_insert_block_to_freelist(mb, &free_blocks_list);
-    }
-    else return;
-}
-
-static inline uint64_t rpc_dart_mem_malloc(size_t size)
-{
-    uint64_t buf;
-    dart_buffer_alloc(size, &buf);
-    if (!buf) {
-        printf("%s(): dart_buffer_alloc() failed\n", __func__);
-        return 0;
-    }
-
-    return buf;
-}
-
-static inline void rpc_dart_mem_free(void *ptr)
-{
-    dart_buffer_free((uint64_t)ptr);
-}
-
-static int rpc_dart_mem_init(struct rpc_server *rpc_s, size_t dart_mem_buffer_size)
-{
-    int err;
-    void *buf;
-    gni_return_t status;
-
-    buf = malloc(dart_mem_buffer_size);
-    if (!buf) {
-        printf("%s(): malloc failed\n", __func__);
-        goto err_out;
-    }
-    memset(buf, 0, dart_mem_buffer_size);
-
-    status = GNI_MemRegister(rpc_s->nic_hndl,
-                            (uint64_t)buf,
-                            (uint64_t)dart_mem_buffer_size,
-                            rpc_s->dst_cq_hndl,
-                            GNI_MEM_READWRITE,
-                            -1,
-                            &rpc_s->dart_mem_mdh);
-    if (status != GNI_RC_SUCCESS) {
-        printf("Fail: %d GNI_MemRegister returned error with %d in %s.\n",
-                rpc_s->ptlmap.id, status, __func__);
-        err = -1;
-        free(buf);
-        goto err_out;
-    }
-
-    dart_buffer_init((uint64_t)buf, dart_mem_buffer_size);
-    return 0;
-err_out:
-    return err;
-}
-
-static int rpc_dart_mem_finalize(struct rpc_server *rpc_s)
-{
-    int err;
-    gni_return_t status;
-
-    status = GNI_MemDeregister(rpc_s->nic_hndl, &rpc_s->dart_mem_mdh);
-    if ( status != GNI_RC_SUCCESS ) {
-        printf("Fail: %d GNI_MemDeregister returned error with %d in %s.\n",
-                rpc_s->ptlmap.id, status, __func__);
-    }
-
-    uint64_t addr = dart_buffer_ptr;
-    dart_buffer_finalize();
-    free(addr);
-
-    return 0;
-}
-#endif
-
-
 /* =====================================================
 	barrier
  =====================================================*/
@@ -1253,42 +919,22 @@ static int rpc_cb_req_completion(struct rpc_server *rpc_s, struct rpc_request *r
 	int err;
 	gni_return_t status = GNI_RC_SUCCESS;
 
-    if (rr->f_use_prealloc_rdma_mem) {
-#ifdef DART_UGNI_PREALLOC_RDMA
-        rr->refcont--;
-        if (rr->refcont == 0) {
-            if (rr->type == 1 || rr->f_data == 1) {
-                void *buf = rr->msg->msg_data;
-                rr->msg->msg_data = rr->msg->original_msg_data;
-
-                if (rr->rr_type == DART_RPC_RECEIVE ||
-                    rr->rr_type == DART_RPC_RECEIVE_DIRECT) {
-                    memcpy(rr->msg->msg_data, buf, rr->msg->size);
-                }
-                rpc_dart_mem_free(buf);
+    rr->refcont--;
+    if (rr->refcont == 0) {
+       if(rr->type == 1 || rr->f_data == 1)
+       {
+            status = GNI_MemDeregister(rpc_s->nic_hndl, &rr->mdh_data);
+            if(status != GNI_RC_SUCCESS)
+            {
+                printf("(%s) Fail: GNI_MemDeregister returned error. (%d)\n", __func__, status);
+                return status;
             }
 
-            (*rr->msg->cb)(rpc_s, rr->msg);
-        }
-#endif
-    } else {
-        rr->refcont--;
-        if (rr->refcont == 0) {
-           if(rr->type == 1 || rr->f_data == 1)
-           {
-	            status = GNI_MemDeregister(rpc_s->nic_hndl, &rr->mdh_data);
-	            if(status != GNI_RC_SUCCESS)
-	            {
-		            printf("(%s) Fail: GNI_MemDeregister returned error. (%d)\n", __func__, status);
-		            return status;
-	            }
+       }
 
-           }
-
-	       err = (*rr->msg->cb)(rpc_s, rr->msg);
-	       if(err!=0)
-                 return -1;
-	    }
+       err = (*rr->msg->cb)(rpc_s, rr->msg);
+       if(err!=0)
+             return -1;
     }
 
 	return 0;
@@ -1302,46 +948,23 @@ static int rpc_prepare_buffers(struct rpc_server *rpc_s, const struct node_id *p
 	gni_return_t status;
 	gni_mem_handle_t mdh;
 
-    if (rr->f_use_prealloc_rdma_mem) {
-#ifdef DART_UGNI_PREALLOC_RDMA
-        rr->msg->original_msg_data = rr->msg->msg_data;
-        rr->msg->msg_data = rpc_dart_mem_malloc(rr->msg->size);
-        if ( !rr->msg->msg_data) {
-            printf("%s(): rpc_dart_mem_malloc failed size %u\n", __func__,
-                rpc_s->ptlmap.id, rr->msg->size);
-            err = -1;
-            goto err_out;
-        }
-        //printf("%s(): original_msg_data= %llu msg_data= %llu size= %u\n",
-        //        __func__, rr->msg->original_msg_data, rr->msg->msg_data, rr->msg->size);
-        memcpy(rr->msg->msg_data, rr->msg->original_msg_data, rr->msg->size);
-
-        rr->f_data = 1;
-        rr->mdh_data = rr->msg->msg_rpc->mdh_addr.mdh = rpc_s->dart_mem_mdh;
-        rr->msg->msg_rpc->mdh_addr.address = (uint64_t)rr->msg->msg_data;
-        rr->msg->msg_rpc->mdh_addr.length = rr->msg->size;
-        rr->msg->msg_rpc->mdh_addr.index = rr->index;
-        rr->refcont++;
-#endif
-    } else {
-        //No Vector Operation in this version
-        //added for alignment
-        status = GNI_MemRegister(rpc_s->nic_hndl, (uint64_t)rr->msg->msg_data, (uint64_t)(rr->msg->size), rpc_s->dst_cq_hndl, GNI_MEM_READWRITE, -1, &mdh);
-        if (status != GNI_RC_SUCCESS)
-        {
-            printf("Fail: GNI_MemRegister returned error %d data size %u\n",
-                status, rr->msg->size);
-            err = -1;
-            goto err_out;
-        }
-
-        rr->f_data = 1;
-        rr->mdh_data = rr->msg->msg_rpc->mdh_addr.mdh = mdh;
-        rr->msg->msg_rpc->mdh_addr.address = (uint64_t)rr->msg->msg_data;
-        rr->msg->msg_rpc->mdh_addr.length = rr->msg->size;
-        rr->msg->msg_rpc->mdh_addr.index = rr->index;
-        rr->refcont++;
+    //No Vector Operation in this version
+    //added for alignment
+    status = GNI_MemRegister(rpc_s->nic_hndl, (uint64_t)rr->msg->msg_data, (uint64_t)(rr->msg->size), rpc_s->dst_cq_hndl, GNI_MEM_READWRITE, -1, &mdh);
+    if (status != GNI_RC_SUCCESS)
+    {
+        printf("Fail: GNI_MemRegister returned error %d data size %u\n",
+            status, rr->msg->size);
+        err = -1;
+        goto err_out;
     }
+
+    rr->f_data = 1;
+    rr->mdh_data = rr->msg->msg_rpc->mdh_addr.mdh = mdh;
+    rr->msg->msg_rpc->mdh_addr.address = (uint64_t)rr->msg->msg_data;
+    rr->msg->msg_rpc->mdh_addr.length = rr->msg->size;
+    rr->msg->msg_rpc->mdh_addr.index = rr->index;
+    rr->refcont++;
 
 	return 0;
 err_out:
@@ -1411,46 +1034,7 @@ RESEND:
 
 	}
 
-    if (rr->type == 1 && rr->f_use_prealloc_rdma_mem) {
-#ifdef DART_UGNI_PREALLOC_RDMA
-        remote = peer->mdh_addr.index;
-        status = GNI_EpSetEventData(peer->ep_hndl, local, (uint32_t)remote);
-        if(status != GNI_RC_SUCCESS)
-        {
-            printf("(%s) 2 Fail: GNI_EpSetEventData returned error. (%d)\n", __func__, status);
-            goto err_status;
-        }
-
-        rr->msg->original_msg_data = rr->msg->msg_data;
-        rr->msg->msg_data = rpc_dart_mem_malloc(rr->msg->size);
-        if ( !rr->msg->msg_data) {
-            printf("%s(): rpc_dart_mem_malloc failed size %u\n", __func__,
-                rpc_s->ptlmap.id, rr->msg->size);
-            err = -1;
-            goto err_out;
-        }
-
-        memcpy(rr->msg->msg_data, rr->msg->original_msg_data, rr->msg->size);
-
-        rdma_data_desc.type = GNI_POST_RDMA_PUT;
-        rdma_data_desc.cq_mode = GNI_CQMODE_GLOBAL_EVENT | GNI_CQMODE_REMOTE_EVENT;
-        rdma_data_desc.dlvr_mode = GNI_DLVMODE_PERFORMANCE;
-        rdma_data_desc.local_addr = (uint64_t) rr->msg->msg_data;
-        rdma_data_desc.local_mem_hndl = rpc_s->dart_mem_mdh;
-        rdma_data_desc.remote_addr = peer->mdh_addr.address;
-        rdma_data_desc.remote_mem_hndl = peer->mdh_addr.mdh;
-        rdma_data_desc.length = rr->msg->size;
-        rdma_data_desc.rdma_mode = 0;
-        rdma_data_desc.src_cq_hndl = rpc_s->src_cq_hndl;
-
-        status = GNI_PostRdma(peer->ep_hndl, &rdma_data_desc);
-        if (status != GNI_RC_SUCCESS)
-        {
-            printf("Fail: GNI_PostRdma returned error. %d\n", status);
-            goto err_status;
-        }
-#endif
-    } else if (rr->type == 1) {
+    if (rr->type == 1) {
         remote = peer->mdh_addr.index;
 		status = GNI_EpSetEventData(peer->ep_hndl, local, (uint32_t)remote);
 		if(status != GNI_RC_SUCCESS)
@@ -1516,67 +1100,33 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
 
 	if (rr->type == 1)
 	{
-#ifdef DART_UGNI_PREALLOC_RDMA
-            rr->msg->original_msg_data = rr->msg->msg_data;
-            rr->msg->msg_data = rpc_dart_mem_malloc(rr->msg->size);
-            if ( !rr->msg->msg_data) {
-                printf("%s(): rpc_dart_mem_malloc failed size %u\n", __func__,
-                    rpc_s->ptlmap.id, rr->msg->size);
-                err = -1;
-                goto err_out;
-            }                        
+	    status = GNI_MemRegister(rpc_s->nic_hndl, (uint64_t)(rr->msg->msg_data), (uint64_t)(rr->msg->size), NULL, GNI_MEM_READWRITE, -1, &rr->mdh_data);
+        if (status != GNI_RC_SUCCESS)
+        {
+          printf("Fail: GNI_MemRegister returned error with %d.\n", status);
+            goto err_status;
+        }
 
-            rdma_data_desc.type = GNI_POST_RDMA_GET;
-            rdma_data_desc.cq_mode = GNI_CQMODE_GLOBAL_EVENT | GNI_CQMODE_REMOTE_EVENT; //?reconsider, need some tests.
-            rdma_data_desc.dlvr_mode = GNI_DLVMODE_PERFORMANCE;
-            rdma_data_desc.local_addr = (uint64_t) rr->msg->msg_data;
-            rdma_data_desc.local_mem_hndl = rpc_s->dart_mem_mdh;
-            rdma_data_desc.remote_addr = peer->mdh_addr.address;
-            rdma_data_desc.remote_mem_hndl = peer->mdh_addr.mdh;
-            rdma_data_desc.length = rr->msg->size;//Must be a multiple of 4-bytes for GETs
-            rdma_data_desc.rdma_mode = 0;
-            rdma_data_desc.src_cq_hndl = rpc_s->src_cq_hndl;
-            status = GNI_PostRdma(peer->ep_hndl, &rdma_data_desc);
-            if (status != GNI_RC_SUCCESS)
-            {
-                  if(status == 7)
-                  {
-                     printf("status == 7.\n");
+        rdma_data_desc.type = GNI_POST_RDMA_GET;
+        rdma_data_desc.cq_mode = GNI_CQMODE_GLOBAL_EVENT | GNI_CQMODE_REMOTE_EVENT; //?reconsider, need some tests.
+        rdma_data_desc.dlvr_mode = GNI_DLVMODE_PERFORMANCE;
+        rdma_data_desc.local_addr = (uint64_t) rr->msg->msg_data;
+        rdma_data_desc.local_mem_hndl = rr->mdh_data;
+        rdma_data_desc.remote_addr = peer->mdh_addr.address;
+        rdma_data_desc.remote_mem_hndl = peer->mdh_addr.mdh;
+        rdma_data_desc.length = rr->msg->size;//Must be a multiple of 4-bytes for GETs
+        rdma_data_desc.rdma_mode = 0;
+        rdma_data_desc.src_cq_hndl = rpc_s->src_cq_hndl;
+        status = GNI_PostRdma(peer->ep_hndl, &rdma_data_desc);
+        if (status != GNI_RC_SUCCESS)
+        {
+              if(status == 7)
+              {
+                 printf("status == 7.\n");
 
-                  }
-                  printf("Fail: GNI_PostRdma returned error with %d.\n", status);
-                  goto err_status;
-            }
-#endif
-        } else {
-	  status = GNI_MemRegister(rpc_s->nic_hndl, (uint64_t)(rr->msg->msg_data), (uint64_t)(rr->msg->size), NULL, GNI_MEM_READWRITE, -1, &rr->mdh_data);
-            if (status != GNI_RC_SUCCESS)
-            {
-              printf("Fail: GNI_MemRegister returned error with %d.\n", status);
-                goto err_status;
-            }
-
-            rdma_data_desc.type = GNI_POST_RDMA_GET;
-            rdma_data_desc.cq_mode = GNI_CQMODE_GLOBAL_EVENT | GNI_CQMODE_REMOTE_EVENT; //?reconsider, need some tests.
-            rdma_data_desc.dlvr_mode = GNI_DLVMODE_PERFORMANCE;
-            rdma_data_desc.local_addr = (uint64_t) rr->msg->msg_data;
-            rdma_data_desc.local_mem_hndl = rr->mdh_data;
-            rdma_data_desc.remote_addr = peer->mdh_addr.address;
-            rdma_data_desc.remote_mem_hndl = peer->mdh_addr.mdh;
-            rdma_data_desc.length = rr->msg->size;//Must be a multiple of 4-bytes for GETs
-            rdma_data_desc.rdma_mode = 0;
-            rdma_data_desc.src_cq_hndl = rpc_s->src_cq_hndl;
-            status = GNI_PostRdma(peer->ep_hndl, &rdma_data_desc);
-            if (status != GNI_RC_SUCCESS)
-            {
-                  if(status == 7)
-                  {
-                     printf("status == 7.\n");
-
-                  }
-                  printf("Fail: GNI_PostRdma returned error with %d.\n", status);
-                  goto err_status;
-            }
+              }
+              printf("Fail: GNI_PostRdma returned error with %d.\n", status);
+              goto err_status;
         }
 	}
 
@@ -2581,16 +2131,6 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 
 	rpc_add_service(cn_ack_credit, rpc_process_ack);
 
-#ifdef DART_UGNI_PREALLOC_RDMA
-    if (rpc_s->cmp_type == DART_CLIENT) {
-        rpc_dart_mem_init(rpc_s, 64*1024*1024); // MB
-    }
-
-    if (rpc_s->cmp_type == DART_SERVER) {
-        rpc_dart_mem_init(rpc_s, 80*1024*1024); // MB
-    }
-#endif
-
 	// Init succeeded, set the instance reference here.
 	rpc_s_instance = rpc_s;
 	return rpc_s;
@@ -2659,9 +2199,6 @@ int rpc_server_free(struct rpc_server *rpc_s, void *comm)
 		}
 	}
 
-#ifdef DART_UGNI_PREALLOC_RDMA
-    rpc_dart_mem_finalize(rpc_s);
-#endif
 
 	//Free memory to index_list
 	list_for_each_entry_safe(ri, ri_tmp, &index_list, struct rr_index, index_entry)
@@ -2861,13 +2398,6 @@ int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg
 	rr->data = msg->msg_rpc;
 	rr->size = sizeof(*msg->msg_rpc);
 
-
-#ifdef DART_UGNI_PREALLOC_RDMA
-    rr->f_use_prealloc_rdma_mem = 1;
-    rr->rr_type = DART_RPC_SEND;
-#else
-    rr->f_use_prealloc_rdma_mem = 0;
-#endif
 	do
 		rr->index = rpc_get_index();
 	while(rr->index == -1);
@@ -2899,12 +2429,6 @@ inline static int __send_direct(struct rpc_server *rpc_s, struct node_id *peer, 
 	rr->data = msg->msg_data;
 	rr->size = msg->size;
 	rr->f_vec = 0;
-#ifdef DART_UGNI_PREALLOC_RDMA
-    rr->f_use_prealloc_rdma_mem = 1;
-    rr->rr_type = DART_RPC_SEND_DIRECT;
-#else
-    rr->f_use_prealloc_rdma_mem = 0;
-#endif
 	do
 		rr->index = rpc_get_index();
 	while(rr->index == -1);
@@ -2956,12 +2480,6 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 	rr->cb = (async_callback)rpc_cb_req_completion;
 	rr->data = msg->msg_data;
 	rr->size = msg->size;
-#ifdef DART_UGNI_PREALLOC_RDMA
-    rr->f_use_prealloc_rdma_mem = 1;
-    rr->rr_type = DART_RPC_RECEIVE_DIRECT;
-#else
-    rr->f_use_prealloc_rdma_mem = 0;
-#endif
 	do
 		rr->index = rpc_get_index();
 	while(rr->index == -1);
@@ -2993,12 +2511,6 @@ inline static int __receive(struct rpc_server *rpc_s, struct node_id *peer, stru
 	rr->data = msg->msg_rpc;
 	rr->size = sizeof(*msg->msg_rpc);
 	rr->f_vec = 0;
-#ifdef DART_UGNI_PREALLOC_RDMA
-    rr->f_use_prealloc_rdma_mem = 1;
-    rr->rr_type = DART_RPC_RECEIVE;
-#else
-    rr->f_use_prealloc_rdma_mem = 0;
-#endif
 	do
 		rr->index = rpc_get_index();
 	while(rr->index == -1);
