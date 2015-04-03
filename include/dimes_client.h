@@ -62,15 +62,30 @@ struct dimes_client_option {
     int max_num_concurrent_rdma_read_op;
 };
 
+// Key parameters for DIMES.
+// TODO: Most of these parameters are currently set at compile time. Can we
+// use dspaces_init() API's parameters list to pass their values?
+struct dimes_client_option {
+#ifdef DS_HAVE_DIMES_SHMEM
+    int enable_shmem_buffer;
+    int enable_get_local;
+#endif
+    int enable_pre_allocated_rdma_buffer;
+    size_t pre_allocated_rdma_buffer_size;
+    struct dart_rdma_mem_handle pre_allocated_rdma_handle;
+    size_t rdma_buffer_size;
+    size_t rdma_buffer_write_usage;
+    size_t rdma_buffer_read_usage;
+    int max_num_concurrent_rdma_read_op;
+};
+
 struct dimes_client {
 	struct dcg_space *dcg;
-	struct sspace *ssd;
+	struct sspace *default_ssd;
     struct list_head sspace_list;
     struct list_head gdim_list;
-	struct bbox domain;
 	struct query_tran_d qt;
     unsigned int max_versions;
-	int    f_ss_info;
 #ifdef DS_HAVE_DIMES_SHMEM
     struct list_head shmem_obj_list;
     struct node_id* local_peer_tab[MAX_NUM_PEER_PER_NODE];
