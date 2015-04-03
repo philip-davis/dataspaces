@@ -43,6 +43,11 @@
 #ifdef DS_HAVE_DIMES
 #include "dimes_data.h"
 
+int equal_dimes_obj_id(const struct dimes_obj_id *oid1, const struct dimes_obj_id *oid2)
+{
+    return (oid1->dart_id == oid2->dart_id) && (oid1->local_obj_index == oid2->local_obj_index);
+}
+
 static struct var_list_node* var_node_lookup(struct list_head *var_list,
                                     const char* var_name)
 {

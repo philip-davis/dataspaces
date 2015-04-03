@@ -50,15 +50,30 @@ struct query_tran_d {
 	int                     num_ent;
 };
 
+// Key parameters for DIMES.
+// TODO: Most of these parameters are currently set at compile time. Can we
+// use dspaces_init() API's parameters list to pass their values?
+struct dimes_client_option {
+#ifdef DS_HAVE_DIMES_SHMEM
+    int enable_shmem_buffer;
+    int enable_get_local;
+#endif
+    int enable_pre_allocated_rdma_buffer;
+    size_t pre_allocated_rdma_buffer_size;
+    struct dart_rdma_mem_handle pre_allocated_rdma_handle;
+    size_t rdma_buffer_size;
+    size_t rdma_buffer_write_usage;
+    size_t rdma_buffer_read_usage;
+    int max_num_concurrent_rdma_read_op;
+};
+
 struct dimes_client {
 	struct dcg_space *dcg;
-	struct sspace *ssd;
+	struct sspace *default_ssd;
     struct list_head sspace_list;
     struct list_head gdim_list;
-	struct bbox domain;
 	struct query_tran_d qt;
     unsigned int max_versions;
-	int    f_ss_info;
 #ifdef DS_HAVE_DIMES_SHMEM
     struct list_head shmem_obj_list;
     struct node_id* local_peer_tab[MAX_NUM_PEER_PER_NODE];
@@ -86,10 +101,10 @@ int dimes_client_put (const char *var_name,
         uint64_t *lb,
         uint64_t *ub,
         void *data);
-int dimes_client_put_sync_all(void);
+int dimes_client_put_sync_all(void); //TODO: rename to dimes_client_delete_all?
 int dimes_client_put_set_group(const char *group_name, int step);
 int dimes_client_put_unset_group();
-int dimes_client_put_sync_group(const char *group_name, int step);
+int dimes_client_put_sync_group(const char *group_name, int step); //TODO: rename to dimes_client_delete_group?
 
 #ifdef DS_HAVE_DIMES_SHMEM
 int dimes_client_shmem_init(void *comm, size_t shmem_obj_size);

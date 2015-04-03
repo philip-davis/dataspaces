@@ -129,6 +129,30 @@ struct dimes_cr_allocator_block_info
 } __attribute__((__packed__));
 #endif
 
+struct dimes_obj_id {
+    int dart_id;
+    uint32_t local_obj_index; 
+};
+int equal_dimes_obj_id(const struct dimes_obj_id *oid1, const struct dimes_obj_id *oid2);
+
+struct dimes_memory_obj {
+    struct list_head entry;
+    struct dimes_obj_id obj_id;
+    struct obj_descriptor obj_desc;
+#ifdef DS_HAVE_DIMES_SHMEM
+    struct dimes_shmem_descriptor shmem_desc;
+#endif
+    struct global_dimension gdim;
+    struct dart_rdma_mem_handle rdma_handle;
+};
+
+#define STORAGE_GROUP_NAME_MAXLEN 256
+struct dimes_storage_group {
+    struct list_head entry;
+    char name[STORAGE_GROUP_NAME_MAXLEN];
+    struct list_head *version_tab;
+};
+
 struct obj_data_wrapper {
 	struct list_head obj_entry;
 	struct obj_data *od;
@@ -136,11 +160,10 @@ struct obj_data_wrapper {
 	int q_id;
 };
 
-
 // Header structure for dimes_put request.
 struct hdr_dimes_put { // TODO: more comments
     struct ptlid_map ptlmap;
-	int sync_id;
+	struct dimes_obj_id obj_id;
 	struct obj_descriptor odsc;
 #ifdef DS_HAVE_DIMES_SHMEM
     __u8 has_shmem_data;
@@ -154,13 +177,6 @@ struct hdr_dimes_get {
 	int rc;
     int num_obj;
 	struct obj_descriptor odsc;
-} __attribute__((__packed__));
-
-struct hdr_dimes_get_ack {
-	int qid;
-	int sync_id;
-	struct obj_descriptor odsc;
-	size_t bytes_read;
 } __attribute__((__packed__));
 
 struct obj_location_wrapper {
