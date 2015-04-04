@@ -253,8 +253,6 @@ static char *current_group_name = NULL;
 const char* default_group_name = "__default_storage_group__";
 
 #ifdef DS_HAVE_DIMES_SHMEM
-static struct list_head node_local_obj_index;
-
 static struct dimes_storage_group* node_local_obj_index_add_group(const char *group_name)
 {
     struct dimes_storage_group *p = malloc(sizeof(*p));
@@ -268,7 +266,7 @@ static struct dimes_storage_group* node_local_obj_index_add_group(const char *gr
     for (i = 0; i < dimes_c->dcg->max_versions; i++) {
         INIT_LIST_HEAD(&p->version_tab[i]);
     }
-    list_add(&p->entry, &node_local_obj_index);
+    list_add(&p->entry, &dimes_c->node_local_obj_index);
     return p;
  err_out_free:
     if (p) free(p);
@@ -278,7 +276,7 @@ static struct dimes_storage_group* node_local_obj_index_add_group(const char *gr
 static struct dimes_storage_group* node_local_obj_index_lookup_group(const char *group_name)
 {
     struct dimes_storage_group *p;
-    list_for_each_entry(p, &node_local_obj_index, struct dimes_storage_group, entry)
+    list_for_each_entry(p, &dimes_c->node_local_obj_index, struct dimes_storage_group, entry)
     {
         if (p->name == NULL) continue;
         if (0 == strcmp(p->name, group_name)) {
@@ -310,13 +308,13 @@ static int node_local_obj_index_free_group(struct dimes_storage_group *group)
 
 static void node_local_obj_index_init()
 {
-    INIT_LIST_HEAD(&node_local_obj_index);
+    INIT_LIST_HEAD(&dimes_c->node_local_obj_index);
 }
 
 static void node_local_obj_index_free()
 {
     struct dimes_storage_group *p, *t;
-    list_for_each_entry_safe(p, t, &node_local_obj_index, struct dimes_storage_group, entry)
+    list_for_each_entry_safe(p, t, &dimes_c->node_local_obj_index, struct dimes_storage_group, entry)
     {
         node_local_obj_index_free_group(p);
     }
@@ -2354,7 +2352,7 @@ static int dimes_obj_get_local(struct obj_data *od)
 #endif
     // Locate data objects
     local_search_group_list(&dimes_c->storage, qte);
-    local_search_group_list(&node_local_obj_index, qte);
+    local_search_group_list(&dimes_c->node_local_obj_index, qte);
     if (qte->num_fetch == 0) {
         uloga("%s(): ERROR qte->num_fetch= %d for obj '%s' version= %d\n",
             __func__, qte->num_fetch, qte->q_obj.name, qte->q_obj.version);
@@ -2604,7 +2602,6 @@ static int gather_node_shmem_obj(struct shared_memory_obj *shmem_obj)
 int dimes_client_shmem_init(void *comm, size_t shmem_obj_size)
 {
     options.enable_shmem_buffer = 1;
-    // TODO: add programmer-provided parameters list
     options.enable_get_local = 1;
 
     INIT_LIST_HEAD(&dimes_c->shmem_obj_list);
@@ -2793,7 +2790,6 @@ int dimes_client_shmem_checkpoint()
 int dimes_client_shmem_restart(void *comm)
 {
     options.enable_shmem_buffer = 1;
-    // TODO: add programmer-provided parameters list
     options.enable_get_local = 1;
 
     if (options.enable_get_local) {

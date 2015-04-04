@@ -88,13 +88,13 @@ struct dimes_client {
     struct list_head storage;
 #ifdef DS_HAVE_DIMES_SHMEM
     struct list_head shmem_obj_list;
+    struct list_head node_local_obj_index;
     struct node_id* local_peer_tab[MAX_NUM_PEER_PER_NODE];
     int num_local_peer;
     int node_master_dart_id;
     uint32_t node_id;
     int node_rank;
     MPI_Comm node_mpi_comm;
-    // TODO: put struct list_head storage; into dimes_client
 #endif
 };
 
