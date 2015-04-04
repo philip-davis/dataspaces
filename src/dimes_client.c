@@ -251,14 +251,6 @@ static uint32_t next_local_obj_index()
 
 static char *current_group_name = NULL;
 const char* default_group_name = "__default_storage_group__";
-static void update_current_group_name(const char *name)
-{
-    if (!name) return;
-    if (strlen(name)>STORAGE_GROUP_NAME_MAXLEN) {
-        strncpy(current_group_name, name, STORAGE_GROUP_NAME_MAXLEN);
-        current_group_name[STORAGE_GROUP_NAME_MAXLEN] = '\0';
-    } else strcpy(current_group_name, name);
-}
 
 #ifdef DS_HAVE_DIMES_SHMEM
 static struct list_head node_local_obj_index;
@@ -359,7 +351,7 @@ static struct dimes_storage_group* storage_add_group(const char *group_name)
     for (i = 0; i < dimes_c->dcg->max_versions; i++) {
         INIT_LIST_HEAD(&p->version_tab[i]);
     }
-	list_add(&p->entry, &storage);	
+	list_add(&p->entry, &dimes_c->storage);	
 	return p;
  err_out_free:
     if (p) free(p);
@@ -369,7 +361,7 @@ static struct dimes_storage_group* storage_add_group(const char *group_name)
 static struct dimes_storage_group* storage_lookup_group(const char *group_name)
 {
 	struct dimes_storage_group *p;
-	list_for_each_entry(p, &storage, struct dimes_storage_group, entry)
+	list_for_each_entry(p, &dimes_c->storage, struct dimes_storage_group, entry)
 	{
 		if (p->name == NULL) continue;
 		if (0 == strcmp(p->name, group_name)) {
@@ -407,7 +399,7 @@ static int storage_free_group(struct dimes_storage_group *group)
 
 static void storage_init()
 {
-	INIT_LIST_HEAD(&storage);
+	INIT_LIST_HEAD(&dimes_c->storage);
 
     // Add the default storage group
 	struct dimes_storage_group *p =
@@ -420,7 +412,7 @@ static void storage_init()
 static void storage_free()
 {
 	struct dimes_storage_group *p, *t;
-	list_for_each_entry_safe(p, t, &storage, struct dimes_storage_group, entry) 
+	list_for_each_entry_safe(p, t, &dimes_c->storage, struct dimes_storage_group, entry) 
 	{
         storage_free_group(p);
 	}
@@ -2232,7 +2224,7 @@ int dimes_client_put_sync_all(void)
 {
 	int err;
 	struct dimes_storage_group *p, *t;
-	list_for_each_entry_safe(p, t, &storage, struct dimes_storage_group, entry)
+	list_for_each_entry_safe(p, t, &dimes_c->storage, struct dimes_storage_group, entry)
 	{
         err = storage_free_group(p);
         if (err < 0) return err;
@@ -2361,7 +2353,7 @@ static int dimes_obj_get_local(struct obj_data *od)
     tm_st = timer_read(&tm_perf);
 #endif
     // Locate data objects
-    local_search_group_list(&storage, qte);
+    local_search_group_list(&dimes_c->storage, qte);
     local_search_group_list(&node_local_obj_index, qte);
     if (qte->num_fetch == 0) {
         uloga("%s(): ERROR qte->num_fetch= %d for obj '%s' version= %d\n",
@@ -2948,7 +2940,7 @@ int dimes_client_shmem_update_server_state()
         dht_update_stat[i] = 0;
 
     struct dimes_storage_group *p;
-    list_for_each_entry(p, &storage, struct dimes_storage_group, entry)
+    list_for_each_entry(p, &dimes_c->storage, struct dimes_storage_group, entry)
     {
         for (j = 0; j < dimes_c->dcg->max_versions; j++) {
             struct dimes_memory_obj *mem_obj;
@@ -3024,7 +3016,7 @@ int dimes_client_shmem_checkpoint_storage(int shmem_obj_id, void *restart_buf)
 
     struct dimes_storage_group *g, *gt;
     struct dimes_memory_obj *o, *ot;
-    list_for_each_entry_safe(g, gt, &storage, struct dimes_storage_group, entry)
+    list_for_each_entry_safe(g, gt, &dimes_c->storage, struct dimes_storage_group, entry)
     {
         num_group++;
         uint32_t num_obj = 0;
@@ -3266,7 +3258,7 @@ size_t estimate_storage_restart_buf_size()
     uint32_t num_group = 0, num_obj = 0;
     struct dimes_storage_group *g, *gt;
     struct dimes_memory_obj *o, *ot;
-    list_for_each_entry_safe(g, gt, &storage, struct dimes_storage_group, entry)
+    list_for_each_entry_safe(g, gt, &dimes_c->storage, struct dimes_storage_group, entry)
     {
         num_group++;
         int i;
