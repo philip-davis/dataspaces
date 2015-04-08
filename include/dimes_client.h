@@ -45,19 +45,60 @@ extern "C" {
 
 #include "dimes_data.h"
 
+// Status of a data fetch operation. 
+enum fetch_status {
+    fetch_ready = 0,
+    fetch_posted,
+    fetch_done
+};
+
+struct fetch_entry {
+    struct list_head entry;
+    struct dimes_obj_id remote_obj_id;
+    struct obj_descriptor src_odsc;
+    struct obj_descriptor dst_odsc;
+    struct dart_rdma_tran *read_tran;
+#ifdef DS_HAVE_DIMES_SHMEM
+    struct dimes_shmem_descriptor src_shmem_desc;
+#endif
+};
+
+struct query_dht_d {
+    int                     qh_size, qh_num_peer;
+    int                     qh_num_req_posted;
+    int                     qh_num_req_received;
+    int                     *qh_peerid_tab;
+};
+
+/* 
+   A query transaction serves a dimes_get request.
+   This structure keeps query info to assemble the result.
+*/
+struct query_tran_entry_d {
+    struct list_head        q_entry;
+
+    struct obj_data         *data_ref;
+    int                     q_id;
+    struct obj_descriptor   q_obj;
+
+    int                     num_fetch;
+    struct list_head        fetch_list;
+
+    struct query_dht_d        *qh;
+
+    unsigned int    f_locate_data_complete:1,
+                    f_complete:1;
+};
+
 struct query_tran_d {
 	struct list_head        q_list;
-	int                     num_ent;
+	int                     num_entry;
 };
 
 // Key parameters for DIMES.
 // TODO: Most of these parameters are currently set at compile time. Can we
 // use dspaces_init() API's parameters list to pass their values?
 struct dimes_client_option {
-#ifdef DS_HAVE_DIMES_SHMEM
-    int enable_shmem_buffer;
-    int enable_get_local;
-#endif
     int enable_pre_allocated_rdma_buffer;
     size_t pre_allocated_rdma_buffer_size;
     struct dart_rdma_mem_handle pre_allocated_rdma_handle;
@@ -65,6 +106,10 @@ struct dimes_client_option {
     size_t rdma_buffer_write_usage;
     size_t rdma_buffer_read_usage;
     int max_num_concurrent_rdma_read_op;
+#ifdef DS_HAVE_DIMES_SHMEM
+    int enable_shmem_buffer;
+    int enable_get_local;
+#endif
 };
 
 struct dimes_client {

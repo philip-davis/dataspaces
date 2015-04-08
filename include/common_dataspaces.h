@@ -96,6 +96,32 @@ int common_dimes_put_set_group(const char *group_name, int step);
 int common_dimes_put_unset_group();
 int common_dimes_put_sync_group(const char *group_name, int step);
 
+/* 
+    Source code enclosed within macro #ifdef DS_HAVE_DIMES_SHMEM implements
+    the dimes_shmem_xxx APIs that are used by EPSI coupling workflow. dimes_shmem_xxx 
+    APIs enables using shared memory segment to share data between sequentially executing
+    applications on a node. 
+
+    A writer application typically invokes the dimes_shmem_xxx APIs in the following sequence:
+        call dspaces_init
+        call dimes_shmem_init
+        call dimes_shmem_put_local
+        ...
+        call dimes_shmem_checkpoint
+        call dimes_shmem_finalize
+        call dimes_shmem_reset_server_state
+        call dspaces_finalize
+
+    A reader application typically invokes the dimes_shmem_xxx APIs in the following sequence:
+        call dspaces_init
+        call dimes_shmem_restart
+        call dimes_shmem_update_server_state
+        call dimes_shmem_get_local
+        ...
+        call dimes_shmem_finalize
+        call dimes_shmem_reset_server_state
+        call dspaces_finalize  
+*/
 #ifdef DS_HAVE_DIMES_SHMEM
 int common_dimes_shmem_init(void *comm, size_t shmem_obj_size);
 int common_dimes_shmem_finalize(unsigned int unlink);
