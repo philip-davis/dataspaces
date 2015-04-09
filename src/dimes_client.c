@@ -246,8 +246,16 @@ static uint32_t next_local_obj_index()
     return local_obj_index_seed++;
 }
 
-static char *current_group_name = NULL;
+static char current_group_name[STORAGE_GROUP_NAME_MAXLEN+1];
 const char* default_group_name = "__default_storage_group__";
+static void update_current_group_name(const char *name)
+{
+    if (!name) return;
+    if (strlen(name)>STORAGE_GROUP_NAME_MAXLEN) {
+        strncpy(current_group_name, name, STORAGE_GROUP_NAME_MAXLEN);
+        current_group_name[STORAGE_GROUP_NAME_MAXLEN] = '\0';
+    } else strcpy(current_group_name, name);
+}
 
 #ifdef DS_HAVE_DIMES_SHMEM
 static struct dimes_storage_group* node_local_obj_index_add_group(const char *group_name)
@@ -420,12 +428,8 @@ static void storage_init()
 {
 	INIT_LIST_HEAD(&dimes_c->storage);
 
-    // Add the default storage group
-	struct dimes_storage_group *p =
-			storage_add_group(default_group_name);
-
 	// Set current group as default
-	current_group_name = p->name;	
+    update_current_group_name(default_group_name);
 } 
 
 // Finalize dimes storage.
@@ -436,15 +440,13 @@ static void storage_free()
 	{
         storage_free_group(p);
 	}
-
-	current_group_name = NULL;
 }
 
 // Add a data object to dimes storage.
 static int storage_add_obj(struct dimes_memory_obj *mem_obj)
 {
 	struct dimes_storage_group *p = storage_lookup_group(current_group_name);
-	if (p == NULL) return -1;
+	if (!p) p = storage_add_group(current_group_name);
 
     int tab_idx = mem_obj->obj_desc.version % dimes_c->dcg->max_versions;
     return mem_obj_list_add(&p->version_tab[tab_idx], mem_obj);    
@@ -2203,28 +2205,13 @@ int dimes_client_put_sync_all(void)
 
 int dimes_client_put_set_group(const char *group_name, int step)
 {
-    struct dimes_storage_group *p;
-    p = storage_lookup_group(group_name);
-    if (p == NULL) {
-        p = storage_add_group(group_name);
-    }
-
-    current_group_name = p->name;
-
+    update_current_group_name(group_name);
 	return 0;
 }
 
 int dimes_client_put_unset_group()
 {
-    struct dimes_storage_group *p;
-    p = storage_lookup_group(default_group_name);
-    if (p == NULL) {
-        uloga("%s(): ERROR p == NULL should not happen!\n", __func__);
-        p = storage_add_group(default_group_name);
-    }
-
-    current_group_name = p->name;
-
+    update_current_group_name(default_group_name);
 	return 0;
 }
 
@@ -3054,9 +3041,7 @@ static int restart_storage_insert_mem_obj(const char *group_name,
 
     // add memory object
     struct dimes_storage_group *p = storage_lookup_group(group_name);
-    if (!p) {
-        p = storage_add_group(group_name);
-    }
+    if (!p) p = storage_add_group(group_name);
     int tab_idx = mem_obj->obj_desc.version % dimes_c->dcg->max_versions;
     mem_obj_list_add(&p->version_tab[tab_idx], mem_obj);
 
