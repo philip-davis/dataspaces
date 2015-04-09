@@ -149,7 +149,7 @@ struct dimes_memory_obj {
 #define STORAGE_GROUP_NAME_MAXLEN 256
 struct dimes_storage_group {
     struct list_head entry;
-    char name[STORAGE_GROUP_NAME_MAXLEN];
+    char name[STORAGE_GROUP_NAME_MAXLEN+1];
     struct list_head *version_tab;
 };
 
