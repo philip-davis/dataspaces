@@ -951,11 +951,11 @@ static int qt_add_obj_with_cmd_d(struct query_tran_entry_d *qte,
     if (hdr->ptlmap.appid != dimes_c->dcg->dc->self->ptlmap.appid) {
         peer = dart_rdma_create_remote_peer(&hdr->ptlmap);
     } else {
-        peer = dc_get_peer(DART_CLIENT_PTR, odsc->owner);
+        peer = dc_get_peer(DART_CLIENT_PTR, hdr->odsc.owner);
     }
 #else
     // Lookup the owner peer of the remote data object
-    peer = dc_get_peer(DART_CLIENT_PTR, odsc->owner);
+    peer = dc_get_peer(DART_CLIENT_PTR, hdr->odsc.owner);
 #endif
 
     // Creat read transaction

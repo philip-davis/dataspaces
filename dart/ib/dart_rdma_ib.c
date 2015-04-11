@@ -218,6 +218,7 @@ int dart_rdma_get_memregion_from_cmd(struct dart_rdma_mem_handle *mem_hndl, stru
 
 int dart_rdma_create_read_tran(struct node_id *remote_peer, struct dart_rdma_tran **pp)
 {
+    if (!remote_peer) uloga("%s(): ERROR remote_peer is NULL.\n", __func__);
 	if (!remote_peer->rpc_conn.f_connected &&
         drh->rpc_s->ptlmap.id != remote_peer->ptlmap.id) {
 #ifdef DEBUG
