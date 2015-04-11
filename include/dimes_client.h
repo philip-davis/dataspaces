@@ -103,8 +103,7 @@ struct dimes_client_option {
     size_t pre_allocated_rdma_buffer_size;
     struct dart_rdma_mem_handle pre_allocated_rdma_handle;
     size_t rdma_buffer_size;
-    size_t rdma_buffer_write_usage;
-    size_t rdma_buffer_read_usage;
+    size_t rdma_buffer_usage;
     int max_num_concurrent_rdma_read_op;
 #ifdef DS_HAVE_DIMES_SHMEM
     int enable_shmem_buffer;
