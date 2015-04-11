@@ -28,7 +28,6 @@
 *  Fan Zhang (2012)  TASSL Rutgers University
 *  zhangfan@cac.rutgers.edu
 */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,40 +37,73 @@
 #include "config.h"
 
 #ifdef DS_HAVE_DIMES
+
 #include "dimes_interface.h"
 #include "dimes_client.h"
 #include "dimes_data.h"
-/* Name mangling for C functions to adapt Fortran compiler */
-#define FC_FUNC(name,NAME) name ## _
 
+static struct dimes_client_option options;
 static struct dimes_client *dimes_c = NULL;
-static enum storage_type st = column_major;
-static int num_dims = 2;
+static enum storage_type default_st = column_major;
 #ifdef TIMING_PERF
 static char log_header[256] = "";
 static struct timer tm_perf;
 #endif
 
+/* Macros definitions. */
+#define DIMES_WAIT_COMPLETION(x)                \
+    do {                            \
+        err = dc_process(dimes_c->dcg->dc);     \
+        if (err < 0)                    \
+            goto err_out;               \
+    } while (!(x))
+// Return dart id for myself.
+#define DIMES_CID   dimes_c->dcg->dc->self->ptlmap.id
+// Return dart rank for myself.
+#define DIMES_RANK (DIMES_CID-dimes_c->dcg->dc->cp_min_rank)
+// Return pointer to dart client. 
+#define DART_CLIENT_PTR dimes_c->dcg->dc
+// Return pointer to rpc server.
+#define RPC_SERVER_PTR dimes_c->dcg->dc->rpc_s 
+// Return number of servers.
+#define NUM_SERVER dimes_c->dcg->dc->num_sp
+
+/* Forward declarations. */
+static int dimes_memory_free(struct dart_rdma_mem_handle *rdma_hndl);
+
+// Allocate the default shared space dht using the global domain 
+// that specified in dataspaces.conf. DIMES client uses this dht
+// to determine which servers are used for sending the data update
+// requests (for put operation) or data locating requests (for get operation).
+//
+// Linked list sspace_list stores shared space dhts that are dynamically 
+// created based on global domain information provided by users through 
+// dimes_define_gdim() API. 
 static int init_sspace_dimes(struct dimes_client *d)
 {
     int err = -ENOMEM;
+    // DIMES client only use the shared space dht for selecting 
+    // servers. So set max version to 1 is ok. 
     const int max_versions = 1;
-    d->ssd = ssd_alloc(&d->domain, d->dcg->ss_info.num_space_srv, max_versions,
-                    d->dcg->hash_version);
-    if (!d->ssd) {
+    d->default_ssd = ssd_alloc(&d->dcg->ss_domain,
+                        d->dcg->ss_info.num_space_srv, 
+                        max_versions, d->dcg->hash_version);
+    if (!d->default_ssd) {
         goto err_out;
     }
 
     INIT_LIST_HEAD(&d->sspace_list);
     return 0;
  err_out:
-    uloga("%s(): ERROR failed\n", __func__);
+    uloga("%s(): ERROR failed.\n", __func__);
     return err;
 }
 
+// Deallocate the default shared space dht and shared space dhts that stored
+// in linked list sspace_list. 
 static int free_sspace_dimes(struct dimes_client *d)
 {
-    ssd_free(d->ssd);
+    ssd_free(d->default_ssd);
     struct sspace_list_entry *ssd_entry, *temp;
     list_for_each_entry_safe(ssd_entry, temp, &d->sspace_list,
             struct sspace_list_entry, entry)
@@ -84,103 +116,62 @@ static int free_sspace_dimes(struct dimes_client *d)
     return 0;
 }
 
-static struct sspace* lookup_sspace_dimes(struct dimes_client *d, const char* var_name,
-    const struct global_dimension* gd)
+// Lookup shared space dht by global dimension.
+static struct sspace* lookup_sspace_dimes(struct dimes_client *d, const struct global_dimension* gd)
 {
-    struct global_dimension gdim;
-    memcpy(&gdim, gd, sizeof(struct global_dimension));
-
-    // Return the default shared space created based on
-    // global data domain specified in dataspaces.conf 
-    if (global_dimension_equal(&gdim, &d->dcg->default_gdim)) {
-        return d->ssd;
+    // If global domain gdim equals to the one specified 
+    // in dataspaces.conf, then return the default shared space dht.
+    if (global_dimension_equal(gd, &d->dcg->default_gdim)) {
+        return d->default_ssd;
     }
 
-    // Otherwise, search for shared space based on the
-    // global data domain specified by application in put()/get().
+    // Otherwise, search for shared space dht in the linked list.
     struct sspace_list_entry *ssd_entry = NULL;
     list_for_each_entry(ssd_entry, &d->sspace_list,
         struct sspace_list_entry, entry)
     {
-        // compare global dimension
-        if (gdim.ndim != ssd_entry->gdim.ndim)
+        if (gd->ndim != ssd_entry->gdim.ndim)
             continue;
 
-        if (global_dimension_equal(&gdim, &ssd_entry->gdim))
+        if (global_dimension_equal(gd, &ssd_entry->gdim))
             return ssd_entry->ssd;
     }
 
-    // If not found, add new shared space
+    // If not found, create new shared space dht and add it to the linked list.
     int i, err;
     struct bbox domain;
     memset(&domain, 0, sizeof(struct bbox));
-    domain.num_dims = gdim.ndim;
-    for (i = 0; i < gdim.ndim; i++) {
+    domain.num_dims = gd->ndim;
+    for (i = 0; i < gd->ndim; i++) {
         domain.lb.c[i] = 0;
-        domain.ub.c[i] = gdim.sizes.c[i] - 1;
+        domain.ub.c[i] = gd->sizes.c[i] - 1;
     }
 
     ssd_entry = malloc(sizeof(struct sspace_list_entry));
-    memcpy(&ssd_entry->gdim, &gdim, sizeof(struct global_dimension));
+    memcpy(&ssd_entry->gdim, gd, sizeof(struct global_dimension));
     const int max_versions = 1;
     ssd_entry->ssd = ssd_alloc(&domain, d->dcg->ss_info.num_space_srv, max_versions,
                             d->dcg->hash_version);
     if (!ssd_entry->ssd) {
         uloga("%s(): ERROR ssd_alloc() failed\n", __func__);
-        return d->ssd;
+        return d->default_ssd;
     }
-
-#ifdef DEBUG
-/*
-    uloga("%s(): add new shared space ndim= %d global dimension= %llu %llu %llu\n",
-     __func__, gdim.ndim, gdim.sizes.c[0], gdim.sizes.c[1], gdim.sizes.c[2]);
-*/
-#endif
 
     list_add(&ssd_entry->entry, &d->sspace_list);
     return ssd_entry->ssd;
 }
 
-
-struct dimes_client_option {
-    int enable_dimes_ack;
-    int enable_pre_allocated_rdma_buffer;
-    size_t pre_allocated_rdma_buffer_size;
-    struct dart_rdma_mem_handle pre_allocated_rdma_handle;
-    size_t rdma_buffer_size;
-    size_t rdma_buffer_write_usage;
-    size_t rdma_buffer_read_usage;
-    int max_num_concurrent_rdma_read_op;
-};
-static struct dimes_client_option options;
-
-#define DIMES_WAIT_COMPLETION(x)				\
-	do {							\
-		err = dc_process(dimes_c->dcg->dc);		\
-		if (err < 0)					\
-			goto err_out;				\
-	} while (!(x))
-
-#define DIMES_CID	dimes_c->dcg->dc->self->ptlmap.id
-#define DIMES_RANK DIMES_CID - dimes_c->dcg->dc->cp_min_rank
-#define DC dimes_c->dcg->dc
-#define RPC_S dimes_c->dcg->dc->rpc_s 
-#define NUM_SP dimes_c->dcg->dc->num_sp
-
-static int is_peer_on_same_core(struct node_id *peer)
+// Check if peer has the same DART id as myself.
+static int is_peer_myself(struct node_id *peer)
 {
-	return (peer->ptlmap.id == DIMES_CID);
+    return peer->ptlmap.id == DIMES_CID;
 }
 
+// Calculate size (in bytes) of available RDMA memory buffer.
 static size_t get_available_rdma_buffer_size()
 {
-    size_t total_usage = options.rdma_buffer_write_usage +
-                         options.rdma_buffer_read_usage;
-    if (total_usage > options.rdma_buffer_size) {
-        return 0;
-    } else {
-        return options.rdma_buffer_size-total_usage;
-    }
+    if (options.rdma_buffer_usage > options.rdma_buffer_size) return 0; 
+    else return options.rdma_buffer_size-options.rdma_buffer_usage;
 }
 
 static void print_rdma_buffer_usage()
@@ -188,152 +179,91 @@ static void print_rdma_buffer_usage()
 #ifdef DEBUG_DIMES_BUFFER_USAGE
     uloga("DIMES rdma buffer usage: peer #%d "
           "rdma_buffer_size= %u bytes "
-          "rdma_buffer_write_usage= %u bytes "
-          "rdma_buffer_read_usage= %u bytes "
+          "rdma_buffer_usage= %u bytes "
           "rdma_buffer_avail_size= %u bytes\n", DIMES_CID,
-        options.rdma_buffer_size, options.rdma_buffer_write_usage,
-        options.rdma_buffer_read_usage, get_available_rdma_buffer_size());
+        options.rdma_buffer_size, options.rdma_buffer_usage,
+        get_available_rdma_buffer_size());
 #endif
 }
 
-
-#define NUM_SYNC_ID 4096
-static struct {
-	int next;
-	int sync_ids[NUM_SYNC_ID];
-} sync_op_data;
-
-static void syncop_init(void)
+static uint32_t local_obj_index_seed = 0;
+static uint32_t next_local_obj_index()
 {
-    int i;
-    for (i = 0; i < NUM_SYNC_ID; i++)
-        sync_op_data.sync_ids[i] = 1;
-    sync_op_data.next = 0;
+    return local_obj_index_seed++;
 }
 
-static int syncop_next_sync_id(void)
-{
-	int n;
-	n = sync_op_data.next;
-	// NOTE: this is tricky and error prone; implement a better sync opertation
-	if (sync_op_data.sync_ids[n] != 1) {
-		uloga("%s(): ERROR sync operation overflows.\n", __func__);
-	}
-	sync_op_data.sync_ids[n] = 0;
-	sync_op_data.next = (sync_op_data.next + 1) % NUM_SYNC_ID;
-
-	return n;
-}
-
-static int syncop_status(int sid)
-{
-    return sync_op_data.sync_ids[sid];
-}
-
-static void syncop_set_done(int sid)
-{   
-    sync_op_data.sync_ids[sid] = 1;
-}
-
-enum dimes_put_status {
-	DIMES_PUT_OK = 0,
-	DIMES_PUT_PENDING = 1,
-};
-
-enum dimes_ack_type {
-    dimes_ack_type_msg = 0,
-    dimes_ack_type_rdma,
-};
-
-struct dimes_memory_obj {
-	struct list_head entry;
-	int sync_id;
-    enum dimes_ack_type ack_type;
-    struct obj_descriptor obj_desc;
-    struct global_dimension gdim;
-    struct dart_rdma_mem_handle rdma_handle;
-};
-
-struct dimes_storage_group {
-	struct list_head entry;
-	char *name;
-	// List of dimes_memory_obj
-	struct list_head mem_obj_list;
-};
-
-//static struct list_head mem_obj_list;
-static char *current_group_name = NULL;
+static char current_group_name[STORAGE_GROUP_NAME_MAXLEN+1];
 const char* default_group_name = "__default_storage_group__";
-static struct list_head storage;
+static void update_current_group_name(const char *name)
+{
+    if (!name) return;
+    if (strlen(name)>STORAGE_GROUP_NAME_MAXLEN) {
+        strncpy(current_group_name, name, STORAGE_GROUP_NAME_MAXLEN);
+        current_group_name[STORAGE_GROUP_NAME_MAXLEN] = '\0';
+    } else strcpy(current_group_name, name);
+}
 
+/*
+    About DIMES storage:
+    Data objects in local RDMA memory buffer are logically organized into a two-level 
+    by their "group name" and "version". "group name" is an attribute specified through
+    the dimes_put_set_group() function. When this attribute is not explicitly specified,
+    the data objects are under group "__default_storage_group__". "version" is specified  
+    through dimes_put() function. The graph below illustrates this two-level organization. 
+
+    group 1--group 2--group 3
+     |
+     |
+    version0--obj--obj--obj--obj
+     |
+     |    
+    version1--obj--obj--obj--obj
+     |
+     |
+    version2--obj--obj--obj 
+*/
+// Add data object to the linked list.
 static int mem_obj_list_add(struct list_head *l, struct dimes_memory_obj *p) {
 	list_add(&p->entry, l);
 	return 0;
 }
 
-static int mem_obj_list_delete(struct list_head *l, int sid) {
-	struct dimes_memory_obj *p, *t;
-	list_for_each_entry_safe(p, t, l, struct dimes_memory_obj, entry) {
-		if (p->sync_id == sid) {
-			list_del(&p->entry);
-			free(p);
-			return 0;
-		}
-	}
-
-	return -1;
-}
-
-static struct dimes_memory_obj* mem_obj_list_lookup(struct list_head *l, int sid) {
+// Lookup data object (in local RDMA memory buffer) by dimes obj id.
+static struct dimes_memory_obj* mem_obj_list_lookup(struct list_head *l, const struct dimes_obj_id *oid) {
 	struct dimes_memory_obj *p;
 	list_for_each_entry(p, l, struct dimes_memory_obj, entry) {
-		if (p->sync_id == sid)
-			return p;
+		if (equal_dimes_obj_id(&p->obj_id, oid)) return p;
 	}
 
 	return NULL;
 } 
 
+// Create and add a new group. 
 static struct dimes_storage_group* storage_add_group(const char *group_name)
 {
 	struct dimes_storage_group *p = malloc(sizeof(*p));
-	p->name = (char *)malloc(strlen(group_name)+1);
+    if (!p) goto err_out_free;
+
+    p->version_tab = malloc(sizeof(*p->version_tab)*dimes_c->dcg->max_versions);
+    if (!p->version_tab) goto err_out_free;
+
 	strcpy(p->name, group_name);
-	INIT_LIST_HEAD(&p->mem_obj_list);
-
-	list_add(&p->entry, &storage);	
+    int i;
+    for (i = 0; i < dimes_c->dcg->max_versions; i++) {
+        INIT_LIST_HEAD(&p->version_tab[i]);
+    }
+	list_add(&p->entry, &dimes_c->storage);	
 	return p;
+ err_out_free:
+    if (p) free(p);
+    return NULL;
 }
 
-static void storage_init()
-{
-	INIT_LIST_HEAD(&storage);
-
-    // Add the default storage group
-	struct dimes_storage_group *p =
-			storage_add_group(default_group_name);
-
-	// Set current group as default
-	current_group_name = p->name;	
-} 
-
-static void storage_free()
-{
-	struct dimes_storage_group *p, *t;
-	list_for_each_entry_safe(p, t, &storage, struct dimes_storage_group, entry) 
-	{
-		list_del(&p->entry);
-		if (p->name != NULL) free(p->name);
-		free(p);
-	}
-
-	current_group_name = NULL;
-}
-
+// Lookup group by its name.
 static struct dimes_storage_group* storage_lookup_group(const char *group_name)
 {
 	struct dimes_storage_group *p;
-	list_for_each_entry(p, &storage, struct dimes_storage_group, entry)
+	list_for_each_entry(p, &dimes_c->storage, struct dimes_storage_group, entry)
 	{
 		if (p->name == NULL) continue;
 		if (0 == strcmp(p->name, group_name)) {
@@ -344,62 +274,70 @@ static struct dimes_storage_group* storage_lookup_group(const char *group_name)
 	return NULL;
 } 
 
+// Deallocate a group.
+static int storage_free_group(struct dimes_storage_group *group)
+{
+    int i, err;
+    struct dimes_memory_obj *p, *t;
+    for (i = 0; i < dimes_c->dcg->max_versions; i++) {
+        list_for_each_entry_safe(p, t, &group->version_tab[i],
+                    struct dimes_memory_obj, entry) {
+            dimes_memory_free(&p->rdma_handle);
+            list_del(&p->entry);
+            free(p);            
+        }
+    }
+
+    list_del(&group->entry); 
+    if (group->version_tab) free(group->version_tab);
+    free(group);
+
+    return 0;
+}
+
+// Initialize dimes storage.
+static void storage_init()
+{
+	INIT_LIST_HEAD(&dimes_c->storage);
+
+	// Set current group as default
+    update_current_group_name(default_group_name);
+} 
+
+// Finalize dimes storage.
+static void storage_free()
+{
+	struct dimes_storage_group *p, *t;
+	list_for_each_entry_safe(p, t, &dimes_c->storage, struct dimes_storage_group, entry) 
+	{
+        storage_free_group(p);
+	}
+}
+
+// Add a data object to dimes storage.
 static int storage_add_obj(struct dimes_memory_obj *mem_obj)
 {
 	struct dimes_storage_group *p = storage_lookup_group(current_group_name);
-	if (p == NULL) {
-		return -1;
-	}
+	if (!p) p = storage_add_group(current_group_name);
 
-	return mem_obj_list_add(&p->mem_obj_list, mem_obj);
+    int tab_idx = mem_obj->obj_desc.version % dimes_c->dcg->max_versions;
+    return mem_obj_list_add(&p->version_tab[tab_idx], mem_obj);    
 }
 
-static int storage_delete_obj(int sid)
+// Lookup a data object by (1) dimes obj id; and (2) version.
+static struct dimes_memory_obj* storage_lookup_obj(const struct dimes_obj_id *oid, int version)
 {
 	struct dimes_storage_group *p;
-	list_for_each_entry(p, &storage, struct dimes_storage_group, entry)
+	list_for_each_entry(p, &dimes_c->storage, struct dimes_storage_group, entry)
 	{
-		if(0 == mem_obj_list_delete(&p->mem_obj_list, sid)) {
-			return 0;
-		}
-	}	
-
-	return -1;
-}
-
-static struct dimes_memory_obj* storage_lookup_obj(int sid)
-{
-	struct dimes_storage_group *p;
-	list_for_each_entry(p, &storage, struct dimes_storage_group, entry)
-	{
+        int tab_idx = version % dimes_c->dcg->max_versions;
 		struct dimes_memory_obj *mem_obj;
-		mem_obj = mem_obj_list_lookup(&p->mem_obj_list, sid);
+		mem_obj = mem_obj_list_lookup(&p->version_tab[tab_idx], oid);
 		if (mem_obj != NULL) return mem_obj;
 	}	
 
 	return NULL;
 }
-
-
-
-/**************************************************
-  Data structures & functions for DIMES transaction
-***************************************************/
-enum dimes_memory_type {
-    dimes_memory_non_rdma = 0,
-    dimes_memory_rdma
-};
-
-enum fetch_status {
-    fetch_ready = 0,
-    fetch_posted,
-    fetch_done
-};
-
-enum fetch_dst_memory_type {
-    fetch_dst_memory_non_rdma = 0,
-    fetch_dst_memory_rdma
-};
 
 static int dimes_memory_init()
 {
@@ -451,22 +389,34 @@ static int dimes_memory_finalize()
     return 0;
 }
 
-static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl, size_t size, enum dimes_memory_type type)
+static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl, 
+    size_t size, enum dart_memory_type type)
 {
     int err;
+    unsigned char use_rdma_memory = 0;
     uint64_t buf;
+    rdma_hndl->mem_type = type;
 
-    switch (type) {
-    case dimes_memory_non_rdma:
+    if (rdma_hndl->mem_type == dart_memory_rdma) use_rdma_memory = 1;
+    // Check if there is available rdma buffer
+    if (use_rdma_memory && get_available_rdma_buffer_size() < size) {
+        uloga("%s(): ERROR: no sufficient RDMA memory for caching data "
+            "with %u bytes. Suggested fix: increase the value of "
+            "'--with-dimes-rdma-buffer-size' at configuration.\n",
+            __func__, size);
+        print_rdma_buffer_usage();            
+        return -1;
+    } 
+
+    switch (rdma_hndl->mem_type) {
+    case dart_memory_non_rdma:
         buf = (uint64_t)malloc(size);
-        if (!buf) {
-            goto err_out_malloc;
-        }
+        if (!buf) goto err_out_malloc;
 
         rdma_hndl->base_addr = buf;
         rdma_hndl->size = size;
         break;
-    case dimes_memory_rdma:
+    case dart_memory_rdma:
         if (options.enable_pre_allocated_rdma_buffer) {
             dimes_buffer_alloc(size, &buf);
             if (!buf) {
@@ -482,9 +432,7 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl, size_t siz
             rdma_hndl->size = size;
         } else {
             buf = (uint64_t)malloc(size);
-            if (!buf) {
-                goto err_out_malloc;
-            }
+            if (!buf) goto err_out_malloc;
 
             err = dart_rdma_register_mem(rdma_hndl, (void*)buf, size);
             if (err < 0) {
@@ -495,11 +443,15 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl, size_t siz
         }
         break;
     default:
-        uloga("%s(): ERROR unknow dimes_memory_type %d\n", __func__, type);
+        uloga("%s(): ERROR unknow dart_memory_type %d\n", __func__, rdma_hndl->mem_type);
         goto err_out;
-        break;
     }
 
+    // Update RDMA memory usage
+    if (use_rdma_memory) options.rdma_buffer_usage += size;
+#ifdef DEBUG
+    if (use_rdma_memory) print_rdma_buffer_usage();
+#endif
     return 0;
  err_out_malloc:
     uloga("%s(): ERROR malloc() failed\n", __func__);
@@ -507,15 +459,17 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl, size_t siz
     return -1;
 }
 
-static int dimes_memory_free(struct dart_rdma_mem_handle *rdma_hndl, enum dimes_memory_type type)
+static int dimes_memory_free(struct dart_rdma_mem_handle *rdma_hndl)
 {
     int err;
+    unsigned char use_rdma_memory = 0;
+    if (rdma_hndl->mem_type == dart_memory_rdma) use_rdma_memory = 1;
 
-    switch (type) {
-    case dimes_memory_non_rdma:
+    switch (rdma_hndl->mem_type) {
+    case dart_memory_non_rdma:
         free((void*)rdma_hndl->base_addr);
         break;
-    case dimes_memory_rdma:
+    case dart_memory_rdma:
         if (options.enable_pre_allocated_rdma_buffer) {
             dimes_buffer_free(rdma_hndl->base_addr);
         } else {
@@ -530,52 +484,19 @@ static int dimes_memory_free(struct dart_rdma_mem_handle *rdma_hndl, enum dimes_
         }
         break;
     default:
-        uloga("%s(): ERROR unknow dimes_memory_type %d\n", __func__, type);
+        uloga("%s(): ERROR unknow dart_memory_type %d\n", __func__, rdma_hndl->mem_type);
         goto err_out;
-        break;
     }
 
+    // Update RDMA buffer usage
+    if (use_rdma_memory) options.rdma_buffer_usage -= rdma_hndl->size; 
+#ifdef DEBUG
+    if (use_rdma_memory) print_rdma_buffer_usage();
+#endif
     return 0;
  err_out:
     return -1;
 }
-
-struct fetch_entry {
-    struct list_head entry;
-    int remote_sync_id;
-    struct obj_descriptor src_odsc;
-    struct obj_descriptor dst_odsc;
-    // TODO: can we use array of read_tran pointers?
-    struct dart_rdma_tran *read_tran;
-};
-
-struct query_dht_d {
-	int                     qh_size, qh_num_peer;
-	int                     qh_num_req_posted;
-	int                     qh_num_req_received;
-	int                     *qh_peerid_tab;
-};
-
-/* 
-   A query is a multi step transaction that serves an 'obj_get'
-   request. This structure keeps query info to assemble the result.
-*/
-struct query_tran_entry_d {
-	struct list_head        q_entry;
-
-    struct obj_data         *data_ref;
-	int                     q_id;
-	struct obj_descriptor   q_obj;
-
-    int                     num_fetch;
-	struct list_head        fetch_list;
-
-	struct query_dht_d        *qh;
-
-    unsigned int    f_dht_peer_recv:1,
-					f_locate_data_complete:1,
-					f_complete:1;
-};
 
 /*
   Generate a unique query id.
@@ -620,7 +541,7 @@ qte_alloc_d(struct obj_data *od)
     qte->data_ref = od;
 	qte->q_id = qt_gen_qid_d();
 	qte->q_obj = od->obj_desc;
-	qte->qh = qh_alloc_d(NUM_SP);
+	qte->qh = qh_alloc_d(NUM_SERVER);
 	if (!qte->qh) {
 		free(qte);
 		errno = ENOMEM;
@@ -638,7 +559,7 @@ static void qte_free_d(struct query_tran_entry_d *qte)
 
 static void qt_init_d(struct query_tran_d *qt)
 {
-	qt->num_ent = 0;
+	qt->num_entry = 0;
 	INIT_LIST_HEAD(&qt->q_list);
 }
 
@@ -657,13 +578,13 @@ static struct query_tran_entry_d * qt_find_d(struct query_tran_d *qt, int q_id)
 static void qt_add_d(struct query_tran_d *qt, struct query_tran_entry_d *qte)
 {
 	list_add(&qte->q_entry, &qt->q_list);
-	qt->num_ent++;
+	qt->num_entry++;
 }
 
 static void qt_remove_d(struct query_tran_d *qt, struct query_tran_entry_d *qte)
 {
 	list_del(&qte->q_entry);
-	qt->num_ent--;
+	qt->num_entry--;
 }
 
 static struct obj_descriptor *
@@ -701,20 +622,19 @@ static void qt_free_obj_data_d(struct query_tran_entry_d *qte)
 static int qt_add_obj_with_cmd_d(struct query_tran_entry_d *qte,
                 struct obj_descriptor *odsc, struct rpc_cmd *cmd)
 {
-    struct hdr_dimes_put *hdr;
+    struct hdr_dimes_put *hdr = (struct hdr_dimes_put*)cmd->pad;
     struct node_id *peer;
     struct fetch_entry *fetch;
     fetch = (struct fetch_entry*)malloc(sizeof(*fetch));
 
     // Lookup the owner peer of the remote data object
-    peer = dc_get_peer(DC, odsc->owner);
+    peer = dc_get_peer(DART_CLIENT_PTR, hdr->odsc.owner);
 
     // Creat read transaction
     dart_rdma_create_read_tran(peer, &fetch->read_tran);
 
     // Set source and destination object descriptors
-    hdr = (struct hdr_dimes_put*)cmd->pad;
-    fetch->remote_sync_id = hdr->sync_id;
+    fetch->remote_obj_id = hdr->obj_id;
     fetch->src_odsc = hdr->odsc;
     fetch->dst_odsc = *odsc;
 
@@ -743,6 +663,7 @@ static char *fstrncpy(char *cstr, const char *fstr, size_t len, size_t maxlen)
 	return cstr;
 }
 
+// Copy fetched data into the results buffer.
 static int obj_assemble(struct fetch_entry *fetch, struct obj_data *od)
 {
     int err;
@@ -758,6 +679,8 @@ static int obj_assemble(struct fetch_entry *fetch, struct obj_data *od)
     return err;
 }
 
+// Callback function that invoked when the client succesfully transfers
+// the data location information from server.
 static int locate_data_completion_client(struct rpc_server *rpc_s,
 					 struct msg_buf *msg)
 {
@@ -783,8 +706,7 @@ static int locate_data_completion_client(struct rpc_server *rpc_s,
 		bbox_intersect(&qte->q_obj.bb, &hdr->odsc.bb, &odsc.bb);	
 		if (!qt_find_obj_d(qte, &odsc)) {
             err = qt_add_obj_with_cmd_d(qte, &odsc, &tab[i]);
-            if (err < 0)
-                goto err_out_free;
+            if (err < 0) goto err_out_free;
 		} else {
 			qte->num_fetch--;
 		}
@@ -806,12 +728,13 @@ err_out_free:
 	ERROR_TRACE();
 }
 
+// Callback function for 'dimes_locate_data_msg' message.
 static int dcgrpc_dimes_locate_data(struct rpc_server *rpc_s,
 				    struct rpc_cmd *cmd)
 {
 	struct hdr_dimes_get *oht, 
 			 *oh = (struct hdr_dimes_get *) cmd->pad;
-	struct node_id *peer = dc_get_peer(DC, cmd->id);
+	struct node_id *peer = dc_get_peer(DART_CLIENT_PTR, cmd->id);
 	struct rpc_cmd *tab;
 	struct msg_buf *msg;
 	int err = -ENOMEM;
@@ -822,7 +745,7 @@ static int dcgrpc_dimes_locate_data(struct rpc_server *rpc_s,
 #endif
 
 	if (oh->rc == -1) {
-		// No need to fetch the cmd table.
+		// Server has no location information.
 		struct query_tran_entry_d *qte =
 				qt_find_d(&dimes_c->qt, oh->qid);
 		if (!qte) {
@@ -839,9 +762,10 @@ static int dcgrpc_dimes_locate_data(struct rpc_server *rpc_s,
 		return 0;
 	}
 
+    // Transfer data location information from server using rpc_receive_direct().
+    // Location information is stored as an array of struct rpc_cmd.
 	tab = malloc(sizeof(struct rpc_cmd) * oh->num_obj);
-	if (!tab)
-		goto err_out;
+	if (!tab) goto err_out;
 
 	oht = malloc(sizeof(*oh));
 	if (!oht) {
@@ -870,8 +794,7 @@ static int dcgrpc_dimes_locate_data(struct rpc_server *rpc_s,
 	rpc_mem_info_cache(peer, msg, cmd);
 	err = rpc_receive_direct(rpc_s, peer, msg);
     rpc_mem_info_reset(peer, msg, cmd);
-	if (err == 0)
-		return 0;
+	if (err == 0) return 0;
 
 	free(tab);
 	free(msg);
@@ -879,102 +802,10 @@ err_out:
 	ERROR_TRACE();
 }
 
-static int dcgrpc_dimes_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
-{
-	struct hdr_ss_info *hsi = (struct hdr_ss_info *) cmd->pad;
-
-	dimes_c->dcg->ss_info.num_dims = hsi->num_dims;
-	dimes_c->dcg->ss_info.num_space_srv = hsi->num_space_srv;
-	dimes_c->domain.num_dims = hsi->num_dims;
-    int i;
-    for(i = 0; i < hsi->num_dims; i++){
-        dimes_c->domain.lb.c[i] = 0;
-        dimes_c->domain.ub.c[i] = hsi->dims.c[i]-1;
-    }
-
-	dimes_c->f_ss_info = 1;
-
-	return 0;
-}
-
-static int dimes_ss_info(int *ndim)
-{
-	struct msg_buf *msg;
-	struct node_id *peer;
-	int err = -ENOMEM;
-
-	if (dimes_c->f_ss_info) {
-		*ndim = dimes_c->domain.num_dims;
-		return 0;
-	}
-
-    if (dimes_c->dcg->f_ss_info) {
-        struct bbox *bb = &(dimes_c->dcg->ss_domain);
-        dimes_c->domain.num_dims = bb->num_dims;
-        int i;
-        for (i = 0; i < bb->num_dims; i++) {
-            dimes_c->domain.lb.c[i] = bb->lb.c[i];
-            dimes_c->domain.ub.c[i] = bb->ub.c[i];
-        }
-        dimes_c->f_ss_info = 1;
-   } else {
-        peer = dc_get_peer(DC, DIMES_CID % NUM_SP);
-        msg = msg_buf_alloc(RPC_S, peer, 1);
-        if (!msg)
-            goto err_out;
-
-        msg->msg_rpc->cmd = dimes_ss_info_msg;
-        msg->msg_rpc->id = DIMES_CID;
-        err = rpc_send(RPC_S, peer, msg);
-        if (err < 0)
-            goto err_out;
-
-        DIMES_WAIT_COMPLETION(dimes_c->f_ss_info == 1);
-    }
-	
-	*ndim = dimes_c->dcg->ss_info.num_dims;
-	return 0;
-err_out:
-	ERROR_TRACE();
-}
-
-static int dimes_memory_obj_status(struct dimes_memory_obj *mem_obj)
-{
-	int ret;
-
-/*
-    if (mem_obj->ack_type == dimes_ack_type_rdma) {
-        // Check the pad
-        size_t data_size = obj_data_size(&mem_obj->obj_desc);
-        size_t pad_size = 64; // bytes
-        char *data = mem_obj->rdma_handle.base_addr+data_size;
-        
-        // TODO: is this safe to read/check the pad?
-        int i;
-        int flag = 1;
-        for (i = 0; i < pad_size; i++) {
-            if (data[i] != 1) {
-                flag = 0;
-                break;
-            }
-        }
-        if (flag) {
-            uloga("%s(): pad is set by remote peer!\n", __func__);
-            dimes_memory_free(&mem_obj->rdma_handle, dimes_memory_rdma);
-            syncop_set_done(mem_obj->sync_id);
-        }
-    }
-*/
-    if (syncop_status(mem_obj->sync_id) == 1) {	
-		ret = DIMES_PUT_OK;
-	} else {
-		ret = DIMES_PUT_PENDING;
-	}
-
-	return ret;
-}
-
 #ifdef HAVE_PAMI
+/*
+    Auxiliary functions used for PAMI network interface.
+*/
 static int completion_dimes_obj_put(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
     if (msg) {
@@ -989,14 +820,15 @@ static int rpc_send_complete(const int *send_flags, int num_send)
 {
     int i;
     for (i = 0; i < num_send; i++) {
-        if (!send_flags[i])
-            return 0;
+        if (!send_flags[i]) return 0;
     }
 
     return 1;
 }
 #endif
 
+// Send update messages to corresponding dht nodes (servers) and add new
+// data object. 
 static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
 {
 	struct dht_entry *dht_nodes[dimes_c->dcg->ss_info.num_space_srv];
@@ -1007,8 +839,7 @@ static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
 	int err = -ENOMEM;
 
 	// Update the DHT nodes
-    struct sspace *ssd = lookup_sspace_dimes(dimes_c, mem_obj->obj_desc.name,
-                                &mem_obj->gdim);
+    struct sspace *ssd = lookup_sspace_dimes(dimes_c, &mem_obj->gdim);
 	num_dht_nodes = ssd_hash(ssd, &mem_obj->obj_desc.bb, dht_nodes);
 	if (num_dht_nodes <= 0) {
 		uloga("%s(): ERROR: ssd_hash() return %d but the value should be > 0\n",
@@ -1025,8 +856,8 @@ static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
 	for (i = 0; i < num_dht_nodes; i++) {
 		// TODO(fan): There is assumption here that the space servers
 		// rank range from 0~(num_space_srv-1).
-		peer = dc_get_peer(DC, dht_nodes[i]->rank);
-		msg = msg_buf_alloc(RPC_S, peer, 1);
+		peer = dc_get_peer(DART_CLIENT_PTR, dht_nodes[i]->rank);
+		msg = msg_buf_alloc(RPC_SERVER_PTR, peer, 1);
 		if (!msg)
 			goto err_out;
 
@@ -1039,11 +870,11 @@ static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
 		dart_rdma_set_memregion_to_cmd(&mem_obj->rdma_handle, msg->msg_rpc);	
 
 		hdr = (struct hdr_dimes_put *)msg->msg_rpc->pad;
+        hdr->ptlmap = dimes_c->dcg->dc->rpc_s->ptlmap; 
 		hdr->odsc = mem_obj->obj_desc;
-		hdr->sync_id = mem_obj->sync_id;
-		hdr->has_rdma_data = 1;
+		hdr->obj_id = mem_obj->obj_id;
 	
-		err = rpc_send(RPC_S, peer, msg);
+		err = rpc_send(RPC_SERVER_PTR, peer, msg);
 		if (err < 0) {
 			free(msg);
 			goto err_out;
@@ -1054,7 +885,7 @@ static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
     // block for all the rpc_send to complete
     while (!rpc_send_complete(send_flags, num_dht_nodes))
     {
-        err = rpc_process_event(RPC_S);
+        err = rpc_process_event(RPC_SERVER_PTR);
         if (err < 0) {
             free(send_flags);
             goto err_out;
@@ -1063,13 +894,13 @@ static int dimes_obj_put(struct dimes_memory_obj *mem_obj)
     free(send_flags);
 #endif
 
-
 	storage_add_obj(mem_obj);
 	return 0;
 err_out:
 	ERROR_TRACE();			
 }
 
+// Lookup data locations information for a dimes_get query.
 static int dimes_locate_data(struct query_tran_entry_d *qte)
 {
 	struct hdr_dimes_get *oh;
@@ -1083,11 +914,10 @@ static int dimes_locate_data(struct query_tran_entry_d *qte)
 
 	peer_id = qte->qh->qh_peerid_tab;
 	while (*peer_id != -1) {
-		peer = dc_get_peer(DC, *peer_id);
+		peer = dc_get_peer(DART_CLIENT_PTR, *peer_id);
 		err = -ENOMEM;
-		msg = msg_buf_alloc(RPC_S, peer, 1);
-		if (!msg)
-			goto err_out;
+		msg = msg_buf_alloc(RPC_SERVER_PTR, peer, 1);
+		if (!msg) goto err_out;
 
 		msg->msg_rpc->cmd = dimes_locate_data_msg;
 		msg->msg_rpc->id = DIMES_CID;
@@ -1097,7 +927,7 @@ static int dimes_locate_data(struct query_tran_entry_d *qte)
 		oh->odsc = qte->q_obj;
 
 		qte->qh->qh_num_req_posted++;
-		err = rpc_send(RPC_S, peer, msg);
+		err = rpc_send(RPC_SERVER_PTR, peer, msg);
 		if (err < 0) {
 			free(msg);
 			qte->qh->qh_num_req_posted--;
@@ -1389,18 +1219,11 @@ static int all_fetch_done(struct query_tran_entry_d *qte, struct fetch_entry **f
                 // Copy fetched data
                 obj_assemble(fetch_tab[i], qte->data_ref); 
                 // Free recv buffer
-                err = dimes_memory_free(&fetch_tab[i]->read_tran->dst,
-                                        dimes_memory_rdma); 
+                err = dimes_memory_free(&fetch_tab[i]->read_tran->dst);
                 if (err < 0) {
                     goto err_out;
                 }
 
-                // Update rdma buffer usage
-                options.rdma_buffer_read_usage -= 
-                            obj_data_size(&fetch_tab[i]->dst_odsc);
-#ifdef DEBUG
-                print_rdma_buffer_usage();
-#endif
                 fetch_status_tab[i] = fetch_done;
                 complete_one_fetch = 1;
             } 
@@ -1431,18 +1254,10 @@ static int get_next_fetch(struct fetch_entry **fetch_tab, int *fetch_status_tab,
 
     for (i = 0; i < fetch_tab_size; i++) {
         size_t read_size = obj_data_size(&fetch_tab[i]->dst_odsc);
-        if (fetch_status_tab[i] == fetch_ready &&
-            read_size <= get_available_rdma_buffer_size()) {
+        if (fetch_status_tab[i] == fetch_ready) {
             err = dimes_memory_alloc(&fetch_tab[i]->read_tran->dst,
-                                     read_size, dimes_memory_rdma);
-            if (err < 0) {
-                goto err_out;
-            }
-            // Update rdma buffer usage
-            options.rdma_buffer_read_usage += read_size;
-#ifdef DEBUG
-            print_rdma_buffer_usage();
-#endif
+                                     read_size, dart_memory_rdma);
+            if (err < 0) goto err_out;
             *index = i;
             return 0;
         }
@@ -1492,101 +1307,14 @@ static int estimate_fetch_tab_capacity(struct query_tran_entry_d *qte)
 */
 }
 
-static int dimes_get_ack_by_msg(struct query_tran_entry_d *qte)
-{
-    int err;
-    struct fetch_entry *fetch;
-    struct msg_buf *msg;
-    struct node_id *peer;
-    struct hdr_dimes_get_ack *oh;
-
-    list_for_each_entry(fetch, &qte->fetch_list, struct fetch_entry, entry)
-    {
-        // Ack. indirectly through server
-        peer = dc_get_peer(DC, fetch->src_odsc.owner % NUM_SP);
-        msg = msg_buf_alloc(RPC_S, peer, 1);
-        msg->msg_rpc->cmd = dimes_get_ack_msg;
-        msg->msg_rpc->id = DIMES_CID;
-
-        oh = (struct hdr_dimes_get_ack *)msg->msg_rpc->pad;
-        oh->qid = qte->q_id;
-        oh->sync_id = fetch->remote_sync_id;
-        oh->odsc = fetch->src_odsc;
-        oh->bytes_read = obj_data_size(&fetch->dst_odsc);
-        err = rpc_send(RPC_S, peer, msg);
-        if (err < 0) {
-            free(msg);
-            goto err_out;
-        }
-    }
-
-    return 0;
- err_out:
-    ERROR_TRACE();
-}
-
-/*
-static int dimes_get_ack_by_rdma(struct query_tran_entry_d *qte)
-{
-    int err;
-    struct fetch_entry *fetch;
-    struct dart_rdma_tran *tran;
-    size_t pad_size = 64;
-
-    list_for_each_entry(fetch, &qte->fetch_list, struct fetch_entry, entry)
-    {
-        err = dart_rdma_create_write_tran(fetch->read_tran->remote_peer, &tran);
-        if (err < 0) {
-            goto err_out;
-        }
-
-        err = dimes_memory_alloc(&tran->src, pad_size, dimes_memory_rdma);
-        if (err < 0) {
-            goto err_out_delete;
-        }
-
-        // Set ack data
-        memset(tran->src.base_addr, 1, pad_size);
-        // Set dst mem region
-        tran->dst = fetch->read_tran->src; // TODO: tricky?
-        // Schedule rdma write op
-        size_t src_offset = 0;
-        size_t dst_offset = obj_data_size(&fetch->src_odsc); // TODO: tricky?
-        dart_rdma_schedule_write(tran->tran_id, src_offset, dst_offset,
-                                 pad_size);
-        err = dart_rdma_perform_writes(tran->tran_id);
-        if (err < 0) {
-            goto err_out_free;
-        }
-
-        while (!dart_rdma_check_writes(tran->tran_id)) {
-            err = dart_rdma_process_writes();
-            if (err < 0) {
-                goto err_out_free;
-            }
-        }
-
-        dimes_memory_free(&tran->src, dimes_memory_rdma);
-        dart_rdma_delete_write_tran(tran->tran_id);
-    }
-
-    return 0;
- err_out_free:
-    dimes_memory_free(&tran->src, dimes_memory_rdma);
- err_out_delete:
-    dart_rdma_delete_write_tran(tran->tran_id);
- err_out:
-    ERROR_TRACE();
-}
-*/
-
+// Fetching data for a dimes_get query.
 static int dimes_fetch_data(struct query_tran_entry_d *qte)
 {
     struct fetch_entry *fetch;
 	int i = 0, err;
 	qte->f_complete = 0;
 
-	// Allocate the array for fetch operations 
+	// Allocate the array for storing fetch operations 
 	struct fetch_entry **fetch_tab = NULL;
     int *fetch_status_tab = NULL;
     int fetch_tab_capacity = estimate_fetch_tab_capacity(qte);
@@ -1616,7 +1344,7 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
             goto err_out_free;
         }
 
-        if (!is_peer_on_same_core(fetch->read_tran->remote_peer) &&
+        if (!is_peer_myself(fetch->read_tran->remote_peer) &&
             is_remote_data_contiguous_in_memory(&fetch->src_odsc, &fetch->dst_odsc))
         {
             fetch_tab[i] = fetch;
@@ -1672,13 +1400,15 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
     // require sub-array reading, OR (2) resides on local core
     list_for_each_entry(fetch, &qte->fetch_list, struct fetch_entry, entry)
     {
-        if (is_peer_on_same_core(fetch->read_tran->remote_peer)) {
-            // Data on local peer (itself), fetch directly
-            struct dimes_memory_obj *mem_obj =
-                                    storage_lookup_obj(fetch->remote_sync_id);
+        if (is_peer_myself(fetch->read_tran->remote_peer)) {
+#ifdef DEBUG
+            uloga("%s(): peer %d fetch data from local memory.\n", __func__, DIMES_CID);
+#endif
+            // Data is in local memory, fetch directly
+            struct dimes_memory_obj *mem_obj = storage_lookup_obj(&fetch->remote_obj_id,
+                                                       fetch->src_odsc.version);
             if (mem_obj == NULL) {
-                uloga("%s(): ERROR failed to find memory object with sync_id=%d\n",
-                    __func__, fetch->remote_sync_id);
+                uloga("%s(): ERROR failed to find data object in local memory.\n", __func__);
                 goto err_out;
             }
 
@@ -1689,20 +1419,21 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
             // Alloc receive buffer, schedle reads, perform reads
             dimes_memory_alloc(&fetch->read_tran->dst,
                                obj_data_size(&fetch->dst_odsc),
-                               dimes_memory_non_rdma);
+                               dart_memory_non_rdma);
             schedule_rdma_reads(fetch->read_tran->tran_id,
                                 &fetch->src_odsc, &fetch->dst_odsc);
             dart_rdma_perform_reads(fetch->read_tran->tran_id);
             // Copy fetched data
             obj_assemble(fetch, qte->data_ref);
-            dimes_memory_free(&fetch->read_tran->dst, dimes_memory_non_rdma);
-        } else if (!is_remote_data_contiguous_in_memory(&fetch->src_odsc, &fetch->dst_odsc))
+            dimes_memory_free(&fetch->read_tran->dst);
+        } 
+        else if (!is_remote_data_contiguous_in_memory(&fetch->src_odsc, &fetch->dst_odsc))
         {
             // Data on remote peer
             // Alloc receive buffer, schedle reads, perform reads
             err = dimes_memory_alloc(&fetch->read_tran->dst,
                                obj_data_size(&fetch->dst_odsc),
-                               dimes_memory_rdma);
+                               dart_memory_rdma);
             if (err < 0) {
                 goto err_out;
             }
@@ -1724,15 +1455,7 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
 
             // Copy fetched data
             obj_assemble(fetch, qte->data_ref);
-            dimes_memory_free(&fetch->read_tran->dst, dimes_memory_rdma);
-        }
-    }
-
-    if (options.enable_dimes_ack) {
-        // Send back ack messages to all dst. peers
-        err = dimes_get_ack_by_msg(qte);
-        if (err < 0) {
-            goto err_out;
+            dimes_memory_free(&fetch->read_tran->dst);
         }
     }
 
@@ -1741,7 +1464,7 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
 err_out_free:
     for (i = 0; i < fetch_tab_size; i++) {
         if (fetch_status_tab[i] == fetch_posted) {
-            dimes_memory_free(&fetch_tab[i]->read_tran->dst, dimes_memory_rdma);
+            dimes_memory_free(&fetch_tab[i]->read_tran->dst);
         }
     } 
     free(fetch_tab);
@@ -1766,8 +1489,7 @@ static int dimes_obj_get(struct obj_data *od)
 	qt_add_d(&dimes_c->qt, qte);
 
 	/* get dht nodes */
-    struct sspace *ssd = lookup_sspace_dimes(dimes_c, od->obj_desc.name,
-                                &od->gdim);
+    struct sspace *ssd = lookup_sspace_dimes(dimes_c, &od->gdim);
 	num_dht_nodes = ssd_hash(ssd, &od->obj_desc.bb, dht_nodes);
 	if (num_dht_nodes <= 0) {
 		uloga("%s(): ERROR ssd_hash() return %d but value should be > 0\n",
@@ -1780,7 +1502,6 @@ static int dimes_obj_get(struct obj_data *od)
     }
 	qte->qh->qh_peerid_tab[i] = -1;
 	qte->qh->qh_num_peer = num_dht_nodes;
-	qte->f_dht_peer_recv = 1;
 
 #ifdef TIMING_PERF
     tm_st = timer_read(&tm_perf);
@@ -1836,123 +1557,6 @@ err_out:
 	ERROR_TRACE();
 }
 
-static int dcgrpc_dimes_get_ack(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
-{
-	struct hdr_dimes_get_ack *oh = (struct hdr_dimes_get_ack *)cmd->pad;
-	int sid = oh->sync_id;
-	int err = -ENOMEM;
-
-	struct dimes_memory_obj *mem_obj = storage_lookup_obj(sid);
-	if (mem_obj == NULL) {
-		uloga("%s(): ERROR failed to find memory object with sync_id=%d\n", __func__, sid);
-		err = -1;
-		goto err_out;
-	}
-
-    if (oh->bytes_read != obj_data_size(&mem_obj->obj_desc)) {
-		uloga("%s(): ERROR should not happen...\n", __func__);
-	}
-
-	// Set the flag
-    syncop_set_done(mem_obj->sync_id);
-
-#ifdef DEBUG
-	uloga("%s(): #%d get ack from #%d for sync_id=%d\n",
-		__func__, DIMES_CID, cmd->id, mem_obj->sync_id);
-#endif
-
-	return 0;
- err_out:
-	ERROR_TRACE();	
-}
-
-static int dimes_put_sync_with_timeout(float timeout_sec, struct dimes_storage_group *group)
-{
-	int err;
-	int stay_in_poll_loop = 1;
-	struct timer tm;
-	double t1, t2;
-	timer_init(&tm, 1);
-	timer_start(&tm);
-	t1 = timer_read(&tm);
-
-	while (stay_in_poll_loop) {	
-		// Check the size of mem_obj_list
-		if (list_empty(&group->mem_obj_list)) {
-			break;
-		}
-
-		struct dimes_memory_obj *p, *t;
-		list_for_each_entry_safe(p, t, &group->mem_obj_list,
-					 struct dimes_memory_obj, entry) {
-			// TODO: fix this part
-#if defined (HAVE_PAMI) || defined (HAVE_DCMF)
-			err = rpc_process_event(RPC_S);
-#else
-			err = rpc_process_event_with_timeout(RPC_S, 1);
-#endif
-			if (err < 0) {
-				return -1;
-			}
-
-			switch (dimes_memory_obj_status(p)) {
-			case DIMES_PUT_OK:
-                err = dimes_memory_free(&p->rdma_handle, dimes_memory_rdma);
-                // Update rdma buffer usage
-                options.rdma_buffer_write_usage -= obj_data_size(&p->obj_desc);
-#ifdef DEBUG
-                print_rdma_buffer_usage();
-#endif
-
-				list_del(&p->entry);
-				free(p);
-				break;
-			case DIMES_PUT_PENDING:
-				// Continue to block and check...
-				break;
-			default:
-				uloga("%s(): ERROR unknown DIMES memory object status!\n", __func__);
-				break;
-			}
-		}
-
-		if (timeout_sec < 0) {
-			stay_in_poll_loop = 1;
-		} else if (timeout_sec == 0) {
-			// TODO: or i should return immediately before the loop?
-			stay_in_poll_loop = 0;
-		} else if (timeout_sec > 0) {
-			t2 = timer_read(&tm);
-			if ((t2-t1) >= timeout_sec) {
-				stay_in_poll_loop = 0;
-			}
-		}
-	}
-
-	return 0;
-}
-
-static int dimes_put_free_group(struct dimes_storage_group *group)
-{
-    int err;
-    struct dimes_memory_obj *p, *t;
-    list_for_each_entry_safe(p, t, &group->mem_obj_list,
-                struct dimes_memory_obj, entry) {
-        // Set the flag
-        syncop_set_done(p->sync_id);
-        dimes_memory_free(&p->rdma_handle, dimes_memory_rdma);
-        // Update rdma buffer usage
-        options.rdma_buffer_write_usage -= obj_data_size(&p->obj_desc);
-#ifdef DEBUG
-        print_rdma_buffer_usage();
-#endif
-        list_del(&p->entry);
-        free(p);
-    }
-
-    return 0;
-}
-
 /*
   DIMES client public APIs.
 */
@@ -1969,14 +1573,8 @@ struct dimes_client* dimes_client_alloc(void * ptr)
     options.enable_pre_allocated_rdma_buffer = 0;
     options.pre_allocated_rdma_buffer_size = DIMES_RDMA_BUFFER_SIZE*1024*1024; // bytes
     options.rdma_buffer_size = DIMES_RDMA_BUFFER_SIZE*1024*1024; // bytes 
-    options.rdma_buffer_write_usage = 0;
-    options.rdma_buffer_read_usage = 0;
+    options.rdma_buffer_usage = 0;
     options.max_num_concurrent_rdma_read_op = DIMES_RDMA_MAX_NUM_CONCURRENT_READ;
-#ifdef DS_HAVE_DIMES_ACK
-    options.enable_dimes_ack = 1;
-#else
-    options.enable_dimes_ack = 0;
-#endif
 
 	dimes_c = calloc(1, sizeof(*dimes_c));
 	dimes_c->dcg = (struct dcg_space*)ptr;
@@ -1984,17 +1582,14 @@ struct dimes_client* dimes_client_alloc(void * ptr)
         goto err_free;
 	}
 
-    syncop_init();
 	qt_init_d(&dimes_c->qt);
 
 	// Add rpc servie routines
-	rpc_add_service(dimes_ss_info_msg, dcgrpc_dimes_ss_info);
 	rpc_add_service(dimes_locate_data_msg, dcgrpc_dimes_locate_data);
-	rpc_add_service(dimes_get_ack_msg, dcgrpc_dimes_get_ack); 
 
-	err = dimes_ss_info(&num_dims);
-	if (err < 0) {
-		uloga("%s(): ERROR failed to obtain space info\n", __func__);
+	if (!dimes_c->dcg->f_ss_info) {
+		uloga("%s(): ERROR failed to retrieve the default global domain "
+            "information that configured in dataspaces.conf.\n", __func__);
         goto err_free;
 	}
 
@@ -2004,7 +1599,7 @@ struct dimes_client* dimes_client_alloc(void * ptr)
     }
 
 	storage_init();
-	dart_rdma_init(RPC_S);
+	dart_rdma_init(RPC_SERVER_PTR);
     dimes_memory_init();
     init_gdim_list(&dimes_c->gdim_list);
 
@@ -2012,7 +1607,6 @@ struct dimes_client* dimes_client_alloc(void * ptr)
     timer_init(&tm_perf, 1);
     timer_start(&tm_perf);
 #endif
-
 #ifdef DEBUG
 	uloga("%s(): OK.\n", __func__);
 #endif
@@ -2026,20 +1620,13 @@ struct dimes_client* dimes_client_alloc(void * ptr)
 void dimes_client_free(void) {
     free_gdim_list(&dimes_c->gdim_list);
     free_sspace_dimes(dimes_c);
-	free(dimes_c);
-	dimes_c = NULL;
 
 	storage_free();
     dimes_memory_finalize();
 	dart_rdma_finalize();
-}
 
-void dimes_client_set_storage_type(int fst)
-{
-	if (fst == 0)
-		st = row_major;
-	else if (fst == 1)
-		st = column_major;
+	free(dimes_c);
+	dimes_c = NULL;
 }
 
 int dimes_client_get(const char *var_name,
@@ -2051,7 +1638,7 @@ int dimes_client_get(const char *var_name,
 {
 	struct obj_descriptor odsc = {
 			.version = ver, .owner = -1,
-			.st = st,
+			.st = default_st,
 			.size = size,
 			.bb = {.num_dims = ndim,}
 	};
@@ -2096,7 +1683,7 @@ int dimes_client_put(const char *var_name,
 {
 	struct obj_descriptor odsc = {
 			.version = ver, .owner = DIMES_CID,
-			.st = st,
+			.st = default_st,
 			.size = size,
 			.bb = {.num_dims = ndim,}
 	};
@@ -2111,31 +1698,20 @@ int dimes_client_put(const char *var_name,
 	odsc.name[sizeof(odsc.name)-1] = '\0';
 
     size_t data_size = obj_data_size(&odsc);
-    // Check if there is sufficient rdma memory buffer
-    if (data_size > get_available_rdma_buffer_size()) {
-        uloga("%s(): ERROR: no sufficient RDMA memory for caching data "
-            "with %u bytes. Suggested fix: increase the value of "
-            "'--with-dimes-rdma-buffer-size' at configuration.\n",
-            __func__, data_size);
-        print_rdma_buffer_usage();
-        goto err_out;
-    } 
-
     // TODO: fix alignment issue, here assumes obj_data_size(&odsc) align by
     // 4 bytes ...
     struct dimes_memory_obj *mem_obj = (struct dimes_memory_obj*)
                                        malloc(sizeof(*mem_obj));
-    mem_obj->sync_id = syncop_next_sync_id();
-    mem_obj->ack_type = dimes_ack_type_msg;
+    mem_obj->obj_id.dart_id = DIMES_CID;
+    mem_obj->obj_id.local_obj_index = next_local_obj_index();
     mem_obj->obj_desc = odsc;
-    // TODO: can we memcpy safely? do we need a new function like
-    // dimes_memory_alloc_with_data()?
     err = dimes_memory_alloc(&mem_obj->rdma_handle, data_size,
-                             dimes_memory_rdma);
+                             dart_memory_rdma);
     if (err < 0) {
         free(mem_obj);
         goto err_out;
     }
+
     // Copy user data
     memcpy((void*)mem_obj->rdma_handle.base_addr, data, data_size);
 
@@ -2143,16 +1719,11 @@ int dimes_client_put(const char *var_name,
             &dimes_c->dcg->default_gdim, &mem_obj->gdim);
 	err = dimes_obj_put(mem_obj);
 	if (err < 0) {
-        dimes_memory_free(&mem_obj->rdma_handle, dimes_memory_rdma);
+        dimes_memory_free(&mem_obj->rdma_handle);
         free(mem_obj);
 		goto err_out;
 	}
     
-    // Update memory usage
-    options.rdma_buffer_write_usage += data_size;
-#ifdef DEBUG
-    print_rdma_buffer_usage();
-#endif
 	return 0;
 err_out:
 	ERROR_TRACE();
@@ -2161,14 +1732,10 @@ err_out:
 int dimes_client_put_sync_all(void)
 {
 	int err;
-	struct dimes_storage_group *p;
-	list_for_each_entry(p, &storage, struct dimes_storage_group, entry)
+	struct dimes_storage_group *p, *t;
+	list_for_each_entry_safe(p, t, &dimes_c->storage, struct dimes_storage_group, entry)
 	{
-        if (options.enable_dimes_ack) {	
-            err = dimes_put_sync_with_timeout(-1.0, p);
-        } else {
-            err = dimes_put_free_group(p);
-        }
+        err = storage_free_group(p);
         if (err < 0) return err;
     }
 
@@ -2177,28 +1744,13 @@ int dimes_client_put_sync_all(void)
 
 int dimes_client_put_set_group(const char *group_name, int step)
 {
-    struct dimes_storage_group *p;
-    p = storage_lookup_group(group_name);
-    if (p == NULL) {
-        p = storage_add_group(group_name);
-    }
-
-    current_group_name = p->name;
-
+    update_current_group_name(group_name);
 	return 0;
 }
 
 int dimes_client_put_unset_group()
 {
-    struct dimes_storage_group *p;
-    p = storage_lookup_group(default_group_name);
-    if (p == NULL) {
-        uloga("%s(): ERROR p == NULL should not happen!\n", __func__);
-        p = storage_add_group(default_group_name);
-    }
-
-    current_group_name = p->name;
-
+    update_current_group_name(default_group_name);
 	return 0;
 }
 
@@ -2209,11 +1761,7 @@ int dimes_client_put_sync_group(const char *group_name, int step)
     p = storage_lookup_group(group_name);
     if (p == NULL) return 0;
 
-    if (options.enable_dimes_ack) {
-        err = dimes_put_sync_with_timeout(-1, p);
-    } else {
-        err = dimes_put_free_group(p);
-    }
+    err = storage_free_group(p);
     if (err < 0) return err;
 
     return 0;

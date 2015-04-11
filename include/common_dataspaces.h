@@ -45,6 +45,7 @@
 int common_dspaces_init(int num_peers, int appid, void *comm, const char *parameters);
 int common_dspaces_rank(void);
 int common_dspaces_peers(void);
+int common_dspaces_servers(void);
 void common_dspaces_barrier(void);
 void common_dspaces_lock_on_read(const char *lock_name, void *comm);
 void common_dspaces_unlock_on_read(const char *lock_name, void *comm);
@@ -87,5 +88,6 @@ int common_dimes_put_unset_group();
 int common_dimes_put_sync_group(const char *group_name, int step);
 #endif
 
-void common_dspaces_set_mpi_rank(int rank);
+void common_dspaces_set_mpi_rank_hint(int rank);
+void common_dspaces_unset_mpi_rank_hint();
 #endif

@@ -46,61 +46,6 @@ static struct dimes_server *dimes_s = NULL;
 
 #define DIMES_SID dimes_s->dsg->ds->self->ptlmap.id
 
-struct dimes_sync_info {
-	struct list_head entry;
-	int qid;
-	int sync_id;
-	int dart_id;
-	struct obj_descriptor odsc;
-	size_t bytes_read;
-};
-
-static struct list_head sync_info_list;
-static struct dimes_sync_info* sync_info_list_find(struct list_head *l, int sid, int dartid) {
-	struct dimes_sync_info *p;
-	list_for_each_entry(p, l, struct dimes_sync_info, entry) {
-		if (sid == p->sync_id && dartid == p->dart_id)
-			return p;
-	}
-
-	return NULL;
-}
-
-static int dsgrpc_dimes_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
-{
-	struct msg_buf *msg;
-	struct node_id *peer = ds_get_peer(dimes_s->dsg->ds, cmd->id);
-	struct hdr_ss_info *hsi;
-	int err = -ENOMEM;
-
-	msg = msg_buf_alloc(rpc_s, peer, 1);
-	if (!msg)
-		goto err_out;
-
-	msg->msg_rpc->cmd = dimes_ss_info_msg;
-	msg->msg_rpc->id = DIMES_SID;
-	
-	hsi = (struct hdr_ss_info*) msg->msg_rpc->pad;
-	hsi->num_dims = dimes_s->dsg->ssd->dht->bb_glb_domain.num_dims;
-
-/*	hsi->val_dims[bb_x] = dimes_s->dsg->ssd->dht->bb_glb_domain.ub.c[0] + 1;
-	hsi->val_dims[bb_y] = dimes_s->dsg->ssd->dht->bb_glb_domain.ub.c[1] + 1;
-	hsi->val_dims[bb_z] = dimes_s->dsg->ssd->dht->bb_glb_domain.ub.c[2] + 1;
-*/
-	int i;
-	for(i = 0; i < hsi->num_dims; i++){
-		hsi->dims.c[i] = dimes_s->dsg->ssd->dht->bb_glb_domain.ub.c[i] + 1;
-	}
-
-	hsi->num_space_srv = dimes_s->dsg->ds->size_sp;
-
-	err = rpc_send(rpc_s, peer, msg);
-	if (err == 0)
-		return 0;
-err_out:
-	ERROR_TRACE();
-}
-
 static int locate_data_completion_server(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
 	free(msg->msg_data);
@@ -169,6 +114,8 @@ static int locate_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd,
 		hdr->rc = 0;
 	} else {
 		hdr->rc = -1;
+        uloga("%s: WARNING #%d num_obj= %d for request from #%d.\n",
+            __func__, DIMES_SID, num_obj, cmd->id);
 	}
 
 	msg->msg_rpc->cmd = reply_msg_type;
@@ -205,84 +152,17 @@ static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	struct obj_descriptor *odsc = &hdr->odsc;
 	// odsc->owner = cmd->id;
 	
-	if (hdr->has_rdma_data) {
-        metadata_s_add_obj_location(dimes_s->meta_store, cmd);
-	}
+    metadata_s_add_obj_location(dimes_s->meta_store, cmd);
 
 #ifdef DEBUG    
 	uloga("%s(): get request from peer #%d "
-				"has_rdma_data= %d "
-				"name= %s version= %d data_size= %u\n",
-					__func__, cmd->id, hdr->has_rdma_data,
-					odsc->name, odsc->version, obj_data_size(odsc));
+           "name= %s version= %d data_size= %u\n",
+            __func__, cmd->id, odsc->name, odsc->version, obj_data_size(odsc));
 #endif
     
     //uloga("%s(): %lf name=%s version=%d process_time %lf from peer %d\n", __func__,
     //        t1, odsc->name, odsc->version, t2-t1, cmd->id);
 	return 0;
-}
-
-static int send_ack(struct dimes_sync_info *p)
-{
-	int err;
-	struct msg_buf *msg;
-	struct node_id *peer;
-	struct hdr_dimes_get_ack *oh;
-
-	peer = ds_get_peer(dimes_s->dsg->ds, p->dart_id);
-	msg = msg_buf_alloc(dimes_s->dsg->ds->rpc_s, peer, 1);
-	msg->msg_rpc->cmd = dimes_get_ack_msg;
-	msg->msg_rpc->id = DIMES_SID;
-
-	oh = (struct hdr_dimes_get_ack *)msg->msg_rpc->pad;
-	oh->qid = p->qid;
-	oh->sync_id = p->sync_id;
-	oh->odsc = p->odsc;
-	oh->bytes_read = obj_data_size(&p->odsc);
-	err = rpc_send(dimes_s->dsg->ds->rpc_s, peer, msg);
-	if (err < 0) {
-		free(msg);
-		goto err_out;
-	}
-
-	return 0;
- err_out:
-	ERROR_TRACE();
-}
-
-static int dsgrpc_dimes_get_ack(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
-{ 
-	int err;
-	struct hdr_dimes_get_ack *oh = (struct hdr_dimes_get_ack*)cmd->pad;
-	int qid = oh->qid;
-	int sync_id = oh->sync_id;
-	int dart_id = oh->odsc.owner;
-	struct dimes_sync_info *p;
-
-	p = sync_info_list_find(&sync_info_list, sync_id, dart_id);	
-	if (p == NULL) {
-		p = (struct dimes_sync_info*)malloc(sizeof(*p));
-		p->qid = qid;
-		p->sync_id = sync_id;
-		p->dart_id = dart_id;	
-		p->odsc = oh->odsc;
-		p->bytes_read = 0;
-		list_add(&p->entry, &sync_info_list);
-	}
-	p->bytes_read += oh->bytes_read;
-	
-	if (obj_data_size(&p->odsc) == p->bytes_read) {
-		err = send_ack(p);
-		if (err < 0)
-			goto err_out;
-		// Delete
-		list_del(&p->entry);
-		free(p);
-	}
-
-	return 0;
- err_out:
-	ERROR_TRACE();
 }
 
 /*
@@ -303,10 +183,8 @@ struct dimes_server *dimes_server_alloc(int num_sp, int num_cp, char *conf_name)
 		goto err_out;
 	}
 
-	rpc_add_service(dimes_ss_info_msg, dsgrpc_dimes_ss_info);
 	rpc_add_service(dimes_put_msg, dsgrpc_dimes_put);
 	rpc_add_service(dimes_locate_data_msg, dsgrpc_dimes_locate_data);
-	rpc_add_service(dimes_get_ack_msg, dsgrpc_dimes_get_ack);
 
 	dimes_s_l->meta_store =
         metadata_s_alloc(dimes_s_l->dsg->ls->size_hash);
@@ -315,8 +193,6 @@ struct dimes_server *dimes_server_alloc(int num_sp, int num_cp, char *conf_name)
 		free(dimes_s_l);
 		goto err_out;
 	}
-
-	INIT_LIST_HEAD(&sync_info_list);
 
 	dimes_s = dimes_s_l;
 

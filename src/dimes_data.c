@@ -43,6 +43,11 @@
 #ifdef DS_HAVE_DIMES
 #include "dimes_data.h"
 
+int equal_dimes_obj_id(const struct dimes_obj_id *oid1, const struct dimes_obj_id *oid2)
+{
+    return (oid1->dart_id == oid2->dart_id) && (oid1->local_obj_index == oid2->local_obj_index);
+}
+
 static struct var_list_node* var_node_lookup(struct list_head *var_list,
                                     const char* var_name)
 {
@@ -367,7 +372,7 @@ are sorted by block_size in ascending order.
 struct list_head used_blocks_list;
 
 enum mem_block_status {
-    free_block,
+    free_block = 0,
     used_block
 };
 

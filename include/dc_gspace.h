@@ -74,6 +74,7 @@ struct dcg_space {
         int                     num_pending;
 
         enum sspace_hash_version    hash_version;
+        int    max_versions; 
         /* Version bookeeping for objects available in the space. */
         int                     num_vers;
         int                     versions[64];
@@ -82,9 +83,9 @@ struct dcg_space {
 struct dcg_space * dcg_alloc(int, int, void*);
 int dcg_barrier(struct dcg_space *);
 void dcg_free(struct dcg_space *);
+int dcg_obj_put(struct obj_data *);
 int dcg_obj_get(struct obj_data *);
 int dcg_get_versions(int **);
-int dcg_obj_put(struct obj_data *);
 int dcg_obj_filter(struct obj_data *);
 int dcg_obj_cq_register(struct obj_data *);
 int dcg_obj_cq_update(int);
@@ -98,6 +99,7 @@ int dcg_unlock_on_write(const char *, void *comm);
 int dcghlp_get_id(struct dcg_space *);
 int dcg_get_rank(struct dcg_space *);
 int dcg_get_num_peers(struct dcg_space *);
+int dcg_get_num_servers(struct dcg_space *);
 int dcg_get_num_space_peers(struct dcg_space *);
 int dcg_ss_info(struct dcg_space *, int *);
 
@@ -108,5 +110,6 @@ int dcg_code_send(const void *, /* int, int,*/ struct obj_data *);
 int dcg_collect_timing(double, double *);
 int dcg_get_num_space_srv(struct dcg_space *);
 
-void dcg_set_mpi_rank(int rank);
+void dcg_set_mpi_rank_hint(int rank);
+void dcg_unset_mpi_rank_hint();
 #endif /* __DCG_SPACE_H_ */

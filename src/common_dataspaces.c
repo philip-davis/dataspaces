@@ -116,12 +116,12 @@ int common_dspaces_init(int num_peers, int appid, void *comm, const char *parame
 		return 0;
 	}
 
-        /*struct name_value_pair *params, *p;
-	params = text_to_nv_pairs(parameters);
-	p  = params;
-	while (p) {
-		p = p->next;
-	}*/
+    /*struct name_value_pair *params, *p;
+    params = text_to_nv_pairs(parameters);
+    p  = params;
+    while (p) {
+        p = p->next;
+    }*/
 
 
 	dcg = dcg_alloc(num_peers, appid, comm);
@@ -316,14 +316,6 @@ int common_dspaces_put(const char *var_name,
         // set global dimension
         set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
                              &od->gdim); 
-#ifdef DEBUG
-/*
-        uloga("%s(): %s default_gdim %llu %llu %llu od->gdim %llu %llu %llu\n",
-            __func__, var_name, dcg->default_gdim.sizes.c[0], dcg->default_gdim.sizes.c[1],
-            dcg->default_gdim.sizes.c[2], od->gdim.sizes.c[0], od->gdim.sizes.c[1],
-            od->gdim.sizes.c[2]);
-*/
-#endif
         err = dcg_obj_put(od);
         if (err < 0) {
             obj_data_free(od);
@@ -589,7 +581,12 @@ int common_dimes_put_sync_group(const char *group_name, int step)
 }
 #endif
 
-void common_dspaces_set_mpi_rank(int rank)
+void common_dspaces_set_mpi_rank_hint(int rank)
 {
-    dcg_set_mpi_rank(rank);
+    dcg_set_mpi_rank_hint(rank);
+}
+
+void common_dspaces_unset_mpi_rank_hint()
+{
+    dcg_unset_mpi_rank_hint();
 }
