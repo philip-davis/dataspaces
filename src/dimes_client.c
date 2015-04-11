@@ -221,10 +221,8 @@ static struct node_id* get_peer_on_same_node(int node_rank)
 // Calculate size (in bytes) of available RDMA memory buffer.
 static size_t get_available_rdma_buffer_size()
 {
-    size_t total_usage = options.rdma_buffer_write_usage +
-                         options.rdma_buffer_read_usage;
-    if (total_usage > options.rdma_buffer_size) return 0; 
-    else return options.rdma_buffer_size-total_usage;
+    if (options.rdma_buffer_usage > options.rdma_buffer_size) return 0; 
+    else return options.rdma_buffer_size-options.rdma_buffer_usage;
 }
 
 static void print_rdma_buffer_usage()
@@ -232,11 +230,10 @@ static void print_rdma_buffer_usage()
 #ifdef DEBUG_DIMES_BUFFER_USAGE
     uloga("DIMES rdma buffer usage: peer #%d "
           "rdma_buffer_size= %u bytes "
-          "rdma_buffer_write_usage= %u bytes "
-          "rdma_buffer_read_usage= %u bytes "
+          "rdma_buffer_usage= %u bytes "
           "rdma_buffer_avail_size= %u bytes\n", DIMES_CID,
-        options.rdma_buffer_size, options.rdma_buffer_write_usage,
-        options.rdma_buffer_read_usage, get_available_rdma_buffer_size());
+        options.rdma_buffer_size, options.rdma_buffer_usage,
+        get_available_rdma_buffer_size());
 #endif
 }
 
@@ -406,11 +403,6 @@ static int storage_free_group(struct dimes_storage_group *group)
         list_for_each_entry_safe(p, t, &group->version_tab[i],
                     struct dimes_memory_obj, entry) {
             dimes_memory_free(&p->rdma_handle);
-            // Update rdma buffer usage
-            options.rdma_buffer_write_usage -= obj_data_size(&p->obj_desc);
-#ifdef DEBUG
-            print_rdma_buffer_usage();
-#endif
             list_del(&p->entry);
             free(p);            
         }
@@ -668,12 +660,27 @@ static int dimes_memory_finalize()
     return 0;
 }
 
-static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl, size_t size, 
-    enum dart_memory_type type)
+static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl, 
+    size_t size, enum dart_memory_type type)
 {
     int err;
+    unsigned char use_rdma_memory = 0;
     uint64_t buf;
     rdma_hndl->mem_type = type;
+
+    if (rdma_hndl->mem_type == dart_memory_rdma) use_rdma_memory = 1;
+#ifdef DS_HAVE_DIMES_SHMEM
+    if (rdma_hndl->mem_type == dart_memory_shmem_rdma) use_rdma_memory = 1;
+#endif
+    // Check if there is available rdma buffer
+    if (use_rdma_memory && get_available_rdma_buffer_size() < size) {
+        uloga("%s(): ERROR: no sufficient RDMA memory for caching data "
+            "with %u bytes. Suggested fix: increase the value of "
+            "'--with-dimes-rdma-buffer-size' at configuration.\n",
+            __func__, size);
+        print_rdma_buffer_usage();            
+        return -1;
+    } 
 
     switch (rdma_hndl->mem_type) {
     case dart_memory_non_rdma:
@@ -749,6 +756,11 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl, size_t siz
         goto err_out;
     }
 
+    // Update RDMA memory usage
+    if (use_rdma_memory) options.rdma_buffer_usage += size;
+#ifdef DEBUG
+    if (use_rdma_memory) print_rdma_buffer_usage();
+#endif
     return 0;
  err_out_malloc:
     uloga("%s(): ERROR malloc() failed\n", __func__);
@@ -759,6 +771,11 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl, size_t siz
 static int dimes_memory_free(struct dart_rdma_mem_handle *rdma_hndl)
 {
     int err;
+    unsigned char use_rdma_memory = 0;
+    if (rdma_hndl->mem_type == dart_memory_rdma) use_rdma_memory = 1;
+#ifdef DS_HAVE_DIMES_SHMEM
+    if (rdma_hndl->mem_type == dart_memory_shmem_rdma) use_rdma_memory = 1;
+#endif
 
     switch (rdma_hndl->mem_type) {
     case dart_memory_non_rdma:
@@ -807,6 +824,11 @@ static int dimes_memory_free(struct dart_rdma_mem_handle *rdma_hndl)
         goto err_out;
     }
 
+    // Update RDMA buffer usage
+    if (use_rdma_memory) options.rdma_buffer_usage -= rdma_hndl->size; 
+#ifdef DEBUG
+    if (use_rdma_memory) print_rdma_buffer_usage();
+#endif
     return 0;
  err_out:
     return -1;
@@ -1564,12 +1586,6 @@ static int all_fetch_done(struct query_tran_entry_d *qte, struct fetch_entry **f
                     goto err_out;
                 }
 
-                // Update rdma buffer usage
-                options.rdma_buffer_read_usage -= 
-                            obj_data_size(&fetch_tab[i]->dst_odsc);
-#ifdef DEBUG
-                print_rdma_buffer_usage();
-#endif
                 fetch_status_tab[i] = fetch_done;
                 complete_one_fetch = 1;
             } 
@@ -1600,16 +1616,10 @@ static int get_next_fetch(struct fetch_entry **fetch_tab, int *fetch_status_tab,
 
     for (i = 0; i < fetch_tab_size; i++) {
         size_t read_size = obj_data_size(&fetch_tab[i]->dst_odsc);
-        if (fetch_status_tab[i] == fetch_ready &&
-            read_size <= get_available_rdma_buffer_size()) {
+        if (fetch_status_tab[i] == fetch_ready) {
             err = dimes_memory_alloc(&fetch_tab[i]->read_tran->dst,
                                      read_size, dart_memory_rdma);
             if (err < 0) goto err_out;
-            // Update rdma buffer usage
-            options.rdma_buffer_read_usage += read_size;
-#ifdef DEBUG
-            print_rdma_buffer_usage();
-#endif
             *index = i;
             return 0;
         }
@@ -1969,8 +1979,7 @@ struct dimes_client* dimes_client_alloc(void * ptr)
     options.enable_pre_allocated_rdma_buffer = 0;
     options.pre_allocated_rdma_buffer_size = DIMES_RDMA_BUFFER_SIZE*1024*1024; // bytes
     options.rdma_buffer_size = DIMES_RDMA_BUFFER_SIZE*1024*1024; // bytes 
-    options.rdma_buffer_write_usage = 0;
-    options.rdma_buffer_read_usage = 0;
+    options.rdma_buffer_usage = 0;
     options.max_num_concurrent_rdma_read_op = DIMES_RDMA_MAX_NUM_CONCURRENT_READ;
 
 	dimes_c = calloc(1, sizeof(*dimes_c));
@@ -2099,16 +2108,6 @@ int dimes_client_put(const char *var_name,
 	odsc.name[sizeof(odsc.name)-1] = '\0';
 
     size_t data_size = obj_data_size(&odsc);
-    // Check if there is sufficient rdma memory buffer
-    if (data_size > get_available_rdma_buffer_size()) {
-        uloga("%s(): ERROR: no sufficient RDMA memory for caching data "
-            "with %u bytes. Suggested fix: increase the value of "
-            "'--with-dimes-rdma-buffer-size' at configuration.\n",
-            __func__, data_size);
-        print_rdma_buffer_usage();
-        goto err_out;
-    } 
-
     // TODO: fix alignment issue, here assumes obj_data_size(&odsc) align by
     // 4 bytes ...
     struct dimes_memory_obj *mem_obj = (struct dimes_memory_obj*)
@@ -2116,8 +2115,6 @@ int dimes_client_put(const char *var_name,
     mem_obj->obj_id.dart_id = DIMES_CID;
     mem_obj->obj_id.local_obj_index = next_local_obj_index();
     mem_obj->obj_desc = odsc;
-    // TODO: can we memcpy safely? do we need a new function like
-    // dimes_memory_alloc_with_data()?
 #ifdef DS_HAVE_DIMES_SHMEM
     if (options.enable_shmem_buffer) {
         err = dimes_memory_alloc(&mem_obj->rdma_handle, data_size,
@@ -2134,9 +2131,11 @@ int dimes_client_put(const char *var_name,
         free(mem_obj);
         goto err_out;
     }
+
     // Copy user data
     memcpy((void*)mem_obj->rdma_handle.base_addr, data, data_size);
 #ifdef DS_HAVE_DIMES_SHMEM
+    // Set shmem information
     if (options.enable_shmem_buffer) {
         // TODO: hardcoded for now, and assume there is 
         // only one shared mem obj that belongs to me ...
@@ -2163,11 +2162,6 @@ int dimes_client_put(const char *var_name,
 		goto err_out;
 	}
     
-    // Update memory usage
-    options.rdma_buffer_write_usage += data_size;
-#ifdef DEBUG
-    print_rdma_buffer_usage();
-#endif
 	return 0;
 err_out:
 	ERROR_TRACE();
@@ -2614,8 +2608,7 @@ int dimes_client_shmem_clear_testing()
 
     // reset
     storage_init();
-    options.rdma_buffer_write_usage = 0;
-    options.rdma_buffer_read_usage = 0;
+    options.rdma_buffer_usage = 0;
 }
 
 int dimes_client_shmem_checkpoint()
@@ -2925,7 +2918,7 @@ int dimes_client_shmem_update_server_state()
                 }
 
                 // update rdma buffer usage 
-                options.rdma_buffer_write_usage += mem_obj->shmem_desc.size;
+                options.rdma_buffer_usage += mem_obj->shmem_desc.size;
             }     
         }
     }    
