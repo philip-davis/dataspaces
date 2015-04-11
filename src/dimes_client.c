@@ -687,9 +687,7 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl, size_t siz
     switch (rdma_hndl->mem_type) {
     case dart_memory_non_rdma:
         buf = (uint64_t)malloc(size);
-        if (!buf) {
-            goto err_out_malloc;
-        }
+        if (!buf) goto err_out_malloc;
 
         rdma_hndl->base_addr = buf;
         rdma_hndl->size = size;
@@ -710,9 +708,7 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl, size_t siz
             rdma_hndl->size = size;
         } else {
             buf = (uint64_t)malloc(size);
-            if (!buf) {
-                goto err_out_malloc;
-            }
+            if (!buf) goto err_out_malloc;
 
             err = dart_rdma_register_mem(rdma_hndl, (void*)buf, size);
             if (err < 0) {
@@ -722,8 +718,8 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl, size_t siz
             }
         }
         break;
-    case dart_memory_shmem_non_rdma:
 #ifdef DS_HAVE_DIMES_SHMEM
+    case dart_memory_shmem_non_rdma:
         if (options.enable_shmem_buffer) {
             dimes_buffer_alloc(size, &buf);
             if (!buf) {
@@ -737,10 +733,8 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl, size_t siz
             uloga("%s(): enable_shmem_buffer= %d\n", __func__, options.enable_shmem_buffer);
             return -1;
         }
-#endif
         break;
     case dart_memory_shmem_rdma:
-#ifdef DS_HAVE_DIMES_SHMEM 
         if (options.enable_shmem_buffer) {
             dimes_buffer_alloc(size, &buf);
             if (!buf) {
@@ -757,8 +751,8 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl, size_t siz
             uloga("%s(): enable_shmem_buffer= %d\n", __func__, options.enable_shmem_buffer);
             return -1;
         }
-#endif
         break;
+#endif
     default:
         uloga("%s(): ERROR unknow dart_memory_type %d\n", __func__, rdma_hndl->mem_type);
         goto err_out;
@@ -800,18 +794,16 @@ static int dimes_memory_free(struct dart_rdma_mem_handle *rdma_hndl)
             free((void*)rdma_hndl->base_addr);
         }
         break;
-    case dart_memory_shmem_non_rdma:
 #ifdef DS_HAVE_DIMES_SHMEM
+    case dart_memory_shmem_non_rdma:
         if (options.enable_shmem_buffer) {
             dimes_buffer_free(rdma_hndl->base_addr);
         } else {
             uloga("%s(): ERROR enable_shmem_buffer= %d\n", __func__, options.enable_shmem_buffer);
             return -1;
         }
-#endif
         break;
     case dart_memory_shmem_rdma:
-#ifdef DS_HAVE_DIMES_SHMEM
         if (options.enable_shmem_buffer) {
             err = dart_rdma_deregister_mem(rdma_hndl);
             if (err < 0) {
@@ -824,8 +816,8 @@ static int dimes_memory_free(struct dart_rdma_mem_handle *rdma_hndl)
             uloga("%s(): ERROR enable_shmem_buffer= %d\n", __func__, options.enable_shmem_buffer);
             return -1;
         }
-#endif
         break;
+#endif
     default:
         uloga("%s(): ERROR unknow dart_memory_type %d\n", __func__, rdma_hndl->mem_type);
         goto err_out;
@@ -1632,9 +1624,7 @@ static int get_next_fetch(struct fetch_entry **fetch_tab, int *fetch_status_tab,
         if (fetch_status_tab[i] == fetch_ready) {
             err = dimes_memory_alloc(&fetch_tab[i]->read_tran->dst,
                                      read_size, dart_memory_rdma);
-            if (err < 0) {
-                goto err_out;
-            }
+            if (err < 0) goto err_out;
             // Update rdma buffer usage
             options.rdma_buffer_read_usage += read_size;
 #ifdef DEBUG

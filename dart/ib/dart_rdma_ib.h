@@ -14,8 +14,10 @@
 enum dart_memory_type {
     dart_memory_non_rdma = 0,
     dart_memory_rdma,
+#ifdef DS_HAVE_DIMES_SHMEM
     dart_memory_shmem_non_rdma,
     dart_memory_shmem_rdma,
+#endif
 };
 
 struct dart_rdma_mem_handle {
@@ -70,7 +72,9 @@ int dart_rdma_perform_reads(int tran_id);
 int dart_rdma_process_reads();
 int dart_rdma_check_reads(int tran_id);
 
+#ifdef DS_HAVE_DIMES_SHMEM
 int dart_rdma_perform_reads_local(int tran_id);
 #endif
 
+#endif
 #endif

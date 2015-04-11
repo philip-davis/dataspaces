@@ -39,8 +39,10 @@
 enum dart_memory_type {
     dart_memory_non_rdma = 0,
     dart_memory_rdma,
+#ifdef DS_HAVE_DIMES_SHMEM
     dart_memory_shmem_non_rdma,
     dart_memory_shmem_rdma,
+#endif
 };
 
 enum dart_rdma_tran_type {
@@ -106,8 +108,18 @@ int dart_rdma_schedule_read(int tran_id, size_t src_offset, size_t dst_offset,
 int dart_rdma_perform_reads(int tran_id);
 int dart_rdma_process_reads();
 int dart_rdma_check_reads(int tran_id);
-int dart_rdma_perform_reads_local(int tran_id);
 
+#ifdef DS_HAVE_DIMES_SHMEM
+int dart_rdma_perform_reads_local(int tran_id);
+#endif
+
+/*
+ DART gni as-a-service implementation does not create the GNI end point for peers
+ of remote application. Because GNI end point is required to post one-sided GET 
+ operation on RDMA memory buffer created by remote peer, we added the following 
+ APIs to dynamically create/bind and unbind/delete GNI end point for peer of 
+ remote applications.
+*/
 struct node_id* dart_rdma_create_remote_peer(struct ptlid_map *ptlmap);
 int dart_rdma_delete_remote_peer(struct node_id* peer);
 #endif
