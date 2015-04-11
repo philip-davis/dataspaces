@@ -36,11 +36,16 @@
 #ifdef DS_HAVE_DIMES
 #include "dart_rpc_pami.h"
 
+enum dart_memory_type {
+    dart_memory_non_rdma = 0,
+    dart_memory_rdma,
+};
+
 struct dart_rdma_mem_handle {
 	pami_memregion_t memregion;
-	//void *base_addr; // Only used for local data copy
 	uint64_t base_addr; // Only used for local data copy
 	size_t size;
+    enum dart_memory_type mem_type;
 };
 
 struct dart_rdma_op {
@@ -63,7 +68,6 @@ struct dart_rdma_tran {
 
 struct dart_rdma_handle {
 	struct rpc_server *rpc_s;
-	//DCMF_Protocol_t dcmf_get_protocol;
 	struct list_head read_tran_list;
 };
 

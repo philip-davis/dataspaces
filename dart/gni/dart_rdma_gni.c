@@ -548,6 +548,7 @@ int dart_rdma_get_memregion_from_cmd(struct dart_rdma_mem_handle *mem_hndl,
 	return 0;
 }
 
+#ifdef DS_HAVE_DIMES_SHMEM
 int dart_rdma_perform_reads_local(int tran_id)
 {
     if (!drh) {
@@ -564,6 +565,7 @@ int dart_rdma_perform_reads_local(int tran_id)
     dart_perform_local_copy(tran); 
     return 0;
 }
+#endif
 
 struct node_id* dart_rdma_create_remote_peer(struct ptlid_map *ptlmap)
 {

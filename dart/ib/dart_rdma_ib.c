@@ -312,6 +312,7 @@ int dart_rdma_perform_reads(int tran_id)
 	return 0;
 }
 
+#ifdef DS_HAVE_DIMES_SHMEM
 int dart_rdma_perform_reads_local(int tran_id)
 {
     if(!drh) {
@@ -327,7 +328,8 @@ int dart_rdma_perform_reads_local(int tran_id)
 
     dart_perform_local_copy(read_tran);
     return 0;
-};
+}
+#endif
 
 int dart_rdma_check_reads(int tran_id)
 {
