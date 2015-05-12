@@ -590,3 +590,4 @@ void common_dspaces_unset_mpi_rank_hint()
 {
     dcg_unset_mpi_rank_hint();
 }
+

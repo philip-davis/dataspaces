@@ -37,6 +37,12 @@
 #include "pami/ds_base_pami.h"
 #include "pami/dart_rdma_pami.h"
 
+#elif HAVE_TCP_SOCKET
+
+#include "tcp/dart_rpc_tcp.h"
+#include "tcp/dc_base_tcp.h"
+#include "tcp/ds_base_tcp.h"
+
 #endif
 
 #endif
