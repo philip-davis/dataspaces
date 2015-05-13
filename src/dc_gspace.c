@@ -1455,6 +1455,7 @@ static int dcgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
     dcg->ss_domain.num_dims = hsi->num_dims;
     dcg->default_gdim.ndim = hsi->num_dims;
     dcg->hash_version = hsi->hash_version;
+    dcg->max_versions = hsi->max_versions;
 	int i;
 	for(i = 0; i < hsi->num_dims; i++){
 		dcg->ss_domain.lb.c[i] = 0;
@@ -1954,6 +1955,11 @@ int dcg_get_num_peers(struct dcg_space *dcg)
         return dcg->dc->cp_in_job;
 }
 
+int dcg_get_num_servers(struct dcg_space *dcg)
+{  
+   return dcg->dc->num_sp;
+}
+
 int dcg_get_num_space_peers(struct dcg_space *dcg)
 {
 	return dcg->dc->num_sp;
@@ -2338,17 +2344,16 @@ int dcg_get_num_space_srv(struct dcg_space *dcg)
 	return dcg->ss_info.num_space_srv;
 }
 
-//Bug fix by Tong. Added "_hint"
 void dcg_set_mpi_rank_hint(int rank)
 {
     mpi_rank = rank;
     flag_set_mpi_rank = 1;
 }
 
-//Bug fix: Added by Tong. 
 void dcg_unset_mpi_rank_hint()
 {
-
+    mpi_rank = 0;
+    flag_set_mpi_rank = 0;
 }
 
 #ifdef TIMING_PERF
