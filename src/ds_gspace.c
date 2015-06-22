@@ -1404,7 +1404,7 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
         peer = ds_get_peer(dsg->ds, cmd->id);
 
         peer_num = ssd_hash(ssd, &oh->u.o.odsc.bb, de_tab);
-        peer_id_tab = malloc(sizeof(int) * (peer_num+1));
+        peer_id_tab = malloc(sizeof(int) * (dsg->ds->size_sp+1));
         if (!peer_id_tab)
                 goto err_out;
         for (i = 0; i < peer_num; i++)
@@ -1419,7 +1419,7 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
         }
 
         msg->msg_data = peer_id_tab;
-        msg->size = sizeof(int) * (peer_num+1);
+        msg->size = sizeof(int) * (dsg->ds->size_sp+1);
         msg->cb = obj_send_dht_peers_completion;
 
         rpc_mem_info_cache(peer, msg, cmd);

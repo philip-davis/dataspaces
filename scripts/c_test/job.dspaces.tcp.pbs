@@ -1,0 +1,25 @@
+#!/bin/bash
+#PBS -N test-sith
+#PBS -A XXX 
+#PBS -j oe
+#PBS -q batch
+#PBS -l nodes=6:ppn=10,walltime=00:30:00
+
+cd $PBS_O_WORKDIR
+
+#export DATASPACES_TCP_INTERFACE="gn0"
+export DATASPACES_TCP_WRITE_SIZE=1073741824
+export DATASPACES_TCP_READ_SIZE=87380
+
+rm -f conf srv.lck
+
+
+mpirun -n 4 ./dataspaces_server -s 4 -c 48 &
+sleep 2
+
+mpirun -n 16 ./test_writer DATASPACES 16 3 4 4 1 32 32 128 10 1 &
+
+mpirun -n 32 ./test_reader DATASPACES 32 3 4 4 2 32 32 64 10 2&
+
+wait
+
