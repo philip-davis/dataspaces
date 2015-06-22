@@ -237,6 +237,14 @@ int dspaces_get (const char *var_name,
         void *data);
 
 /**
+ * Remove a particular version of a variable (whole domain)
+ * @param[in] var_name:     Name of the variable.
+ * @param[in] ver:      Version of the variable.
+**/
+int dspaces_remove (const char *var_name,
+	unsigned int ver);
+
+/**
  * @brief Define the global dimension for array variable.
  *
  * Note: ordering of dimension (fast->slow) is 0, 1, ..., n-1. For C row-major

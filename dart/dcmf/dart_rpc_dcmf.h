@@ -293,6 +293,7 @@ enum cmd_type {
         ss_obj_filter,
         ss_obj_info,
         ss_info,
+	cp_remove,
 #ifdef DS_HAVE_ACTIVESPACE
 	ss_code_put,
 	ss_code_reply,

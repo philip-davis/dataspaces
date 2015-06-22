@@ -406,6 +406,7 @@ enum cmd_type {
 	ss_info,
 	ss_code_put,
 	ss_code_reply,
+	cp_remove,
 #ifdef DS_HAVE_DIMES
 	dimes_ss_info_msg,
 	dimes_locate_data_msg,

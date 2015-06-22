@@ -154,6 +154,14 @@ int dspaces_get (const char *var_name,
     return common_dspaces_get(var_name, ver, size, ndim, lb, ub, data);    
 }
 
+int dspaces_remove (const char *var_name,
+        unsigned int ver)
+{
+    return common_dspaces_remove(var_name, ver);
+}
+
+
+
 int dspaces_put_sync(void)
 {
 	return common_dspaces_put_sync();

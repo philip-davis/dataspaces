@@ -96,6 +96,9 @@ int dcg_unlock_on_read(const char *, void *comm);
 int dcg_lock_on_write(const char *, void *comm);
 int dcg_unlock_on_write(const char *, void *comm);
 
+int dcg_remove(const char *var_name, unsigned int ver);
+
+
 int dcghlp_get_id(struct dcg_space *);
 int dcg_get_rank(struct dcg_space *);
 int dcg_get_num_peers(struct dcg_space *);

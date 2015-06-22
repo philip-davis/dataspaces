@@ -951,6 +951,41 @@ static int dsgrpc_lock_service(struct rpc_server *rpc, struct rpc_cmd *cmd)
         ERROR_TRACE();
 }
 
+/*routine to remove data object*/
+
+static int dsgrpc_remove_service(struct rpc_server *rpc, struct rpc_cmd *cmd)
+{
+        struct lockhdr *lh = (struct lockhdr *) cmd->pad;
+        struct dsg_lock *dl;
+        int err = -ENOMEM;
+
+//        uloga("'%s()': Remove %s version %d.\n", __func__, lh->name, lh->lock_num  );
+
+
+	if (!dsg->ls) return;
+
+	struct obj_data *od, *t;
+	struct list_head *list;
+	int i;
+
+	for (i = 0; i < dsg->ls->size_hash; i++) {
+        	list = &(dsg->ls)->obj_hash[i];
+	        list_for_each_entry_safe(od, t, list, struct obj_data, obj_entry ) {
+			if(od->obj_desc.version==lh->lock_num&&strcmp(od->obj_desc.name,lh->name)){
+				ls_remove(dsg->ls, od);
+				obj_data_free(od);
+			}
+		}
+	}
+
+        
+	return 0;
+
+ err_out:
+        ERROR_TRACE();
+}
+
+
 static struct cont_query *cq_alloc(struct hdr_obj_get *oh)
 {
         struct cont_query *cq;
@@ -2029,6 +2064,7 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         rpc_add_service(ss_obj_filter, dsgrpc_obj_filter);
         rpc_add_service(ss_obj_cq_register, dsgrpc_obj_cq_register);
         rpc_add_service(cp_lock, dsgrpc_lock_service);
+        rpc_add_service(cp_remove, dsgrpc_remove_service);
         rpc_add_service(ss_info, dsgrpc_ss_info);
 #ifdef DS_HAVE_ACTIVESPACE
         rpc_add_service(ss_code_put, dsgrpc_bin_code_put);

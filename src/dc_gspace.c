@@ -1531,8 +1531,6 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
         dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
 #elif HAVE_PAMI
         dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
-#elif HAVE_TCP_SOCKET
-        dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
 #else 
         dcg_l->dc = dc_alloc(num_nodes, appid, dcg_l);
 #endif
@@ -2004,6 +2002,45 @@ int dcg_time_log(double time_tab[], int n)
  err_out:
         ERROR_TRACE();
 }
+
+int int dcg_remove(const char *var_name, unsigned int ver)
+{
+	int err = -ENOMEM;
+
+	for(int i=0; i <dcg->dc->num_sp;i++){
+	        struct node_id *peer;
+	        struct msg_buf *msg;
+	        //using struct lockhdr to transport var_name and version to server side
+	        struct lockhdr *lh;
+
+        	peer = dc_get_peer(dcg->dc, i);
+
+	        msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+	        if (!msg)
+        	        goto err_out;
+
+	        msg->msg_rpc->cmd = cp_remove;
+	        msg->msg_rpc->id = DCG_ID;
+
+        	lh = (struct lockhdr *) msg->msg_rpc->pad;
+	        strcpy(lh->name, var_name);
+        	//using lock_num for version number
+	        lh->lock_num = ver;
+
+	        err = rpc_send(dcg->dc->rpc_s, peer, msg);
+	        if (err < 0) {
+        	        free(msg);
+                	goto err_out;
+	        }
+	}
+
+        return 0;
+ err_out:
+        ERROR_TRACE();
+}
+
+
+
 
 int dcg_lock_on_read(const char *lock_name, void *comm)
 {

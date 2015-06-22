@@ -328,6 +328,19 @@ int common_dspaces_put(const char *var_name,
         return 0;
 }
 
+
+int common_dspaces_remove (const char *var_name, unsigned int ver)
+{
+
+	if (!is_dspaces_lib_init()) return;
+
+        int err = dcg_remove(var_name, ver);
+        if (err < 0)
+                ERROR_TRACE_AND_EXIT();
+	return err;
+}
+
+
 /*
 int common_dspaces_select(char *var_name, unsigned int vers,
 	int ndim,
@@ -590,4 +603,3 @@ void common_dspaces_unset_mpi_rank_hint()
 {
     dcg_unset_mpi_rank_hint();
 }
-
