@@ -543,6 +543,12 @@ int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_b
     return -1;
 }
 
+// added by Tong
+int rpc_send_directv(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg) {
+
+  return 0;
+}
+
 int rpc_receive(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg) {
     if (!peer->f_connected) {
         rpc_connect(rpc_s, peer);

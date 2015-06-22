@@ -21,6 +21,11 @@ $ ./configure CC=mpixlc FC=mpixlf90 CFLAGS="-g -O0 -qarch=450 -qtune=450" --with
 # IBM BlueGene/Q
 $ ./configure CC=/bgsys/drivers/ppcfloor/comm/xl/bin/mpixlc_r FC=/bgsys/drivers/ppcfloor/comm/xl/bin/mpixlf90 CFLAGS="-O0 -g -qlanglvl=extc99 -O3 -qarch=qp -qtune=qp -qfullpath"
 
+# TCP/IP
+$ ./configure CC=[C_COMPILER_OPTION] FC=[Fortran_COMPILER_OPTION] --enable-dart-tcp
+* [C_COMPILER_OPTION]: C compiler in cluster; [Fortran_COMPILER_OPTION]: Fortran compiler in cluster.
+
+
 2. Some of the useful configure options
  --prefix=/install/path
    Set the directory where DataSpaces will be installed.
@@ -44,6 +49,11 @@ $ ./configure CC=/bgsys/drivers/ppcfloor/comm/xl/bin/mpixlc_r FC=/bgsys/drivers/
    to locally cache the data written by dimes_put(), and is also used by
    dimes_get() to fetch data in remote memory buffer. Must be used with
    --enable-dimes option. Default value is set as 64MB.
+
+ --enable-dart-tcp 
+   This option will enable DataSpaces to build on ethernet using TCP/IP socket interfaces. 
+   Since socket is available in most of the current clusters, this option will avoid the conflict 
+   of selections between IP network and other advanced networks (e.g. IB, Gemini). 
 
 --with-build-for-stampede=integer
   User set this value to 1 in order to configure and compile DataSpaces on Stampede cluster.

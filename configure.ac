@@ -18,13 +18,58 @@ AC_DCMF
 AC_UGNI
 AC_GNI_PTAG
 AC_PAMI
+AC_TCP_SOCKET
+
 AC_CONFIGURE_OPTIONS
+
 
 dnl Generate flags for dataspaces lib creation which depends on the particular network transport layer. DSPACESLIB_* is used for compiling the lib, and linking testing codes.
 DSPACESLIB_CFLAGS=
 DSPACESLIB_CPPFLAGS=
 DSPACESLIB_LDFLAGS=
 DSPACESLIB_LDADD=
+
+
+dnl Check if DART_TCP is enabled
+AC_ARG_ENABLE(dart_tcp,
+[AS_HELP_STRING([--enable-dart-tcp],
+[Build DART over tcp socket.])])
+if test "x$enable_dart_tcp" == "xyes"; then
+  if test -z "${HAVE_UGNI_TRUE}"; then
+    AM_CONDITIONAL(HAVE_UGNI, false)
+    AC_DEFINE(HAVE_UGNI, 0, [])
+  elif test -z "${HAVE_DCMF_TRUE}"; then
+    AM_CONDITIONAL(HAVE_DCMF, false)
+    AC_DEFINE(HAVE_DCMF, 0, [])
+  elif test -z "${HAVE_PAMI_TRUE}"; then
+    AM_CONDITIONAL(HAVE_PAMI, false)
+    AC_DEFINE(HAVE_PAMI, 0, [])
+  elif test -z "${HAVE_INFINIBAND_TRUE}"; then
+    AM_CONDITIONAL(HAVE_INFINIBAND, false)
+    AC_DEFINE(HAVE_INFINIBAND, 0, [])
+  elif test -z "${HAVE_PORTALS_TRUE}"; then
+    AM_CONDITIONAL(HAVE_PORTALS, false)
+    AC_DEFINE(HAVE_PORTALS, 0, [])
+  fi
+else
+  if test -z "${HAVE_UGNI_TRUE}"; then
+    AM_CONDITIONAL(HAVE_TCP_SOCKET, false)
+    AC_DEFINE(HAVE_TCP_SOCKET, 0, [])
+  elif test -z "${HAVE_DCMF_TRUE}"; then
+    AM_CONDITIONAL(HAVE_TCP_SOCKET, false)
+    AC_DEFINE(HAVE_TCP_SOCKET, 0, [])
+  elif test -z "${HAVE_PAMI_TRUE}"; then
+    AM_CONDITIONAL(HAVE_TCP_SOCKET, false)
+    AC_DEFINE(HAVE_TCP_SOCKET, 0, [])
+  elif test -z "${HAVE_INFINIBAND_TRUE}"; then
+    AM_CONDITIONAL(HAVE_TCP_SOCKET, false)
+    AC_DEFINE(HAVE_TCP_SOCKET, 0, [])
+  elif test -z "${HAVE_PORTALS_TRUE}"; then
+    AM_CONDITIONAL(HAVE_TCP_SOCKET, false)
+    AC_DEFINE(HAVE_TCP_SOCKET, 0, [])
+  fi
+fi
+
 
 dnl Check if DIMES is enabled
 AC_ARG_ENABLE(dimes,
@@ -160,4 +205,10 @@ if test -z "${HAVE_PAMI_TRUE}"; then
   echo "        - PAMI_LIBS = $PAMI_LIBS";
 else
   echo "No IBM PAMI."
+fi
+
+if test -z "${HAVE_TCP_SOCKET_TRUE}"; then
+  echo "TCP socket DART is enabled.";
+else
+  echo "No TCP socket DART."
 fi
