@@ -1,6 +1,6 @@
-DATASPACES_DIR=/home/user/software/dataspaces-1.5.0/bin
-DATASPACES_INC=-I/home/user/software/dataspaces-1.5.0/include
-DATASPACES_LIB=-L/home/user/software/dataspaces-1.5.0/lib -ldspaces -ldscommon -ldart -lrdmacm -libverbs -lm
+DATASPACES_DIR=/home/user/software/dataspaces-1.6.0/bin
+DATASPACES_INC=-I/home/user/software/dataspaces-1.6.0/include
+DATASPACES_LIB=-L/home/user/software/dataspaces-1.6.0/lib -ldspaces -ldscommon -ldart -lrdmacm -libverbs -lm
 CC=mpicc
 
 DEPS=bitmap.h bitmap.c testw.c testr.c
