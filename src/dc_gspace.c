@@ -1531,6 +1531,8 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
         dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
 #elif HAVE_PAMI
         dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
+#elif HAVE_TCP_SOCKET
+        dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
 #else 
         dcg_l->dc = dc_alloc(num_nodes, appid, dcg_l);
 #endif
