@@ -1,5 +1,5 @@
 1.6.0 Released July 2015
-    - Added network support: TCP/IP for socket
+    - Added network support: socket for TCP/IP
     - Added feature: new data objects deleting API for deleting a version of data stored in staging 
     - Fixed minor bugs.
 
