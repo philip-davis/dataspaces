@@ -2005,7 +2005,7 @@ int dcg_time_log(double time_tab[], int n)
         ERROR_TRACE();
 }
 
-int int dcg_remove(const char *var_name, unsigned int ver)
+int dcg_remove(const char *var_name, unsigned int ver)
 {
 	int err = -ENOMEM;
 
