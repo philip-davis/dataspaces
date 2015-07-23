@@ -7,34 +7,24 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include "dataspaces.h"
-#include "mpi.h"
 
 int main(int argc, char **argv)
 {
-	int err;
-	int nprocs, rank;
-	MPI_Comm gcomm;
-
-	MPI_Init(&argc, &argv);
-	MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Barrier(MPI_COMM_WORLD);
-	gcomm = MPI_COMM_WORLD;
-
 	// DataSpaces: Initalize and identify application
 	// Usage: dspaces_init(num_peers, appid, Ptr to MPI comm, parameters)
 	// Note: appid for get.c is 2 [for put.c, it was 1]
-	dspaces_init(1, 2, &gcomm, NULL);
+	dspaces_init(1, 2, NULL, NULL);
+	
 
 	int timestep=0;
 
 	while(timestep<10){
-		timestep++;
-
 		// DataSpaces: Read-Lock Mechanism
 		// Usage: Prevent other processies from changing the 
 		// 	  data while we are working with it
-		dspaces_lock_on_read("my_test_lock", &gcomm);
+		dspaces_lock_on_read("my_test_lock", NULL);
+		
+		timestep++;
 
 		// Name our data.
 		char var_name[128];
@@ -65,14 +55,11 @@ int main(int argc, char **argv)
 		free(data);
 
 		// DataSpaces: Release our lock on the data
-		dspaces_unlock_on_read("my_test_lock", &gcomm);
+		dspaces_unlock_on_read("my_test_lock", NULL);
 	}
-
+		
 	// DataSpaces: Finalize and clean up DS process
 	dspaces_finalize();
-
-	MPI_Barrier(gcomm);
-	MPI_Finalize();
 
 	return 0;
 }

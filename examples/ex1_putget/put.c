@@ -6,37 +6,32 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include "dataspaces.h"
-#include "mpi.h"
 
 int main(int argc, char **argv)
 {
-	int err;
-	int nprocs, rank;
-	MPI_Comm gcomm;
-
-	MPI_Init(&argc, &argv);
-	MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Barrier(MPI_COMM_WORLD);
-	gcomm = MPI_COMM_WORLD;
 
 	// Initalize DataSpaces
 	// # of Peers, Application ID, ptr MPI comm, additional parameters
 	// # Peers: Number of connecting clients to the DS server
 	// Application ID: Unique idenitifier (integer) for application
-	// Pointer to the MPI Communicator, allows DS Layer to use MPI barrier func
+	// Pointer to the MPI Communicator: 
+	//      when NOT NULL, allows DS Layer to use MPI barrier func
 	// Addt'l parameters: Placeholder for future arguments, currently NULL.
-	dspaces_init(1, 1, &gcomm, NULL);
+	dspaces_init(1, 1, NULL, NULL);
 
+	
 	int timestep=0;
 
 	while(timestep<10){
-		timestep++;
-		sleep(2);
 		// DataSpaces: Lock Mechanism
 		// Usage: Prevent other process from modifying 
 		// 	  data at the same time as ours
-		dspaces_lock_on_write("my_test_lock", &gcomm);
+		// The NULL parameter is for a pointer to the 
+		//MPI Communicator which we are not using in this example
+		dspaces_lock_on_write("my_test_lock", NULL);
+		
+		timestep++;
+		sleep(2);
 
 		//Name the Data that will be writen
 		char var_name[128];
@@ -74,16 +69,14 @@ int main(int argc, char **argv)
 		dspaces_put(var_name, timestep, 3*sizeof(int), ndim, lb, ub, data);
 	
 		free(data);
-	
+		
 		// DataSpaces: Release our lock on the data
-		dspaces_unlock_on_write("my_test_lock", &gcomm);
+		dspaces_unlock_on_write("my_test_lock", NULL);
+	
 	}
-
+	
 	// DataSpaces: Finalize and clean up DS process
 	dspaces_finalize();
-
-	MPI_Barrier(gcomm);
-	MPI_Finalize();
 
 	return 0;
 }
