@@ -112,7 +112,6 @@ int main(int argc, char **argv){
 	int count = stop-start+1;
 	struct mbrotData mb[IMAGES];
 
-	sleep(2);
 	dspaces_lock_on_read("taskLock",&gcomm);
 	dspaces_get(var_name, timestep, sizeof(struct mbrotData), ndim, lb, ub, &mb);
 	dspaces_unlock_on_read("taskLock",&gcomm);
