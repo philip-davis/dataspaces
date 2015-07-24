@@ -7,7 +7,7 @@
 #include "dataspaces.h"
 #include "mpi.h"
 #include "bitmap.h"
-#define MATRIX_DIM 512
+#define MATRIX_DIM 500
 #define IMAGES 50
 
 struct mbrotData{
@@ -40,7 +40,7 @@ int main(int argc, char *argv[]){
 	for(i=0;i<IMAGES;i++){
 		mb[i].xCenter = atof(argv[1]);
 		mb[i].yCenter = atof(argv[2]);
-		mb[i].scale = (atof(argv[3])-0.000001);
+		mb[i].scale = atof(argv[3]);
 		mb[i].max_iter = atoi(argv[4]);
 		mb[i].index = i;
 
@@ -61,7 +61,6 @@ int main(int argc, char *argv[]){
 		printf("index:%d\n",mb[j].index);
 	}
 	dspaces_lock_on_write("taskLock",&gcomm);
-	sleep(2);
 	dspaces_put(var_name, timestep, sizeof(struct mbrotData), ndim, lb, ub, &mb);
 
 	dspaces_unlock_on_write("taskLock", &gcomm);
