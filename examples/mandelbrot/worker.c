@@ -1,6 +1,12 @@
-/*
- * worker.c
- * Mandelbrot Worker
+/* worker.c:  Mandelbrot Image Worker
+ * Sample bag of tasks workflow where
+ * n Processes pull their task data 
+ * from the DataSpace and then operate on it 
+ * using the escape time algorithm 
+ * for mandelbrot computation
+ * For simplicity, we will use -np 5
+ * and generate 50 images. Each proc will
+ * generate 10 images.
  */
 
 #include <stdio.h>
@@ -24,7 +30,6 @@ struct mbrotData{
 /* Bitmap/Mandelbrot Function Credit: 
 http://www3.nd.edu/~cpoellab/teaching/cse30341/project3.html
 */
-
 int iteration_to_color(int i, int max){
 	int gray = 255*i/max;
 	return MAKE_RGBA(gray,gray,gray,0);
@@ -50,6 +55,7 @@ int iterations_at_point(double x, double y, int max){
 	return iteration_to_color(iter,max);
 }
 
+/* Helper Function to Iterate over all the pixels and set relevant ones*/ 
 void compute_image(struct bitmap *bm, double xmin, double xmax, double ymin, double ymax, int max){
 
 	int i,j;
@@ -84,8 +90,11 @@ int main(int argc, char **argv){
 	MPI_Barrier(MPI_COMM_WORLD);
 	gcomm = MPI_COMM_WORLD;
 
+	//Initialize the DataSpace
 	dspaces_init(nprocs,2,&gcomm,NULL);
 	
+	
+	// Simple Divide-and-Conquer Work Strategy
 	int per_proc = IMAGES/nprocs;
 	int remainder = IMAGES%nprocs;
 	int start, stop;
@@ -99,7 +108,7 @@ int main(int argc, char **argv){
 
 
 	double scale_inc, scale_adj, xmin, ymin, xmax, ymax;
-	int i,j,k;
+	int k;
 	int ndim=1;
 	int timestep=0;
 	char var_name[128];
@@ -126,6 +135,10 @@ int main(int argc, char **argv){
 			printf("Index:%d\n",mb[k].index);
 			printf("\n\n");
 			#endif
+
+		// We will scale from 2 down to the 
+		// input scale size (given via CL to master.c)
+		// Each image will be at a different scale.
 		scale_inc = (2-(mb[k].scale))/IMAGES;
 		scale_adj = 2-((mb[k].index+1)*(scale_inc)); 
 
@@ -137,8 +150,10 @@ int main(int argc, char **argv){
 		struct bitmap *bm = bitmap_create(MATRIX_DIM,MATRIX_DIM);
 		bitmap_reset(bm,MAKE_RGBA(0,0,255,0));
 
+		// Create image
 		compute_image(bm,xmin,xmax,ymin,ymax,mb[k].max_iter);
 
+		// Save the image
 		char mandel_name[128];
 		sprintf(mandel_name, "mandel%d.bmp", mb[k].index);
 		bitmap_save(bm, mandel_name);

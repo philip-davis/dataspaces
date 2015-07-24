@@ -1,4 +1,4 @@
-
+/* http://www3.nd.edu/~cpoellab/teaching/cse30341/project3.html */
 #ifndef BITMAP_H
 #define BITMAP_H
 
