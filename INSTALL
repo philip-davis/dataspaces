@@ -25,6 +25,12 @@ $ ./configure CC=/bgsys/drivers/ppcfloor/comm/xl/bin/mpixlc_r FC=/bgsys/drivers/
 $ ./configure CC=[C_COMPILER_OPTION] FC=[Fortran_COMPILER_OPTION] --enable-dart-tcp
 * [C_COMPILER_OPTION]: C compiler in cluster; [Fortran_COMPILER_OPTION]: Fortran compiler in cluster.
 
+# TACC Stampede InfiniBand Cluster
+module unload intel
+module unload mvapich2/2.1
+module load intel/13.0.2.146
+module load mvapich2/1.9a2
+./configure CC=mpicc FC=mpif90 CFLAGS="-DHAVE_INFINIBAND -L/opt/ofed/lib64/ -lrdmacm -I/opt/ofed/include/" --with-ib-interface=ib
 
 2. Some of the useful configure options
  --prefix=/install/path
@@ -55,14 +61,10 @@ $ ./configure CC=[C_COMPILER_OPTION] FC=[Fortran_COMPILER_OPTION] --enable-dart-
    Since socket is available in most of the current clusters, this option will avoid the conflict 
    of selections between IP network and other advanced networks (e.g. IB, Gemini). 
 
---with-build-for-stampede=integer
-  User set this value to 1 in order to configure and compile DataSpaces on Stampede cluster.
-
 --with-infiniband-msg-queue-size=integer value
   User can use this option to change the size of the messaging queue on DataSpaces servers.
   If you receive errors stating the messaging queue is full. You should use this option to
   increase the size of the messaging queue.
-
 
    For applications using DIMES, dimes_put_sync_all() or dimes_put_sync_group()
    API functions (see dimes_interface.h for detailed documentation) should be
