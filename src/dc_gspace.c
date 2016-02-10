@@ -2008,8 +2008,8 @@ int dcg_time_log(double time_tab[], int n)
 int dcg_remove(const char *var_name, unsigned int ver)
 {
 	int err = -ENOMEM;
-
-	for(int i=0; i <dcg->dc->num_sp;i++){
+	int i;
+	for(i=0; i <dcg->dc->num_sp;i++){
 	        struct node_id *peer;
 	        struct msg_buf *msg;
 	        //using struct lockhdr to transport var_name and version to server side
