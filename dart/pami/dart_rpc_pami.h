@@ -80,7 +80,7 @@ struct rpc_cmd {
         pami_memregion_t	mem_region; //PAMI memory region created for remote node
         size_t			mem_size; //Size for created PAMI memory region
 
-        unsigned char            pad[RPC_CMD_PAD_SIZE];
+        unsigned char            pad[RPC_CMD_PAD_SIZE];// payload of the command
 } __attribute__((__packed__));
 
 /*

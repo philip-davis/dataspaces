@@ -166,7 +166,7 @@ struct hdr_dimes_put { // TODO: more comments
 	struct dimes_obj_id obj_id;
 	struct obj_descriptor odsc;
 #ifdef DS_HAVE_DIMES_SHMEM
-    __u8 has_shmem_data;
+    unsigned char has_shmem_data;
     struct dimes_shmem_descriptor shmem_desc;
 #endif
 } __attribute__((__packed__));

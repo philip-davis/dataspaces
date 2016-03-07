@@ -48,11 +48,12 @@
 
 #define FPTR_DEF  void * _fptr[] = {&malloc, &free, &memset};
 
+/*
 typedef unsigned char __u8;
 typedef unsigned int __u32;
 typedef int __s32;
 typedef uint64_t __u64;
-
+*/
 struct msg_buf;
 struct rpc_server;
 struct rpc_cmd;
@@ -153,7 +154,7 @@ struct rpc_cmd {
 	unsigned int id;
 	struct ibv_mr mr;
 	int qp_num;
-	// payload of the command 
+    // payload of the command
 	unsigned char pad[RPC_CMD_PAD_SIZE];
 	uint64_t wr_id;
 };

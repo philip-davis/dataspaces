@@ -711,7 +711,6 @@ void ssd_free_v2(struct sspace *ssd)
         sh_free();
 }
 
->>>>>>> 9da97de... merge main trunk revision r1556
 int ssd_hash_v2(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[])
 {
         int i, j, num_nodes;
@@ -817,7 +816,6 @@ int ssd_hash(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[
     tm_st = timer_read(&tm);
 #endif
 
-<<<<<<< HEAD
 /*
  ssd hashing function v1: uses Hilbert SFC to linearize the global data domain
     and bounding box passed by put()/get().

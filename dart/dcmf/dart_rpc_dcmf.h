@@ -113,13 +113,6 @@ struct rpc_cmd {
         unsigned char            pad[RPC_CMD_PAD_SIZE];
 } __attribute__((__packed__));
 
-/* Header for space info. */
-struct hdr_ss_info {
-    int         num_dims;
-    struct coord2       dims;
-    int         num_space_srv;
-} __attribute__((__packed__));
-
 /*
   Header  structure  used  to  send  timing messages.  Note:  size  of
   time_tab[] should fit into the pad field of a 'struct rpc_cmd'.
