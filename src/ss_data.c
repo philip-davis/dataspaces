@@ -51,13 +51,13 @@
   matrix.
 */
 struct matrix_view {
-        __u64   lb[BBOX_MAX_NDIM];
-        __u64   ub[BBOX_MAX_NDIM];	
+        uint64_t   lb[BBOX_MAX_NDIM];
+        uint64_t   ub[BBOX_MAX_NDIM];	
 };
 
 /* Generic matrix representation. */
 struct matrix {
-        __u64   dist[BBOX_MAX_NDIM];
+        uint64_t   dist[BBOX_MAX_NDIM];
         int 			        num_dims;
         size_t                  size_elem;
         enum storage_type       mat_storage;
@@ -93,7 +93,7 @@ static uint64_t next_pow_2_v2(uint64_t n)
         return i;
 }
 
-static int compute_bits_v2(__u64 n)
+static int compute_bits_v2(uint64_t n)
 {
         int nr_bits = 0;
 
@@ -105,7 +105,7 @@ static int compute_bits_v2(__u64 n)
         return nr_bits;
 }
 
-static int compute_bits(__u64 n)
+static int compute_bits(uint64_t n)
 {
         int nr_bits = 0;
 
@@ -201,10 +201,10 @@ static void matrix_copy(struct matrix *a, struct matrix *b)
         char *A = a->pdata;
         char *B = b->pdata;
 
-        __u64 a0, a1, a2, a3, a4, a5, a6, a7, a8, a9;
-        __u64 aloc=0, aloc1=0, aloc2=0, aloc3=0, aloc4=0, aloc5=0, aloc6=0, aloc7=0, aloc8=0, aloc9=0;
-        __u64 b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
-        __u64 bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
+        uint64_t a0, a1, a2, a3, a4, a5, a6, a7, a8, a9;
+        uint64_t aloc=0, aloc1=0, aloc2=0, aloc3=0, aloc4=0, aloc5=0, aloc6=0, aloc7=0, aloc8=0, aloc9=0;
+        uint64_t b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
+        uint64_t bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
 
     switch(a->num_dims){
         case(1):    
@@ -532,7 +532,7 @@ static int dht_intersect(struct dht_entry *de, struct intv *itv)
         return 0;
 }
 
-static __u64 ssd_get_max_dim(struct sspace *ss)
+static uint64_t ssd_get_max_dim(struct sspace *ss)
 {
         return ss->max_dim;
 }
@@ -548,10 +548,10 @@ static int ssd_get_bpd(struct sspace *ss)
 */
 static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
 {
-        const __u64 sn = bbox_volume(&dht->bb_glb_domain) / dht->num_entries;
+        const uint64_t sn = bbox_volume(&dht->bb_glb_domain) / dht->num_entries;
         struct intv *i_tab, intv;
         struct dht_entry *de;
-        __u64 len;
+        uint64_t len;
         int num_intv, i, j;
         int err = -ENOMEM;
 
@@ -610,7 +610,7 @@ static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
 static struct sspace *ssd_alloc_v1(struct bbox *bb_domain, int num_nodes, int max_versions)
 {
         struct sspace *ssd;
-        __u64 max_dim;
+        uint64_t max_dim;
         int err = -ENOMEM;
 
         ssd = malloc(sizeof(*ssd));
@@ -1393,14 +1393,14 @@ void obj_data_free(struct obj_data *od)
 	free(od);
 }
 
-__u64 obj_data_size(struct obj_descriptor *obj_desc)
+uint64_t obj_data_size(struct obj_descriptor *obj_desc)
 {
     return obj_desc->size * bbox_volume(&obj_desc->bb);
 }
 
-__u64 obj_data_sizev(struct obj_descriptor *odsc)
+uint64_t obj_data_sizev(struct obj_descriptor *odsc)
 {
-	__u64 size = 1; // sizeof(iovec_t);
+	uint64_t size = 1; // sizeof(iovec_t);
 
 	if (odsc->bb.num_dims == 2) {
 		if (odsc->st == row_major)

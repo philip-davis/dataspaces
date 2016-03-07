@@ -73,11 +73,12 @@ struct rpc_server;
 struct rpc_cmd;
 struct node_id;
 
+/*
 typedef unsigned char	__u8;
 typedef unsigned int	__u32;
 typedef int		__s32;
 typedef uint64_t __u64;
-
+*/
 
 // Rpc prototype function, should be called in response to a remote rpc request. 
 typedef int (*rpc_service)(struct rpc_server *rpc_s, struct rpc_cmd *cmd);
@@ -107,8 +108,8 @@ struct rr_index{
 };
 
 struct ptlid_map{
-	__u32	nid;
-	__u32	pid;
+	unsigned int	nid;
+	unsigned int	pid;
 	int	id;
 	int	appid;
 };
@@ -153,13 +154,13 @@ struct hdr_register {
 struct rfshdr {
 	size_t		size;
 	size_t		base_offset;
-	__u32		index;
+	unsigned int		index;
         // Number of instances to serve from the shared space.
-	__u32		num_inst;
-	__u8		wrs;            // write source: 1 = disk, 2 = tcp
-	__u8		append;
-	__s32		rc;
-	__u8		fname[60];      // If not enough, consider 128
+	unsigned int		num_inst;
+	unsigned char		wrs;            // write source: 1 = disk, 2 = tcp
+	unsigned char		append;
+	int		rc;
+	unsigned char		fname[60];      // If not enough, consider 128
 };
 
 // Header for the locking service.
@@ -214,16 +215,16 @@ enum io_dir {
 };
 
 struct rpc_cmd {
-	__u8			cmd;            // type of command
-	__u32			srcnid;		// nid means node address in GNI
-	__u32			dstnid;
-	__u32			srcpid;
-	__u32			dstpid;
-	__u8			num_msg;        // # accepting messages
+	unsigned char			cmd;            // type of command
+	unsigned int			srcnid;		// nid means node address in GNI
+	unsigned int			dstnid;
+	unsigned int			srcpid;
+	unsigned int			dstpid;
+	unsigned char			num_msg;        // # accepting messages
 	struct mdh_addr_t	mdh_addr;
-	__u32			id;
+	unsigned int			id;
 	// payload of the command
-	__u8			pad[RPC_CMD_PAD_SIZE];
+	unsigned char			pad[RPC_CMD_PAD_SIZE];
 };
 
 struct node_id {

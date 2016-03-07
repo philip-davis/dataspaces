@@ -23,11 +23,12 @@ extern "C" {
         unsigned long _a = (unsigned long) (a);                 \
         _a = (_a + 7) & ~7;                                     \
         (a) = (void *) _a;
-
+/*
 typedef unsigned char   __u8;
 typedef unsigned int    __u32;
 typedef int             __s32;
 typedef uint64_t    __u64;
+*/
 
 struct msg_buf;
 struct rpc_server;
@@ -62,11 +63,11 @@ struct lockhdr {
 
 /* Rpc command structure. */
 struct rpc_cmd {
-        __u8            cmd;            // type of command
-        __u8            num_msg;
-        __u32           id; //Dart ID
+        unsigned char            cmd;            // type of command
+        unsigned char            num_msg;
+        unsigned int           id; //Dart ID
 
-        __u8            pad[280+(BBOX_MAX_NDIM-3)*24];// payload of the command
+        unsigned char            pad[280+(BBOX_MAX_NDIM-3)*24];// payload of the command
 } __attribute__((__packed__));
 
 /*
