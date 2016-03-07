@@ -55,10 +55,12 @@ extern "C" {
         _a = (_a + 7) & ~7;                                     \
         (a) = (void *) _a;
 
+/*
 typedef unsigned char   __u8;
 typedef unsigned int    __u32;
 typedef int             __s32;
 typedef uint64_t __u64;
+*/
 
 struct msg_buf;
 struct rpc_server;
@@ -103,19 +105,19 @@ struct lockhdr {
 
 /* Rpc command structure. */
 struct rpc_cmd {
-        __u8            cmd;            // type of command
-        __u64           srcnid; //ibm dcmf rank id
-        __u64           dstnid; //ibm dcmf rank id
-        __u32           srcpid; //default is 0
-        __u32           dstpid; //default is 0
-        __u8            num_msg;
-        __u32           id; //Dart ID
+        unsigned char            cmd;            // type of command
+        uint64_t           srcnid; //ibm dcmf rank id
+        uint64_t           dstnid; //ibm dcmf rank id
+        unsigned int           srcpid; //default is 0
+        unsigned int           dstpid; //default is 0
+        unsigned char            num_msg;
+        unsigned int           id; //Dart ID
 
         DCMF_Memregion_t	mem_region; //DCMF memory region created for remote node
         size_t			mem_size; //Size for created DCMF memory region
 
         // payload of the command
-        __u8            pad[RPC_CMD_PAD_SIZE];
+        unsigned char            pad[RPC_CMD_PAD_SIZE];
 } __attribute__((__packed__));
 
 /*

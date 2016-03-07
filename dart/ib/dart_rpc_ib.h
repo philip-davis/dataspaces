@@ -45,11 +45,12 @@
 
 #define FPTR_DEF  void * _fptr[] = {&malloc, &free, &memset};
 
+/*
 typedef unsigned char __u8;
 typedef unsigned int __u32;
 typedef int __s32;
 typedef uint64_t __u64;
-
+*/
 struct msg_buf;
 struct rpc_server;
 struct rpc_cmd;
@@ -114,13 +115,13 @@ struct con_param {
 struct rfshdr {
 	size_t size;
 	size_t base_offset;
-	__u32 index;
+	unsigned int index;
 	/* Number of instances to serve from the shared space. */
-	__u32 num_inst;
-	__u8 wrs;		// write source: 1 = disk, 2 = tcp
-	__u8 append;
-	__s32 rc;
-	__u8 fname[60];		// If not enough, consider 128
+	unsigned int num_inst;
+	unsigned char wrs;		// write source: 1 = disk, 2 = tcp
+	unsigned char append;
+	int rc;
+	unsigned char fname[60];		// If not enough, consider 128
 } __attribute__ ((__packed__));
 
 #define LOCK_NAME_SIZE 64
@@ -142,15 +143,15 @@ struct hdr_fn_kernel {
 
 /* Rpc command structure. */
 struct rpc_cmd {
-	__u8 cmd;		// type of command
+	unsigned char cmd;		// type of command
 	struct sockaddr_in src;
 	struct sockaddr_in dst;
-	__u8 num_msg;		// # accepting messages
-	__u32 id;
+	unsigned char num_msg;		// # accepting messages
+	unsigned int id;
 	struct ibv_mr mr;
 	int qp_num;
     // payload of the command
-	__u8 pad[RPC_CMD_PAD_SIZE];
+	unsigned char pad[RPC_CMD_PAD_SIZE];
 	uint64_t wr_id;
 };
 

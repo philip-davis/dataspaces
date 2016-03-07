@@ -43,10 +43,12 @@
 #define max(a,b) (a) > (b) ? (a):(b)
 #define min(a,b) (a) < (b) ? (a):(b)
 
+/*
 typedef unsigned char 		__u8;
 typedef unsigned int 		__u32;
 typedef int			__s32;
 typedef uint64_t	__u64; //TODO
+*/
 
 enum bb_dim {
         bb_x = 0,
@@ -55,7 +57,7 @@ enum bb_dim {
 };
 
 struct coord {
-        __u64 c[BBOX_MAX_NDIM];
+        uint64_t c[BBOX_MAX_NDIM];
 };
 
 struct bbox {
@@ -64,29 +66,29 @@ struct bbox {
 };
 
 struct intv {
-        __u64 lb, ub;
+        uint64_t lb, ub;
 };
 
-__u64 bbox_dist(struct bbox *, int);
+uint64_t bbox_dist(struct bbox *, int);
 void bbox_divide(struct bbox *b0, struct bbox *b_tab);
 int bbox_include(const struct bbox *, const struct bbox *);
 int bbox_does_intersect(const struct bbox *, const struct bbox *);
 void bbox_intersect(struct bbox *, const struct bbox *, struct bbox *);
 int bbox_equals(const struct bbox *, const struct bbox *);
 
-__u64 bbox_volume(struct bbox *);
-void bbox_to_intv(const struct bbox *, __u64, int, struct intv **, int *);
-void bbox_to_intv2(const struct bbox *, __u64, int, struct intv **, int *);
+uint64_t bbox_volume(struct bbox *);
+void bbox_to_intv(const struct bbox *, uint64_t, int, struct intv **, int *);
+void bbox_to_intv2(const struct bbox *, uint64_t, int, struct intv **, int *);
 void bbox_to_origin(struct bbox *, const struct bbox *);
 
 int intv_do_intersect(struct intv *, struct intv *);
-__u64 intv_size(struct intv *);
+uint64_t intv_size(struct intv *);
 
 void bbox_divide_in2_ondim(const struct bbox *b0, struct bbox *b_tab, int dim);
 
-static __u64 next_pow_2(__u64 n)
+static uint64_t next_pow_2(uint64_t n)
 {
-        __u64 i;
+        uint64_t i;
 
         if (n < 0)
                 return 0;

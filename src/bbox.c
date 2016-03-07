@@ -42,14 +42,14 @@
 #include "debug.h"
 
 //static inline unsigned int 
-static inline __u64 
+static inline uint64_t 
 coord_dist(struct coord *c0, struct coord *c1, int dim)
 {
         return (c1->c[dim] - c0->c[dim] + 1);
 }
 
 //int bbox_dist(struct bbox *bb, int dim)
-__u64 bbox_dist(struct bbox *bb, int dim)
+uint64_t bbox_dist(struct bbox *bb, int dim)
 {
         return coord_dist(&bb->lb, &bb->ub, dim);
 }
@@ -196,9 +196,9 @@ int bbox_equals(const struct bbox *bb0, const struct bbox *bb1)
     return 0;
 }
 
-__u64 bbox_volume(struct bbox *bb)
+uint64_t bbox_volume(struct bbox *bb)
 {
-    __u64 n = 1;
+    uint64_t n = 1;
     int ndims = bb->num_dims;
     int i;
 
@@ -208,7 +208,7 @@ __u64 bbox_volume(struct bbox *bb)
     return n;
 }
 
-static int compute_bits(__u64 n)
+static int compute_bits(uint64_t n)
 {
         int nr_bits = 0;
 
@@ -230,7 +230,7 @@ static void bbox_flat(struct bbox *bb, struct intv *itv, int bpd)
     int dims = bb->num_dims;
     bitmask_t* sfc_coord;
     int i, j, k;
-    __u64 index;
+    uint64_t index;
 
     //sfc_coord = malloc(sizeof(bitmask_t)*dims);
     /*
@@ -276,9 +276,9 @@ static int intv_compar(const void *a, const void *b)
         else    return 0;
 }
 
-static __u64 intv_compact(struct intv *i_tab, __u64 num_itv)
+static uint64_t intv_compact(struct intv *i_tab, uint64_t num_itv)
 {
-        __u64 i, j;
+        uint64_t i, j;
 
         for (i = 0, j = 1; j < num_itv; j++) {
                 if ((i_tab[i].ub + 1) == i_tab[j].lb)
@@ -299,7 +299,7 @@ static __u64 intv_compact(struct intv *i_tab, __u64 num_itv)
   Find the equivalence in 1d index space using a SFC for a bounding
   box bb.
 */
-void bbox_to_intv(const struct bbox *bb, __u64 dim_virt, int bpd, 
+void bbox_to_intv(const struct bbox *bb, uint64_t dim_virt, int bpd, 
                   struct intv **intv, int *num_intv)
 {
     //const int 1<<(bb->num_dims);
@@ -308,7 +308,7 @@ void bbox_to_intv(const struct bbox *bb, __u64 dim_virt, int bpd,
     struct queue q_can, q_good;
     struct intv *i_tab, *i_tmp;
     //int max;
-    __u64 max;
+    uint64_t max;
     int i, n;
 
     max = dim_virt; //n is the next power of 2 that includes the user's bbox
@@ -386,13 +386,13 @@ void bbox_to_intv(const struct bbox *bb, __u64 dim_virt, int bpd,
 /*
   New test ...
 */
-void bbox_to_intv2(const struct bbox *bb, __u64 dim_virt, int bpd, 
+void bbox_to_intv2(const struct bbox *bb, uint64_t dim_virt, int bpd, 
                   struct intv **intv, int *num_intv)
 {
     struct bbox *bb_tab, *pbb;
     int bb_size, bb_head, bb_tail;
     struct intv *i_tab;
-    __u64 n, i;
+    uint64_t n, i;
     int i_num, i_size, i_resize = 0;
 
 //printf("dim_virt=%llu,bpd=%d,lb[%d,%d,%d,%d],ub[%d,%d,%d,%d]\n", dim_virt,bpd,bb->lb.c[0],bb->lb.c[1],bb->lb.c[2],bb->lb.c[3],
@@ -513,7 +513,7 @@ int intv_do_intersect(struct intv *i0, struct intv *i1)
         else    return 0;
 }
 
-__u64 intv_size(struct intv *intv)
+uint64_t intv_size(struct intv *intv)
 {
         return intv->ub - intv->lb + 1;
 }
