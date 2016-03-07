@@ -1345,17 +1345,17 @@ static void matrix_init_d(struct matrix_d *mat, enum storage_type st,
 
 static int matrix_rdma_copy(struct matrix_d *a, struct matrix_d *b, int tran_id)
 {
-    __u64 src_offset = 0;
-    __u64 dst_offset = 0;
-    __u64 bytes = 0;
+    uint64_t src_offset = 0;
+    uint64_t dst_offset = 0;
+    uint64_t bytes = 0;
     int err = -ENOMEM;
 
-    __u64 a0, a1, a2, a3, a4, a5, a6, a7, a8, a9;
-    __u64 aloc=0, aloc1=0, aloc2=0, aloc3=0, aloc4=0, aloc5=0, aloc6=0, aloc7=0, aloc8=0, aloc9=0;
-    __u64 b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
-    __u64 bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
+    uint64_t a0, a1, a2, a3, a4, a5, a6, a7, a8, a9;
+    uint64_t aloc=0, aloc1=0, aloc2=0, aloc3=0, aloc4=0, aloc5=0, aloc6=0, aloc7=0, aloc8=0, aloc9=0;
+    uint64_t b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
+    uint64_t bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
 
-    __u64 n = 0;
+    uint64_t n = 0;
     n = a->mat_view.ub[0] - a->mat_view.lb[0] + 1;
     a0 = a->mat_view.lb[0];
     b0 = b->mat_view.lb[0];
