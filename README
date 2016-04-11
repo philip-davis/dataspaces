@@ -166,6 +166,11 @@ applications exchange multiple 2D arrays with the same global dimension as
 ndim = 2
 dims = 256,128
 
+Note: For large values of ndim and dims, initialization of dataspaces_server will take significantly
+more time. The only way to make sure dataspaces_clients to wait enough for the dataspaces_server 
+initialization is to run the server and have an approximate estimate on the time clients should wait
+for the server.
+
 Since DataSpaces 1.4.0 release, user application can explicitly set the global
 dimension for each variable using dspaces_define_gdim() and dimes_define_gdim()
 APIs (see include/dataspaces.h and include/dimes_interface.h for detailed

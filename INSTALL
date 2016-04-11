@@ -61,16 +61,24 @@ module load mvapich2/1.9a2
    Since socket is available in most of the current clusters, this option will avoid the conflict 
    of selections between IP network and other advanced networks (e.g. IB, Gemini). 
 
---with-infiniband-msg-queue-size=integer value
-  User can use this option to change the size of the messaging queue on DataSpaces servers.
-  If you receive errors stating the messaging queue is full. You should use this option to
-  increase the size of the messaging queue.
+ --with-infiniband-msg-queue-size=integer value
+   User can use this option to change the size of the messaging queue on DataSpaces servers.
+   If you receive errors stating the messaging queue is full. You should use this option to
+   increase the size of the messaging queue.
 
    For applications using DIMES, dimes_put_sync_all() or dimes_put_sync_group()
    API functions (see dimes_interface.h for detailed documentation) should be
    called periodically to free data objects cached in DIMES. Where there is no
    sufficient memory space, dimes_put()/dimes_get() would fail and return errors. 
-
+   
+ --enable-ib-cpp=yes
+   To use cpp implementation of dart communication layer using infiniband. If this is enabled, some
+   care needs to be taken on the configure command; CXX=mpicxx, LDFLAGS="-lstdc++ -lmpi_cxx -lpthread"
+   e.g., 
+   ./configure CC=mpicc FC=mpif90 CXX=mpicxx 
+     LDFLAGS="-lstdc++ -lmpi_cxx -lpthread" \
+     --enable-ib-cpp=yes --with-ib-interface=ib0 --prefix="install_dir"
+   
 3. Build & Install 
 # Under project top directory
 $ make
