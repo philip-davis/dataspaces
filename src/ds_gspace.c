@@ -971,7 +971,7 @@ static int dsgrpc_remove_service(struct rpc_server *rpc, struct rpc_cmd *cmd)
 	for (i = 0; i < dsg->ls->size_hash; i++) {
         	list = &(dsg->ls)->obj_hash[i];
 	        list_for_each_entry_safe(od, t, list, struct obj_data, obj_entry ) {
-			if(od->obj_desc.version==lh->lock_num&&strcmp(od->obj_desc.name,lh->name)){
+			if (od->obj_desc.version == lh->lock_num && !strcmp(od->obj_desc.name,lh->name) ) {
 				ls_remove(dsg->ls, od);
 				obj_data_free(od);
 			}

@@ -9,3 +9,4 @@ run.sh
 *.a
 *.Tpo
 *.Po
+*.zed*
