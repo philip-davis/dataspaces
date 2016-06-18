@@ -15,6 +15,13 @@ $ ./configure CC=cc FC=ftn
 # Infiniband cluster
 $ ./configure CC=mpicc FC=mpif90
 
+* For TACC Stampede InfiniBand Cluster
+  $ module unload intel
+  $ module unload mvapich2/2.1
+  $ module load intel/13.0.2.146
+  $ module load mvapich2/1.9a2
+  $ ./configure CC=mpicc FC=mpif90 CFLAGS="-DHAVE_INFINIBAND -L/opt/ofed/lib64/ -lrdmacm -I/opt/ofed/include/" --with-ib-interface=ib
+
 # IBM BlueGene/P
 $ ./configure CC=mpixlc FC=mpixlf90 CFLAGS="-g -O0 -qarch=450 -qtune=450" --with-dcmf="/bgsys/drivers/ppcfloor"
 
@@ -24,13 +31,6 @@ $ ./configure CC=/bgsys/drivers/ppcfloor/comm/xl/bin/mpixlc_r FC=/bgsys/drivers/
 # TCP/IP
 $ ./configure CC=[C_COMPILER_OPTION] FC=[Fortran_COMPILER_OPTION] --enable-dart-tcp
 * [C_COMPILER_OPTION]: C compiler in cluster; [Fortran_COMPILER_OPTION]: Fortran compiler in cluster.
-
-# TACC Stampede InfiniBand Cluster
-module unload intel
-module unload mvapich2/2.1
-module load intel/13.0.2.146
-module load mvapich2/1.9a2
-./configure CC=mpicc FC=mpif90 CFLAGS="-DHAVE_INFINIBAND -L/opt/ofed/lib64/ -lrdmacm -I/opt/ofed/include/" --with-ib-interface=ib
 
 2. Some of the useful configure options
  --prefix=/install/path
