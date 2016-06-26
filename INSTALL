@@ -8,9 +8,11 @@ Quick Installation Instructions
 The following steps are needed to configure, build and install DataSpaces.
 
 1. Configure
-# Examples for the configure command on supported architectures and networks. Please customize it according to your specific system configurations and environments.
+# Examples for the configure command on supported architectures and networks. Please customize it according to your specific system configurations and environments (If there is no 'configure' file, please run ./autogen.sh to generate it.).
 # Cray XE and XK series
 $ ./configure CC=cc FC=ftn
+* For Aries based system, e.g. EOS at ORNL, please add:
+  --enable-aries
 
 # Infiniband cluster
 $ ./configure CC=mpicc FC=mpif90
@@ -58,8 +60,21 @@ $ ./configure CC=[C_COMPILER_OPTION] FC=[Fortran_COMPILER_OPTION] --enable-dart-
 
  --enable-dart-tcp 
    This option will enable DataSpaces to build on ethernet using TCP/IP socket interfaces. 
-   Since socket is available in most of the current clusters, this option will avoid the conflict 
-   of selections between IP network and other advanced networks (e.g. IB, Gemini). 
+   Since socket is available in most of the current clusters, this option will avoid the 
+   conflict of selections between IP network and other advanced networks (e.g. IB, Gemini). 
+
+ --enable-aries
+   With this option, it will get the right shared protection domain information for 
+   application access on Aries-based systems, such as EOS system at ORNL. Before adding 
+   this option, please run 'apstat -P' to check if your Aries based system support shared 
+   protection domain.
+
+ --with-gni-ptag = PTAG DECIMAL VALUE
+ --with-gni-cookie = COOKIE HEXA VALUE
+   This two options directly give the values of ptag+cookie pair to DataSpaces in uGNI 
+   based systems. When DataSpaces is running at Aries-based systems, ptag will be 
+   automatically assigned by the system itself. Therefore, in those systems, only 
+   --with-gni-cookie is required to provided and activated.
 
  --with-infiniband-msg-queue-size=integer value
    User can use this option to change the size of the messaging queue on DataSpaces servers.

@@ -284,6 +284,49 @@ static int get_adios_dom(uint8_t *_ptag, uint32_t *_cookie)
   return get_named_dom("ADIOS", _ptag, _cookie);
 }
 
+/*                                                                                                                                            
+ * get cookie and ptag from shared communication domain information                                                                           
+ * for SPMD model at Aries based system, e.g. EOS                                                                                             
+ */
+static int get_named_dom_aries(const char *pname, uint32_t *_cookie, uint32_t *_cookie2)
+{
+  char buffer[255];
+  FILE *fdom = NULL;
+  char name[16];
+  char *returnb;
+  uint32_t cookie;
+  uint32_t cookie2;
+
+  //  system("apstat -P > apstat.out");                                                                                                       
+  fdom = popen("apstat -P", "r");
+  if(fdom == NULL)
+    {
+      perror("fopen");
+      exit(-1);
+    }
+
+    do
+      {
+       	returnb = fgets(buffer, 255, fdom);
+        if(returnb == NULL)
+          break;
+        sscanf(buffer, "%s %*s %*d %x %x",
+               &name, &cookie, &cookie2);
+        //printf("Buffer info: name (%s), cookie(%x), cookie2(%x).\n", name, cookie, cookie2);                                                
+        if(!strcasecmp(name, pname))
+          {
+            *_cookie = cookie;
+            *_cookie2 = cookie2;
+            pclose(fdom);
+            return 0;
+          }
+
+      }while(1);
+
+    pclose(fdom);
+    return -1;
+}
+
 
 /*
  * get_cookie will get the cookie value associated with this process.

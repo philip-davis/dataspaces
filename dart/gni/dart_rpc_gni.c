@@ -71,6 +71,7 @@ static int rank_id_pmi; //this global rank_id is fetched by using pmi library.
 static int num_of_rank_pmi;
 
 static uint32_t cookie;
+static uint32_t cookie2;
 static uint8_t ptag;
 
 static struct rpc_server *rpc_s_instance;
@@ -218,23 +219,44 @@ static int init_gni (struct rpc_server *rpc_s)
 
     /* Try from environment first DSPACES_GNI_PTAG (decimal) and DSPACES_GNI_COOKIE (hexa)*/
     ptag = get_ptag_env("DSPACES_GNI_PTAG");
-    if (ptag != 0)
-        cookie = get_cookie_env("DSPACES_GNI_COOKIE");
+    cookie = get_cookie_env("DSPACES_GNI_COOKIE");
     //uloga(" ****** (%s) from env: ptag=%d  cookie=%x.\n", __func__, ptag, cookie);
 
     if (ptag == 0 || cookie == 0) {
 #ifdef GNI_PTAG
-        ptag = GNI_PTAG;
         cookie = GNI_COOKIE;
-        //uloga(" ****** (%s) from configure: ptag=%d  cookie=%x.\n", __func__, ptag, cookie);
+
+#ifdef DS_HAVE_ARIES
+        ptag = GNI_FIND_ALLOC_PTAG;
+#else
+	ptag = GNI_PTAG;
+#endif
+
+#else
+
+#ifdef DS_HAVE_ARIES
+	// For Aries Network
+        err = get_named_dom_aries("ADIOS", &cookie, &cookie2);
+        if(err != 0){
+		printf("Fail: cookie(%x) and cookie2(%d) returned error. %d.\n", err, cookie, cookie2);
+		printf("Please use 'apstat -P' to check if shared protection domain is activiated.\n"); 
+        	goto err_out;
+        }
+
+    	//cookie = 0xc9de0000;
+    	ptag = GNI_FIND_ALLOC_PTAG;
+
 #else
         err = get_named_dom("ADIOS", &ptag, &cookie);
         if(err != 0){
             printf("Fail: ptag and cookie returned error. %d.\n", err);
             goto err_out;
         }
-    //uloga(" ****** (%s) from apstat: ptag=%d  cookie=%x.\n", __func__, ptag, cookie);
+
 #endif
+
+#endif
+    	//uloga(" ****** (%s) from apstat: ptag=%d  cookie=%x.\n", __func__, ptag, cookie);
     }
 
 	status = GNI_CdmCreate(rank_id_pmi, ptag, cookie, modes, &rpc_s->cdm_handle);
@@ -1334,6 +1356,272 @@ int rpc_write_config(struct rpc_server *rpc_s)
         return -EIO;
 }
 
+#ifdef DS_HAVE_ARIES
+inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
+{
+  gni_cq_handle_t cq_array[] = {rpc_s->src_cq_hndl, rpc_s->dst_cq_hndl, rpc_s->sys_cq_hndl};
+  gni_cq_entry_t event_data = 0;
+  uint64_t event_type;
+  int event_id;
+  gni_post_descriptor_t *post_des;
+  gni_return_t status;
+
+  struct node_id *peer;
+  struct rpc_request *rr, *tmp;
+  struct hdr_sys *hs;
+  int err =  -ENOMEM;
+  uint32_t n;
+  int check=0;
+  int cnt=0;
+  void *tmpcmd;
+
+  status = GNI_CqVectorWaitEvent(cq_array, 3, (uint64_t)timeout, &event_data, &n);
+  if (status == GNI_RC_TIMEOUT)
+    return status;
+
+  else if (status != GNI_RC_SUCCESS)
+    {
+      printf("(%s): GNI_CqVectorWaitEvent PROCESSING ERROR.\n", __func__);
+      return status;
+    }
+
+  event_type = GNI_CQ_GET_TYPE(event_data);
+  //event_id = GNI_CQ_GET_MSG_ID(event_data);                                                                                           
+
+  if(GNI_CQ_STATUS_OK(event_data) == 0)
+    printf("Rank %d: receive event_id (%d) not done.\n",rank_id_pmi, event_id);
+
+  if(n == 0)
+    {
+      //Modified for Aries                                                                                                                  
+      event_id = 0x00FFFFFF & GNI_CQ_GET_MSG_ID(event_data);
+
+      if(event_id == 0)
+	return 0;
+      list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry)
+	{
+	  if(rr->index == event_id)
+	    {
+	      check=1;
+	      break;
+	    }
+	}
+
+      while(!GNI_CQ_STATUS_OK(event_data));
+
+      if(check == 0)
+	{
+	  printf("Rank %d: SRC Indexing err with event_id (%d), rr_num (%d) in (%s).\n", rank_id_pmi, event_id, rpc_s->rr_num,  __func__)\
+	    ;
+	  list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry)
+	    {
+	      printf("Rank(%d):rest Index(%d) with rr_num(%d).\n",rank_id_pmi, rr->index, rpc_s->rr_num);
+	    }
+	  goto err_out;
+	}
+
+
+      if(rr->type == 1)
+	{
+	  status = GNI_GetCompleted(rpc_s->src_cq_hndl, event_data, &post_des);
+	  if (status != GNI_RC_SUCCESS)
+	    {
+	      printf("(%s): GNI_GetCompleted PROCESSING ERROR.\n", __func__);
+	      goto err_status;
+	    }
+	}
+
+      err = rpc_cb_req_completion(rpc_s, rr);
+      if(err!=0)
+	goto err_out;
+
+      if(rr->refcont == 0)
+	{
+	  list_del(&rr->req_entry);
+	  rpc_s->rr_num--;
+	  err = rpc_free_index(rr->index);
+	  if(err!=0)
+	    goto err_out;
+	  free(rr);
+	}
+    }
+
+  if(n == 1)
+    {
+      event_id = GNI_CQ_GET_REM_INST_ID(event_data);
+
+      if(event_id >= INDEX_COUNT)
+	{
+          rr = rr_comm_alloc(0);
+          if(rr == NULL)
+            {
+              printf("rr_comm_alloc err (%d).\n", err);
+              goto err_out;
+            }
+
+          peer = rpc_get_peer(rpc_s, (int)event_id-INDEX_COUNT);
+          if(peer == NULL)
+            {
+              printf("(%s): rpc_get_peer err.\n", __func__);
+              return -ENOMEM;
+            }
+          rr->msg->msg_rpc = calloc(1, sizeof(struct rpc_cmd));
+          if(rr->msg->msg_rpc == NULL)
+            {
+              printf("Rank %d: calloc error.\n", rank_id_pmi);
+              return -ENOMEM;
+            }
+
+          do
+            {
+              status = GNI_SmsgGetNext(peer->ep_hndl, (void **) &tmpcmd);
+              cnt++;
+            } while(status == GNI_RC_NOT_DONE);
+
+          cnt=0;
+
+          if(status == GNI_RC_NOT_DONE){
+            printf("Rank %d: GNI_RC_NOT_DONE.\n",rank_id_pmi);//debug                                                                         
+            return 0;
+          }
+
+          if(status != GNI_RC_SUCCESS)
+            {
+              cnt=0;
+              printf("Rank %d: receive wrong event.\n", rank_id_pmi);//debug                                                                  
+              free(rr);
+              goto err_out;
+            }
+
+          memcpy(rr->msg->msg_rpc, tmpcmd, sizeof(struct rpc_cmd));
+
+          do
+            {
+              status = GNI_SmsgRelease(peer->ep_hndl);
+              if(status != GNI_RC_SUCCESS && status != GNI_RC_NOT_DONE)
+                {
+		  printf("GNI_SmsgRelease failed with %d.\n", status);
+		  goto err_status;
+                }
+            }while(status == GNI_RC_NOT_DONE);
+
+	  if (rr->msg->msg_rpc->cmd != cn_ack_credit) {
+	    peer->num_msg_recv++;
+	  }
+
+	  if(peer->num_msg_recv == RECVCREDIT)
+	    {
+	      err = rpc_credit_return(rpc_s, peer);
+	      if(err!=0)
+		goto err_out;
+	      peer->num_msg_recv = 0;
+	    }
+
+          err = rpc_cb_decode(rpc_s, rr);
+          if(err!=0)
+            goto err_out;
+
+          free(rr->msg->msg_rpc);
+          free(rr);
+	}
+
+      if( event_id < INDEX_COUNT )
+	{
+	  while(!GNI_CQ_STATUS_OK(event_data));
+
+	  list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry)
+	    {
+	      if( rr->index == event_id )
+		{
+		  check = 1;
+		  break;
+		}
+	    }
+
+	  if(check == 0)
+	    {
+	      printf("Rank %d: DST Indexing err with event_id (%d), rr_num (%d) in (%s).\n", rank_id_pmi, event_id, rpc_s->rr_num,  __func__);
+	      list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry)
+		{
+		  printf("Rank(%d):Index(%d) with rr_num(%d).\n",rank_id_pmi, rr->index, rpc_s->rr_num);
+		}
+
+	      goto err_out;
+	    }
+
+	  if(check == 1)
+	    {
+
+	      err = rpc_cb_req_completion(rpc_s, rr);
+	      if(err!=0)
+		goto err_out;
+	      if(rr->refcont == 0)
+		{
+		  list_del(&rr->req_entry);
+		  rpc_s->rr_num--;
+		  err = rpc_free_index(rr->index);
+		  if(err!=0)
+		    goto err_out;
+		  free(rr);
+		}
+	    }
+	}
+    }
+
+  if(n == 2)
+    {
+      if(event_id == rpc_s->ptlmap.id);
+      if(event_id != rpc_s->ptlmap.id)
+	{
+	  peer = rpc_get_peer(rpc_s, (int)event_id);
+	  if(peer == NULL)
+	    {
+	      printf("(%s): rpc_get_peer err.\n", __func__);
+	      return -ENOMEM;
+	    }
+            do
+              {
+                status = GNI_SmsgGetNext(peer->sys_ep_hndl, (void **) &hs);
+              } while(status != GNI_RC_SUCCESS);
+
+            err = sys_dispatch_event(rpc_s, hs);
+            if(err != 0)
+              goto err_out;
+            do
+              status = GNI_SmsgRelease(peer->sys_ep_hndl);
+            while(status == GNI_RC_NOT_DONE);
+            if(status != GNI_RC_SUCCESS)
+              {
+                printf("GNI_SmsgRelease failed with (%d).\n", status);
+                goto err_status;
+              }
+
+            peer->sys_msg_recv++;
+            if(peer->sys_msg_recv == RECVCREDIT)
+              {
+                err = sys_credit_return(rpc_s, peer);
+                if(err!=0)
+                  {
+                    printf("(%s): sys_credit_return failed with err (%d).\n", __func__, err);
+                    return err;
+                  }
+                peer->sys_msg_recv = 0;
+	      }
+	}
+
+    }
+
+  return 0;
+
+ err_out:
+  printf("(%s): err (%d).\n", __func__, err);
+  return err;
+ err_status:
+  printf("(%s): status (%d).\n", __func__, status);
+  return status;
+}
+
+#else
 
 inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 {
@@ -1596,6 +1884,8 @@ err_status:
   printf("(%s): status (%d).\n", __func__, status);
   return status;
 }
+
+#endif
 
 int rpc_process_msg_resend(struct rpc_server *rpc_s, struct node_id *peer_tab, int num_peer)
 {

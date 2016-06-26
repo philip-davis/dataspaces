@@ -335,7 +335,7 @@ static int ds_master_init(struct dart_server *ds)//testing
 	ds->rpc_s->address.address.sin_port = htons(err);
 
 	printf("ip=%s port=%d\n", inet_ntoa(ds->rpc_s->address.address.sin_addr), ntohs(ds->rpc_s->address.address.sin_port));
-	printf("nid=%d pid=%d\n", ds->rpc_s->ptlmap.nid, ds->rpc_s->ptlmap.pid);
+	//printf("nid=%d pid=%d\n", ds->rpc_s->ptlmap.nid, ds->rpc_s->ptlmap.pid);
 
 	//use socket address
 	err = rpc_write_socket(ds->rpc_s);
@@ -725,7 +725,7 @@ static int ds_boot_master(struct dart_server *ds)
 		goto err_out;
 	}
 
-	printf("PASS ds_master_init.\n");//debug
+	//printf("PASS ds_master_init.\n");//debug
 
 	return 0;
 

@@ -1,15 +1,17 @@
-AC_INIT([dataspaces],[1.6.0])
+AC_INIT([dataspaces],[1.6.1])
 AC_CONFIG_AUX_DIR(config)
 
-AM_INIT_AUTOMAKE([-Wall -Werror foreign])
+dnl AM_INIT_AUTOMAKE([-Wall -Wno-extra-portability -Werror subdir-objects foreign])
+AM_INIT_AUTOMAKE([-Wall -Werror subdir-objects foreign])
 
 AC_PROG_CC
 AC_PROG_CXX
 AC_PROG_FC
 AC_PROG_RANLIB
 
-dnl AC_PROG_LIBTOOL
+m4_ifdef([AM_PROG_AR],[AM_PROG_AR])
 
+dnl AC_PROG_LIBTOOL
 dnl AC_CRAY_PMI
 dnl AC_CRAY_UGNI
 AC_PORTALS
@@ -94,6 +96,17 @@ if test "x$enable_dimes" == "xyes"; then
             echo "DIMES only supported on Cray UGNI, IBM PAMI, IBM DCMF"
         fi
 fi
+
+dnl added for Aries EOS
+dnl Check if it is Aries network
+AC_ARG_ENABLE(aries,
+    [AS_HELP_STRING([--enable-aries],
+        [Build Dart on Aries network. ])])
+if test "x$enable_aries" == "xyes"; then
+	AC_DEFINE(DS_HAVE_ARIES, 1, [uGNI-Aires is enabled])
+	echo "uGNI Aries version enabled!"
+fi
+dnl AM_CONDITIONAL(DS_HAVE_ARIES, true) 
 
 dnl Check the max array dimension
 
