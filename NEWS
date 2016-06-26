@@ -1,12 +1,17 @@
+1.6.1 Released June 2016
+	- Added network support: Aries for Cray XC30
+	- Updated configuration files to support automake-1.12 version and above
+	- Fixed minor bugs
+
 1.6.0 Released July 2015
-    - Added network support: socket for TCP/IP
-    - Added feature: new data objects deleting API for deleting a version of data stored in staging 
-    - Fixed minor bugs.
+	- Added network support: socket for TCP/IP
+	- Added feature: new data objects deleting API for deleting a version of data stored in staging 
+	- Fixed minor bugs.
 
 1.5.0 Released January 2015 
-    - Version checking for client/server compatibility.
-    - Support for DIMES on InfiniBand.
-    - A new set of examples.
+	- Version checking for client/server compatibility.
+	- Support for DIMES on InfiniBand.
+	- A new set of examples.
 
 1.4.0 Released June 2014
 	- Added network support: PAMI for IBM BlueGene/Q

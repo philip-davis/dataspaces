@@ -98,7 +98,7 @@ the specific workflow scenario and the system you plan to run DataSpaces.
 
 The DataSpaces server executable has three command line options:
 
-  --server, -s    number of server instance/staging nodes
+  --server, -s    number of server instance/process
   --cnodes, -c    number of client processes
   --conf, -f      path to the configuration file
 
