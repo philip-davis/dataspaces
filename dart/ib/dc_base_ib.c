@@ -266,9 +266,11 @@ static int dc_unregister(struct dart_client *dc)	//Done
 
 	// Should wait here for 'unregister' confirmation. 
 	while(dc->f_reg) {
-		err = rpc_process_event(dc->rpc_s);
-		if(err < 0)
-			goto err_out;
+		sleep(3);
+		//err = rpc_process_event(dc->rpc_s);
+		//if(err < 0)
+		//	goto err_out;
+		break;
 	}
 	return 0;
       err_out_free:free(msg);
@@ -594,6 +596,8 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *comm, void *dart_re
 			printf("MPI_Comm_dup failed\n");
 			goto err_out;
 		}
+	}else{
+		dc->comm=NULL;
 	}
 
 	dc->rpc_s = rpc_server_init(0, NULL, 0, 10, num_peers, dc, DART_CLIENT);

@@ -1,0 +1,7 @@
+# DataSpaces 1.6.1 VM Edition
+---
+### This code has been modified from the master branch to work on an Ubuntu 14.04 LTS release with software emulated InfiniBand (soft iWARP).
+### The soft iWARP code is also enclosed in this repository, under the softIB directory.
+
+- config.h contains a change for InfiniBand wherein "ib0" must be changed to "eth0" on the VM (due to iWARP emulator)
+- IMPORTANT: config.h is overwritten every time the configure script is run! make sure that you always edit ib0 to eth0 afterward.

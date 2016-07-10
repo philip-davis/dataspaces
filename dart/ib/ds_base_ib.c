@@ -255,8 +255,9 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		}
 	}
 //      printf("rank %d: %s ends.\n\n", ds->self->ptlmap.id, __func__);//debug
+	peer->rpc_conn.f_connected=0;
 	return 0;
-      err_out:printf("(%s): failed. (%d)\n", __func__, err);
+        err_out:printf("(%s): failed. (%d)\n", __func__, err);
 	return err;
 }
 
