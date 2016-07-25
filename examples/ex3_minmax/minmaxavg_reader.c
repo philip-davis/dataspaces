@@ -74,7 +74,7 @@ int main(int argc, char **argv)
 	int array_size = sizeof(tempDataBuffer)/sizeof(int);
 	int local_max=tempDataBuffer[0];
 	int local_min=tempDataBuffer[0];
-	int sum; //for avg
+	int sum = 0; //for avg
 	
 	// Find Max and Min in our local buffer
 	// Also, sum the contents of this buffer for averaging purposes
