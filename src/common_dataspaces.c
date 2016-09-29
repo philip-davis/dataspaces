@@ -332,7 +332,7 @@ int common_dspaces_put(const char *var_name,
 int common_dspaces_remove (const char *var_name, unsigned int ver)
 {
 
-	if (!is_dspaces_lib_init()) return;
+	if (!is_dspaces_lib_init()) return 0;
 
         int err = dcg_remove(var_name, ver);
         if (err < 0)
