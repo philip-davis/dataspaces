@@ -38,6 +38,7 @@
 #include "debug.h"
 #include "ss_data.h"
 #include "queue.h"
+#include "mem_persist.h"
 
 #ifdef TIMING_SSD
 #include "timer.h"
@@ -1377,19 +1378,123 @@ struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *odsc, void *dat
 
 void obj_data_free_with_data(struct obj_data *od)
 {
-	if (od->_data) {
-		uloga("'%s()': explicit data free on descriptor %s.\n", 
+	if (od->sl == in_memory || od->sl == in_memory_ssd){
+		if (od->_data) {
+			uloga("'%s()': explicit data free on descriptor %s.\n",
+				__func__, od->obj_desc.name);
+			free(od->_data);
+		}
+		else if (od->_data){
+			free(od->data); 
+		}
+		else{
+			uloga("'%s()': ERROR double data free on descriptor %s.\n",
 			__func__, od->obj_desc.name);
-		free(od->_data);
+		}
 	}
-	else    free(od->data);
-        free(od);
+	if ((od->sl == in_ssd || od->sl == in_memory_ssd) && od->s_data){
+		obj_data_free_in_ssd(od->s_data);
+	}
+    free(od);
+}
+
+/*free object data in memory */
+void obj_data_free_in_mem(struct obj_data *od)
+{
+#ifdef DEBUG
+	char *str;
+	asprintf(&str, "obj_data_free_in_mem: od->_data %p, od->data %p", od->_data, od->data);
+	uloga("'%s()': %s\n", __func__, str);
+	free(str);
+#endif
+	if (od->_data) {
+		uloga("'%s()': explicit data free on descriptor %s.\n",
+			__func__, od->obj_desc.name);
+		free(od->_data);	
+	}
+	else if (od->data){
+		free(od->data);	
+	}
+	else{
+		uloga("'%s()': ERROR double data free on descriptor %s.\n",
+			__func__, od->obj_desc.name);
+	}
+	od->data = NULL;
+	od->_data = NULL;
+	if (od->sl == in_memory_ssd){ 
+		od->sl = in_ssd;
+	}
+	od->so = normal;
+}
+
+/*free object data in ssd */
+void obj_data_free_in_ssd(struct obj_data *od)
+{
+	//pmem_free(od->s_data);
+	od->s_data = NULL;
+	if (od->sl == in_memory_ssd){
+		od->sl = in_memory;
+	}
+}
+
+/*copy object data from memory to ssd */
+void obj_data_copy_to_ssd(struct obj_data *od)
+{
+	od->s_data = pmem_alloc(obj_data_size(&od->obj_desc));
+#ifdef DEBUG
+	char *str;
+	asprintf(&str, "obj_data_copy_to_ssd: od->s_data = pmem_alloc(obj_data_size(&od->obj_desc)) %p", od->s_data);
+	uloga("'%s()': %s\n", __func__, str);
+	free(str);
+#endif
+	if (od->s_data != NULL){
+		if (od->_data) {
+			memcpy(od->s_data, od->_data, obj_data_size(&od->obj_desc) + 7); //void *memcpy(void *dest, const void *src, size_t n);
+			msync(od->s_data, obj_data_size(&od->obj_desc) + 7, MS_SYNC);//int msync ( void * ptr, size_t len, int flags) flags = MS_ASYNC|MS_SYNC
+
+			uloga("'%s()': explicit data copy to ssd on descriptor %s.\n",
+			__func__, od->obj_desc.name);
+		}
+		else{
+			memcpy(od->s_data, od->data, obj_data_size(&od->obj_desc)); //void *memcpy(void *dest, const void *src, size_t n);
+			msync(od->s_data, obj_data_size(&od->obj_desc), MS_SYNC);//int msync ( void * ptr, size_t len, int flags) flags = MS_ASYNC|MS_SYNC
+		}
+	}
+	else{ 
+		uloga("%s(): ERROR od->s_data %p, no pmem space is allocated! \n", __func__, od->s_data);
+
+	}
+	od->sl = in_memory_ssd;
+}
+
+/*copy object data from ssd to mem */
+void obj_data_copy_to_mem(struct obj_data *od)
+{
+	if (od->s_data) {
+		od->_data = od->data = malloc(obj_data_size(&od->obj_desc) + 7);
+		if (!od->_data) {
+			free(od);
+			uloga("%s(): ERROR malloc od->_data %p is is NULL! \n", __func__, od->_data);
+		}
+		ALIGN_ADDR_QUAD_BYTES(od->data);
+		memcpy(od->_data, od->s_data, obj_data_size(&od->obj_desc) + 7); //void *memcpy(void *dest, const void *src, size_t n);
+		uloga("'%s()': explicit data copy to mem on descriptor %s.\n",
+			__func__, od->obj_desc.name);
+	}
+	else{
+		uloga("%s(): ERROR od->s_data %p is is NULL! \n", __func__, od->s_data);
+	}
+	od->sl = in_memory_ssd;
 }
 
 void obj_data_free(struct obj_data *od)
 {
-	if (od->_data)
+	if ((od->sl == in_memory || od->sl == in_memory_ssd) && od->_data){
 		free(od->_data);
+	}
+	if ((od->sl == in_ssd || od->sl == in_memory_ssd) && od->s_data){
+		obj_data_free_in_ssd(od);
+	}
 	free(od);
 }
 
