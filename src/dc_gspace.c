@@ -1195,6 +1195,48 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
 }
 
 /*
+Prefetch a data object from the distributed storage. We call this
+routine when we have all object descriptors for all parts.
+*/
+
+static int dcg_obj_data_hint(struct query_tran_entry *qte)
+{
+	struct msg_buf *msg;
+	struct node_id *peer;
+	struct hdr_obj_get *oh;
+	struct obj_data *od;
+	int err;
+
+	list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
+		peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
+
+		err = -ENOMEM;
+		msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+		if (!msg) {
+			goto err_out;
+		}
+
+		msg->msg_rpc->cmd = ss_obj_hint;
+		msg->msg_rpc->id = DCG_ID;
+
+		oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
+		oh->qid = qte->q_id;
+		oh->u.o.odsc = od->obj_desc;
+		oh->u.o.odsc.version = qte->q_obj.version;
+		memcpy(&oh->gdim, &qte->gdim,
+			sizeof(struct global_dimension));
+
+		err = rpc_send(dcg->dc->rpc_s, peer, msg);
+	}
+	if (err == 0)
+		return qte->q_id;
+
+	qt_remove(&dcg->qt, qte);
+	err_out:
+		ERROR_TRACE();
+}
+
+/*
   Initiate a custom filter retrieve operation.
   TODO: add a parameter for cusom functions ... 
 */
@@ -1735,6 +1777,68 @@ int dcg_obj_sync(int sync_op_id)
  err_out:
         uloga("'%s()': failed with %d.\n", __func__, err);
         return err;
+}
+
+/*
+*/
+int dcg_obj_hint(struct obj_data *od)
+{
+	struct query_tran_entry *qte;
+	const struct query_cache_entry *qce;
+	int err = -ENOMEM;
+#ifdef TIMING_PERF
+	double tm_st, tm_end;
+	tm_st = timer_read(&tm_perf);
+#endif
+
+	qte = qte_alloc(od, 1);
+	if (!qte)
+		goto err_out;
+
+	qt_add(&dcg->qt, qte);
+
+	versions_reset();
+
+	// TODO:  I have  intentionately  disabled the  cache here.  I
+	// should reconsider.
+	// qce = qc_find(&dcg->qc, &od->obj_desc);
+	qce = 0;
+	if (qce) {
+		err = qte_set_odsc_from_cache(qte, qce);
+		if (err < 0) {
+			free(qte);
+			goto err_out;
+		}
+	}
+	else {
+		err = get_dht_peers(qte);
+		if (err < 0)
+			goto err_qt_free;
+		DC_WAIT_COMPLETION(qte->f_peer_received == 1);
+
+		err = get_obj_descriptors(qte);
+		if (err < 0) {
+			goto err_qt_free;
+		}
+		DC_WAIT_COMPLETION(qte->f_odsc_recv == 1);
+	}
+
+
+#ifdef TIMING_PERF
+	tm_end = timer_read(&tm_perf);
+	uloga("TIMING_PERF locate_data ts %d peer %d time %lf %s\n",
+		od->obj_desc.version, dcg_get_rank(dcg), tm_end - tm_st, log_header);
+	tm_st = tm_end;
+#endif
+
+	err = dcg_obj_data_hint(qte);
+	return err;
+
+err_qt_free:
+	qt_remove(&dcg->qt, qte);
+	free(qte);
+err_out:
+	ERROR_TRACE();
 }
 
 /*
