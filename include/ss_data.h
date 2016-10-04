@@ -72,6 +72,9 @@ struct gdim_list_entry {
         struct global_dimension gdim; 
 };
 
+enum storage_level { in_memory, in_ssd, in_memory_ssd };/* storage level */
+enum storage_opera { normal, prefetching, caching };/* storage operation */
+
 struct obj_data {
         struct list_head        obj_entry;
 
@@ -89,11 +92,18 @@ struct obj_data {
 
         /* Flag to mark if we should free this data object. */
         unsigned int            f_free:1;
+
+	enum storage_level       sl; 
+	enum storage_opera       so;
+
+	void                    *s_data;	/* data pointer in ssd Duan*/
 };
 
 struct ss_storage {
         int                     num_obj;
         int                     size_hash;
+        uint64_t                mem_used;
+	uint64_t                mem_size;
         /* List of data objects. */
         struct list_head        obj_hash[1];
 };
@@ -283,4 +293,8 @@ struct gdim_list_entry* lookup_gdim_list(struct list_head *gdim_list, const char
 void free_gdim_list(struct list_head *gdim_list);
 void set_global_dimension(struct list_head *gdim_list, const char *var_name,
             const struct global_dimension *default_gdim, struct global_dimension *gdim);
+void obj_data_free_in_mem(struct obj_data *od);
+void obj_data_free_in_ssd(struct obj_data *od);
+void obj_data_copy_to_ssd(struct obj_data *od);
+void obj_data_copy_to_mem(struct obj_data *od);
 #endif /* __SS_DATA_H_ */
