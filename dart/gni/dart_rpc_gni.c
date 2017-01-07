@@ -237,16 +237,6 @@ static int init_gni (struct rpc_server *rpc_s)
 				printf("SERVER: Error Dynamic RDMA Credentials Acquire Failed (%s)", __func__);
     			goto err_out;
     		}
-
-    		//ACCESS
-    		err = drc_access(rpc_s->drc_credential_id,0,&drc_credential_info);
-    		if(err != DRC_SUCCESS){
-    			//error in acquiring - release the credential 
-    			printf("SERVER: Error Dynamic RDMA Credentials (%s)", __func__);
-    			drc_release(rpc_s->drc_credential_id,0);
-    			goto err_out;
-    		}
-
     		//WRITE TO FILE
     		rpc_write_drc(rpc_s->drc_credential_id);
     	}
@@ -260,7 +250,6 @@ static int init_gni (struct rpc_server *rpc_s)
     		printf("ERROR: cmp_type unknown (%s)", __func__);
     		goto err_out;
     	}
-
     }
 
     // WAIT FOR ACQUIRE CREDENTIAL
@@ -275,18 +264,18 @@ static int init_gni (struct rpc_server *rpc_s)
     	goto err_out;
 	}
 
-	//ALL CLIENT PROCS MUST CALL DRC ACCESS
-    if(rpc_s->cmp_type==DART_CLIENT){
-   		drc_access(rpc_s->drc_credential_id,0,&drc_credential_info);
-        if(err != DRC_SUCCESS){
-    		//error in acquiring - release the credential 
-    		printf("CLIENT: Error Dynamic RDMA Credentials (%s)", __func__);
-    		drc_release(rpc_s->drc_credential_id,0);
-    		goto err_out;
-    	}
+	//ACCESS
+    err = drc_access(rpc_s->drc_credential_id,0,&drc_credential_info);
+    if(err != DRC_SUCCESS){
+    	//error in acquiring - release the credential 
+    	printf("Error on Access Dynamic RDMA Credentials, CMP_ID: %d, rank_id: %d, (%s)",rpc_s->cmp_type,rank_id_pmi,__func__);
+    	drc_release(rpc_s->drc_credential_id,0);
+    	goto err_out;
     }
-#endif 
 
+    PMI_Barrier();
+
+#endif 
 
     if (ptag == 0 || cookie == 0) {
 #ifdef GNI_PTAG
@@ -1463,21 +1452,19 @@ int rpc_write_drc(uint32_t rdma_credential)
 }
 
 int rpc_read_drc(uint32_t *rdma_credential){
-        char *cred;
-
         FILE *f;
         int err;
-
-        cred = getenv("RDMACRED");
+        uint32_t temp_cred;
 
         f = fopen("cred", "rt");
 
         if (!f) {
-		err = -ENOENT;
-		goto err_out;
+			err = -ENOENT;
+			goto err_out;
         }
 
-        err = fscanf(f, "RDMACRED=%u\n", &rdma_credential);
+        err = fscanf(f, "RDMACRED=%" SCNu32 "\n", &temp_cred);
+		*rdma_credential=temp_cred;
 
         fclose(f);
         if (err == 1)
