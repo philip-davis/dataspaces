@@ -660,8 +660,9 @@ static int sys_cleanup (struct rpc_server *rpc_s)
 	*///SCA SYS
 
 #ifdef DS_HAVE_DRC
-	printf("Releasing DRC Credential for Shutdown.");
-	drc_release(rpc_s->drc_credential_id, 0);
+	if(rpc_s->cmp_type == DART_SERVER && rank_id_pmi==0){
+		drc_release(rpc_s->drc_credential_id, 0);
+	}
 #endif
 
 	for(i=0; i < rpc_s->num_rpc_per_buff; i++)
