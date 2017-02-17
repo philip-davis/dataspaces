@@ -672,12 +672,13 @@ static int dc_boot_master(struct dart_client *dc, int appid)
         int i, err = -ENOMEM;
 	struct node_id *peer;
 
+	printf("start dc_boot_master\n");
 	err = dc_master_init(dc);
 	if (err != 0){
 		printf("Rank 0: master client failed to init. (%d)\n", err);
 		goto err_out;
 	}
-
+	printf("dc_boot_master done.\n");
 	return 0;
 
 err_out:
@@ -697,6 +698,8 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 	gni_return_t status;
 
 	gni_smsg_attr_t *smsg_attr;
+
+	printf("dc_boot_slave start\n");
 
 	// PMI_Bcast peer_size
 	err = PMI_Bcast(&dc->peer_size, sizeof(int));
@@ -721,8 +724,10 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 
 	dcreg = (struct ptlid_map *)recv_buffer;
 	peer = dc->peer_tab;
+	
 	for (i = 0; i < dc->peer_size; i++) 
 	{
+		printf("init peer %i\n", i);
 		peer->ptlmap.nid = dcreg->nid;
 		peer->ptlmap.pid = dcreg->pid;
 		peer->ptlmap.appid = dcreg->appid;
@@ -738,6 +743,7 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 	free(recv_buffer);
 
 	for(i=0;i<dc->peer_size; i++){
+		printf("peer connection create %i\n", i);
 		if(i == dc->rpc_s->ptlmap.id)
 			continue;
 
@@ -798,7 +804,7 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 			sp++;
 		k++;
 	}
-
+	printf("rpc_smsg_init\n");
 		err = rpc_smsg_init(dc->rpc_s, sp);
 		if (err != 0){
 			printf("Rank %d: failed for rpc_smsg_init %d. (%d)\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, err);
@@ -845,7 +851,7 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 		printf("Rank %d: failed for broadcast information to slave clients. (%d)\n", dc->rpc_s->ptlmap.id, err);			
 		goto err_out;
 	}
-
+	printf("PMI Barrier in dc_boot_slave...\n");
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);	
 
@@ -911,7 +917,7 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 	free(recv_buffer);
 
 	dc->f_reg  = 1;
-
+	printf("done with dc_slave_boot\n");
 	return 0;
 
  err_free:
@@ -931,6 +937,8 @@ static int dc_boot(struct dart_client *dc, int appid)
 
 	i = sp = 0;
 	counter = 0;
+
+	printf("start dc_boot\n");
 
 	if(dc->rpc_s->ptlmap.id == 0){
 		err = dc_boot_master(dc, appid);
@@ -977,7 +985,7 @@ static int dc_boot(struct dart_client *dc, int appid)
 	rpc_server_set_rpc_per_buff(dc->rpc_s, dc->peer_size);
 
 	dc->f_reg = 1;
-
+	printf("done with dc_boot\n");
 	return 0;
 
  err_out:
@@ -996,6 +1004,9 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
 	int node_size;
 	gni_return_t status;
 
+	
+	printf("start dc_alloc\n");
+
 	dc = calloc(1, sizeof(*dc));
 	if (!dc)
 		return NULL;
@@ -1003,6 +1014,8 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
 	dc->dart_ref = dart_ref;
 	dc->cp_in_job = num_peers;
 	dc->num_cp = num_peers;
+
+	printf("rpc init\n");
 
 	dc->rpc_s = rpc_server_init(30, num_peers, dc, DART_CLIENT, appid);
         if (!dc->rpc_s) {
@@ -1012,6 +1025,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
 	dc->rpc_s->app_minid = appid;
 	dc->rpc_s->app_num_peers = num_peers;
 
+	printf("some other service registration.\n");
         rpc_add_service(cn_register, dcrpc_register);//not used in GNI version
         rpc_add_service(cp_barrier, dcrpc_barrier);
 	rpc_add_service(cn_unregister, dcrpc_unregister);
@@ -1027,6 +1041,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
 	peer = dc->peer_tab;
 	for (i = 0; i < dc->peer_size; i++) 
 	{
+		printf("peer %i init.\n", i);
 		INIT_LIST_HEAD(&peer->req_list);
 		peer->num_msg_at_peer = dc->rpc_s->max_num_msg;
 
@@ -1040,12 +1055,14 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
 		peer++;
 	}
 
+	printf("Peer initilization barrier...\n");
 	err = PMI_Barrier();	
 	assert(err == PMI_SUCCESS);
 
 #ifdef DEBUG
 	printf("'%s(%d:%d:%d:%d)': init ok.\n", __func__, dc->self->ptlmap.id, dc->self->ptlmap.appid, dc->self->ptlmap.pid, dc->self->ptlmap.nid);//partial debug
 #endif
+	printf("dc_alloc done\n");
 	//print_dc(dc);
         return dc;
 

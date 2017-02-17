@@ -1939,7 +1939,7 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 
 	if (rpc_s_instance)
 		return rpc_s_instance;
-
+	printf("alloc and init.\n");
 	rpc_s = calloc(1, sizeof(*rpc_s));
 	if (!rpc_s)
 		goto err_free;
@@ -1952,6 +1952,7 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 	rpc_s->ptlmap.appid = appid;
 
 	//Use PMI library to get necessary global information.
+    printf("init PMI\n");
     PMI_BOOL initialized;
     if (PMI_SUCCESS == PMI_Initialized(&initialized) ) {
             if (PMI_TRUE != initialized) {
@@ -1959,23 +1960,26 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
                     assert(err == PMI_SUCCESS);
             }
     }
+	printf("some more PMI ops.\n");
 	err = PMI_Get_size(&num_of_rank_pmi);
 	assert(err == PMI_SUCCESS);
 	err = PMI_Get_rank(&rank_id_pmi);	
 	assert(err == PMI_SUCCESS);
-
+	printf("pmi_size = %i, PMI_rank = %i\n", num_of_rank_pmi, rank_id_pmi);
 	rpc_s->ptlmap.id = rank_id_pmi;
 	rpc_s->num_rpc_per_buff = num_rpc_per_buff;
 
+	printf("init gni.\n");
 	err = init_gni(rpc_s);
 	if (err != 0)
 		goto err_free;
 
+	printf("gather_node_id\n");
 	rpc_s->peer_tab = gather_node_id(appid);
 	if(rpc_s->peer_tab == NULL)
 		goto err_free;
 
-
+	printf("GNI_CqCreate1\n");
         status = GNI_CqCreate(rpc_s->nic_hndl, ENTRY_COUNT, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->sys_cq_hndl);
         if (status != GNI_RC_SUCCESS)
         {
@@ -1983,7 +1987,7 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
                 goto err_out;
         }
 
-
+	printf("GNI_CqCreate2\n");
 	status = GNI_CqCreate(rpc_s->nic_hndl,ENTRY_COUNT, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->src_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
@@ -1991,6 +1995,7 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 		goto err_out;
 	}
 
+	printf("GNI_CqCreate3\n");
 	status = GNI_CqCreate(rpc_s->nic_hndl, ENTRY_COUNT, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->dst_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
@@ -1998,6 +2003,7 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 		goto err_out;
 	}
 
+	printf("PMI Barrier...\n");
 	err = PMI_Barrier();	
 	assert(err == PMI_SUCCESS);
 
@@ -2019,7 +2025,8 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 
 	//	printf("rpc_cmd size is %d.\n", sizeof(struct rpc_cmd));
 
-	// Init succeeded, set the instance reference here.
+	// Init succeeded, set the instance reference here
+	printf("rpc_server_init done.\n");
 	rpc_s_instance = rpc_s;
 	return rpc_s;
 

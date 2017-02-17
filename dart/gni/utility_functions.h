@@ -70,6 +70,9 @@ allgather(void *in, void *out, int len)
     static int     *ivec_ptr = NULL;
     static int      job_size = 0;
     int             my_rank;
+    int		    my_app_rank;
+    int		    app_job_size;
+    int		    appnum;
     char           *out_ptr;
     int             rc;
     char           *tmp_buf;
@@ -84,7 +87,14 @@ allgather(void *in, void *out, int len)
         ivec_ptr = (int *) malloc(sizeof(int) * job_size);
         assert(ivec_ptr != NULL);
 
+	PMI_Get_appnum(&appnum);
+	PMI_Get_app_size(appnum, &app_job_size);
+	PMI_Get_rank_in_app(&my_app_rank);
+	printf("App rank, size: %i, %i\n", app_job_size, my_app_rank);
+
+	printf("Before allgather (rank = %i, size = %i)\n", my_rank, job_size); 
         rc = PMI_Allgather(&my_rank, ivec_ptr, sizeof(int));
+	printf("After allgather (rank = %i, size = %i)\n", my_rank, job_size);
         assert(rc == PMI_SUCCESS);
 
         already_called = 1;
