@@ -1501,7 +1501,6 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
         struct dcg_space *dcg_l;
         int i, err = -ENOMEM;
 
-	printf("dcg_alloc start.\n");
         if (dcg)
                 return dcg;
 
@@ -1514,9 +1513,7 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
                 sync_op.opid[i] = 1;
 
         dcg_l->num_pending = 0;
-	printf("alloc and initted.\n");
         qt_init(&dcg_l->qt);
-	printf("qt init done.\n");
         // rpc_add_service(ss_obj_get_dht_peers, dcgrpc_obj_get_dht_peers);
         rpc_add_service(ss_obj_get_desc, dcgrpc_obj_get_desc);
         rpc_add_service(ss_obj_cq_notify, dcgrpc_obj_cq_update);
@@ -1529,21 +1526,13 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
         /* Added for ccgrid demo. */
         rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);	
 	printf("added rpc services\n");
-#ifdef HAVE_INFINIBAND
-        dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
-#elif HAVE_PAMI
-        dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
-#elif HAVE_TCP_SOCKET
-        dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
-#else 
-        dcg_l->dc = dc_alloc(num_nodes, appid, dcg_l);
-#endif
+	dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
+//#endif
         if (!dcg_l->dc) {
                 free(dcg_l);
                 goto err_out;
         }
 
-	printf("Initialize various datastructures.\n");
         INIT_LIST_HEAD(&dcg_l->locks_list);
         init_gdim_list(&dcg_l->gdim_list);    
         qc_init(&dcg_l->qc);
@@ -1553,7 +1542,6 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
         timer_init(&tm_perf, 1);
         timer_start(&tm_perf);
 #endif
-	printf("dcg_alloc done.\n");
         dcg = dcg_l;
         return dcg_l;
  err_out:

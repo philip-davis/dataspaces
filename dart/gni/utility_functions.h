@@ -41,9 +41,10 @@
 #include "aries/misc/exceptions.h"
 #endif
 #include <sys/utsname.h>
+#include <mpi.h>
 
 static int             compare_data_failed = 0;
-int             rank_id;
+static int             rank_id;
 struct utsname  uts_info;
 static int             v_option = 0;
 
@@ -63,13 +64,13 @@ static int             passed = 0;
  */
 
 static void
-allgather(void *in, void *out, int len)
+allgather(void *in, void *out, int len, void *comm)
 {
     static int      already_called = 0;
     int             i;
     static int     *ivec_ptr = NULL;
     static int      job_size = 0;
-    int             my_rank;
+    static int      my_rank;
     int		    my_app_rank;
     int		    app_job_size;
     int		    appnum;
@@ -78,40 +79,50 @@ allgather(void *in, void *out, int len)
     char           *tmp_buf;
 
     if (!already_called) {
-        rc = PMI_Get_size(&job_size);
-        assert(rc == PMI_SUCCESS);
+	if(NULL != comm) {
+	    rc = MPI_Comm_size(*((MPI_Comm *)comm), &job_size);
+            assert(rc == MPI_SUCCESS);
 
-        rc = PMI_Get_rank(&my_rank);
-        assert(rc == PMI_SUCCESS);
+            rc = MPI_Comm_rank(*((MPI_Comm *)comm), &my_rank);
+            assert(rc == MPI_SUCCESS);
 
-        ivec_ptr = (int *) malloc(sizeof(int) * job_size);
-        assert(ivec_ptr != NULL);
+	    ivec_ptr = (int *) malloc(sizeof(int) * job_size);
+            assert(ivec_ptr != NULL);
+	    rc = MPI_Allgather(&my_rank, 1, MPI_INT, ivec_ptr, 1, MPI_INT, *((MPI_Comm *)comm));
+	    assert(rc == MPI_SUCCESS);
 
-	PMI_Get_appnum(&appnum);
-	PMI_Get_app_size(appnum, &app_job_size);
-	PMI_Get_rank_in_app(&my_app_rank);
-	printf("App rank, size: %i, %i\n", app_job_size, my_app_rank);
+	} else {
+            rc = PMI_Get_size(&job_size);
+            assert(rc == PMI_SUCCESS);
 
-	printf("Before allgather (rank = %i, size = %i)\n", my_rank, job_size); 
-        rc = PMI_Allgather(&my_rank, ivec_ptr, sizeof(int));
-	printf("After allgather (rank = %i, size = %i)\n", my_rank, job_size);
-        assert(rc == PMI_SUCCESS);
+            rc = PMI_Get_rank(&my_rank);
+            assert(rc == PMI_SUCCESS);
 
+            ivec_ptr = (int *) malloc(sizeof(int) * job_size);
+            assert(ivec_ptr != NULL);
+
+            rc = PMI_Allgather(&my_rank, ivec_ptr, sizeof(int));
+            assert(rc == PMI_SUCCESS);
+	}
         already_called = 1;
     }
 
     tmp_buf = (char *) malloc(job_size * len);
     assert(tmp_buf);
 
-    rc = PMI_Allgather(in, tmp_buf, len);
-    assert(rc == PMI_SUCCESS);
+    if(NULL != comm) {
+	rc = MPI_Allgather(in, len, MPI_BYTE, tmp_buf, len, MPI_BYTE, *((MPI_Comm *)comm));
+	assert(rc == MPI_SUCCESS);
+    } else {
+        rc = PMI_Allgather(in, tmp_buf, len);
+        assert(rc == PMI_SUCCESS);
+    }
 
     out_ptr = out;
 
     for (i = 0; i < job_size; i++) {
         memcpy(&out_ptr[len * ivec_ptr[i]], &tmp_buf[i * len], len);
     }
-
     free(tmp_buf);
 }
 
@@ -235,7 +246,7 @@ gather_nic_addresses(void)
      * Get the nic addresses from all of the other ranks.
      */
 
-    allgather(&local_addr, all_addrs, sizeof(int));
+    allgather(&local_addr, all_addrs, sizeof(int), NULL);
 
     return (void *) all_addrs;
 }

@@ -536,7 +536,7 @@ static int ds_master_init(struct dart_server *ds)//testing
         assert(err == PMI_SUCCESS);	
 	*///SCA SYS
 
-	allgather(&ds->rpc_s->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t));
+	allgather(&ds->rpc_s->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t), NULL);
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);
 
@@ -843,7 +843,7 @@ static int ds_boot_slave(struct dart_server *ds)
         assert(err == PMI_SUCCESS);	
 	*/// SCA SYS
 
-	allgather(&ds->rpc_s->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t));
+	allgather(&ds->rpc_s->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t), NULL);
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);
 
@@ -1003,7 +1003,7 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref)
 	ds->num_cp = num_cp; //total number of peers from all applications
 	INIT_LIST_HEAD(&ds->app_list);
 
-	ds->rpc_s = rpc_server_init(30, ds->peer_size, ds, DART_SERVER, 0);
+	ds->rpc_s = rpc_server_init(30, ds->peer_size, ds, DART_SERVER, 0, NULL);
 	if (!ds->rpc_s)
 		goto err_free_dsrv;
 
@@ -1097,7 +1097,7 @@ void ds_free(struct dart_server *ds)//not done
 
 	int track = ds->self->ptlmap.id;//debug
 
-	err = rpc_server_free(ds->rpc_s);//not done
+	err = rpc_server_free(ds->rpc_s, NULL);//not done
 	if(err!=0)
 		printf("(%s): rpc server free failed.\n", __func__);
 	//printf("Rank(%d): step2.1.\n",track);//debug

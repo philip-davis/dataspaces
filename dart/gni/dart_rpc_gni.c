@@ -35,6 +35,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+
+#include <mpi.h>
+
 #include "dart_rpc_gni.h"
 #include "debug.h"
 //#include "gni_pub.h"
@@ -67,8 +70,9 @@
 
 
 static int first_spawned;
-static int rank_id_pmi; //this global rank_id is fetched by using pmi library.
-static int num_of_rank_pmi;
+static int rank_id; 
+static int rank_id_pmi;
+static int num_of_rank;
 
 static uint32_t cookie;
 static uint32_t cookie2;
@@ -603,7 +607,7 @@ static int sys_cleanup (struct rpc_server *rpc_s)
 		status = GNI_EpUnbind(rpc_s->peer_tab[i].sys_ep_hndl);
 		if (status != GNI_RC_NOT_DONE && status != GNI_RC_SUCCESS) 
 		{
-		  printf("(%d)Fail: GNI_EpUnbind(%d) returned error. %d.\n", rank_id_pmi, rpc_s->peer_tab[i].ptlmap.id, status);
+		  printf("(%d)Fail: GNI_EpUnbind(%d) returned error. %d.\n", rank_id, rpc_s->peer_tab[i].ptlmap.id, status);
 			goto err_out;
 		}
 
@@ -656,21 +660,23 @@ static int clean_gni (struct rpc_server *rpc_s)
  *            other ranks.
  */
 
-struct node_id *gather_node_id(int appid)
+struct node_id *gather_node_id(int appid, void *comm)
 {
 	size_t		addr_len;
 	struct node_id	*all_addrs;
 	struct node_id	local_addr;
 	int		rc;
-	int		size;
+	//int		size;
 
 	memset(&local_addr, 0, sizeof(struct node_id));
 
-	rc = PMI_Get_size(&size);
-	assert(rc == PMI_SUCCESS);
+	/*
+	    rc = PMI_Get_size(&size);
+	    assert(rc == PMI_SUCCESS);
 
-	rc = PMI_Get_rank(&local_addr.ptlmap.id);
-	assert(rc == PMI_SUCCESS);
+	    rc = PMI_Get_rank(&local_addr.ptlmap.id);
+	    assert(rc == PMI_SUCCESS);
+	*/
 	local_addr.ptlmap.nid = get_gni_nic_address(0);
 	local_addr.ptlmap.pid = getpid();
 	local_addr.ptlmap.appid = appid;
@@ -678,12 +684,12 @@ struct node_id *gather_node_id(int appid)
 	addr_len = sizeof(struct node_id);
 
  	//Allocate a buffer to hold the node_id from all of the other ranks.
-	all_addrs = (struct node_id *) malloc(addr_len * size);
+	all_addrs = (struct node_id *) malloc(addr_len * num_of_rank);
 	assert(all_addrs != NULL);
 
 	//Get the node_id from all of the other ranks.
-	allgather(&local_addr, all_addrs, sizeof(struct node_id));
-
+	allgather(&local_addr, all_addrs, sizeof(struct node_id), comm);
+	
 	return (struct node_id *)all_addrs;
 }
 
@@ -1389,7 +1395,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
   //event_id = GNI_CQ_GET_MSG_ID(event_data);                                                                                           
 
   if(GNI_CQ_STATUS_OK(event_data) == 0)
-    printf("Rank %d: receive event_id (%d) not done.\n",rank_id_pmi, event_id);
+    printf("Rank %d: receive event_id (%d) not done.\n",rank_id, event_id);
 
   if(n == 0)
     {
@@ -1411,11 +1417,11 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 
       if(check == 0)
 	{
-	  printf("Rank %d: SRC Indexing err with event_id (%d), rr_num (%d) in (%s).\n", rank_id_pmi, event_id, rpc_s->rr_num,  __func__)\
+	  printf("Rank %d: SRC Indexing err with event_id (%d), rr_num (%d) in (%s).\n", rank_id, event_id, rpc_s->rr_num,  __func__)\
 	    ;
 	  list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry)
 	    {
-	      printf("Rank(%d):rest Index(%d) with rr_num(%d).\n",rank_id_pmi, rr->index, rpc_s->rr_num);
+	      printf("Rank(%d):rest Index(%d) with rr_num(%d).\n",rank_id, rr->index, rpc_s->rr_num);
 	    }
 	  goto err_out;
 	}
@@ -1468,7 +1474,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
           rr->msg->msg_rpc = calloc(1, sizeof(struct rpc_cmd));
           if(rr->msg->msg_rpc == NULL)
             {
-              printf("Rank %d: calloc error.\n", rank_id_pmi);
+              printf("Rank %d: calloc error.\n", rank_id);
               return -ENOMEM;
             }
 
@@ -1481,14 +1487,14 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
           cnt=0;
 
           if(status == GNI_RC_NOT_DONE){
-            printf("Rank %d: GNI_RC_NOT_DONE.\n",rank_id_pmi);//debug                                                                         
+            printf("Rank %d: GNI_RC_NOT_DONE.\n",rank_id);//debug                                                                         
             return 0;
           }
 
           if(status != GNI_RC_SUCCESS)
             {
               cnt=0;
-              printf("Rank %d: receive wrong event.\n", rank_id_pmi);//debug                                                                  
+              printf("Rank %d: receive wrong event.\n", rank_id);//debug                                                                  
               free(rr);
               goto err_out;
             }
@@ -1540,10 +1546,10 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 
 	  if(check == 0)
 	    {
-	      printf("Rank %d: DST Indexing err with event_id (%d), rr_num (%d) in (%s).\n", rank_id_pmi, event_id, rpc_s->rr_num,  __func__);
+	      printf("Rank %d: DST Indexing err with event_id (%d), rr_num (%d) in (%s).\n", rank_id, event_id, rpc_s->rr_num,  __func__);
 	      list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry)
 		{
-		  printf("Rank(%d):Index(%d) with rr_num(%d).\n",rank_id_pmi, rr->index, rpc_s->rr_num);
+		  printf("Rank(%d):Index(%d) with rr_num(%d).\n",rank_id, rr->index, rpc_s->rr_num);
 		}
 
 	      goto err_out;
@@ -1655,7 +1661,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	event_id = GNI_CQ_GET_MSG_ID(event_data);
 
 	if(GNI_CQ_STATUS_OK(event_data) == 0)
-		printf("Rank %d: receive event_id (%d) not done.\n",rank_id_pmi, event_id);
+		printf("Rank %d: receive event_id (%d) not done.\n",rank_id, event_id);
 
   if(n == 0)
     {
@@ -1676,10 +1682,10 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 
 	  if(check == 0)
 	    {
-	      printf("Rank %d: SRC Indexing err with event_id (%d), rr_num (%d) in (%s).\n", rank_id_pmi, event_id, rpc_s->rr_num,  __func__);
+	      printf("Rank %d: SRC Indexing err with event_id (%d), rr_num (%d) in (%s).\n", rank_id, event_id, rpc_s->rr_num,  __func__);
 	      list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry)
 		{
-		  printf("Rank(%d):rest Index(%d) with rr_num(%d).\n",rank_id_pmi, rr->index, rpc_s->rr_num);
+		  printf("Rank(%d):rest Index(%d) with rr_num(%d).\n",rank_id, rr->index, rpc_s->rr_num);
 		}
 	      goto err_out;
 	    }
@@ -1732,7 +1738,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	  rr->msg->msg_rpc = calloc(1, sizeof(struct rpc_cmd));
 	  if(rr->msg->msg_rpc == NULL)
 	    {
-	      printf("Rank %d: calloc error.\n", rank_id_pmi);
+	      printf("Rank %d: calloc error.\n", rank_id);
 	      return -ENOMEM;
 	    }
 
@@ -1745,14 +1751,14 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	  cnt=0;
 
 	  if(status == GNI_RC_NOT_DONE){ 
-	    printf("Rank %d: GNI_RC_NOT_DONE.\n",rank_id_pmi);//debug
+	    printf("Rank %d: GNI_RC_NOT_DONE.\n",rank_id);//debug
 	    return 0;
 	  }
 
 	  if(status != GNI_RC_SUCCESS)
 	    {
 	      cnt=0;
-	      printf("Rank %d: receive wrong event.\n", rank_id_pmi);//debug
+	      printf("Rank %d: receive wrong event.\n", rank_id);//debug
 	      free(rr);
 	      goto err_out;
 	    }
@@ -1804,10 +1810,10 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 		     
 	     if(check == 0)
 	       {
-		 printf("Rank %d: DST Indexing err with event_id (%d), rr_num (%d) in (%s).\n", rank_id_pmi, event_id, rpc_s->rr_num,  __func__);
+		 printf("Rank %d: DST Indexing err with event_id (%d), rr_num (%d) in (%s).\n", rank_id, event_id, rpc_s->rr_num,  __func__);
 		 list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry)
 		   {
-		     printf("Rank(%d):Index(%d) with rr_num(%d).\n",rank_id_pmi, rr->index, rpc_s->rr_num);
+		     printf("Rank(%d):Index(%d) with rr_num(%d).\n",rank_id, rr->index, rpc_s->rr_num);
 		   }
 
 		 goto err_out;
@@ -1927,7 +1933,7 @@ int rpc_process_event_with_timeout(struct rpc_server *rpc_s, int timeout)
 	return err;
 }
 
-struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dart_ref, enum rpc_component cmp_type, int appid)
+struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dart_ref, enum rpc_component cmp_type, int appid, void *comm)
 {
 	struct rpc_server *rpc_s = 0;
 	struct rpc_request *rr;
@@ -1939,7 +1945,6 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 
 	if (rpc_s_instance)
 		return rpc_s_instance;
-	printf("alloc and init.\n");
 	rpc_s = calloc(1, sizeof(*rpc_s));
 	if (!rpc_s)
 		goto err_free;
@@ -1952,34 +1957,42 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 	rpc_s->ptlmap.appid = appid;
 
 	//Use PMI library to get necessary global information.
-    printf("init PMI\n");
-    PMI_BOOL initialized;
-    if (PMI_SUCCESS == PMI_Initialized(&initialized) ) {
-            if (PMI_TRUE != initialized) {
-                    err = PMI_Init(&first_spawned);
-                    assert(err == PMI_SUCCESS);
-            }
+    PMI_BOOL pmi_initialized;
+    if (PMI_SUCCESS == PMI_Initialized(&pmi_initialized) ) {
+        if (PMI_TRUE != pmi_initialized) {
+            err = PMI_Init(&first_spawned);
+            assert(err == PMI_SUCCESS);
+        } 
     }
-	printf("some more PMI ops.\n");
-	err = PMI_Get_size(&num_of_rank_pmi);
-	assert(err == PMI_SUCCESS);
-	err = PMI_Get_rank(&rank_id_pmi);	
-	assert(err == PMI_SUCCESS);
-	printf("pmi_size = %i, PMI_rank = %i\n", num_of_rank_pmi, rank_id_pmi);
-	rpc_s->ptlmap.id = rank_id_pmi;
-	rpc_s->num_rpc_per_buff = num_rpc_per_buff;
+    err = PMI_Get_rank(&rank_id_pmi);
+    assert(err == PMI_SUCCESS);
+    if(NULL != comm) {
+	int mpi_initialized;
 
-	printf("init gni.\n");
+	err = MPI_Initialized(&mpi_initialized);
+	assert(mpi_initialized && (err == MPI_SUCCESS));
+	err = MPI_Comm_size(*((MPI_Comm *)comm), &num_of_rank);
+	assert(err == MPI_SUCCESS);
+	err = MPI_Comm_rank(*((MPI_Comm *)comm), &rank_id);
+	assert(err == MPI_SUCCESS);
+    } else {
+	err = PMI_Get_size(&num_of_rank);
+	assert(err == PMI_SUCCESS);
+	rank_id = rank_id_pmi;
+    }
+    rpc_s->ptlmap.id = rank_id;
+    rpc_s->num_rpc_per_buff = num_rpc_per_buff;
+
 	err = init_gni(rpc_s);
 	if (err != 0)
 		goto err_free;
 
-	printf("gather_node_id\n");
-	rpc_s->peer_tab = gather_node_id(appid);
-	if(rpc_s->peer_tab == NULL)
+	rpc_s->peer_tab = gather_node_id(appid, comm);
+	if(rpc_s->peer_tab == NULL) {
+		printf("rpc_s->peer_tab is null.\n");
 		goto err_free;
+	}
 
-	printf("GNI_CqCreate1\n");
         status = GNI_CqCreate(rpc_s->nic_hndl, ENTRY_COUNT, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->sys_cq_hndl);
         if (status != GNI_RC_SUCCESS)
         {
@@ -1987,7 +2000,6 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
                 goto err_out;
         }
 
-	printf("GNI_CqCreate2\n");
 	status = GNI_CqCreate(rpc_s->nic_hndl,ENTRY_COUNT, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->src_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
@@ -1995,7 +2007,6 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 		goto err_out;
 	}
 
-	printf("GNI_CqCreate3\n");
 	status = GNI_CqCreate(rpc_s->nic_hndl, ENTRY_COUNT, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->dst_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
@@ -2003,9 +2014,13 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 		goto err_out;
 	}
 
-	printf("PMI Barrier...\n");
-	err = PMI_Barrier();	
-	assert(err == PMI_SUCCESS);
+	if(NULL != comm) {
+	    err = MPI_Barrier(*((MPI_Comm *)comm));
+	    assert(err == MPI_SUCCESS);
+	} else {
+	    err = PMI_Barrier();	
+	    assert(err == PMI_SUCCESS);
+	}
 
 	INIT_LIST_HEAD(&rpc_s->rpc_list);
 	err = rpc_index_init(rpc_s);
@@ -2026,7 +2041,6 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 	//	printf("rpc_cmd size is %d.\n", sizeof(struct rpc_cmd));
 
 	// Init succeeded, set the instance reference here
-	printf("rpc_server_init done.\n");
 	rpc_s_instance = rpc_s;
 	return rpc_s;
 
@@ -2059,7 +2073,7 @@ static int rpc_server_finish(struct rpc_server *rpc_s)
 }
 
 
-int rpc_server_free(struct rpc_server *rpc_s)
+int rpc_server_free(struct rpc_server *rpc_s, void *comm)
 {
 	gni_return_t status;
 	struct rpc_request *rr, *tmp;
@@ -2143,7 +2157,12 @@ int rpc_server_free(struct rpc_server *rpc_s)
 
         free(rpc_s);
 
-	PMI_Barrier();
+	if(NULL != comm) {
+	    err = MPI_Barrier(*(MPI_Comm *)comm);
+	    assert(err == MPI_SUCCESS);
+	} else {
+	    PMI_Barrier();
+	}
 
 	PMI_Finalize();
 
@@ -2208,7 +2227,7 @@ int rpc_barrier(struct rpc_server *rpc_s)
     goto err_out;
 
  err_out:
-  printf("Rank %d: (%s) failed (%d).\n", rank_id_pmi, __func__, err);
+  printf("Rank %d: (%s) failed (%d).\n", rank_id, __func__, err);
   return err;
 }
 
@@ -2243,7 +2262,7 @@ int rpc_barrier(struct rpc_server *rpc_s)
 	return 0;
 
  err_out:
-	printf("Rank %d: (%s) failed (%d).\n", rank_id_pmi, __func__, err);
+	printf("Rank %d: (%s) failed (%d).\n", rank_id, __func__, err);
 	return err;
 }
 */
