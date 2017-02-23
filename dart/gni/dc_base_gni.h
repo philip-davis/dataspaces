@@ -32,6 +32,7 @@
 #define __DC_BASE_GNI_H__
 
 #include "dart_rpc_gni.h"
+#include <mpi.h>
 
 #define dc_barrier(dc)	rpc_barrier(dc->rpc_s)
 
@@ -58,7 +59,7 @@ struct dart_client {
         int			f_bar:1;
 
         void			*dart_ref;
-	void			*comm;
+	MPI_Comm		*comm;
 
         int			num_posted;
 };

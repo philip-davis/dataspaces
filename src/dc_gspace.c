@@ -1525,7 +1525,6 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
 #endif
         /* Added for ccgrid demo. */
         rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);	
-	printf("added rpc services\n");
 	dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
 //#endif
         if (!dcg_l->dc) {
@@ -1560,12 +1559,12 @@ void dcg_free(struct dcg_space *dcg)
         uloga("'%s()': num pending = %d.\n", __func__, dcg->num_pending);
 #endif
 
-	while (dcg->num_pending)
+	while (dcg->num_pending) {
 	      dc_process(dcg->dc);
+	}
 
     dc_free(dcg->dc);
     qc_free(&dcg->qc);
-
 	lock_free();
 
     free_gdim_list(&dcg->gdim_list);

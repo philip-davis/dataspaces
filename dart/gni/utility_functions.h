@@ -79,7 +79,7 @@ allgather(void *in, void *out, int len, void *comm)
     char           *tmp_buf;
 
     if (!already_called) {
-	if(NULL != comm) {
+	if(comm) {
 	    rc = MPI_Comm_size(*((MPI_Comm *)comm), &job_size);
             assert(rc == MPI_SUCCESS);
 
@@ -110,7 +110,7 @@ allgather(void *in, void *out, int len, void *comm)
     tmp_buf = (char *) malloc(job_size * len);
     assert(tmp_buf);
 
-    if(NULL != comm) {
+    if(comm) {
 	rc = MPI_Allgather(in, len, MPI_BYTE, tmp_buf, len, MPI_BYTE, *((MPI_Comm *)comm));
 	assert(rc == MPI_SUCCESS);
     } else {

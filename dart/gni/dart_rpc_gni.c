@@ -1966,7 +1966,7 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
     }
     err = PMI_Get_rank(&rank_id_pmi);
     assert(err == PMI_SUCCESS);
-    if(NULL != comm) {
+    if(comm) {
 	int mpi_initialized;
 
 	err = MPI_Initialized(&mpi_initialized);
@@ -2014,7 +2014,7 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 		goto err_out;
 	}
 
-	if(NULL != comm) {
+	if(comm) {
 	    err = MPI_Barrier(*((MPI_Comm *)comm));
 	    assert(err == MPI_SUCCESS);
 	} else {
@@ -2098,7 +2098,6 @@ int rpc_server_free(struct rpc_server *rpc_s, void *comm)
 		}
 	}
 
-
 	//Free memory to index_list
 	list_for_each_entry_safe(ri, ri_tmp, &index_list, struct rr_index, index_entry)
 	{
@@ -2118,7 +2117,6 @@ int rpc_server_free(struct rpc_server *rpc_s, void *comm)
 	  }	
 	
 	free(rpc_s->rpc_mem);
-
 	for(i=0; i < rpc_s->num_rpc_per_buff; i++)
 	{
 	  if(rpc_s->peer_tab[i].ptlmap.id==rpc_s->ptlmap.id)
@@ -2156,8 +2154,7 @@ int rpc_server_free(struct rpc_server *rpc_s, void *comm)
         clean_gni(rpc_s);
 
         free(rpc_s);
-
-	if(NULL != comm) {
+	if(comm) {
 	    err = MPI_Barrier(*(MPI_Comm *)comm);
 	    assert(err == MPI_SUCCESS);
 	} else {

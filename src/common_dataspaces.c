@@ -527,7 +527,6 @@ void common_dspaces_finalize(void)
 #ifdef DS_HAVE_DIMES
     dimes_client_free();
 #endif
-    
     dcg_free(dcg);
     dcg = 0;
 }
