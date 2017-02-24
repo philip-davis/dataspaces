@@ -962,7 +962,7 @@ static int dsgrpc_remove_service(struct rpc_server *rpc, struct rpc_cmd *cmd)
 //        uloga("'%s()': Remove %s version %d.\n", __func__, lh->name, lh->lock_num  );
 
 
-	if (!dsg->ls) return;
+	if (!dsg->ls) return 0;
 
 	struct obj_data *od, *t;
 	struct list_head *list;
