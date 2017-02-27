@@ -97,6 +97,15 @@ if test "x$enable_dimes" == "xyes"; then
         fi
 fi
 
+dnl Check if DataSpaces location-aware write is enabled
+AC_ARG_ENABLE(dataspaces_location_aware_write,
+    [AS_HELP_STRING([--enable-dataspaces-location-aware-write],
+        [Include experimental feature. DataSpaces client writes data to
+         servers that running on local compute node. This feature is useful
+         when co-locating the execution of DataSpaces servers with application
+         on the same set of compute nodes. By default this is not included.])])
+AM_CONDITIONAL([DATASPACES_LOCATION_AWARE_WRITE], [test "x$enable_dataspaces_location_aware_write" == "xyes"])
+
 dnl added for Aries EOS
 dnl Check if it is Aries network
 AC_ARG_ENABLE(aries,
