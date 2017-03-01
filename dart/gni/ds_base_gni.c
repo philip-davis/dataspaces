@@ -453,18 +453,31 @@ static int ds_master_init(struct dart_server *ds)//testing
 		}	
 	}
 
-	// PMI_Bcast to all slave servers.
-        err = PMI_Barrier();
-        assert(err == PMI_SUCCESS);	
+	if(ds->comm) {
+	    // MPI_Bcast to all slave servers.
+	    err = MPI_Barrier(*ds->comm);
+	    assert(err == MPI_SUCCESS);
+	    err = MPI_Bcast(send_buffer, ds->peer_size * sizeof(struct ptlid_map), MPI_BYTE, 0, *ds->comm);
+	    if(err != MPI_SUCCESS) {
+		printf("Rank 0: failed for broadcast Address information to slave servers. (%d)\n", err);
+                goto err_out;
+            }
+	    err = MPI_Barrier(*ds->comm);
+	    assert(err == MPI_SUCCESS);
+	} else {
+	    // PMI_Bcast to all slave servers.
+            err = PMI_Barrier();
+            assert(err == PMI_SUCCESS);	
 
-	err = PMI_Bcast(send_buffer, ds->peer_size * sizeof(struct ptlid_map));
-	if (err != PMI_SUCCESS){
+	    err = PMI_Bcast(send_buffer, ds->peer_size * sizeof(struct ptlid_map));
+	    if (err != PMI_SUCCESS){
 		printf("Rank 0: failed for broadcast Address information to slave servers. (%d)\n", err);			
 		goto err_out;
-	}
+	    }
 
-        err = PMI_Barrier();
-        assert(err == PMI_SUCCESS);	
+            err = PMI_Barrier();
+            assert(err == PMI_SUCCESS);	
+	}
 
 	free(send_buffer);
 
@@ -529,16 +542,16 @@ static int ds_master_init(struct dart_server *ds)//testing
 	
 	//4. allgather APP smsg_attr[rpc+sys]
         gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(ds->size_sp * sizeof(gni_smsg_attr_t));
-        /*gni_smsg_attr_t *remote_smsg_sys_array = (gni_smsg_attr_t *)malloc(ds->size_sp * sizeof(gni_smsg_attr_t));
-
-	allgather(&ds->rpc_s->sys_local_smsg_attr, remote_smsg_sys_array, sizeof(gni_smsg_attr_t));
-        err = PMI_Barrier();
-        assert(err == PMI_SUCCESS);	
-	*///SCA SYS
 
 	allgather(&ds->rpc_s->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t), NULL);
-        err = PMI_Barrier();
-        assert(err == PMI_SUCCESS);
+
+	if(ds->comm) {
+	    err = MPI_Barrier(*ds->comm);
+	   assert(err == MPI_SUCCESS);
+	} else {
+            err = PMI_Barrier();
+            assert(err == PMI_SUCCESS);
+	}
 
 	for(j=0;j<ds->size_sp;j++){
 		ds->peer_tab[j].remote_smsg_attr = remote_smsg_rpc_array[j];
@@ -658,21 +671,36 @@ static int ds_master_init(struct dart_server *ds)//testing
 		}	
 	}
 
-	// PMI_Bcast to all slave servers.
-        err = PMI_Barrier();
-        assert(err == PMI_SUCCESS);
+	if(ds->comm) {
+	    // MPI_Bcast to all slave servers.
+	    err = MPI_Barrier(*ds->comm);
+            assert(err == MPI_SUCCESS);
+	    err = MPI_Bcast(send_buffer, ds->peer_size * sizeof(gni_smsg_attr_t), MPI_BYTE, 0, *ds->comm);
+	    if (err != MPI_SUCCESS){
+                printf("Rank 0: failed for broadcast smsg attributes information to slave servers. (%d)\n", err);
+                goto err_out;
+            }
+	} else {
+	    // PMI_Bcast to all slave servers.
+            err = PMI_Barrier();
+            assert(err == PMI_SUCCESS);
 
-	//	err = PMI_Bcast(send_buffer, ds->peer_size * sizeof(gni_smsg_attr_t) * 2);//SCA SYS
-	err = PMI_Bcast(send_buffer, ds->peer_size * sizeof(gni_smsg_attr_t));//SCA SYS
-	if (err != PMI_SUCCESS){
+	    err = PMI_Bcast(send_buffer, ds->peer_size * sizeof(gni_smsg_attr_t));//SCA SYS
+	    if (err != PMI_SUCCESS){
 		printf("Rank 0: failed for broadcast smsg attributes information to slave servers. (%d)\n", err);			
 		goto err_out;
+	    }
 	}
 
 	smsg_attr = (gni_smsg_attr_t *)send_buffer;
 
-        err = PMI_Barrier();
-        assert(err == PMI_SUCCESS);
+	if(ds->comm) {
+            err = MPI_Barrier(*ds->comm);
+            assert(err == MPI_SUCCESS);
+        } else {
+            err = PMI_Barrier();
+            assert(err == PMI_SUCCESS);
+        }
 
 	free(send_buffer);
 
@@ -758,16 +786,27 @@ static int ds_boot_slave(struct dart_server *ds)
 	recv_buffer = malloc(ds->peer_size * sizeof(struct ptlid_map));
 	memset(recv_buffer,0,ds->peer_size * sizeof(struct ptlid_map));
 
-        err = PMI_Barrier();
-        assert(err == PMI_SUCCESS);	
-	err = PMI_Bcast(recv_buffer, ds->peer_size * sizeof(struct ptlid_map));
-	if (err != PMI_SUCCESS){
+	if(ds->comm) {
+	    err = MPI_Barrier(*ds->comm);
+	    assert(err == MPI_SUCCESS);
+	    err = MPI_Bcast(recv_buffer, ds->peer_size * sizeof(struct ptlid_map), MPI_BYTE, 0, *ds->comm);
+	    if (err != MPI_SUCCESS){
+                printf("Rank %d: failed for broadcast ptlmap information from master server. (%d)\n", ds->rpc_s->ptlmap.id, err);
+                goto err_out;
+            }
+	    err = MPI_Barrier(*ds->comm);
+            assert(err == MPI_SUCCESS);
+	} else {
+            err = PMI_Barrier();
+            assert(err == PMI_SUCCESS);	
+	    err = PMI_Bcast(recv_buffer, ds->peer_size * sizeof(struct ptlid_map));
+	    if (err != PMI_SUCCESS){
 		printf("Rank %d: failed for broadcast ptlmap information from master server. (%d)\n", ds->rpc_s->ptlmap.id, err);			
 		goto err_out;
+	    }
+            err = PMI_Barrier();
+            assert(err == PMI_SUCCESS);	
 	}
-        err = PMI_Barrier();
-        assert(err == PMI_SUCCESS);	
-
 	ptlmap = (struct ptlid_map *)recv_buffer;
 	for(j=0;j<ds->peer_size;j++){
 		ds->peer_tab[j].ptlmap.nid = ptlmap->nid;
@@ -836,38 +875,44 @@ static int ds_boot_slave(struct dart_server *ds)
 
 	// 3. allgather APP smsg_attr[rpc+sys]
         gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(ds->size_sp * sizeof(gni_smsg_attr_t));
-        /*gni_smsg_attr_t *remote_smsg_sys_array = (gni_smsg_attr_t *)malloc(ds->size_sp * sizeof(gni_smsg_attr_t));
-
-	allgather(&ds->rpc_s->sys_local_smsg_attr, remote_smsg_sys_array, sizeof(gni_smsg_attr_t));
-        err = PMI_Barrier();
-        assert(err == PMI_SUCCESS);	
-	*/// SCA SYS
 
 	allgather(&ds->rpc_s->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t), NULL);
-        err = PMI_Barrier();
-        assert(err == PMI_SUCCESS);
-
+        if(ds->comm) {
+            err = MPI_Barrier(*ds->comm);
+            assert(err == MPI_SUCCESS);
+	} else {
+	    err = PMI_Barrier();
+            assert(err == PMI_SUCCESS);
+	}
 
 	// 4. bcast slave servers
-	/*	recv_buffer = malloc(ds->peer_size * sizeof(gni_smsg_attr_t) * 2);
-		memset(recv_buffer,0,ds->peer_size * sizeof(gni_smsg_attr_t) * 2);*/
 
       	recv_buffer = malloc(ds->peer_size * sizeof(gni_smsg_attr_t));// SCA SYS
 	memset(recv_buffer,0,ds->peer_size * sizeof(gni_smsg_attr_t));// SCA SYS
 
-        err = PMI_Barrier();
-        assert(err == PMI_SUCCESS);
+	if(ds->comm) {
+	    err = MPI_Barrier(*ds->comm);
+            assert(err == MPI_SUCCESS);
+	    err = MPI_Bcast(recv_buffer, ds->peer_size * sizeof(gni_smsg_attr_t), MPI_BYTE, 0, *ds->comm);
+	    if (err != MPI_SUCCESS){
+                printf("Rank %d: failed for broadcast smsg attributes information to slave servers. (%d)\n", ds->rpc_s->ptlmap.id, err);
+                goto err_out;
+            }
+	    err = MPI_Barrier(*ds->comm);
+            assert(err == MPI_SUCCESS);
+	} else {
+            err = PMI_Barrier();
+            assert(err == PMI_SUCCESS);
 
-	//	err = PMI_Bcast(recv_buffer, ds->peer_size * sizeof(gni_smsg_attr_t) * 2);//SCA SYS
-	err = PMI_Bcast(recv_buffer, ds->peer_size * sizeof(gni_smsg_attr_t));//SCA SYS
-	if (err != PMI_SUCCESS){
+	    err = PMI_Bcast(recv_buffer, ds->peer_size * sizeof(gni_smsg_attr_t));//SCA SYS
+	    if (err != PMI_SUCCESS){
 		printf("Rank %d: failed for broadcast smsg attributes information to slave servers. (%d)\n", ds->rpc_s->ptlmap.id, err);			
 		goto err_out;
-	}
+	    }  
 	
-        err = PMI_Barrier();
-        assert(err == PMI_SUCCESS);
-
+            err = PMI_Barrier();
+            assert(err == PMI_SUCCESS);
+	}
 	smsg_attr = (gni_smsg_attr_t *)recv_buffer;
 	for(j=0;j<ds->peer_size;j++){
 		ds->peer_tab[j].remote_smsg_attr = *smsg_attr;
@@ -980,7 +1025,7 @@ static int ds_boot(struct dart_server *ds)
    Allocate and initialize dart server; the server initializes rpc
    server. 
 */
-struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref)
+struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 {
 	struct dart_server *ds = 0;
 	struct node_id *peer;
@@ -1003,7 +1048,14 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref)
 	ds->num_cp = num_cp; //total number of peers from all applications
 	INIT_LIST_HEAD(&ds->app_list);
 
-	ds->rpc_s = rpc_server_init(30, ds->peer_size, ds, DART_SERVER, 0, NULL);
+	if(comm) {
+		ds->comm = malloc(sizeof(*ds->comm));
+		*(ds->comm) = *(MPI_Comm *)comm;
+	} else {
+		ds->comm = NULL;
+	}
+
+	ds->rpc_s = rpc_server_init(30, ds->peer_size, ds, DART_SERVER, 0, comm);
 	if (!ds->rpc_s)
 		goto err_free_dsrv;
 
@@ -1057,8 +1109,13 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref)
 	}
 	ds->num_charge_cp = ds->num_charge;
 
-	err = PMI_Barrier();	
-	assert(err == PMI_SUCCESS);
+	if(ds->comm) {
+		err = MPI_Barrier(*ds->comm);
+		assert(err == MPI_SUCCESS);
+	} else {
+		err = PMI_Barrier();	
+		assert(err == PMI_SUCCESS);
+	}
 
 	printf("'%s(%d)': init ok.\n", __func__, ds->self->ptlmap.id);
 	//print_ds(ds);
@@ -1107,6 +1164,9 @@ void ds_free(struct dart_server *ds)//not done
 		free(app);
         }
 	//printf("Rank(%d): step2.2.\n",track);//debug
+	if(ds->comm) {
+	    free(ds->comm);
+	}
 	free(ds);
 }
 

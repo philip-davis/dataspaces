@@ -39,7 +39,7 @@ struct dart_server {
 	void* dart_ref; /* Reference to the front end module used. */
 };
 
-struct dart_server* ds_alloc(int num_sp, int num_cp, void* dart_ref_);
+struct dart_server* ds_alloc(int num_sp, int num_cp, void* dart_ref_, void* comm);
 int ds_free(struct dart_server *ds);
 int ds_process(struct dart_server *ds); // primary function for msg processing
 

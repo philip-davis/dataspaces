@@ -2005,7 +2005,7 @@ static int dsgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
   Public API starts here.
 */
 
-struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
+struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name, void *comm)
 {
         struct ds_gspace *dsg_l;
         int err = -ENOMEM;
@@ -2074,7 +2074,7 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         INIT_LIST_HEAD(&dsg_l->obj_data_req_list);
         INIT_LIST_HEAD(&dsg_l->locks_list);
 
-        dsg_l->ds = ds_alloc(num_sp, num_cp, dsg_l);
+        dsg_l->ds = ds_alloc(num_sp, num_cp, dsg_l, comm);
         if (!dsg_l->ds)
                 goto err_free;
 
