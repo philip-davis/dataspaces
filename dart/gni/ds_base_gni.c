@@ -1050,7 +1050,7 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 
 	if(comm) {
 		ds->comm = malloc(sizeof(*ds->comm));
-		*(ds->comm) = *(MPI_Comm *)comm;
+		MPI_Comm_dup(*(MPI_Comm *)comm, ds->comm);
 	} else {
 		ds->comm = NULL;
 	}
@@ -1165,6 +1165,7 @@ void ds_free(struct dart_server *ds)//not done
         }
 	//printf("Rank(%d): step2.2.\n",track);//debug
 	if(ds->comm) {
+	    MPI_Comm_free(ds->comm);
 	    free(ds->comm);
 	}
 	free(ds);

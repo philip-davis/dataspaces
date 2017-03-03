@@ -910,7 +910,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *comm, void *dart_re
 	dc->num_cp = num_peers;
 	if(comm) {
 		dc->comm = malloc(sizeof(*dc->comm));
-		*(dc->comm) = *(MPI_Comm *)comm;
+		MPI_Comm_dup(*(MPI_Comm *)comm, dc->comm);
 	} else {
 		dc->comm = NULL;
 	}
@@ -994,13 +994,11 @@ void dc_free(struct dart_client *dc)
 		rpc_process_event(dc->rpc_s);
 	*/
 	//printf("Rank %d: step0 done.\n", dc->self->ptlmap.id);//debug
-	MPI_Barrier(*dc->comm);
 	err = dc_unregister(dc);
 	if(err!=0)
 	    printf("Rank %d: dc_unregister failed with err %d.\n", dc->self->ptlmap.id, err);
 
 	//printf("Rank(%d): step1 done.\n", dc->self->ptlmap.id);//debug
- MPI_Barrier(*dc->comm);
 	track = dc->self->ptlmap.id;
 	err = rpc_server_free(dc->rpc_s, dc->comm);
 	if(err!=0)
@@ -1011,6 +1009,7 @@ void dc_free(struct dart_client *dc)
 		free(dc->peer_tab);
 	//free(dc);
 	if(dc->comm) {
+		MPI_Comm_free(dc->comm);
 		free(dc->comm);
 	}
 }
