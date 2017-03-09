@@ -541,16 +541,16 @@ static int ds_master_init(struct dart_server *ds)//testing
 
 	
 	//4. allgather APP smsg_attr[rpc+sys]
-        gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(ds->size_sp * sizeof(gni_smsg_attr_t));
+    gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(ds->size_sp * sizeof(gni_smsg_attr_t));
 
-	allgather(&ds->rpc_s->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t), NULL);
+	allgather(&ds->rpc_s->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t), ds->comm);
 
 	if(ds->comm) {
 	    err = MPI_Barrier(*ds->comm);
-	   assert(err == MPI_SUCCESS);
+	    assert(err == MPI_SUCCESS);
 	} else {
-            err = PMI_Barrier();
-            assert(err == PMI_SUCCESS);
+        err = PMI_Barrier();
+        assert(err == PMI_SUCCESS);
 	}
 
 	for(j=0;j<ds->size_sp;j++){
@@ -862,27 +862,17 @@ static int ds_boot_slave(struct dart_server *ds)
 			printf("Rank 0: failed for rpc_smsg_init %d. (%d)\n", peer->ptlmap.id, err);
 			goto err_out;
 		}
-		/*
-		err = sys_smsg_init(ds->rpc_s, ds->peer_size);
-		if (err != 0){
-			printf("Rank 0: failed for sys_smsg_init. (%d)\n", err);
-			goto err_out;
-			}*///SCA SYS
-		
-		//rpc_smsg_check(ds->rpc_s);
-		//sys_smsg_check(ds->rpc_s);
-
 
 	// 3. allgather APP smsg_attr[rpc+sys]
-        gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(ds->size_sp * sizeof(gni_smsg_attr_t));
+    gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(ds->size_sp * sizeof(gni_smsg_attr_t));
 
-	allgather(&ds->rpc_s->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t), NULL);
-        if(ds->comm) {
-            err = MPI_Barrier(*ds->comm);
-            assert(err == MPI_SUCCESS);
+	allgather(&ds->rpc_s->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t), ds->comm);
+    if(ds->comm) {
+        err = MPI_Barrier(*ds->comm);
+        assert(err == MPI_SUCCESS);
 	} else {
 	    err = PMI_Barrier();
-            assert(err == PMI_SUCCESS);
+        assert(err == PMI_SUCCESS);
 	}
 
 	// 4. bcast slave servers
