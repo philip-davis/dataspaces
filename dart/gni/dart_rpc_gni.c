@@ -666,17 +666,21 @@ struct node_id *gather_node_id(int appid, void *comm)
 	struct node_id	*all_addrs;
 	struct node_id	local_addr;
 	int		rc;
-	//int		size;
+	int		size;
 
 	memset(&local_addr, 0, sizeof(struct node_id));
 
-	/*
-	    rc = PMI_Get_size(&size);
-	    assert(rc == PMI_SUCCESS);
-
-	    rc = PMI_Get_rank(&local_addr.ptlmap.id);
-	    assert(rc == PMI_SUCCESS);
-	*/
+    if(comm) {
+        rc = MPI_Comm_size(*(MPI_Comm *)comm, &size);
+        assert(rc == MPI_SUCCESS);
+        rc = MPI_Comm_rank(*(MPI_Comm *)comm, &local_addr.ptlmap.id);
+        assert(rc == MPI_SUCCESS);
+    } else {
+        rc = PMI_Get_size(&size);
+        assert(rc == MPI_SUCCESS);
+        rc = PMI_Get_rank(&local_addr.ptlmap.id);
+        assert(rc == MPI_SUCCESS);
+    }
 	local_addr.ptlmap.nid = get_gni_nic_address(0);
 	local_addr.ptlmap.pid = getpid();
 	local_addr.ptlmap.appid = appid;
@@ -1967,18 +1971,18 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
     err = PMI_Get_rank(&rank_id_pmi);
     assert(err == PMI_SUCCESS);
     if(comm) {
-	int mpi_initialized;
+	    int mpi_initialized;
 
-	err = MPI_Initialized(&mpi_initialized);
-	assert(mpi_initialized && (err == MPI_SUCCESS));
-	err = MPI_Comm_size(*((MPI_Comm *)comm), &num_of_rank);
-	assert(err == MPI_SUCCESS);
-	err = MPI_Comm_rank(*((MPI_Comm *)comm), &rank_id);
-	assert(err == MPI_SUCCESS);
+	    err = MPI_Initialized(&mpi_initialized);
+	    assert(mpi_initialized && (err == MPI_SUCCESS));
+	    err = MPI_Comm_size(*((MPI_Comm *)comm), &num_of_rank);
+	    assert(err == MPI_SUCCESS);
+	    err = MPI_Comm_rank(*((MPI_Comm *)comm), &rank_id);
+	    assert(err == MPI_SUCCESS);
     } else {
-	err = PMI_Get_size(&num_of_rank);
-	assert(err == PMI_SUCCESS);
-	rank_id = rank_id_pmi;
+	    err = PMI_Get_size(&num_of_rank);
+	    assert(err == PMI_SUCCESS);
+	    rank_id = rank_id_pmi;
     }
     rpc_s->ptlmap.id = rank_id;
     rpc_s->num_rpc_per_buff = num_rpc_per_buff;

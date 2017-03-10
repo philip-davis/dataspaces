@@ -123,7 +123,6 @@ int common_dspaces_init(int num_peers, int appid, void *comm, const char *parame
         p = p->next;
     }*/
 
-
 	dcg = dcg_alloc(num_peers, appid, comm);
 	if (!dcg) {
         uloga("%s(): failed to initialize.\n", __func__);
