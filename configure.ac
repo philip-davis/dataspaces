@@ -8,6 +8,7 @@ AC_PROG_CC
 AC_PROG_CXX
 AC_PROG_FC
 AC_PROG_RANLIB
+AM_PROG_CC_C_O
 
 m4_ifdef([AM_PROG_AR],[AM_PROG_AR])
 
@@ -29,7 +30,7 @@ dnl Generate flags for dataspaces lib creation which depends on the particular n
 DSPACESLIB_CFLAGS=
 DSPACESLIB_CPPFLAGS=
 DSPACESLIB_LDFLAGS=
-DSPACESLIB_LDADD=
+DSPACESLIB_LDADD="-lm -lpthread"
 
 
 dnl Check if DART_TCP is enabled

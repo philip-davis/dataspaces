@@ -211,6 +211,7 @@ enum cmd_type {
     ss_obj_cq_register,
     ss_obj_cq_notify,
     ss_obj_get,
+    ss_obj_hint,
     ss_obj_filter,
     ss_obj_info,
     ss_info,
