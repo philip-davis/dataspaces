@@ -34,6 +34,9 @@
 #include <string.h>
 #include <math.h>
 #include <errno.h>
+#include <assert.h>
+
+#include "daos.h"
 
 #include "debug.h"
 #include "ss_data.h"
@@ -1392,8 +1395,9 @@ void obj_data_free_with_data(struct obj_data *od)
 			__func__, od->obj_desc.name);
 		}
 	}
-	if ((od->sl == in_ssd || od->sl == in_memory_ssd) && od->s_data){
-		obj_data_free_in_ssd(od->s_data);
+	if ((od->sl == in_ssd || od->sl == in_memory_ssd)){
+		//obj_data_free_in_ssd(od->s_data);
+        obj_data_free_in_daos(od);
 	}
     free(od);
 }
@@ -1437,6 +1441,87 @@ void obj_data_free_in_ssd(struct obj_data *od)
 	}
 }
 
+void obj_data_free_in_daos(struct obj_data *od)
+{
+
+    int rc;
+
+    daos_dkey_t dkey = {0};
+    daos_vec_iod_t iod = {0};
+    daos_sg_list_t sgl = {0};
+    daos_handle_t *objh = (daos_handle_t *)get_daos_obj_handle();
+    daos_recx_t recx = {0};
+    daos_iov_t iov = {0};
+
+    recx.rx_rsize = 0; //this punches the records
+    recx.rx_idx = 0;
+    recx.rx_nr = obj_data_size(&od->obj_desc);
+
+    iod.vd_name.iov_buf = &od->obj_desc.bb;
+    iod.vd_name.iov_buf_len = iod.vd_name.iov_buf_len = sizeof(od->obj_desc.bb);
+    iod.vd_nr = 1;
+    iod.vd_recxs = &recx;
+    
+    if(od->_data) {
+        daos_iov_set(&iov, od->_data, obj_data_size(&od->obj_desc));
+    } else {
+        daos_iov_set(&iov, od->data, obj_data_size(&od->obj_desc));
+    }
+    sgl.sg_nr.num = 1;
+    sgl.sg_iovs = &iov;
+
+    rc = daos_obj_update(*objh, od->obj_desc.version, &dkey, 1, &iod, &sgl, NULL);
+    assert(rc == 0 && "daos_obj_update(punch)");
+
+    printf("Freed %i bytes from DAOS\n", obj_data_size(&od->obj_desc));
+
+    if (od->sl == in_memory_ssd){
+        od->sl = in_memory;
+    }
+
+}
+
+void obj_data_copy_to_daos(struct obj_data *od)
+{
+
+    int rc;
+
+    daos_dkey_t dkey = {0};
+    daos_vec_iod_t iod = {0};
+    daos_sg_list_t sgl = {0};
+    daos_handle_t *objh = (daos_handle_t *)get_daos_obj_handle();
+    daos_recx_t recx = {0};
+    daos_iov_t iov = {0};
+
+    dkey.iov_buf = od->obj_desc.name;
+    dkey.iov_buf_len = dkey.iov_len = strlen(od->obj_desc.name);
+    
+    recx.rx_rsize = 1;
+    recx.rx_idx = 0;
+    recx.rx_nr = obj_data_size(&od->obj_desc);
+
+    iod.vd_name.iov_buf = &od->obj_desc.bb;
+    iod.vd_name.iov_buf_len = iod.vd_name.iov_buf_len = sizeof(od->obj_desc.bb);
+    iod.vd_nr = 1;
+    iod.vd_recxs = &recx;
+    
+    if(od->_data) {
+        daos_iov_set(&iov, od->_data, obj_data_size(&od->obj_desc));
+    } else {
+        daos_iov_set(&iov, od->data, obj_data_size(&od->obj_desc));
+    }
+    sgl.sg_nr.num = 1;
+    sgl.sg_iovs = &iov;
+
+    rc = daos_obj_update(*objh, od->obj_desc.version, &dkey, 1, &iod, &sgl, NULL);
+    assert(rc == 0 && "daos_obj_update");
+
+    printf("Copied %i bytes from memory to daos.\n", obj_data_size(&od->obj_desc));
+
+    od->sl = in_memory_ssd;
+
+}
+
 /*copy object data from memory to ssd */
 void obj_data_copy_to_ssd(struct obj_data *od)
 {
@@ -1467,6 +1552,50 @@ void obj_data_copy_to_ssd(struct obj_data *od)
 	od->sl = in_memory_ssd;
 }
 
+void obj_data_copy_daos_to_mem(struct obj_data *od)
+{
+
+    int rc;
+
+    daos_dkey_t dkey = {0};
+    daos_vec_iod_t iod = {0};
+    daos_sg_list_t sgl = {0};
+    daos_handle_t *objh = (daos_handle_t *)get_daos_obj_handle();
+    daos_recx_t recx = {0};
+    daos_iov_t iov = {0};
+
+    od->_data = od->data = malloc(obj_data_size(&od->obj_desc) + 7);
+    if (!od->_data) {
+        free(od);
+        uloga("%s(): ERROR malloc od->_data %p is is NULL! \n", __func__, od->_data);
+    }
+    ALIGN_ADDR_QUAD_BYTES(od->data);
+
+    dkey.iov_buf = od->obj_desc.name;
+    dkey.iov_buf_len = dkey.iov_len = strlen(od->obj_desc.name);
+
+    recx.rx_rsize = 1;
+    recx.rx_idx = 0;
+    recx.rx_nr = obj_data_size(&od->obj_desc);
+
+    iod.vd_name.iov_buf = &od->obj_desc.bb;
+    iod.vd_name.iov_buf_len = iod.vd_name.iov_buf_len = sizeof(od->obj_desc.bb);
+    iod.vd_nr = 1;
+    iod.vd_recxs = &recx;
+
+    daos_iov_set(&iov, od->_data, obj_data_size(&od->obj_desc));
+   
+    sgl.sg_nr.num = 1;
+    sgl.sg_iovs = &iov;
+
+    rc = daos_obj_fetch(*objh, od->obj_desc.version, &dkey, 1, &iod, &sgl, NULL, NULL);
+    assert(rc == 0 && "daos_obj_fetch");
+    printf("Copied %i bytes from daos to mem.\n", obj_data_size(&od->obj_desc));
+
+    od->sl = in_memory_ssd;
+
+}
+
 /*copy object data from ssd to mem */
 void obj_data_copy_to_mem(struct obj_data *od)
 {
@@ -1492,8 +1621,9 @@ void obj_data_free(struct obj_data *od)
 	if ((od->sl == in_memory || od->sl == in_memory_ssd) && od->_data){
 		free(od->_data);
 	}
-	if ((od->sl == in_ssd || od->sl == in_memory_ssd) && od->s_data){
-		obj_data_free_in_ssd(od);
+	if ((od->sl == in_ssd || od->sl == in_memory_ssd)){
+		//obj_data_free_in_ssd(od);
+        obj_data_free_in_daos(od);
 	}
 	free(od);
 }

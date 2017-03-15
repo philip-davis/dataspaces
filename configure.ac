@@ -29,8 +29,8 @@ AC_CONFIGURE_OPTIONS
 dnl Generate flags for dataspaces lib creation which depends on the particular network transport layer. DSPACESLIB_* is used for compiling the lib, and linking testing codes.
 DSPACESLIB_CFLAGS=
 DSPACESLIB_CPPFLAGS=
-DSPACESLIB_LDFLAGS=
-DSPACESLIB_LDADD="-lm -lpthread"
+DSPACESLIB_LDFLAGS="-L/home/pdavis/daos/install/lib -L/home/pdavis/daos/install/lib/daos_srv"
+DSPACESLIB_LDADD="-lm -lpthread -ldaos_common -ldaos -ldaos_tier -luuid"
 
 
 dnl Check if DART_TCP is enabled

@@ -36,10 +36,15 @@
 #include <sys/mman.h>
 #include<stdint.h>
 
+enum persist_type { daos, pmem };
+
 void int_to_char(int n, char s[]);
 void pmem_init(const char *file_name);
+void dspaces_daos_init();
+void *get_daos_obj_handle();
 void *pmem_alloc(uint64_t num_bytes);
 int pmem_free(void *pmem_ptr);
 void pmem_destroy();
+void dspaces_daos_destroy();
 
 #endif /* __MEM_PERSIST_H_ */

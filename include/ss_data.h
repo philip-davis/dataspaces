@@ -96,6 +96,8 @@ struct obj_data {
 	enum storage_level       sl; 
 	enum storage_opera       so;
 
+     
+
 	void                    *s_data;	/* data pointer in ssd Duan*/
 };
 
@@ -295,6 +297,9 @@ void set_global_dimension(struct list_head *gdim_list, const char *var_name,
             const struct global_dimension *default_gdim, struct global_dimension *gdim);
 void obj_data_free_in_mem(struct obj_data *od);
 void obj_data_free_in_ssd(struct obj_data *od);
+void obj_data_free_in_daos(struct obj_data *od);
 void obj_data_copy_to_ssd(struct obj_data *od);
+void obj_data_copy_to_daos(struct obj_data *od);
 void obj_data_copy_to_mem(struct obj_data *od);
+void obj_data_copy_daos_to_mem(struct obj_data *od);
 #endif /* __SS_DATA_H_ */

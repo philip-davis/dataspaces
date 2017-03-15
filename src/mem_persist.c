@@ -39,6 +39,10 @@
 #include "mem_persist.h"
 #include<time.h>
 #include <ctype.h>
+#include <daos.h>
+#include <linux/uuid.h>
+#include <assert.h>
+
 
 /* using 128G ssd file for this example */
 //#define PMEM_SIZE 256*1024*1024*1024L
@@ -46,11 +50,11 @@
 //#define PMEM_SIZE 64*1024*1024*1024L
 //#define PMEM_SIZE 60*1024*1024*1024L
 //#define PMEM_SIZE 56*1024*1024*1024L
-#define PMEM_SIZE 48*1024*1024*1024L
+//#define PMEM_SIZE 48*1024*1024*1024L
 //#define PMEM_SIZE 32*1024*1024*1024L
 //#define PMEM_SIZE 16*1024*1024*1024L
 //#define PMEM_SIZE 8*1024*1024*1024L
-//#define PMEM_SIZE 1*1024*1024*1024L
+#define PMEM_SIZE 1*1024*1024*1024L
 /* using /ssd1/sd904/ ssd file path for this example */
 #define PMEM_PATH "ssd/"
 //#define PMEM_PATH "/home1/sd904/"
@@ -67,6 +71,10 @@ static struct PMemEntry *pmem_header = NULL;
 static int fd;
 static char *pmem_file;
 //static char pmem_file[100];
+
+static daos_handle_t poh, coh, objh;
+static daos_obj_id_t oid;
+static uuid_t pool_uuid, cont_uuid;
 
 void *pmem_alloc(uint64_t num_bytes)
 {
@@ -161,6 +169,53 @@ static char *pmem_str_append_const(char *str, const char *msg)
 	return str;
 }
 
+void dspaces_daos_init()
+{
+
+    daos_pool_info_t pool_info = {0};
+    daos_cont_info_t cont_info = {0};
+    daos_rank_list_t svc = {0};
+    daos_obj_id_t oid;
+    int rc;
+    daos_epoch_t epoch = 0;
+
+    rc = daos_init();
+    assert(rc == 0 && "daos_init");
+
+    rc = daos_pool_create(0731, geteuid(), getegid(), NULL,
+                     NULL, "pmem",  PMEM_SIZE,
+                     &svc, pool_uuid, NULL);
+    assert(rc == 0 && "daos_pool_create");
+
+    rc = daos_pool_connect(pool_uuid, NULL, NULL, DAOS_PC_RW,
+                            &poh, &pool_info, NULL);
+    assert(rc == 0 && "daos_pool_connect");
+    
+    uuid_generate(cont_uuid);
+    rc = daos_cont_create(poh, cont_uuid, NULL);
+    assert(rc == 0 && "daos_cont_create");
+    
+    rc = daos_cont_open(poh, cont_uuid, DAOS_COO_RW, &coh,
+                                    &cont_info, NULL);
+    assert(rc == 0 && "daos_cont_open");
+
+    oid.mid = oid.lo = 0;
+    daos_obj_id_generate(&oid, DAOS_OC_LARGE_RW);
+    rc = daos_obj_declare(coh, oid, epoch, NULL, NULL);
+    assert(rc == 0 && "daos_obj_declare");
+
+    rc = daos_obj_open(coh, oid, epoch, DAOS_OO_RW, &objh, NULL);
+    assert(rc == 0 && "daos_obj_open");
+
+}
+
+void *get_daos_obj_handle()
+{
+
+    return(&objh);
+
+}
+
 void pmem_init(const char *file_name)
 {
 	asprintf(&pmem_file, PMEM_PATH);
@@ -243,6 +298,31 @@ void pmem_destroy()
 	free(str);
 	}
 //#endif
+}
+
+void dspaces_daos_destroy()
+{
+
+    int rc;
+
+    rc = daos_obj_close(objh, NULL);
+    assert(rc == 0 && "doas_obj_close");
+
+    rc = daos_cont_close(coh, NULL);
+    assert(rc == 0 && "daos_cont_close");
+
+    rc = daos_cont_destroy(poh, cont_uuid, 1, NULL);
+    assert(rc == 0 && "daos_cont_destroy");
+
+    rc = daos_pool_disconnect(poh, NULL);
+    assert(rc == 0 && "daos_pool_disconnect");
+
+    rc = daos_pool_destroy(pool_uuid, NULL, 1, NULL);
+    assert(rc == 0 && "daos_pool_destroy");
+
+    rc = daos_fini();
+    assert(rc == 0 && "daos_fini");
+
 }
 
 void int_to_char(int n, char s[])

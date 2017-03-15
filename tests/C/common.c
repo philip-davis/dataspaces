@@ -242,8 +242,9 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
 			free(str);
 		}
 #endif
+        dspaces_daos_init();
 		pmem_init(dsg_id_str);//ssd storage initiate						
-		pthread_t t_pref;//prefetch thread
+        pthread_t t_pref;//prefetch thread
 		pthread_create(&t_pref, NULL, prefetch_thread, (void*)NULL); //Create thread
 
                 while (!dsg_complete(dsg)){
@@ -264,7 +265,8 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
 		pthread_join(t_pref, NULL);//wait t_pref thread end
 		pthread_mutex_destroy(&pmutex);//destroy mutex lock
 		pthread_cond_destroy(&pcond);//destroy condition
-		pmem_destroy();//ssd storage destroy
+        dspaces_daos_destroy();
+        pmem_destroy();//ssd storage destroy
 
                 //dsg_barrier(dsg);
 		MPI_Barrier(*(MPI_Comm*)gcomm);

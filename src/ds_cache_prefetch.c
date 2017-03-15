@@ -79,8 +79,9 @@ void *prefetch_thread(void*attr){
 		}else{ /*cond_num > 0 */
 			local_cond_index = cond_index;
 			do{
-				obj_data_copy_to_mem(pod_list.pref_od[local_cond_index]);//copy data from ssd to mem
-				pod_list.pref_od[local_cond_index]->sl = in_memory_ssd;
+				//obj_data_copy_to_mem(pod_list.pref_od[local_cond_index]);//copy data from ssd to mem
+				obj_data_copy_daos_to_mem(pod_list.pref_od[local_cond_index]);
+                pod_list.pref_od[local_cond_index]->sl = in_memory_ssd;
 				pod_list.pref_od[local_cond_index]->so = prefetching;
 				ls->mem_used += obj_data_size(&pod_list.pref_od[local_cond_index]->obj_desc);
 #ifdef DEBUG
@@ -160,7 +161,7 @@ int cache_replacement(int added_mem_size){
 				if (ls->mem_size > ls->mem_used + added_mem_size){ break; }
 
 			}
-			if (od->s_data == NULL && (od->data != NULL || od->_data != NULL) && od->so == caching){
+			if ((od->data != NULL || od->_data != NULL) && od->so == caching){
 		//if (od->sl == in_memory && (od->data != NULL || od->data != NULL) && od->so != prefetching){
 
 #ifdef DEBUG	
@@ -175,7 +176,8 @@ int cache_replacement(int added_mem_size){
 #endif
 
 				/*copy data to ssd and unload data in memory Duan*/
-				obj_data_copy_to_ssd(od);
+				//obj_data_copy_to_ssd(od);
+                obj_data_copy_to_daos(od);
 				obj_data_free_in_mem(od);
 
 				od->so = normal;
