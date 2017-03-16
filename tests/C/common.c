@@ -243,7 +243,7 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
 		}
 #endif
         dspaces_daos_init();
-		pmem_init(dsg_id_str);//ssd storage initiate						
+		//pmem_init(dsg_id_str);//ssd storage initiate						
         pthread_t t_pref;//prefetch thread
 		pthread_create(&t_pref, NULL, prefetch_thread, (void*)NULL); //Create thread
 
@@ -266,7 +266,7 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
 		pthread_mutex_destroy(&pmutex);//destroy mutex lock
 		pthread_cond_destroy(&pcond);//destroy condition
         dspaces_daos_destroy();
-        pmem_destroy();//ssd storage destroy
+        //pmem_destroy();//ssd storage destroy
 
                 //dsg_barrier(dsg);
 		MPI_Barrier(*(MPI_Comm*)gcomm);
@@ -325,10 +325,10 @@ void check_data(const char *var_name, double *buf, int num_elem, int rank, int t
                 }
         }
         avg = sum / num_elem;
-#ifdef DEBUG
+//#ifdef DEBUG
           uloga("%s(): var= %s, rank= %d, max= %f, min= %f, avg= %f\n",
                           __func__, var_name, rank, max, min, avg);
-#endif
+//#endif
 
         if (cnt > 0) {
                 uloga("%s(): var= %s, rank= %d, ts= %d, "

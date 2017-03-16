@@ -1288,7 +1288,7 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 	ls_add_obj(dsg->ls, od);
 
 	//cache data to memory and arrange memory if it is full Duan
-	cache_replacement(obj_data_size(&od->obj_desc));
+    cache_replacement(obj_data_size(&od->obj_desc));
 	pthread_mutex_lock(&pmutex); //lock
 	dsg->ls->mem_used += obj_data_size(&od->obj_desc);
 	pthread_mutex_unlock(&pmutex);
@@ -1998,7 +1998,8 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		//pthread_mutex_lock(&pmutex); //lock
 		cache_replacement(obj_data_size(&from_obj->obj_desc));
 			
-		obj_data_copy_to_mem(from_obj);
+		//obj_data_copy_to_mem(from_obj);
+        obj_data_copy_daos_to_mem(from_obj);
 
 		from_obj->so = caching;
 		pthread_mutex_lock(&pmutex); //lock

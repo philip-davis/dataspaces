@@ -198,6 +198,11 @@ int test_get_run(enum transport_type type, int npapp, int ndims, int* npdim, uin
 		couple_read_nd(ts, num_vars, type, ndims);
 	}
 
+    printf("Reading all %i timesteps again:\n", timesteps_);
+    for(ts = 1; ts <= timesteps_; ts++) {
+        couple_read_nd(ts, num_vars, type, ndims);
+    }
+
 	if(rank_ == 0){
 		uloga("%s(): done\n", __func__);
 	}

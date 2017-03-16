@@ -37,6 +37,7 @@
 #include "ss_data.h"
 #include "ds_cache_prefetch.h"
 
+
 extern struct ss_storage       *ls;
 
 pthread_mutex_t pmutex = PTHREAD_MUTEX_INITIALIZER;//init prefetching pthread function lock Duan
@@ -110,15 +111,15 @@ int cache_replacement(int added_mem_size){
 	struct obj_data *od, *t;
 	struct list_head *list;
 	
-//#ifdef DEBUG
+#ifdef DEBUG
 	{
 	char *str;
-	asprintf(&str, "ls->mem_size %llu ls->mem_used %llu  added_mem_size %d",
-		ls->mem_size, ls->mem_used, added_mem_size);
+	asprintf(&str, "ls->mem_size %llu ls->mem_used %llu  added_mem_size %d, ls->size_hash %i",
+		ls->mem_size, ls->mem_used, added_mem_size, ls->size_hash);
 	uloga("'%s()': %s\n", __func__, str);
 	free(str);
 	}
-//#endif
+#endif
 
 	if (ls->mem_size >= ls->mem_used + added_mem_size){
 		return 0;
@@ -139,8 +140,7 @@ int cache_replacement(int added_mem_size){
 			}
 #endif
 
-			if (od->s_data != NULL && (od->data != NULL || od->_data != NULL) && od->so == caching){
-			//if (od->sl == in_memory_ssd && (od->data != NULL || od->data != NULL) && od->so != prefetching){
+			if (od->sl == in_memory_ssd && od->so == caching){
 
 #ifdef DEBUG
 				{
@@ -161,8 +161,7 @@ int cache_replacement(int added_mem_size){
 				if (ls->mem_size > ls->mem_used + added_mem_size){ break; }
 
 			}
-			if ((od->data != NULL || od->_data != NULL) && od->so == caching){
-		//if (od->sl == in_memory && (od->data != NULL || od->data != NULL) && od->so != prefetching){
+			if (od->sl == in_memory && od->so == caching){
 
 #ifdef DEBUG	
 			{

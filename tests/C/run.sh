@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash 
 
 uri_file=abc
 ip_addr=192.168.56.191

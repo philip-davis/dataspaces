@@ -1397,7 +1397,7 @@ void obj_data_free_with_data(struct obj_data *od)
 	}
 	if ((od->sl == in_ssd || od->sl == in_memory_ssd)){
 		//obj_data_free_in_ssd(od->s_data);
-        obj_data_free_in_daos(od);
+        //obj_data_free_in_daos(od);
 	}
     free(od);
 }
@@ -1412,8 +1412,8 @@ void obj_data_free_in_mem(struct obj_data *od)
 	free(str);
 #endif
 	if (od->_data) {
-		uloga("'%s()': explicit data free on descriptor %s.\n",
-			__func__, od->obj_desc.name);
+		//uloga("'%s()': explicit data free on descriptor %s.\n",
+		//	__func__, od->obj_desc.name);
 		free(od->_data);	
 	}
 	else if (od->data){
@@ -1455,7 +1455,7 @@ void obj_data_free_in_daos(struct obj_data *od)
 
     recx.rx_rsize = 0; //this punches the records
     recx.rx_idx = 0;
-    recx.rx_nr = obj_data_size(&od->obj_desc);
+    recx.rx_nr = 1;
 
     iod.vd_name.iov_buf = &od->obj_desc.bb;
     iod.vd_name.iov_buf_len = iod.vd_name.iov_buf_len = sizeof(od->obj_desc.bb);
@@ -1496,9 +1496,9 @@ void obj_data_copy_to_daos(struct obj_data *od)
     dkey.iov_buf = od->obj_desc.name;
     dkey.iov_buf_len = dkey.iov_len = strlen(od->obj_desc.name);
     
-    recx.rx_rsize = 1;
+    recx.rx_rsize = obj_data_size(&od->obj_desc);
     recx.rx_idx = 0;
-    recx.rx_nr = obj_data_size(&od->obj_desc);
+    recx.rx_nr = 1;
 
     iod.vd_name.iov_buf = &od->obj_desc.bb;
     iod.vd_name.iov_buf_len = iod.vd_name.iov_buf_len = sizeof(od->obj_desc.bb);
@@ -1513,6 +1513,7 @@ void obj_data_copy_to_daos(struct obj_data *od)
     sgl.sg_nr.num = 1;
     sgl.sg_iovs = &iov;
 
+    printf("About to copy %i bytes from memory to daos.\n", obj_data_size(&od->obj_desc));
     rc = daos_obj_update(*objh, od->obj_desc.version, &dkey, 1, &iod, &sgl, NULL);
     assert(rc == 0 && "daos_obj_update");
 
@@ -1574,9 +1575,9 @@ void obj_data_copy_daos_to_mem(struct obj_data *od)
     dkey.iov_buf = od->obj_desc.name;
     dkey.iov_buf_len = dkey.iov_len = strlen(od->obj_desc.name);
 
-    recx.rx_rsize = 1;
+    recx.rx_rsize = obj_data_size(&od->obj_desc);
     recx.rx_idx = 0;
-    recx.rx_nr = obj_data_size(&od->obj_desc);
+    recx.rx_nr = 1;
 
     iod.vd_name.iov_buf = &od->obj_desc.bb;
     iod.vd_name.iov_buf_len = iod.vd_name.iov_buf_len = sizeof(od->obj_desc.bb);
@@ -1623,7 +1624,7 @@ void obj_data_free(struct obj_data *od)
 	}
 	if ((od->sl == in_ssd || od->sl == in_memory_ssd)){
 		//obj_data_free_in_ssd(od);
-        obj_data_free_in_daos(od);
+        //obj_data_free_in_daos(od);
 	}
 	free(od);
 }
