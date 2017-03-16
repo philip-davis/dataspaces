@@ -25,8 +25,8 @@ while [ ! -f conf ] ; do
 done
 
 echo "Running reader and writer..."
-mpirun -np 1 --host 192.168.56.191 test_writer DATASPACES 1 3 1 1 1 128 128 128 10 1 &
-mpirun -np 1 --host 192.168.56.191 test_reader DATASPACES 1 3 1 1 1 128 128 128 10 2  
+mpirun -np 1 --host 192.168.56.191 test_writer DATASPACES 1 3 2 1 1 128 128 128 10 1 &
+mpirun -np 1 --host 192.168.56.191 test_reader DATASPACES 1 3 2 1 1 128 128 128 10 2  
 echo "Done with dataspaces test. Waiting for dataspaces_server to finish..."
 while [ -e /proc/${ds_pid} ] ; do
     sleep 1s

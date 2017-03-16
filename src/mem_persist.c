@@ -42,7 +42,7 @@
 #include <daos.h>
 #include <linux/uuid.h>
 #include <assert.h>
-
+#include <mpi.h>
 
 /* using 128G ssd file for this example */
 //#define PMEM_SIZE 256*1024*1024*1024L
@@ -170,7 +170,7 @@ static char *pmem_str_append_const(char *str, const char *msg)
 	return str;
 }
 
-void dspaces_daos_init()
+void dspaces_daos_init(MPI_Comm *comm)
 {
 
     daos_pool_info_t pool_info = {0};
@@ -179,28 +179,104 @@ void dspaces_daos_init()
     daos_obj_id_t oid;
     int rc;
     daos_epoch_t epoch = 0;
+    int rank;
+    daos_iov_t iov = {0};
 
+    rc = MPI_Comm_rank(*comm, &rank);
+    assert(rc == MPI_SUCCESS);
+
+    printf("rank = %i\n", rank);
     rc = daos_init();
     assert(rc == 0 && "daos_init");
 
-    rc = daos_pool_create(0731, geteuid(), getegid(), NULL,
-                     NULL, "pmem",  PMEM_SIZE,
-                     &svc, pool_uuid, NULL);
-    assert(rc == 0 && "daos_pool_create");
+    if(rank == 0) {
+        rc = daos_pool_create(0731, geteuid(), getegid(), NULL,
+                         NULL, "pmem",  PMEM_SIZE,
+                         &svc, pool_uuid, NULL);
+        assert(rc == 0 && "daos_pool_create");
+    }
 
-    rc = daos_pool_connect(pool_uuid, NULL, NULL, DAOS_PC_RW,
+    rc = MPI_Bcast(pool_uuid, 16, MPI_CHAR, 0, *comm);
+    assert(rc == MPI_SUCCESS && "MPI_Bcast(pool_uuid)");
+
+    rc = MPI_Bcast(&pool_info, sizeof(pool_info), MPI_CHAR, 0, *comm);
+    assert(rc == MPI_SUCCESS && "MPI_Bcast(pool_info)");
+
+    if(rank == 0) {
+        rc = daos_pool_connect(pool_uuid, NULL, NULL, DAOS_PC_RW,
                             &poh, &pool_info, NULL);
-    assert(rc == 0 && "daos_pool_connect");
-    
-    uuid_generate(cont_uuid);
-    rc = daos_cont_create(poh, cont_uuid, NULL);
-    assert(rc == 0 && "daos_cont_create");
-    
-    rc = daos_cont_open(poh, cont_uuid, DAOS_COO_RW, &coh,
-                                    &cont_info, NULL);
-    assert(rc == 0 && "daos_cont_open");
+        assert(rc == 0 && "daos_pool_connect");
+        
+        rc = daos_pool_local2global(poh, &iov);
+        assert(rc == 0 && "daos_pool_local2_global");
+    }
 
-    oid.mid = oid.lo = 0;
+    rc = MPI_Bcast(&iov.iov_buf_len, 1, MPI_UINT64_T, 0, *comm);
+    assert(rc == MPI_SUCCESS && "MPI_Bcast(iov.iov_buf_len)");
+    
+    iov.iov_buf = malloc(iov.iov_buf_len);
+    iov.iov_len = iov.iov_buf_len;
+
+    if(rank == 0) {
+        rc = daos_pool_local2global(poh, &iov);
+        assert(rc == 0 && "daos_pool_local2global");
+    }
+    rc = MPI_Bcast(iov.iov_buf, iov.iov_len, MPI_BYTE, 0, *comm);
+    assert(rc == MPI_SUCCESS && "MPI_Bcast(iov.iov_buf)");
+
+    if(rank != 0) {
+        rc = daos_pool_global2local(iov, &poh);
+        assert(rc == 0 && "daos_pool_global2local");
+    }
+
+    free(iov.iov_buf);
+    iov.iov_buf = NULL;
+    iov.iov_len = iov.iov_buf_len = 0;
+
+    if(rank == 0) {
+        uuid_generate(cont_uuid);
+        rc = daos_cont_create(poh, cont_uuid, NULL);
+        assert(rc == 0 && "daos_cont_create");
+    }
+
+    rc = MPI_Bcast(cont_uuid, 16, MPI_CHAR, 0, *comm);
+    assert(rc == 0 && "MPI_Bcast(cont_uuid)");
+
+    if(rank == 0) {
+        rc = daos_cont_open(poh, cont_uuid, DAOS_COO_RW, &coh,
+                                        &cont_info, NULL);
+        assert(rc == 0 && "daos_cont_open");
+    }
+
+    if(rank == 0) {
+        rc = daos_cont_local2global(coh, &iov);
+        assert(rc == 0 && "daos_cont_local2global");
+    }
+
+    rc = MPI_Bcast(&iov.iov_buf_len, 1, MPI_UINT64_T, 0, *comm);
+    assert(rc == MPI_SUCCESS && "MPI_Bcast(iov.iov_buf_len)");
+
+    iov.iov_buf = malloc(iov.iov_buf_len);
+    iov.iov_len = iov.iov_buf_len;
+
+    if(rank == 0) {
+        rc = daos_cont_local2global(coh, &iov);
+        assert(rc == 0 && "daos_cont_local2global");
+    }
+
+    rc = MPI_Bcast(iov.iov_buf, iov.iov_len, MPI_BYTE, 0, *comm);
+    assert(rc == MPI_SUCCESS && "MPI_Bcast(iov.iov_buf)");
+
+    if(rank != 0) {
+        rc = daos_cont_global2local(poh, iov, &coh);
+        assert(rc == 0 && "daos_cont_global2local");
+    }
+
+    free(iov.iov_buf);
+    iov.iov_len = iov.iov_buf_len = 0;
+
+    oid.mid = 0;
+    oid.lo = rank;
     daos_obj_id_generate(&oid, DAOS_OC_LARGE_RW);
     rc = daos_obj_declare(coh, oid, epoch, NULL, NULL);
     assert(rc == 0 && "daos_obj_declare");
@@ -301,10 +377,14 @@ void pmem_destroy()
 //#endif
 }
 
-void dspaces_daos_destroy()
+void dspaces_daos_destroy(MPI_Comm *comm)
 {
 
+    int rank;
     int rc;
+
+    rc = MPI_Comm_rank(*comm, &rank);
+    assert(rc == MPI_SUCCESS);
 
     rc = daos_obj_close(objh, NULL);
     assert(rc == 0 && "doas_obj_close");
@@ -312,14 +392,21 @@ void dspaces_daos_destroy()
     rc = daos_cont_close(coh, NULL);
     assert(rc == 0 && "daos_cont_close");
 
-    rc = daos_cont_destroy(poh, cont_uuid, 1, NULL);
-    assert(rc == 0 && "daos_cont_destroy");
+    MPI_Barrier(*comm);
 
+    if(rank == 0) {
+        rc = daos_cont_destroy(poh, cont_uuid, 1, NULL);
+        assert(rc == 0 && "daos_cont_destroy");
+    }
     rc = daos_pool_disconnect(poh, NULL);
     assert(rc == 0 && "daos_pool_disconnect");
 
-    rc = daos_pool_destroy(pool_uuid, NULL, 1, NULL);
-    assert(rc == 0 && "daos_pool_destroy");
+    MPI_Barrier(*comm);
+
+    if(rank == 0) {
+        rc = daos_pool_destroy(pool_uuid, NULL, 1, NULL);
+        assert(rc == 0 && "daos_pool_destroy");
+    }
 
     rc = daos_fini();
     assert(rc == 0 && "daos_fini");

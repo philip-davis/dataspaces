@@ -43,6 +43,7 @@
 #include "queue.h"
 #include "mem_persist.h"
 
+#define TIMING_SSD
 #ifdef TIMING_SSD
 #include "timer.h"
 #endif
@@ -938,7 +939,7 @@ int ssd_hash(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[
 
 #ifdef TIMING_SSD
     tm_end = timer_read(&tm);
-    uloga("%s(): hash_version v%u time %lf seconds\n", __func__, ss->hash_version, tm_end-tm_st);
+    //uloga("%s(): hash_version v%u time %lf seconds\n", __func__, ss->hash_version, tm_end-tm_st);
 #endif
     return ret;
 }
@@ -1484,6 +1485,14 @@ void obj_data_free_in_daos(struct obj_data *od)
 void obj_data_copy_to_daos(struct obj_data *od)
 {
 
+#ifdef TIMING_SSD
+    struct timer tm;
+    double tm_st, tm_end;
+    timer_init(&tm, 1);
+    timer_start(&tm);
+    tm_st = timer_read(&tm);
+    double tm_diff;
+#endif
     int rc;
 
     daos_dkey_t dkey = {0};
@@ -1513,11 +1522,12 @@ void obj_data_copy_to_daos(struct obj_data *od)
     sgl.sg_nr.num = 1;
     sgl.sg_iovs = &iov;
 
-    printf("About to copy %i bytes from memory to daos.\n", obj_data_size(&od->obj_desc));
+    tm_st = timer_read(&tm); 
     rc = daos_obj_update(*objh, od->obj_desc.version, &dkey, 1, &iod, &sgl, NULL);
+    tm_end = timer_read(&tm);
     assert(rc == 0 && "daos_obj_update");
-
-    printf("Copied %i bytes from memory to daos.\n", obj_data_size(&od->obj_desc));
+    tm_diff = tm_end - tm_st;
+    printf("Copied %i bytes from memory to daos. (time = %lf)\n", obj_data_size(&od->obj_desc), tm_diff);
 
     od->sl = in_memory_ssd;
 
@@ -1556,6 +1566,15 @@ void obj_data_copy_to_ssd(struct obj_data *od)
 void obj_data_copy_daos_to_mem(struct obj_data *od)
 {
 
+#ifdef TIMING_SSD
+    struct timer tm;
+    double tm_st, tm_end;
+    timer_init(&tm, 1);
+    timer_start(&tm);
+    tm_st = timer_read(&tm);
+    double tm_diff;
+#endif
+
     int rc;
 
     daos_dkey_t dkey = {0};
@@ -1589,9 +1608,12 @@ void obj_data_copy_daos_to_mem(struct obj_data *od)
     sgl.sg_nr.num = 1;
     sgl.sg_iovs = &iov;
 
+    tm_st = timer_read(&tm);
     rc = daos_obj_fetch(*objh, od->obj_desc.version, &dkey, 1, &iod, &sgl, NULL, NULL);
+    tm_end = timer_read(&tm);
     assert(rc == 0 && "daos_obj_fetch");
-    printf("Copied %i bytes from daos to mem.\n", obj_data_size(&od->obj_desc));
+    tm_diff = tm_end - tm_st;
+    printf("Copied %i bytes from daos to mem. (time = %lf)\n", obj_data_size(&od->obj_desc), tm_diff);
 
     od->sl = in_memory_ssd;
 

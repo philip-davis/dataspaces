@@ -35,16 +35,17 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include<stdint.h>
+#include<mpi.h>
 
 enum persist_type { daos, pmem };
 
 void int_to_char(int n, char s[]);
 void pmem_init(const char *file_name);
-void dspaces_daos_init();
+void dspaces_daos_init(MPI_Comm *comm);
 void *get_daos_obj_handle();
 void *pmem_alloc(uint64_t num_bytes);
 int pmem_free(void *pmem_ptr);
 void pmem_destroy();
-void dspaces_daos_destroy();
+void dspaces_daos_destroy(MPI_Comm *comm);
 
 #endif /* __MEM_PERSIST_H_ */
