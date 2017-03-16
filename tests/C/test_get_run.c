@@ -91,6 +91,7 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
 		data_tab[i] = NULL;
 	}	
 
+    sleep(1);
 	common_lock_on_read("mnd_lock", &gcomm_);	//Test dspaces_barrier
 	//common_lock_on_read("mnd_lock", NULL);
 
@@ -200,6 +201,8 @@ int test_get_run(enum transport_type type, int npapp, int ndims, int* npdim, uin
 
     printf("Reading all %i timesteps again:\n", timesteps_);
     for(ts = 1; ts <= timesteps_; ts++) {
+
+        common_unlock_on_write("mnd_lock", &gcomm_);
         couple_read_nd(ts, num_vars, type, ndims);
     }
 
