@@ -216,47 +216,112 @@ static int init_gni (struct rpc_server *rpc_s)
     int modes = 0;
     int device_id = DEVICE_ID;
     gni_return_t status;
+    
+#ifdef DS_HAVE_DRC
+    drc_info_handle_t drc_credential_info;
+#endif
 
     /* Try from environment first DSPACES_GNI_PTAG (decimal) and DSPACES_GNI_COOKIE (hexa)*/
     ptag = get_ptag_env("DSPACES_GNI_PTAG");
     cookie = get_cookie_env("DSPACES_GNI_COOKIE");
     //uloga(" ****** (%s) from env: ptag=%d  cookie=%x.\n", __func__, ptag, cookie);
 
+// For Cray systems with Dynamic RDMA Credentials
+#ifdef DS_HAVE_DRC
+    //Identify root process
+    if(rank_id_pmi == 0){
+    	if(rpc_s->cmp_type==DART_SERVER){
+    		//ACQUIRE
+    		err = drc_acquire(&rpc_s->drc_credential_id,0);
+    		if(err != DRC_SUCCESS){
+				printf("SERVER: Error Dynamic RDMA Credentials Acquire Failed (%s)", __func__);
+    			goto err_out;
+    		}
+    		//WRITE TO FILE
+    		rpc_write_drc(rpc_s->drc_credential_id);
+    	}
+    	else if(rpc_s->cmp_type==DART_CLIENT){
+    		err = rpc_read_drc(&rpc_s->drc_credential_id);
+    		if(err != 0){
+    			printf("ERROR: DRC Client Could Not Read Credential from File (%s)", __func__);
+    		}
+    	}
+    	else{
+    		printf("ERROR: cmp_type unknown (%s)", __func__);
+    		goto err_out;
+    	}
+    }
+
+    // WAIT FOR ACQUIRE CREDENTIAL
+    PMI_Barrier();
+
+    //ROOT: BROADCAST CREDENTIAL TO ALL OTHER RANKS
+    //OTHER RANKS: RECV CREDENTIAL
+    err = PMI_Bcast(&rpc_s->drc_credential_id, 1);
+    if(err != PMI_SUCCESS){
+    	printf("Error PMI_Bcast of RDMA Credential Failed: (%s)", __func__);
+    	drc_release(rpc_s->drc_credential_id,0);
+    	goto err_out;
+	}
+
+	//ACCESS
+    err = drc_access(rpc_s->drc_credential_id,0,&drc_credential_info);
+    if(err != DRC_SUCCESS){
+    	//error in acquiring - release the credential 
+    	printf("Error on Access Dynamic RDMA Credentials, CMP_ID: %d, rank_id: %d, (%s)",rpc_s->cmp_type,rank_id_pmi,__func__);
+    	drc_release(rpc_s->drc_credential_id,0);
+    	goto err_out;
+    }
+
+    PMI_Barrier();
+
+#endif 
+
     if (ptag == 0 || cookie == 0) {
 #ifdef GNI_PTAG
         cookie = GNI_COOKIE;
 
-#ifdef DS_HAVE_ARIES
+	#ifdef DS_HAVE_ARIES
         ptag = GNI_FIND_ALLOC_PTAG;
-#else
-	ptag = GNI_PTAG;
-#endif
+	#else
+		ptag = GNI_PTAG;
+	#endif
 
-#else
+#else //condition: ifndef GNI_PTAG 
 
-#ifdef DS_HAVE_ARIES
-	// For Aries Network
-        err = get_named_dom_aries("ADIOS", &cookie, &cookie2);
-        if(err != 0){
-		printf("Fail: cookie(%x) and cookie2(%d) returned error. %d.\n", err, cookie, cookie2);
-		printf("Please use 'apstat -P' to check if shared protection domain is activiated.\n"); 
-        	goto err_out;
-        }
+	#ifndef DS_HAVE_DRC
+		#ifdef DS_HAVE_ARIES
+       	 	err = get_named_dom_aries("ADIOS", &cookie, &cookie2);
+        	if(err != 0){
+				printf("Fail: cookie(%x) and cookie2(%d) returned error. %d.\n", err, cookie, cookie2);
+				printf("Please use 'apstat -P' to check if shared protection domain is activiated.\n"); 
+        		goto err_out;
+        	}
 
-    	//cookie = 0xc9de0000;
-    	ptag = GNI_FIND_ALLOC_PTAG;
+    		//cookie = 0xc9de0000;
+    		ptag = GNI_FIND_ALLOC_PTAG;
+		#else
+        	err = get_named_dom("ADIOS", &ptag, &cookie);
+        	if(err != 0){
+            	printf("Fail: ptag and cookie returned error. %d.\n", err);
+           	 	goto err_out;
+        	}
+		#endif //condition: ifdef DS_HAVE_AIRES
+    #else //if we are using DRC
+        	cookie = drc_get_first_cookie(drc_credential_info); //Cookie1
+        	cookie2 = drc_get_second_cookie(drc_credential_info); //Not used for slurm. Included for future.
+        	ptag = GNI_FIND_ALLOC_PTAG;
+        	
+        	status = GNI_GetPtag(0, cookie, &ptag);
 
-#else
-        err = get_named_dom("ADIOS", &ptag, &cookie);
-        if(err != 0){
-            printf("Fail: ptag and cookie returned error. %d.\n", err);
-            goto err_out;
-        }
-
-#endif
-
-#endif
-    	//uloga(" ****** (%s) from apstat: ptag=%d  cookie=%x.\n", __func__, ptag, cookie);
+        	if(status != GNI_RC_SUCCESS){
+        		printf("Fail: DRC - GNI_GetPtag: ptag value not found. GNI Error: %d.\n", status);
+        		printf("Releasing credential %d. Something is wrong.\n", rpc_s->drc_credential_id);
+        		drc_release(rpc_s->drc_credential_id,0);
+        		goto err_out;
+        	}
+	#endif // condition: ifndef DS_HAVE_DRC
+#endif //condition: ifdef GNI_PTAG
     }
 
 	status = GNI_CdmCreate(rank_id_pmi, ptag, cookie, modes, &rpc_s->cdm_handle);
@@ -593,6 +658,12 @@ static int sys_cleanup (struct rpc_server *rpc_s)
 
 	free(rpc_s->sys_mem);
 	*///SCA SYS
+
+#ifdef DS_HAVE_DRC
+	if(rpc_s->cmp_type == DART_SERVER && rank_id_pmi==0){
+		drc_release(rpc_s->drc_credential_id, 0);
+	}
+#endif
 
 	for(i=0; i < rpc_s->num_rpc_per_buff; i++)
 	{
@@ -1355,6 +1426,58 @@ int rpc_write_config(struct rpc_server *rpc_s)
         printf("'%s()' failed with %d.", __func__, err);
         return -EIO;
 }
+
+#ifdef DS_HAVE_DRC
+int rpc_write_drc(uint32_t rdma_credential)
+{
+	FILE *f;
+	int err;
+
+	f = fopen("cred", "wt");
+	if (!f)
+			goto err_out;
+
+	err = fprintf(f, "RDMACRED=%u\n", rdma_credential);
+
+	if (err < 0)
+		goto err_out_close;
+
+	fclose(f);
+	return 0;
+
+ err_out_close:
+        fclose(f);
+ err_out:
+        printf("'%s()' failed with %d.", __func__, err);
+        return -EIO;
+}
+
+int rpc_read_drc(uint32_t *rdma_credential){
+        FILE *f;
+        int err;
+        uint32_t temp_cred;
+
+        f = fopen("cred", "rt");
+
+        if (!f) {
+			err = -ENOENT;
+			goto err_out;
+        }
+
+        err = fscanf(f, "RDMACRED=%" SCNu32 "\n", &temp_cred);
+		*rdma_credential=temp_cred;
+
+        fclose(f);
+        if (err == 1)
+                return 0;
+
+	err = -EIO;
+
+ err_out:
+	printf("'%s()': failed with %d.\n", __func__, err);
+	return err;
+}
+#endif
 
 #ifdef DS_HAVE_ARIES
 inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
