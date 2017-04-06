@@ -194,7 +194,7 @@ static int dsgrpc_dimes_shmem_update_server(struct rpc_server *rpc_s, struct rpc
 /*
   Public API starts here.
 */
-struct dimes_server *dimes_server_alloc(int num_sp, int num_cp, char *conf_name)
+struct dimes_server *dimes_server_alloc(int num_sp, int num_cp, char *conf_name, void *comm)
 {
 	struct dimes_server *dimes_s_l;
 	int err = -ENOMEM;
@@ -203,7 +203,7 @@ struct dimes_server *dimes_server_alloc(int num_sp, int num_cp, char *conf_name)
 		return dimes_s;
 
 	dimes_s_l = calloc(1, sizeof(*dimes_s_l));
-	dimes_s_l->dsg = dsg_alloc(num_sp, num_cp, conf_name);
+	dimes_s_l->dsg = dsg_alloc(num_sp, num_cp, conf_name, comm);
 	if (!dimes_s_l->dsg) {
 		free(dimes_s_l);	
 		goto err_out;

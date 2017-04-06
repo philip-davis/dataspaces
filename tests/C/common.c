@@ -224,7 +224,7 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
         int err;
         if (type == USE_DSPACES) {
                 struct ds_gspace *dsg;
-                dsg = dsg_alloc(num_sp, num_cp, "dataspaces.conf");
+                dsg = dsg_alloc(num_sp, num_cp, "dataspaces.conf", gcomm);
                 if (!dsg)
                         return -1;
 
@@ -244,7 +244,7 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
         } else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
                 struct dimes_server *dsg;
-                dsg = dimes_server_alloc(num_sp, num_cp, "dataspaces.conf");
+                dsg = dimes_server_alloc(num_sp, num_cp, "dataspaces.conf", gcomm);
                 if (!dsg)
                         return -1;
 

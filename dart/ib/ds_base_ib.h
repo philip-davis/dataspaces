@@ -62,7 +62,7 @@ struct dart_server {
 	void *dart_ref;
 };				// //
 
-struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref);	// //
+struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm);	// //
 void ds_free(struct dart_server *ds);	// //
 int ds_process(struct dart_server *ds);
 
