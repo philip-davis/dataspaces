@@ -489,7 +489,7 @@ void peer_smsg_check(struct rpc_server *rpc_s, struct node_id *peer, gni_smsg_at
 //------------------
 
 
-struct node_id *gather_node_id(int appid);
+struct node_id *gather_node_id(int appid, void *comm);
 
 int rpc_read_config(struct ptlid_map *ptlmap);
 int rpc_write_config(struct rpc_server *rpc_s);
@@ -497,10 +497,10 @@ int rpc_write_config(struct rpc_server *rpc_s);
 int rpc_read_socket(struct sockaddr_in *address);
 int rpc_write_socket(struct rpc_server *rpc_s);
 
-struct rpc_server *rpc_server_init (int num_buff, int num_rpc_per_buff, void *dart_ref, enum rpc_component cmp_type, int appid);
+struct rpc_server *rpc_server_init (int num_buff, int num_rpc_per_buff, void *dart_ref, enum rpc_component cmp_type, int appid, void *comm);
 void rpc_server_set_peer_ref(struct rpc_server *rpc_s, struct node_id peer_tab[], int num_peers);
 void rpc_server_set_rpc_per_buff(struct rpc_server *rpc_s, int num_rpc_per_buff);
-int rpc_server_free(struct rpc_server *rpc_s);
+int rpc_server_free(struct rpc_server *rpc_s, void *comm);
 struct rpc_server *rpc_server_get_instance(void);
 int rpc_server_get_id(void);
 

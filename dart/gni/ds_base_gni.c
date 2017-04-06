@@ -1066,13 +1066,17 @@ static int ds_master_init(struct dart_server *ds)//testing
 
 
 	// allgather APP smsg_attr[rpc+sys]
-        gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(ds->size_sp * sizeof(gni_smsg_attr_t));
+    gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(ds->size_sp * sizeof(gni_smsg_attr_t));
 
+    allgather(&cur_attr_info->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t), ds->comm);
 
-	allgather(&cur_attr_info->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t));
+    if(ds->comm) {
+        err = MPI_Barrier(*ds->comm);
+        assert(err == MPI_SUCCESS);
+    } else {
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);
-
+    }
 
 	for(j=0;j<ds->size_sp;j++){
 		if(j == ds->rpc_s->ptlmap.id)
@@ -1622,9 +1626,14 @@ static int ds_boot_slave(struct dart_server *ds)
 	// allgather server smsg_attr[rpc]
         gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(ds->size_sp * sizeof(gni_smsg_attr_t));
 
-	allgather(&cur_attr_info->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t));
+	allgather(&cur_attr_info->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t), ds->comm);
+    if(ds->comm) {
+        err = MPI_Barrier(*ds->comm);
+        assert(err == MPI_SUCCESS);
+    } else {
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);
+    }
 
 	for(j=0;j<ds->size_sp;j++){
 	  if(j == ds->rpc_s->ptlmap.id)
@@ -1719,10 +1728,15 @@ static int ds_boot(struct dart_server *ds)
 
 	*/
 
+    if(ds->comm) {
+        err = MPI_Barrier(*ds->comm);
+        assert(err == MPI_SUCCESS);
+    } else {
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);
-
-	if(ds->rpc_s->ptlmap.id == 0){
+    }
+	
+    if(ds->rpc_s->ptlmap.id == 0){
 	  ds->thread_alive = 1;
 	  rc = pthread_create(&(ds->comm_thread), NULL, ds_master_listen, (void *)ds);////DSaaS
 	  if(rc) {
@@ -1748,7 +1762,7 @@ static int ds_boot(struct dart_server *ds)
    Allocate and initialize dart server; the server initializes rpc
    server. 
 */
-struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref)
+struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 {
 	struct dart_server *ds = 0;
 	struct node_id *peer;
@@ -1773,7 +1787,14 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref)
 
 	INIT_LIST_HEAD(&ds->app_list);
 
-	ds->rpc_s = rpc_server_init(30, num_sp, ds, DART_SERVER, 0);
+    if(comm) {
+        ds->comm = malloc(sizeof(*ds->comm));
+        MPI_Comm_dup(*(MPI_Comm *)comm, ds->comm);
+    } else {
+        ds->comm = NULL;
+    }
+
+	ds->rpc_s = rpc_server_init(30, num_sp, ds, DART_SERVER, 0, ds->comm);
 	if (!ds->rpc_s)
 		goto err_free_dsrv;
 
@@ -1826,8 +1847,13 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref)
 		ds->f_reg = 1;
 	}
 
-	err = PMI_Barrier();	
-	assert(err == PMI_SUCCESS);
+   if(ds->comm) {
+        err = MPI_Barrier(*ds->comm);
+        assert(err == MPI_SUCCESS);
+    } else {
+        err = PMI_Barrier();
+        assert(err == PMI_SUCCESS);
+    } 
 
 	printf("'%s(%d)': init ok.\n", __func__, ds->self->ptlmap.id);
 	//print_ds(ds);
@@ -1866,7 +1892,7 @@ void ds_free(struct dart_server *ds)//not done
 
 	int track = ds->self->ptlmap.id;//debug
 
-	err = rpc_server_free(ds->rpc_s);//not done
+	err = rpc_server_free(ds->rpc_s, ds->comm);//not done
 	if(err!=0)
 		printf("(%s): rpc server free failed.\n", __func__);
 	//printf("Rank(%d): step2.1.\n",track);//debug
@@ -1876,6 +1902,10 @@ void ds_free(struct dart_server *ds)//not done
 		free(app);
         }
 	//printf("Rank(%d): step2.2.\n",track);//debug
+    if(ds->comm) {
+        MPI_Comm_free(ds->comm);
+        free(ds->comm);
+    }
 	free(ds);
 }
 

@@ -35,6 +35,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <mpi.h>
+
 #include "dc_base_gni.h"
 
 static int connectfd;
@@ -519,14 +521,25 @@ static int dc_master_init(struct dart_client *dc) //working
 
 	}
 
-	// PMI_Bcast to all slave clients.
-	PMI_Bcast(&dc->peer_size, sizeof(int));
+    if (dc->comm) {
+        // MPI_Bcast to all slave clients
+        err = MPI_Bcast(&dc->peer_size, 1, MPI_INT, 0, *dc->comm);
+        assert(err == MPI_SUCCESS);
+        err = MPI_Bcast(recv_buffer, dc->peer_size * sizeof(struct ptlid_map), MPI_BYTE, 0, *dc->comm);
+        if (err != MPI_SUCCESS) {
+        printf("Rank %d: failed for broadcast Address information to slave servers. (%d)\n", dc->rpc_s->ptlmap.id, err);
+                goto err_out;
+        }
+    } else {
+        // PMI_Bcast to all slave clients.
+        PMI_Bcast(&dc->peer_size, sizeof(int));
 
-	err = PMI_Bcast(recv_buffer, dc->peer_size * sizeof(struct ptlid_map));
-	if (err != PMI_SUCCESS){
-	  printf("Rank %d: failed for broadcast Address information to slave servers. (%d)\n", dc->rpc_s->ptlmap.id, err);			
-		goto err_out;
-	}
+        err = PMI_Bcast(recv_buffer, dc->peer_size * sizeof(struct ptlid_map));
+        if (err != PMI_SUCCESS){
+            printf("Rank %d: failed for broadcast Address information to slave servers. (%d)\n", dc->rpc_s->ptlmap.id, err);            
+        goto err_out;
+        }
+    }
 
     // Create peer_tab for all peers of current application
     struct node_id* app_peer_tab = create_app_peer_tab(recv_buffer, dc);
@@ -583,11 +596,16 @@ static int dc_master_init(struct dart_client *dc) //working
 	}
 
 	// 4. allgather APP smsg_attr[rpc+sys]
-        gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(dc->num_cp * sizeof(gni_smsg_attr_t));
+    gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(dc->num_cp * sizeof(gni_smsg_attr_t));
 
-	allgather(&dc->rpc_s->attr_info_start->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t));
+    allgather(&dc->rpc_s->attr_info_start->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t), dc->comm);
+    if(dc->comm) {
+        err = MPI_Barrier(*dc->comm);
+        assert(err == MPI_SUCCESS);
+    } else {
         err = PMI_Barrier();
-        assert(err == PMI_SUCCESS);
+            assert(err == PMI_SUCCESS);
+    }
 
 	// 5. send APP msg_size + smsg_attr[rpc+sys]
 	info_size = dc->num_cp * sizeof(gni_smsg_attr_t);
@@ -722,24 +740,37 @@ static int register_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 	}
 
 	// bcast to slave clients
+    if(dc->comm) {
+        err = MPI_Barrier(*dc->comm);
+        assert(err == MPI_SUCCESS);
+
+        err = MPI_Bcast(msg->msg_data, msg->size, MPI_BYTE, 0, *dc->comm);
+        if(err != MPI_SUCCESS) {
+            printf("Rank %d: failed for broadcast smsg attributes information to slave clients. (%d)\n", dc->rpc_s->ptlmap.id, err);
+            goto err_out;
+        }
+
+        err = MPI_Barrier(*dc->comm);
+        assert(err == PMI_SUCCESS);
+    } else {
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);
 
-	err = PMI_Bcast(msg->msg_data, msg->size);
-	if (err != PMI_SUCCESS){
-		printf("Rank %d: failed for broadcast smsg attributes information to slave clients. (%d)\n", dc->rpc_s->ptlmap.id, err);			
-		goto err_out;
-	}
-	
+	    err = PMI_Bcast(msg->msg_data, msg->size);
+	    if (err != PMI_SUCCESS){
+		    printf("Rank %d: failed for broadcast smsg attributes information to slave clients. (%d)\n", dc->rpc_s->ptlmap.id, err);			
+		    goto err_out;
+	    }
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);
+    }
 
-        free(msg->msg_data);
-        free(msg);
+    free(msg->msg_data);
+    free(msg);
 
-        dc->f_reg = 1;
+    dc->f_reg = 1;
 
-        return 0;
+    return 0;
 
 err_out:
 	printf("'%s()': failed with %d.\n", __func__, err);
@@ -752,7 +783,7 @@ static int dcrpc_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 	struct node_id *peer;
 	struct msg_buf *msg;
-        int i, num, err = -ENOMEM;
+    int i, num, err = -ENOMEM;
 
 
 	peer = &dc->peer_tab[0];
@@ -765,9 +796,9 @@ static int dcrpc_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 	rpc_mem_info_cache(peer, msg, cmd); 
 	err = rpc_receive_direct(rpc_s, peer, msg);
-        if (err != 0){
+    if (err != 0){
 		free(msg);
-                goto err_out;
+        goto err_out;
 	}
 	rpc_mem_info_reset(peer, msg, cmd);
 
@@ -809,12 +840,21 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 
 	gni_smsg_attr_t *smsg_attr;
 
-	// PMI_Bcast peer_size
-	err = PMI_Bcast(&dc->peer_size, sizeof(int));
-	if (err != PMI_SUCCESS){
-		printf("Rank %d: failed for broadcast peer_size to slave servers. (%d)\n", dc->rpc_s->ptlmap.id, err);			
-		goto err_out;
-	}
+    if (dc->comm) {
+        // MPI_Bcast to all slave clients
+        err = MPI_Bcast(&dc->peer_size, 1, MPI_INT, 0, *dc->comm);
+        if (err != MPI_SUCCESS) {
+            printf("Rank %d: failed for broadcast peer_size to slave servers. (%d)\n", dc->rpc_s->ptlmap.id, err);
+            goto err_out;
+        }
+    } else {
+        // PMI_Bcast to all slave clients.
+        err = PMI_Bcast(&dc->peer_size, sizeof(int));
+        if (err != PMI_SUCCESS){
+            printf("Rank %d: failed for broadcast peer_size to slave servers. (%d)\n", dc->rpc_s->ptlmap.id, err);
+            goto err_out;
+        }
+    }
 
 	dc->rpc_s->num_rpc_per_buff = dc->peer_size - dc->num_cp;
 	dc->num_sp = dc->peer_size - dc->num_cp;
@@ -822,11 +862,21 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 	recv_buffer = malloc(dc->peer_size * sizeof(struct ptlid_map));
 	memset(recv_buffer,0,dc->peer_size * sizeof(struct ptlid_map));
 
-	err = PMI_Bcast(recv_buffer, dc->peer_size * sizeof(struct ptlid_map));
-	if (err != PMI_SUCCESS){
-		printf("Rank 0: failed for broadcast Address information to slave servers. (%d)\n", err);			
-		goto err_out;
-	}
+    if (dc->comm) {
+        // MPI_Bcast to all slave clients
+        err = MPI_Bcast(recv_buffer, dc->peer_size * sizeof(struct ptlid_map), MPI_BYTE, 0, *dc->comm);
+        if (err != MPI_SUCCESS) {
+            printf("Rank %d: failed for broadcast Address information to slave servers. (%d)\n", dc->rpc_s->ptlmap.id, err);
+            goto err_out;
+        }
+    } else {
+        // PMI_Bcast to all slave clients.
+        err = PMI_Bcast(recv_buffer, dc->peer_size * sizeof(struct ptlid_map));
+        if (err != PMI_SUCCESS){
+            printf("Rank %d: failed for broadcast Address information to slave servers. (%d)\n", dc->rpc_s->ptlmap.id, err);
+            goto err_out;
+        }
+    }
 
 	dc->peer_tab = (struct node_id *)malloc(dc->rpc_s->num_rpc_per_buff * sizeof(struct node_id));
 	memset(dc->peer_tab, 0, dc->rpc_s->num_rpc_per_buff * sizeof(struct node_id));
@@ -938,27 +988,45 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 	// 4. allgather APP smsg_attr[rpc+sys]
         gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(dc->num_cp * sizeof(gni_smsg_attr_t));
 
-	allgather(&dc->rpc_s->attr_info_start->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t));
+    allgather(&dc->rpc_s->attr_info_start->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t), dc->comm);
+    if(dc->comm) {
+        err = MPI_Barrier(*dc->comm);
+        assert(err == MPI_SUCCESS);
+    } else {
         err = PMI_Barrier();
-        assert(err == PMI_SUCCESS);
-
+            assert(err == PMI_SUCCESS); 
+    }
         free(remote_smsg_rpc_array);
 
 	// recv APP smsg_attr[rpc] of servers from master client
         recv_buffer = (gni_smsg_attr_t *)malloc(dc->num_sp * sizeof(gni_smsg_attr_t));
 	memset(recv_buffer, 0, dc->num_sp * sizeof(gni_smsg_attr_t));
 
-        err = PMI_Barrier();
-        assert(err == PMI_SUCCESS);	
+    if(dc->comm) {
+        //MPI_Barrier to all slave clients
+        err = MPI_Barrier(*dc->comm);
+        assert(err == MPI_SUCCESS);
+        err = MPI_Bcast(recv_buffer, dc->peer_size * sizeof(gni_smsg_attr_t), MPI_BYTE, 0, *dc->comm);
 
-	err = PMI_Bcast(recv_buffer, dc->num_sp * sizeof(gni_smsg_attr_t));
-	if (err != PMI_SUCCESS){
-		printf("Rank %d: failed for broadcast attr information to slave clients. (%d)\n", dc->rpc_s->ptlmap.id, err);			
-		goto err_out;
-	}
+        if (err != MPI_SUCCESS){
+            printf("Rank %d: failed for broadcast smsg attributes information to slave client. (%d)\n", dc->rpc_s->ptlmap.id, err);
+            goto err_out;
+        }
+        err = MPI_Barrier(*dc->comm);
+        assert(err == MPI_SUCCESS);
+    } else {
+        // PMI_Bcast to all slave clients.
+        err = PMI_Barrier();
+        assert(err == PMI_SUCCESS);
+        err = PMI_Bcast(recv_buffer, dc->peer_size * sizeof(gni_smsg_attr_t));
+        if (err != PMI_SUCCESS){
+            printf("Rank %d: failed for broadcast smsg attributes information to slave client. (%d)\n", dc->rpc_s->ptlmap.id, err);
+            goto err_out;
+        }
 
         err = PMI_Barrier();
-        assert(err == PMI_SUCCESS);	
+        assert(err == PMI_SUCCESS);
+    }
 
 	smsg_attr = (gni_smsg_attr_t *)recv_buffer;
 	for(i=0;i<dc->num_sp;i++){
@@ -1047,7 +1115,7 @@ static int dc_boot(struct dart_client *dc, int appid)
   Public API starts here.
 */
 
-struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
+struct dart_client *dc_alloc(int num_peers, int appid, void *comm, void *dart_ref)
 {
 	struct dart_client *dc;
 	struct node_id *peer_list, *peer;
@@ -1062,8 +1130,14 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
 	dc->dart_ref = dart_ref;
 	dc->cp_in_job = num_peers;
 	dc->num_cp = num_peers;
+    if(comm) {
+        dc->comm = malloc(sizeof(*dc->comm));
+        MPI_Comm_dup(*(MPI_Comm *)comm, dc->comm);
+    } else {
+        dc->comm = NULL;
+    }
 
-	dc->rpc_s = rpc_server_init(30, num_peers, dc, DART_CLIENT, appid);
+	dc->rpc_s = rpc_server_init(30, num_peers, dc, DART_CLIENT, appid, dc->comm);
         if (!dc->rpc_s) {
                 free(dc);
                 return NULL;
@@ -1078,7 +1152,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
 
         err = dc_boot(dc, appid);
         if (err < 0) {
-	  	rpc_server_free(dc->rpc_s);
+	  	rpc_server_free(dc->rpc_s, dc->comm);
                 free(dc);
                 return NULL;
         }
@@ -1099,8 +1173,13 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
 		peer++;
 	}
 
-	err = PMI_Barrier();	
-	assert(err == PMI_SUCCESS);
+    if(dc->comm) {
+        err = MPI_Barrier(*dc->comm);
+        assert(err == MPI_SUCCESS);
+    } else {
+        err = PMI_Barrier();    
+        assert(err == PMI_SUCCESS);
+    }
 
 #ifdef DEBUG
 	printf("'%s(%d:%d:%d:%d)': init ok.\n", __func__, dc->self->ptlmap.id, dc->self->ptlmap.appid, dc->self->ptlmap.pid, dc->self->ptlmap.nid);//partial debug
@@ -1144,9 +1223,13 @@ void dc_free(struct dart_client *dc)
 	    }
 	}
 
-	
-        err = PMI_Barrier();
+    if(dc->comm) {
+        err = MPI_Barrier(*dc->comm);
+        assert(err == MPI_SUCCESS);
+    } else {
+        err = PMI_Barrier();    
         assert(err == PMI_SUCCESS);
+    }	
 		
 	if(dc->cp_min_rank == dc->rpc_s->ptlmap.id){
 
@@ -1159,22 +1242,31 @@ void dc_free(struct dart_client *dc)
 		  if (err < 0){
 		    printf("'%s()': failed with %d.\n", __func__, err);
 	      	}
-	}
+	    }
 
 	}
 
-	
-        err = PMI_Barrier();
+    if(dc->comm) {
+        err = MPI_Barrier(*dc->comm);
+        assert(err == MPI_SUCCESS);
+    } else {
+        err = PMI_Barrier();    
         assert(err == PMI_SUCCESS);
+    }
+
 
 	track = dc->self->ptlmap.id;
-		err = rpc_server_free(dc->rpc_s);
+    err = rpc_server_free(dc->rpc_s, dc->comm);
 	if(err!=0)
 	  printf("(%s): failed. (%d)\n",__func__, err);
 
-
-        err = PMI_Barrier();
+    if(dc->comm) {
+        err = MPI_Barrier(*dc->comm);
+        assert(err == MPI_SUCCESS);
+    } else {
+        err = PMI_Barrier();    
         assert(err == PMI_SUCCESS);
+    }
 
 	//if (dc->peer_tab){
 	// 	printf("Rank(%d): peer_tab is not NULL.\n", track);//debug

@@ -781,7 +781,7 @@ err:
 //Public APIs
 //****************************************************
 
-struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref)
+struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 {
 	//printf("get into ds alloc\n");
 	struct dart_server *ds = NULL;

@@ -792,7 +792,7 @@ err:
 }
 
 //Public APIs
-struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref)
+struct dart_server *ds_alloc(int num_sp, int num_cp, void *comm, void *dart_ref)
 {
 	struct dart_server *ds = NULL;
 	struct node_id *peer;
