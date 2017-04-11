@@ -1259,9 +1259,10 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 		//ls->mem_size = 274877906944;	//256G
 		//ls->mem_size = 12884901888;	//12G
 		//ls->mem_size = 8589934592;	//8G
-		ls->mem_size = 6442450944;	//6G
+		//ls->mem_size = 6442450944;	//6G
 		//ls->mem_size = 4294967296;	//4G
 		//ls->mem_size = 2147483648;	//2G
+		ls->mem_size = 1024 * 1024 * 64L; //64M
 #ifdef DEBUG
 		{
 			char *str;

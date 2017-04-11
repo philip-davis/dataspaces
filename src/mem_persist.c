@@ -52,7 +52,7 @@
 //#define PMEM_SIZE 8*1024*1024*1024L
 //#define PMEM_SIZE 1*1024*1024*1024L
 /* using /ssd1/sd904/ ssd file path for this example */
-#define PMEM_PATH "/ssd1/sd904/"
+#define PMEM_PATH "ssd/"
 //#define PMEM_PATH "/home1/sd904/"
 //#define PMEM_PATH ""
 
@@ -163,7 +163,13 @@ static char *pmem_str_append_const(char *str, const char *msg)
 
 void pmem_init(const char *file_name)
 {
-	asprintf(&pmem_file, PMEM_PATH);
+
+	char *bbpath;
+
+	//asprintf(&pmem_file, PMEM_PATH);
+	bbpath = getenv("DW_JOB_STRIPED");
+	printf("bbpath = %s\n", bbpath);
+	asprintf(&pmem_file, bbpath); 
 	pmem_file = pmem_str_append_const(pmem_file, file_name);
 
 	//#ifdef DEBUG
@@ -180,6 +186,8 @@ void pmem_init(const char *file_name)
 	fd = open(pmem_file, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
 	if (fd == -1)
 	{
+		int err;
+		err = errno;
 		uloga("%s(): ERROR pmem file created failed! \n", __func__);
 		perror("open");
 		exit(1);
@@ -188,10 +196,13 @@ void pmem_init(const char *file_name)
 	write(fd, "\0", 1);
 	lseek(fd, 0, SEEK_SET);
 
-	mem_ptr = mmap(start_ptr, PMEM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	mem_ptr = mmap(start_ptr, PMEM_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+	//mem_ptr = mmap(start_ptr, PMEM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if (mem_ptr == MAP_FAILED)
 	{
-		uloga("%s(): ERROR mmap failed! \n", __func__);
+		int err;
+		err = errno;
+		uloga("%s(): ERROR mmap failed! (error %i)\n", __func__, err);
 		perror("mmap");
 		exit(1);
 	}
@@ -232,7 +243,7 @@ void pmem_destroy()
 		munmap(pmem_header->pmem_ptr, PMEM_SIZE);
 	}
 	close(fd);
-	remove(pmem_file);
+	//remove(pmem_file);
 	free(pmem_file);
 
 //#ifdef DEBUG

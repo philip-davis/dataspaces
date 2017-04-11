@@ -1440,7 +1440,11 @@ void obj_data_free_in_ssd(struct obj_data *od)
 /*copy object data from memory to ssd */
 void obj_data_copy_to_ssd(struct obj_data *od)
 {
+
+	clock_t start, end, write_ticks;
+
 	od->s_data = pmem_alloc(obj_data_size(&od->obj_desc));
+	od->s_data = malloc(obj_data_size(&od->obj_desc));
 #ifdef DEBUG
 	char *str;
 	asprintf(&str, "obj_data_copy_to_ssd: od->s_data = pmem_alloc(obj_data_size(&od->obj_desc)) %p", od->s_data);
@@ -1448,17 +1452,21 @@ void obj_data_copy_to_ssd(struct obj_data *od)
 	free(str);
 #endif
 	if (od->s_data != NULL){
+		uloga("'%s()': explicit data copy to ssd on descriptor %s.\n",
+                        __func__, od->obj_desc.name);
+		start = clock();
 		if (od->_data) {
 			memcpy(od->s_data, od->_data, obj_data_size(&od->obj_desc) + 7); //void *memcpy(void *dest, const void *src, size_t n);
 			msync(od->s_data, obj_data_size(&od->obj_desc) + 7, MS_SYNC);//int msync ( void * ptr, size_t len, int flags) flags = MS_ASYNC|MS_SYNC
-
-			uloga("'%s()': explicit data copy to ssd on descriptor %s.\n",
-			__func__, od->obj_desc.name);
 		}
 		else{
 			memcpy(od->s_data, od->data, obj_data_size(&od->obj_desc)); //void *memcpy(void *dest, const void *src, size_t n);
 			msync(od->s_data, obj_data_size(&od->obj_desc), MS_SYNC);//int msync ( void * ptr, size_t len, int flags) flags = MS_ASYNC|MS_SYNC
 		}
+		end = clock();
+                write_ticks = end - start;
+		//introduce artificial delay
+		//while((clock() - start) < (start + 12 * write_ticks)); 	
 	}
 	else{ 
 		uloga("%s(): ERROR od->s_data %p, no pmem space is allocated! \n", __func__, od->s_data);
@@ -1470,6 +1478,9 @@ void obj_data_copy_to_ssd(struct obj_data *od)
 /*copy object data from ssd to mem */
 void obj_data_copy_to_mem(struct obj_data *od)
 {
+
+	clock_t start, end, read_ticks;
+
 	if (od->s_data) {
 		od->_data = od->data = malloc(obj_data_size(&od->obj_desc) + 7);
 		if (!od->_data) {
@@ -1477,7 +1488,12 @@ void obj_data_copy_to_mem(struct obj_data *od)
 			uloga("%s(): ERROR malloc od->_data %p is is NULL! \n", __func__, od->_data);
 		}
 		ALIGN_ADDR_QUAD_BYTES(od->data);
+		start = clock();
 		memcpy(od->_data, od->s_data, obj_data_size(&od->obj_desc) + 7); //void *memcpy(void *dest, const void *src, size_t n);
+		end = clock();
+		read_ticks = end - start;
+		//introduce artificial delay
+		//while((clock() - start) < (start + 4 * read_ticks));
 		uloga("'%s()': explicit data copy to mem on descriptor %s.\n",
 			__func__, od->obj_desc.name);
 	}

@@ -109,6 +109,33 @@ if test "x$enable_aries" == "xyes"; then
 fi
 dnl AM_CONDITIONAL(DS_HAVE_ARIES, true) 
 
+dnl Cray Dynamic RDMA Credentials
+
+LDFLAGS_save=$LDFLAGS
+
+AC_ARG_WITH([drc],
+    [AS_HELP_STRING([--with-drc=DIR     Location of Dynamic RDMA Credentials])],
+        [],[with_drc=no])
+
+libdrc=
+AS_IF([test "x$with_drc" != xno],
+[
+    LDFLAGS="$LDFLAGS -L$withval/lib64"
+    AC_CHECK_LIB([drc], [drc_acquire],
+    [
+        AC_SUBST([libdrc], ["-L$withval/lib64 -ldrc"])
+        AC_DEFINE([DS_HAVE_DRC], [1], 
+            ["uGNI Dynamic Credentials is enabled"])
+        AS_ECHO("uGNI Dynamic RDMA Credentials Enabled!")
+    ], 
+    [AC_MSG_FAILURE(
+        ["--with-drc was given, but libdrc is not present!"])]
+    )
+    LIBS="$LIBS $libdrc"
+])
+
+LDFLAGS=$LDFLAGS_save
+
 dnl Check the max array dimension
 
 if test -z "${HAVE_UGNI_TRUE}"; then
