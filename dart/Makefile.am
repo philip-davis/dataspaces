@@ -21,14 +21,14 @@ noinst_HEADERS +=	gni/utility_functions.h \
 					gni/dc_base_gni.h \
 					gni/dart_rdma_gni.h
 endif # HAVE_UGNI
-if HAVE_PORTALS
-libdart_a_SOURCES = portals/dart_rpc_portals.c \
-					portals/ds_base_portals.c \
-					portals/dc_base_portals.c
-noinst_HEADERS +=	portals/dart_rpc_portals.h \
-					portals/ds_base_portals.h \
-					portals/dc_base_portals.h
-endif # HAVE_PORTALS
+#if HAVE_PORTALS
+#libdart_a_SOURCES = portals/dart_rpc_portals.c \
+#					portals/ds_base_portals.c \
+#					portals/dc_base_portals.c
+#noinst_HEADERS +=	portals/dart_rpc_portals.h \
+#					portals/ds_base_portals.h \
+#					portals/dc_base_portals.h
+#endif # HAVE_PORTALS
 if HAVE_INFINIBAND 
 libdart_a_SOURCES = ib/dart_rpc_ib.c \
 					ib/ds_base_ib.c \

@@ -1,18 +1,21 @@
 AC_INIT([dataspaces],[1.4.0])
 AC_CONFIG_AUX_DIR(config)
 
-AM_INIT_AUTOMAKE([-Wall -Werror foreign])
+AM_INIT_AUTOMAKE([-Wall -Werror subdir-objects foreign])
 
 AC_PROG_CC
 AC_PROG_CXX
 AC_PROG_FC
 AC_PROG_RANLIB
+AM_PROG_CC_C_O
+
+m4_ifdef([AM_PROG_AR],[AM_PROG_AR])
 
 dnl AC_PROG_LIBTOOL
 
 dnl AC_CRAY_PMI
 dnl AC_CRAY_UGNI
-AC_PORTALS
+dnl AC_PORTALS
 AC_INFINIBAND
 AC_DCMF
 AC_UGNI
@@ -62,6 +65,45 @@ AM_CONDITIONAL([DATASPACES_LOCATION_AWARE_WRITE], [test "x$enable_dataspaces_loc
 if test "x$enable_dataspaces_location_aware_write" == "xyes"; then
     AC_DEFINE(DS_HAVE_DSPACES_LOCATION_AWARE_WRITE, 1, [DATASPACES location-aware write is enabled])
 fi 
+
+dnl added for Aries EOS
+dnl Check if it is Aries network
+AC_ARG_ENABLE(aries,
+    [AS_HELP_STRING([--enable-aries],
+        [Build Dart on Aries network. ])])
+if test "x$enable_aries" == "xyes"; then
+	AC_DEFINE(DS_HAVE_ARIES, 1, [uGNI-Aires is enabled])
+	echo "uGNI Aries version enabled!"
+fi
+dnl AM_CONDITIONAL(DS_HAVE_ARIES, true) 
+
+
+ray Dynamic RDMA Credentials
+
+LDFLAGS_save=$LDFLAGS
+
+AC_ARG_WITH([drc],
+    [AS_HELP_STRING([--with-drc=DIR     Location of Dynamic RDMA Credentials])],
+        [],[with_drc=no])
+
+libdrc=
+AS_IF([test "x$with_drc" != xno],
+[
+    LDFLAGS="$LDFLAGS -L$withval/lib64"
+    AC_CHECK_LIB([drc], [drc_acquire],
+    [
+        AC_SUBST([libdrc], ["-L$withval/lib64 -ldrc"])
+        AC_DEFINE([DS_HAVE_DRC], [1], 
+            ["uGNI Dynamic Credentials is enabled"])
+        AS_ECHO("uGNI Dynamic RDMA Credentials Enabled!")
+    ], 
+    [AC_MSG_FAILURE(
+        ["--with-drc was given, but libdrc is not present!"])]
+    )
+    LIBS="$LIBS $libdrc"
+])
+
+LDFLAGS=$LDFLAGS_save
 
 if test -z "${HAVE_UGNI_TRUE}"; then
   DSPACESLIB_CPPFLAGS+=" ${PMI_CPPFLAGS}"
