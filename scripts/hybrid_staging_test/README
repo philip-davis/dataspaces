@@ -1,0 +1,19 @@
+This directory presents a simple example to demonstrate the dataspaces 
+location-aware write feature on an infiniband HPC cluster. To enable this
+new feature, please configure dataspaces package with the
+"--enable-dataspaces-location-aware-write" option.
+
+The example has two applications, a writer and a reader.
+Number of writer processes is 64.
+Number of reader processes is 32.
+Number of DataSpaces server processes is 4.
+
+In this directory, there are two job script files: 
+(1) job.dspaces.as_service.sith.pbs runs 64 writer process on 4 compute nodes,
+and the 32 reader processes on 2 compute nodes. The server processes run on 1 
+separate compute node.
+(2) job.dspaces.hybrid.sith.pbs runs the 64 writer processes and server processes on the same 4 compute nodes. On each compute node, 1 server is co-located with
+ 16 writer process. In this case, writer application processes will write data 
+to server running on local compute node. It improves write performance, and
+can reduce the amount of network data movement when compared with (1).
+

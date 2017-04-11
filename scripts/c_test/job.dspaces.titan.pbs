@@ -33,7 +33,7 @@ sleep 5s  # wait server to fill up the conf file
 aprun -n 32 ./test_writer DATASPACES 32 3 2 4 4 128 64 64 20 1 >& writer.log &
 
 ## Run reader application
-aprun -n 16 ./test_reader DATASPACES 16 3 2 2 4 128 128 64 20 2 >& reader.log &
+aprun -n 16 ./test_reader DATASPACES 16 3 2 2 4 128 128 64 20 2 >& reader.log
 
 ## Wait for the entire workflow to finish
-wait
+#wait

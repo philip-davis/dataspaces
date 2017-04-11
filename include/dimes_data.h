@@ -40,12 +40,93 @@ extern "C" {
 #include "dart.h"
 #include "ss_data.h"
 
+#ifdef DS_HAVE_DIMES_SHMEM
+#include "mpi.h"
+#define PAGE_SIZE sysconf(_SC_PAGE_SIZE)
+#define MAX_NUM_PEER_PER_NODE 64
+#define SHMEM_OBJ_PATH_PREFIX "/dataspaces_shared_memory_segment"
+#define SHMEM_OBJ_PATH_MAX_LEN 255
+#endif
+
 struct ptlid_map;
 
 struct box_2pointers{
 	void *ptr1;
 	void *ptr2;
 };
+
+#ifdef DS_HAVE_DIMES_SHMEM
+struct shared_memory_obj {
+    struct list_head    entry;
+    int id;
+    int owner_node_rank;
+    char path[SHMEM_OBJ_PATH_MAX_LEN+1];
+    size_t size;
+    void *ptr;
+    int fd;
+};
+struct dimes_shmem_descriptor {
+    size_t size;
+    size_t offset;
+    int shmem_obj_id;
+    int owner_node_rank;
+} __attribute__((__packed__));
+
+// Checkpoint/Restart (CR) of DIMES:
+// (1) node-local shared memory object information
+// (2) (client) in-memory objects information
+// (3) (client) memory allocator information 
+struct dimes_cr_shmem_obj_info
+{
+    int id;
+    size_t size;
+    size_t storage_restart_buf_size;
+    size_t allocator_restart_buf_size;
+    char path[SHMEM_OBJ_PATH_MAX_LEN+1];
+    char path_storage_restart_buf[SHMEM_OBJ_PATH_MAX_LEN+1];
+    char path_allocator_restart_buf[SHMEM_OBJ_PATH_MAX_LEN+1];
+} __attribute__((__packed__));
+
+struct dimes_cr_shmem_info
+{
+    uint32_t num_shmem_obj;
+} __attribute__((__packed__));
+
+struct dimes_cr_storage_info
+{
+     uint32_t num_group;
+     int shmem_obj_id;
+} __attribute__((__packed__));
+
+struct dimes_cr_group_info
+{
+     char name[256];
+     uint32_t num_obj;
+} __attribute__((__packed__));
+
+struct dimes_cr_mem_obj_info
+{
+    struct obj_descriptor obj_desc;
+    struct global_dimension gdim;
+    size_t size;
+    size_t offset;
+    unsigned char mem_type;
+} __attribute__((__packed__));
+
+struct dimes_cr_allocator_info
+{
+     uint32_t num_used_blocks;
+     uint32_t num_free_blocks;
+     int shmem_obj_id;
+} __attribute__((__packed__));
+
+struct dimes_cr_allocator_block_info
+{
+     size_t size;
+     size_t offset;
+     uint32_t block_status;
+} __attribute__((__packed__));
+#endif
 
 struct dimes_obj_id {
     int dart_id;
@@ -57,6 +138,9 @@ struct dimes_memory_obj {
     struct list_head entry;
     struct dimes_obj_id obj_id;
     struct obj_descriptor obj_desc;
+#ifdef DS_HAVE_DIMES_SHMEM
+    struct dimes_shmem_descriptor shmem_desc;
+#endif
     struct global_dimension gdim;
     struct dart_rdma_mem_handle rdma_handle;
 };
@@ -80,6 +164,10 @@ struct hdr_dimes_put { // TODO: more comments
     struct ptlid_map ptlmap;
 	struct dimes_obj_id obj_id;
 	struct obj_descriptor odsc;
+#ifdef DS_HAVE_DIMES_SHMEM
+    unsigned char has_shmem_data;
+    struct dimes_shmem_descriptor shmem_desc;
+#endif
 } __attribute__((__packed__));
 
 // Header structure
@@ -139,6 +227,13 @@ size_t dimes_buffer_total_size(void);
 void dimes_buffer_alloc(size_t , uint64_t *);
 // Free a memory block previously allocated from DIMES Buffer 
 void dimes_buffer_free(uint64_t addr);
+
+#ifdef DS_HAVE_DIMES_SHMEM
+size_t estimate_allocator_restart_buf_size(int dart_id);
+
+int dimes_client_shmem_checkpoint_allocator(int shmem_obj_id, void *restart_buf);
+int dimes_client_shmem_restart_allocator(void *restart_buf, int dart_id);
+#endif
 
 #ifdef __cplusplus
 }

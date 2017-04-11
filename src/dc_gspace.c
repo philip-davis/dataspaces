@@ -1632,6 +1632,56 @@ int dcg_obj_put(struct obj_data *od)
         return err;
 }
 
+// Write data to explicitly specified server (using server_id)
+int dcg_obj_put_to_server(struct obj_data *od, int server_id)
+{
+        struct msg_buf *msg;
+        struct node_id *peer;
+        struct hdr_obj_put *hdr;
+        int sync_op_id;
+        int err = -ENOMEM;
+
+        if (server_id < 0 || server_id >= dcg->dc->num_sp) {
+            uloga("%s: ERROR invalid server_id= %d\n", __func__, server_id);
+            goto err_out;
+        }
+        peer = dc_get_peer(dcg->dc, server_id);
+
+        sync_op_id = syncop_next();
+
+        msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+        if (!msg)
+                goto err_out;
+
+        msg->msg_data = od->data;
+        msg->size = obj_data_size(&od->obj_desc);
+        msg->cb = obj_put_completion;
+        msg->private = od;
+
+        msg->sync_op_id = syncop_ref(sync_op_id);
+
+        msg->msg_rpc->cmd = ss_obj_put;
+        msg->msg_rpc->id = DCG_ID;
+
+        hdr = msg->msg_rpc->pad;
+        hdr->odsc = od->obj_desc;
+        memcpy(&hdr->gdim, &od->gdim, sizeof(struct global_dimension));
+
+        err = rpc_send(dcg->dc->rpc_s, peer, msg);
+        if (err < 0) {
+                free(msg);
+                goto err_out;
+        }
+
+        dcg_inc_pending();
+
+        return sync_op_id;
+ err_out:
+        uloga("'%s()': failed with %d.\n", __func__, err);
+        return err;
+}
+
+
 /* 
    Register a region for continuous queries and return the transaction
    id; it will be used for transaction completion checks.

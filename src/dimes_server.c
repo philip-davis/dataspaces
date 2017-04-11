@@ -158,12 +158,38 @@ static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	uloga("%s(): get request from peer #%d "
            "name= %s version= %d data_size= %u\n",
             __func__, cmd->id, odsc->name, odsc->version, obj_data_size(odsc));
+#ifdef DS_HAVE_DIMES_SHMEM
+    if (hdr->has_shmem_data) {
+        uloga("%s(): #%d get update from peer #%d shmem_desc: size= %u "
+            "offset= %u shmem_obj_id= %d owner_node_rank= %d\n",
+            __func__, DIMES_SID, cmd->id, hdr->shmem_desc.size,
+            hdr->shmem_desc.offset, hdr->shmem_desc.shmem_obj_id,
+            hdr->shmem_desc.owner_node_rank);
+    }
+#endif
 #endif
     
     //uloga("%s(): %lf name=%s version=%d process_time %lf from peer %d\n", __func__,
     //        t1, odsc->name, odsc->version, t2-t1, cmd->id);
 	return 0;
 }
+
+ifdef DS_HAVE_DIMES_SHMEM
+static int dsgrpc_dimes_shmem_reset_server(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+    metadata_s_free(dimes_s->meta_store);
+    dimes_s->meta_store = metadata_s_alloc(dimes_s->dsg->ls->size_hash);
+    
+    return 0;
+}
+
+static int dsgrpc_dimes_shmem_update_server(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+    struct hdr_dimes_put *hdr = (struct hdr_dimes_put*)cmd->pad;
+    metadata_s_add_obj_location(dimes_s->meta_store, cmd);
+    return 0;
+}
+#endif
 
 /*
   Public API starts here.
@@ -185,6 +211,10 @@ struct dimes_server *dimes_server_alloc(int num_sp, int num_cp, char *conf_name)
 
 	rpc_add_service(dimes_put_msg, dsgrpc_dimes_put);
 	rpc_add_service(dimes_locate_data_msg, dsgrpc_dimes_locate_data);
+#ifdef DS_HAVE_DIMES_SHMEM
+    rpc_add_service(dimes_shmem_reset_server_msg, dsgrpc_dimes_shmem_reset_server);
+    rpc_add_service(dimes_shmem_update_server_msg, dsgrpc_dimes_shmem_update_server);
+#endif
 
 	dimes_s_l->meta_store =
         metadata_s_alloc(dimes_s_l->dsg->ls->size_hash);

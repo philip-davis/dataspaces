@@ -38,6 +38,17 @@
 
 #ifdef DS_HAVE_DIMES
 
+#ifdef DS_HAVE_DIMES_SHMEM
+/* shm_* stuff, and mmap() */
+#include <sys/mman.h>
+#include <sys/types.h>
+/* exit() etc */
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#endif
+
+
 #include "dimes_interface.h"
 #include "dimes_client.h"
 #include "dimes_data.h"
@@ -70,6 +81,20 @@ static struct timer tm_perf;
 
 /* Forward declarations. */
 static int dimes_memory_free(struct dart_rdma_mem_handle *rdma_hndl);
+#ifdef DS_HAVE_DIMES_SHMEM
+static void init_node_peer_tab();
+static int build_node_local_obj_index(void *restart_buf);
+#endif
+
+#ifdef DS_HAVE_DIMES_SHMEM
+// Compares two (struct node_id) elements by their dart id values.
+// This function is used and called by qsort. 
+int compare_peer_by_dart_id(const void *a, const void *b)
+{
+    return (*(const struct node_id**)a)->ptlmap.id -
+           (*(const struct node_id**)b)->ptlmap.id;
+}
+#endif
 
 // Allocate the default shared space dht using the global domain 
 // that specified in dataspaces.conf. DIMES client uses this dht
@@ -202,6 +227,76 @@ static void update_current_group_name(const char *name)
         current_group_name[STORAGE_GROUP_NAME_MAXLEN] = '\0';
     } else strcpy(current_group_name, name);
 }
+
+#ifdef DS_HAVE_DIMES_SHMEM
+static struct dimes_storage_group* node_local_obj_index_add_group(const char *group_name)
+{
+    struct dimes_storage_group *p = malloc(sizeof(*p));
+    if (!p) goto err_out_free;
+
+    p->version_tab = malloc(sizeof(*p->version_tab)*dimes_c->dcg->max_versions);
+    if (!p->version_tab) goto err_out_free;
+
+    strcpy(p->name, group_name);
+    int i;
+    for (i = 0; i < dimes_c->dcg->max_versions; i++) {
+        INIT_LIST_HEAD(&p->version_tab[i]);
+    }
+    list_add(&p->entry, &dimes_c->node_local_obj_index);
+    return p;
+ err_out_free:
+    if (p) free(p);
+    return NULL;    
+}
+
+static struct dimes_storage_group* node_local_obj_index_lookup_group(const char *group_name)
+{
+    struct dimes_storage_group *p;
+    list_for_each_entry(p, &dimes_c->node_local_obj_index, struct dimes_storage_group, entry)
+    {
+        if (p->name == NULL) continue;
+        if (0 == strcmp(p->name, group_name)) {
+            return p;
+        }
+    }
+
+    return NULL;
+}
+
+static int node_local_obj_index_free_group(struct dimes_storage_group *group)
+{
+    int i;
+    struct dimes_memory_obj *p, *t;
+    for (i = 0; i < dimes_c->dcg->max_versions; i++) {
+        list_for_each_entry_safe(p, t, &group->version_tab[i],
+                    struct dimes_memory_obj, entry) {
+            list_del(&p->entry);
+            free(p);
+        }
+    }
+
+    list_del(&group->entry);
+    if (group->version_tab) free(group->version_tab);
+    free(group);
+
+    return 0;
+}
+
+static void node_local_obj_index_init()
+{
+    INIT_LIST_HEAD(&dimes_c->node_local_obj_index);
+}
+
+static void node_local_obj_index_free()
+{
+    struct dimes_storage_group *p, *t;
+    list_for_each_entry_safe(p, t, &dimes_c->node_local_obj_index, struct dimes_storage_group, entry)
+    {
+        node_local_obj_index_free_group(p);
+    }
+}
+#endif
+
 
 /*
     About DIMES storage:
@@ -338,6 +433,157 @@ static struct dimes_memory_obj* storage_lookup_obj(const struct dimes_obj_id *oi
 
 	return NULL;
 }
+
+#ifdef DS_HAVE_DIMES_SHMEM
+static int get_next_shmem_obj_id()
+{
+    static int shmem_obj_id_seed = 0;
+    return (DIMES_CID * 1000 + shmem_obj_id_seed++); 
+}
+
+static struct shared_memory_obj* create_shmem_obj(const char* shmem_obj_path,
+    const size_t shmem_obj_size, int shmem_obj_id, int owner_node_rank)
+{
+    int seg_fd;
+    void *seg_ptr = NULL;
+
+    seg_fd = shm_open(shmem_obj_path, O_CREAT | O_EXCL | O_RDWR,
+                    S_IRWXU | S_IRWXG);
+    if (seg_fd < 0) { 
+        uloga("%s(): failed with shm_obj_path %s\n",
+            __func__, shmem_obj_path);
+        perror("shm_open() failed");
+        goto err_out;
+    }    
+
+    if (ftruncate(seg_fd, shmem_obj_size) < 0) { 
+        perror("ftruncate() failed");
+        goto err_out;
+    }    
+
+    seg_ptr = mmap(NULL, shmem_obj_size, PROT_READ | PROT_WRITE, MAP_SHARED,
+                    seg_fd, 0);
+    if (seg_ptr == NULL) {
+        perror("mmap() failed");
+        goto err_out;
+    }    
+
+    // debug print
+    //printf("%s: #%d create '%s' "
+    //    "id= %d size= %u bytes ptr= %p\n", __func__, DIMES_CID, 
+    //    shmem_obj_path, shmem_obj_id, shmem_obj_size, seg_ptr);
+
+    struct shared_memory_obj *shmem_obj = (struct shared_memory_obj*)
+                                            malloc(sizeof(*shmem_obj));
+    shmem_obj->id = shmem_obj_id;
+    strcpy(shmem_obj->path, shmem_obj_path);
+    shmem_obj->size = shmem_obj_size;
+    shmem_obj->ptr = seg_ptr;
+    shmem_obj->fd = seg_fd;
+    shmem_obj->owner_node_rank = owner_node_rank;
+
+    return shmem_obj;
+ err_out:
+    uloga("%s: ERROR failed to create shared memory obj %s.\n",
+        __func__, shmem_obj_path);
+    return NULL;
+}
+
+static struct shared_memory_obj* open_shmem_obj(const char* shmem_obj_path,
+    const size_t shmem_obj_size, int shmem_obj_id, int owner_node_rank)
+{
+    int seg_fd;
+    void *seg_ptr = NULL;
+
+    // open/mmap
+    seg_fd = shm_open(shmem_obj_path, O_RDWR, S_IRWXU | S_IRWXG);
+    if (seg_fd < 0 ) {
+        perror("shm_open() failed");
+        goto err_out;
+    }
+
+    seg_ptr = mmap(NULL, shmem_obj_size, PROT_READ | PROT_WRITE, MAP_SHARED,
+                    seg_fd, 0);
+    if (seg_ptr == NULL) {
+        perror("mmap() failed");
+        goto err_out;
+    }
+
+    // debug print
+    //printf("%s: #%d open '%s' "
+    //    "id= %d size= %u bytes ptr= %p\n", __func__, DIMES_CID,
+    //    shmem_obj_path, shmem_obj_id, shmem_obj_size, seg_ptr);
+    
+    struct shared_memory_obj *shmem_obj = (struct shared_memory_obj*)
+                                            malloc(sizeof(*shmem_obj));
+    shmem_obj->id = shmem_obj_id;
+    strcpy(shmem_obj->path, shmem_obj_path);
+    shmem_obj->size = shmem_obj_size;
+    shmem_obj->ptr = seg_ptr;
+    shmem_obj->fd = seg_fd;
+    shmem_obj->owner_node_rank = owner_node_rank;
+    
+    return shmem_obj;
+ err_out:
+    uloga("%s: ERROR failed to open shared memory obj %s.\n",
+        __func__, shmem_obj_path);
+    return NULL;
+}
+
+static void unmap_shmem_obj(struct shared_memory_obj *shmem_obj)
+{
+    // unmap
+    if (munmap(shmem_obj->ptr, shmem_obj->size) < 0) {
+        perror("munmap() failed");
+    }
+}
+
+static void remove_shmem_obj(struct shared_memory_obj *shmem_obj, unsigned int unlink)
+{
+    // unlink
+    if (dimes_c->node_rank == shmem_obj->owner_node_rank && unlink) {
+        if (shm_unlink(shmem_obj->path) != 0) {
+            perror("shm_unlink() failed");
+        }
+        // debug print
+        //printf("%s(): #%d unlink shmem_obj %s\n", __func__,
+        //    DIMES_CID, shmem_obj->path);
+    }
+
+    shmem_obj->ptr = NULL;
+    shmem_obj->size = 0;
+
+    free(shmem_obj);
+}
+
+static struct shared_memory_obj* find_shmem_obj(int id)
+{
+    struct shared_memory_obj* shmem_obj = NULL;
+    list_for_each_entry(shmem_obj, &dimes_c->shmem_obj_list,
+            struct shared_memory_obj, entry)
+    {
+        if (shmem_obj->id == id) {
+            return shmem_obj;
+        }
+    }
+
+    return NULL;
+}
+
+static struct shared_memory_obj* find_my_shmem_obj()
+{
+    struct shared_memory_obj* shmem_obj = NULL;
+    list_for_each_entry(shmem_obj, &dimes_c->shmem_obj_list,
+            struct shared_memory_obj, entry)
+    {
+        if (shmem_obj->owner_node_rank == dimes_c->node_rank) {
+            return shmem_obj;
+        }
+    }
+
+    return NULL;
+}
+#endif // end of #ifdef DS_HAVE_DIMES_SHMEM
 
 static int dimes_memory_init()
 {
