@@ -19,7 +19,7 @@
 #include <ifaddrs.h>
 #include <netdb.h>
 #include <unistd.h>
-#include <rdma/rdma_cma.h>
+//#include <rdma/rdma_cm.h>
 #include <sys/time.h>
 #include <poll.h>
 #include "list.h"
@@ -371,7 +371,6 @@ static int sys_cleanup(struct rpc_server *rpc_s)
 	int i, err = 0;
 	struct node_id *peer;
 	list_for_each_entry(peer, &rpc_s->peer_list, struct node_id, peer_entry) {	
-		peer = &rpc_s->peer_tab[i];
 		if(peer->sys_conn.f_connected == 0 || peer->ptlmap.id == rpc_s->ptlmap.id)
 			continue;
 		err = rdma_destroy_id(peer->sys_conn.id);
@@ -1645,7 +1644,7 @@ static int __process_event(struct rpc_server *rpc_s, int timeout)   //Done
     j = 0;
     list_for_each_entry(peer, &rpc_s->peer_list, struct node_id, peer_entry) {
     
-        if(peer->sys_conn.f_connected == 0) {    
+        if(peer->sys_conn.f_connected == 1) {    
             my_pollfd[j].fd = peer->sys_conn.comp_channel->fd;
 			my_pollfd[j].events = POLLIN;
 			my_pollfd[j].revents = 0;

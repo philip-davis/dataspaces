@@ -166,10 +166,18 @@ static int dcrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Do
 	struct node_id *peer;
 	struct msg_buf *msg;
 	int err = -ENOMEM;
-	dc->num_sp = hreg->num_sp;
-	dc->num_cp = hreg->num_cp;
-	peer = rpc_s->peer_tab;
-	msg = msg_buf_alloc(rpc_s, peer, 0);
+	
+    dc->num_sp = hreg->num_sp;
+    dc->num_cp = hreg->num_cp;
+
+    if(dc->peer_size, hreg->num_cp + hreg->num_sp - dc->peer_size - 1==0){
+        dc->cp_min_rank = dc->rpc_s->app_minid;
+            dc->f_reg = 1;
+        return 0;
+    }
+    peer = dc_get_peer(dc, 0);
+
+    msg = msg_buf_alloc(rpc_s, peer, 0);
 	if(!msg)
 		goto err_out;
 	msg->size = sizeof(struct ptlid_map) * (hreg->num_cp + hreg->num_sp);

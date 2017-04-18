@@ -21,7 +21,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <getopt.h>
-#include <rdma/rdma_cma.h>
+//#include <rdma/rdma_cma.h>
 #include <rdma/rdma_verbs.h>
 #include "list.h"
 #include "../../include/bbox.h"
@@ -284,7 +284,7 @@ struct rpc_server {
 	// Reference  to peers  table; storage  space is  allocated in dart client or server.
 	int num_peers;		// total number of peers
 
-    struct list_head peer_list //list of peers(servers and clients)
+    struct list_head peer_list; //list of peers(servers and clients)
 
 	//Fields for barrier implementation.
 	int bar_num;
@@ -376,7 +376,6 @@ enum cmd_type {
 	peer_rdma_done,		/* Added in IB version 12 */
 	sp_announce_cp,
     cp_announce_cp,
-    sp_announce_app,
     sp_announce_cp_all,
     cp_disseminate_cs,
     cn_unregister_cp,
