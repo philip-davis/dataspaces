@@ -182,7 +182,7 @@ int dimes_client_shmem_get_local(const char *var_name,
         uint64_t *lb,
         uint64_t *ub,
         void *data);
-#endif
+#endif /*DS_HAVE_DIMES_SHMEM */
 #ifdef __cplusplus
 }
 #endif

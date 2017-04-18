@@ -124,10 +124,10 @@ static int log2_ceil(int n)
 
 static int sys_bar_arrive(struct rpc_server *rpc_s, struct hdr_sys *hs)
 {
-	printf("Warning: this barrier method is no longer supported. This shouldn't happen.\n");
-	return(0);
-}
+    rpc_s->bar_tab[hs->sys_id] = hs->sys_pad1;
 
+    return 0;
+}
 
 static int sys_bar_send(struct rpc_server *rpc_s, int peerid)
 {
@@ -281,78 +281,6 @@ static int init_gni (struct rpc_server *rpc_s)
 err_out:
 	printf("'%s()': failed with %d.\n", __func__, status);
 	return status;	
-}
-
-int sys_smsg_init (struct rpc_server *rpc_s, int num)//done
-{
-	int i, j, err = -ENOMEM;
-	unsigned int responding_remote_addr;
-	int responding_remote_id;
-
-	gni_mem_handle_t sys_local_memory_handle;
-	gni_return_t status;
-	gni_post_state_t post_state;	
-
-	// Allocate memory for system message
-	rpc_s->sys_mem = calloc(SYSNUM * num, sizeof(struct hdr_sys)+SYSPAD);
-	if(!rpc_s->sys_mem)
-	{
-		printf("Fail: SYS MSG MAILBOX calloc error.\n");
-		err =  -ENOMEM;
-		goto err_free;
-	}
-
-	status = GNI_MemRegister(rpc_s->nic_hndl, (uint64_t)rpc_s->sys_mem, (uint64_t)(SYSNUM * num * (sizeof(struct hdr_sys)+SYSPAD)), rpc_s->sys_cq_hndl, GNI_MEM_READWRITE, -1, &sys_local_memory_handle);
-	if (status != GNI_RC_SUCCESS) 
-	{
-		printf("Fail: GNI_MemRegister SYS returned error. %d.\n", status);
-		goto err_out;
-	}
-
-	//sys_msg attributes init
-	rpc_s->sys_local_smsg_attr.msg_type = GNI_SMSG_TYPE_MBOX_AUTO_RETRANSMIT;
-	rpc_s->sys_local_smsg_attr.mbox_maxcredit = SYSNUM;
-	rpc_s->sys_local_smsg_attr.msg_maxsize = sizeof(struct hdr_sys)+SYSPAD;
-	rpc_s->sys_local_smsg_attr.msg_buffer = rpc_s->sys_mem;
-	rpc_s->sys_local_smsg_attr.buff_size = SYSNUM * (sizeof(struct hdr_sys)+SYSPAD);
-	rpc_s->sys_local_smsg_attr.mem_hndl = sys_local_memory_handle;
-	rpc_s->sys_local_smsg_attr.mbox_offset = 0;
-
-	return 0;
-
-err_free:
-	printf("'%s()': failed with %d.\n", __func__, err);
-        return err;
-err_out:
-	printf("'%s()': failed with %d.\n", __func__, status);
-        return status;
-}
-
-int sys_smsg_config(struct rpc_server *rpc_s, struct node_id *peer)
-{
-	int err = -ENOMEM;
-	gni_return_t status;
-
-	rpc_s->sys_local_smsg_attr.mbox_offset = SYSNUM * (sizeof(struct hdr_sys)+SYSPAD) * peer->ptlmap.id; 
-	peer->sys_remote_smsg_attr.mbox_offset = SYSNUM * (sizeof(struct hdr_sys)+SYSPAD) * rpc_s->ptlmap.id; 
-
-	//peer_smsg_check(rpc_s, peer, &peer->sys_remote_smsg_attr);
-
-	status = GNI_SmsgInit(peer->sys_ep_hndl, &rpc_s->sys_local_smsg_attr, &(peer->sys_remote_smsg_attr));
-	if (status != GNI_RC_SUCCESS) 
-	{
-		printf("Fail: GNI_SmsgInit SYS returned error. %d.\n", status);
-		goto err_out;
-	}
-	
-	return 0;
-
-err_free:
-	printf("'%s()': failed with %d.\n", __func__, err);
-        return err;
-err_out:
-	printf("'%s()': failed with %d.\n", __func__, status);
-        return status;
 }
 
 int sys_ep_smsg_config(struct rpc_server *rpc_s, struct node_id *peer)
@@ -2465,11 +2393,6 @@ int rpc_attr_cleanup(struct rpc_server *rpc_s, struct gni_smsg_attr_info *cur_at
 err_status:
   printf("Rank %d: (%s): status (%d).\n", rpc_s->ptlmap.id, __func__, status);
   return status;
-}
-
-// for debug:
-void rpc_smsg_check(struct rpc_server *rpc_s){
-  printf("Rank %d: rpc_s->local_smsg_attr[type(%d),maxcredit(%d),maxsize(%d),buffer(%d),buff_size(%d), mem_hndl(%ld,%ld), offset(%d)]\n", rpc_s->ptlmap.id, rpc_s->local_smsg_attr.msg_type, rpc_s->local_smsg_attr.mbox_maxcredit, rpc_s->local_smsg_attr.msg_maxsize, rpc_s->local_smsg_attr.msg_buffer, rpc_s->local_smsg_attr.buff_size, rpc_s->local_smsg_attr.mem_hndl.qword1, rpc_s->local_smsg_attr.mem_hndl.qword2, rpc_s->local_smsg_attr.mbox_offset);
 }
 
 void sys_smsg_check(struct rpc_server *rpc_s){

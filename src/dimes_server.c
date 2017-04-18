@@ -174,7 +174,7 @@ static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	return 0;
 }
 
-ifdef DS_HAVE_DIMES_SHMEM
+#ifdef DS_HAVE_DIMES_SHMEM
 static int dsgrpc_dimes_shmem_reset_server(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     metadata_s_free(dimes_s->meta_store);

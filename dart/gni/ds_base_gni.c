@@ -975,7 +975,7 @@ static int ds_master_init(struct dart_server *ds)
 
 		err = rpc_smsg_config(ds->rpc_s, ds->rpc_s->attr_info_start, peer);
 		if (err != 0){
-		  printf("Rank 0: failed for config RPC SMSG for peer %d i is %d. (%d)\n", peer->ptlmap.id, i, err);
+		  printf("Rank 0: failed for config RPC SMSG for peer %i is %d. (%d)\n", peer->ptlmap.id, i, err);
 			goto err_out;
 		}
 	}
@@ -990,7 +990,7 @@ err_out:
 	return err;
 }
 
-i// Thread for master server to create listening port, waiting for connection and taking care of application join-in.
+// Thread for master server to create listening port, waiting for connection and taking care of application join-in.
 
 /*
 1. open listening 
@@ -1588,66 +1588,6 @@ static int ds_boot(struct dart_server *ds)
 	printf("'%s()': failed.\n", __func__);
 	return -1;
 }
-
-static int ds_boot(struct dart_server *ds)
-{
-	int i, err = -ENOMEM;
-	struct app_info *app;
-	struct app_info *current_app;
-
-
-	if(ds->rpc_s->ptlmap.id == 0){
-		err = ds_boot_master(ds);
-		if(err!=0)
-			goto err_out;
-	}
-	else{
-		err = ds_boot_slave(ds);
-		if(err!=0)
-			goto err_out;
-	}
-
-	//fill in the app_list
-	for (i=ds->num_sp; i < ds->peer_size; i++)
-	{
-		current_app = app_find(ds, ds->peer_tab[i].ptlmap.appid);
-		if( current_app == NULL )
-		{
-			app = app_alloc();
-			if (!app)
-				goto err_out;
-			app->app_id = ds->peer_tab[i].ptlmap.appid;
-			app->app_num_peers = 1;
-			app->app_cnt_peers = 1;
-			app->app_peer_tab = ds->peer_tab + ds->peer_tab[i].ptlmap.id;
-			list_add(&app->app_entry, &ds->app_list);
-		}
-		else{
-			current_app->app_num_peers++;
-			current_app->app_cnt_peers++;		
-		}
-	}
-
-	//fill in the self
-
-	for(i=0; i<ds->num_sp; i++)
-	{
-		if (ds->peer_tab[i].ptlmap.nid == ds->rpc_s->ptlmap.nid && ds->peer_tab[i].ptlmap.pid == ds->rpc_s->ptlmap.pid) 
-		{
-			ds->self = &ds->peer_tab[i];
-			break;
-		}
-	}
-
-	//mark it to registered
-	ds->f_reg = 1;
-
-	return 0;
- err_out:
-	printf("'%s()': failed.\n", __func__);
-	return -1;
-}
-
 
 /*
   Public API starts here.

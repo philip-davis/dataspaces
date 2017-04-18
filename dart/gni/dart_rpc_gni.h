@@ -349,6 +349,8 @@ struct rpc_server{
 	gni_cdm_handle_t	cdm_handle;
 	gni_nic_handle_t	nic_hndl;
 
+    struct gni_smsg_attr_info      *attr_info_start;
+
 	gni_cq_handle_t		src_cq_hndl;
 	gni_cq_handle_t		dst_cq_hndl;
 

@@ -39,7 +39,7 @@
 
 static int connectfd;
 
-tatic struct node_id* create_app_peer_tab(const struct ptlid_map* buffer, struct dart_client *dc)
+static struct node_id* create_app_peer_tab(const struct ptlid_map* buffer, struct dart_client *dc)
 {
     // Format of 'buffer':
     // | peers info of dataspaces servers | peers info of current application |
@@ -102,6 +102,19 @@ tatic struct node_id* create_app_peer_tab(const struct ptlid_map* buffer, struct
     if (peer_tab) free(peer_tab);
     uloga("%s(): failed.\n", __func__);
     return NULL;
+}
+
+static void peer_tab_list_push_back(struct node_id* head_peer_tab, struct node_id* new_peer_tab)
+{
+    struct node_id *peer = head_peer_tab+head_peer_tab->peer_num-1; // Move to the last peer of head_peer_tab
+    while (1) {
+        if (!peer->next) {
+            peer->next = new_peer_tab;
+            break;
+        } else {
+            peer = peer->next + peer->next->peer_num - 1;
+        }
+    } 
 }
 
 static int barrier_broadcast(struct dart_client *dc)
