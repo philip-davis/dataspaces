@@ -283,43 +283,6 @@ err_out:
 	return status;	
 }
 
-int sys_ep_smsg_config(struct rpc_server *rpc_s, struct node_id *peer)
-{
-	int err = -ENOMEM;
-	gni_return_t status;
-
-	  printf("Rank %d: Fail GNI_EpBind nid %d, sys_ep_hndl %d rpc_ep_hndl %d.\n", peer->ptlmap.id, peer->ptlmap.nid, peer->sys_ep_hndl, peer->ep_hndl);
-
-	status = GNI_EpCreate(rpc_s->nic_hndl, rpc_s->sys_cq_hndl, &peer->sys_ep_hndl);
-	if (status != GNI_RC_SUCCESS)
-	{
-		printf("Rank %d: Fail GNI_EpCreate SYS returned error. %d.\n", rpc_s->ptlmap.id, status);
-		goto err_out;
-	}
-	status = GNI_EpBind(peer->sys_ep_hndl, peer->ptlmap.nid, peer->ptlmap.id-1);
-	if (status != GNI_RC_SUCCESS)
-	{
-	  printf("Rank %d: Fail GNI_EpBind nid %d, sys_ep_hndl %d rpc_ep_hndl %d.\n", peer->ptlmap.id, peer->ptlmap.nid, peer->sys_ep_hndl, peer->ep_hndl);
-		printf("Rank %d: Fail GNI_EpBind SYS returned error. %d.\n", rpc_s->ptlmap.id, status);
-		goto err_out;
-	}
-
-	err = sys_smsg_config(rpc_s, peer);
-	if (err != 0){
-		printf("Rank %d: Failed for config SYS SMSG for %d. (%d)\n", rpc_s->ptlmap.id, peer->ptlmap.id, err);
-		goto err_free;
-	}
-
-	return 0;
-
-err_free:
-	printf("'%s()': failed with %d.\n", __func__, err);
-        return err;
-err_out:
-	printf("'%s()': failed with %d.\n", __func__, status);
-        return status;
-}
-
 /*
   Generic routine to send a system message.
 */
@@ -1154,7 +1117,7 @@ int rpc_read_socket(struct sockaddr_in *address)
 	address->sin_port = htons(tmp_port);
 
         fclose(f);
-        if (err == 3)
+        if (err == 2)
                 return 0;
 
 	err = -EIO;
@@ -1354,7 +1317,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
           if(peer == NULL)
             {
               printf("(%s): rpc_get_peer err.\n", __func__);
-              return -ENOMEM;
+              return 0;
             }
           rr->msg->msg_rpc = calloc(1, sizeof(struct rpc_cmd));
           if(rr->msg->msg_rpc == NULL)
@@ -1862,21 +1825,19 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 	if (err != 0)
 		goto err_free;
 
+    //DSaaS: inital gni_smsg_attr_info list for smsg
+    rpc_s->attr_info_start=NULL; 
+
 	rpc_s->peer_tab = gather_node_id(appid);
 	if(rpc_s->peer_tab == NULL)
 		goto err_free;
 
-	//DSaaS: inital gni_smsg_attr_info list for smsg
-	rpc_s->attr_info_start=NULL;
-	rpc_s->peer_tab = gather_node_id(appid);////DSaaS (num of peer in self-app)
-
-        status = GNI_CqCreate(rpc_s->nic_hndl, ENTRY_COUNT, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->sys_cq_hndl);
-        if (status != GNI_RC_SUCCESS)
-        {
-                printf("Fail: GNI_CqCreate SYS returned error. %d.\n", status);
-                goto err_out;
-        }
-
+    status = GNI_CqCreate(rpc_s->nic_hndl, ENTRY_COUNT, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->sys_cq_hndl);
+    if (status != GNI_RC_SUCCESS)
+    {
+        printf("Fail: GNI_CqCreate SYS returned error. %d.\n", status);
+        goto err_out;
+    }
 
 	status = GNI_CqCreate(rpc_s->nic_hndl,ENTRY_COUNT, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->src_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
@@ -2393,10 +2354,6 @@ int rpc_attr_cleanup(struct rpc_server *rpc_s, struct gni_smsg_attr_info *cur_at
 err_status:
   printf("Rank %d: (%s): status (%d).\n", rpc_s->ptlmap.id, __func__, status);
   return status;
-}
-
-void sys_smsg_check(struct rpc_server *rpc_s){
-  printf("Rank %d: rpc_s->sys_local_smsg_attr[type(%d),maxcredit(%d),maxsize(%d),buffer(%d),buff_size(%d), mem_hndl(%ld,%ld), offset(%d)]\n", rpc_s->ptlmap.id, rpc_s->sys_local_smsg_attr.msg_type, rpc_s->sys_local_smsg_attr.mbox_maxcredit, rpc_s->sys_local_smsg_attr.msg_maxsize, rpc_s->sys_local_smsg_attr.msg_buffer, rpc_s->sys_local_smsg_attr.buff_size, rpc_s->sys_local_smsg_attr.mem_hndl.qword1, rpc_s->sys_local_smsg_attr.mem_hndl.qword2, rpc_s->sys_local_smsg_attr.mbox_offset);
 }
 
 void peer_smsg_check(struct rpc_server *rpc_s, struct node_id *peer, gni_smsg_attr_t *smsg_attr){

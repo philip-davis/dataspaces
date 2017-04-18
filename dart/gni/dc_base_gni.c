@@ -246,6 +246,52 @@ static int dc_unregister(struct dart_client *dc)
 	return err;
 }
 
+static int dc_connect_init(struct dart_client *dc, struct sockaddr_in *dest)
+{
+    struct sockaddr_in dest_addr;
+    dest_addr = *dest;
+    dest_addr.sin_family = AF_INET;
+
+    int Res, i=0;
+    int SocketFD = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+     
+    Res = inet_pton(AF_INET, inet_ntoa(dest_addr.sin_addr), &dest_addr.sin_addr);
+
+    if (-1 == SocketFD)
+    {
+      printf("Rank %d: Cannot create socket in %s.\n", dc->rpc_s->ptlmap.id, __func__);
+        exit(EXIT_FAILURE);
+    }
+     
+    if (0 > Res)
+    {
+      printf("Rank %d: first parameter is not a valid address family, error %d in %s.\n", dc->rpc_s->ptlmap.id, Res, __func__);
+        close(SocketFD);
+        exit(EXIT_FAILURE);
+    }
+    else if (0 == Res)
+    {
+      printf("Rank %d: char string (second parameter does not contain valid ipaddress in %s.\n", dc->rpc_s->ptlmap.id, __func__);
+        close(SocketFD);
+        exit(EXIT_FAILURE);
+    }
+
+    while(i<1000){
+      if (-1 == connect(SocketFD, (struct sockaddr *)&dest_addr, sizeof dest_addr))
+          printf("Rank %d: connect failed in %s.\n", dc->rpc_s->ptlmap.id, __func__);
+      else
+          break;
+          i++;
+    }
+    if(i==1000){
+          close(SocketFD);
+          exit(EXIT_FAILURE);
+    }
+
+    return SocketFD;
+}
+
+
 static int dc_register_at_master(struct dart_client *dc, int appid)
 {
         struct msg_buf *msg;
@@ -523,7 +569,11 @@ static int dc_master_init(struct dart_client *dc) //working
 	dc->rpc_s->attr_info_start = (struct gni_smsg_attr_info *)malloc(sizeof(struct gni_smsg_attr_info)); //// DSaaS
 	memset(dc->rpc_s->attr_info_start, 0, sizeof(struct gni_smsg_attr_info));
 
-
+    err = rpc_smsg_init(dc->rpc_s, dc->rpc_s->attr_info_start, sp);
+    if (err != 0){
+        printf("Rank %d: failed for rpc_smsg_init %d. (%d)\n", dc->rpc_s->ptlmap.id, peer->ptlmap.id, err);
+        goto err_out;
+    }
 
 	// 4. allgather APP smsg_attr[rpc+sys]
         gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(dc->num_cp * sizeof(gni_smsg_attr_t));
