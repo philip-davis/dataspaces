@@ -78,7 +78,7 @@ fi
 dnl AM_CONDITIONAL(DS_HAVE_ARIES, true) 
 
 
-ray Dynamic RDMA Credentials
+# Cray Dynamic RDMA Credentials
 
 LDFLAGS_save=$LDFLAGS
 
