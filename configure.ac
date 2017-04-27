@@ -116,12 +116,12 @@ if test -z "${HAVE_UGNI_TRUE}"; then
   DSPACESLIB_LDADD+=" ${UGNI_LIBS}"
 fi
 
-if test -z "${HAVE_PORTALS_TRUE}"; then
-  DSPACESLIB_CPPFLAGS+=" ${PORTALS_CPPFLAGS}"
-  DSPACESLIB_CFLAGS+=" ${PORTALS_CFLAGS}"
-  DSPACESLIB_LDFLAGS+=" ${PORTALS_LDFLAGS}"
-  DSPACESLIB_LDADD+=" ${PORTALS_LIBS}"
-fi
+#if test -z "${HAVE_PORTALS_TRUE}"; then
+#  DSPACESLIB_CPPFLAGS+=" ${PORTALS_CPPFLAGS}"
+#  DSPACESLIB_CFLAGS+=" ${PORTALS_CFLAGS}"
+#  DSPACESLIB_LDFLAGS+=" ${PORTALS_LDFLAGS}"
+#  DSPACESLIB_LDADD+=" ${PORTALS_LIBS}"
+#fi
 
 if test -z "${HAVE_INFINIBAND_TRUE}"; then
   DSPACESLIB_CPPFLAGS+=" ${INFINIBAND_CPPFLAGS}"
@@ -175,15 +175,15 @@ else
   echo "No Cray UGNI."
 fi
 
-if test -z "${HAVE_PORTALS_TRUE}"; then
-  echo "Cray Portals enabled.";
-  echo "	- PORTALS_CFLAGS = $PORTALS_CFLAGS";
-  echo "	- PORTALS_CPPFLAGS = $PORTALS_CPPFLAGS";
-  echo "	- PORTALS_LDFLAGS = $PORTALS_LDFLAGS";
-  echo "	- PORTALS_LIBS = $PORTALS_LIBS";
-else
-  echo "No Cray Portals."
-fi
+#if test -z "${HAVE_PORTALS_TRUE}"; then
+#  echo "Cray Portals enabled.";
+#  echo "	- PORTALS_CFLAGS = $PORTALS_CFLAGS";
+#  echo "	- PORTALS_CPPFLAGS = $PORTALS_CPPFLAGS";
+#  echo "	- PORTALS_LDFLAGS = $PORTALS_LDFLAGS";
+#  echo "	- PORTALS_LIBS = $PORTALS_LIBS";
+#else
+#  echo "No Cray Portals."
+#fi
 
 if test -z "${HAVE_INFINIBAND_TRUE}"; then
   echo "Infiniband available.";
