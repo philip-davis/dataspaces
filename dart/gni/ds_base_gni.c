@@ -164,7 +164,7 @@ static int ds_register_cp(struct dart_server *ds, struct app_info *app)
 
 	int info_size;	
 
-
+	peer = ds->peer_tab;
 	msg = msg_buf_alloc(ds->rpc_s, peer, 1);
 	if (!msg) 
 		goto err_out;
@@ -182,8 +182,6 @@ static int ds_register_cp(struct dart_server *ds, struct app_info *app)
 	}
 
 	cur_attr_info->local_smsg_attr = attr_info->local_smsg_attr;
-
-	peer = ds->peer_tab;
 
 	err = rpc_send(ds->rpc_s, peer, msg);
 	if (err != 0){
