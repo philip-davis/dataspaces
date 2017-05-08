@@ -1,111 +1,12 @@
-S3D codes for DataSpaces
+DataFlow is a dependency of the ParallelMergeTree.
 
-Build instructions
-==================
-1. s3d library
-// Make sure you have the right branch of s3d
-% cd s3d
+You will find out that the ParallelMergeTree has a CMake configuration, the dependencies are:
+- DataFlow, a CMake project as well (so you can build with the usual: mkdir build; cd build; ccmake ../; make;  etc.)
+- DIY, in inside the ParallelMergeTree project, you can just run ./configure and make, it should create include a lib directory
+- idx_restructuring, also inside the ParallelMergeTree project, just make
+- MPI, the one on your machine
 
-// Configure s3d to build as a library
-% cd ../insitu_s3d_box/libs3d
+These dependency are used by the CMake configuration of the ParallelMergeTree project, so if it doesn’t find automatically just set the paths in the ccmake. 
 
-// Load the cmake module on Hopper
-% module load cmake
-
-// Delete the old CMakeCache.txt
-% rm CMakeCache.txt
-
-// Run CMAKE 
-% cmake ../../s3d
-
-// Modify the cmakecache file to build libs3d.a
-% vim CMakeCache.txt (find the lines below and make the change)
-BUILD_LIBS3D:BOOL=ON (change this line from OFF to ON)
-
-// Build the s3d library
-% make
-
-2. insitu_s3d_box executable
-// cd into the top level directory of insitu_s3d_box/
-
-// (Optional) Set the include/lib path for DataSpaces in GNUMakefile
-% vim GNUmakefile
-
-// Build insitu_s3d_box
-% make
-
-=========================
-BoxLib MultiFab variables
-=========================
-// s3d 'q' vector, 78 components
-MultiFab qmfab;
-
-// species mass fraction, 26 component
-MultiFab yspcmfab;
-
-// temperature, 1 componet
-MultiFab tempmfab;
-
-// velocity, 3 components
-MultiFab uvelmfab;
-
-// operand for differentiation, 1 component
-MultiFab workmfab;
-
-// insitu variables with ghost data, 2 component
-MultiFab insumfab_ghost;
-
-// insitu variables without ghost data, 9 component
-MultiFab insumfab_noghost;
-
-static const char* gInsituVarNames_noghost[gNumInsituVars_noghost] = {
-"u",
-"v",
-"w",
-"temp",
-"OH",
-"HO2",
-"du/dx",
-"dv/dy",
-"dw/dz",
-};
-
-
-=========================
-Key parameters of s3d.in
-=========================
-* Change the values of the following parameters accordingly!
-
-80                   - global number of grid points in the x-direction    (nx_g)
-60                   - global number of grid points in the y-direction    (ny_g)
-80                   - global number of grid points in the z-direction    (nz_g)
-4                   - number of processors in x-direction                (npx)
-3                  - number of processors in y-direction                (npy)
-4                   - number of processors in z-direction                (npz)
-0.32                 - maximum value of grid in x-direction in cm         (xmax)
-0.24                 - maximum value of grid in y-direction in cm         (ymax)
-0.32                 - minimum value of grid in z-direction in cm         (zmax)
-
-For example, if the new values for nx_g = 64, ny_g = 128, nz_g = 128
-xmax = 64/80*0.32 = 64*0.004 = 0.256
-ymax = 128/60*0.24 = 128*0.004 = 0.512
-zmax = 128/80*0.32 = 128*0.004 = 0.512
-
-
-Example S3D configurations
-process layout:
-    4x4x4 (64 processes)
-    8x8x4 (256 processes)
-    16x8x8 (1024 processes)
-    16x16x16 (4096 processes)
-    32x32x16 (16384 processes)
-    64x32x32 (65536 processes)
-
-global domain grid size (X,Y,Z):
-    80x80x80 (wall clock time per step is about 3~4 seconds)
-    160x160x80 (wall clock time per step is about 3.5~4 seconds)
-    320x160x160 (wall clock time per step is about 4~12 seconds)
-    320x320x320
-    640x640x320
-    1280x640x640
-    1280x1280x1280  
+Basically the executable that you want to build is “multi_task_local_compute_test” (so you can just do  "make multi_task_local_compute_test”)
+the corresponding source code is a good starting point in utilities/multi_task_local_compute_test.cpp

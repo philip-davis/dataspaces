@@ -1,7 +1,0 @@
-set(CTEST_PROJECT_NAME "S3D")
-set(CTEST_NIGHTLY_START_TIME "00:00:00 PST")
-
-set(CTEST_DROP_METHOD "http")
-set(CTEST_DROP_SITE "hekili.ca.sandia.gov")
-set(CTEST_DROP_LOCATION "/CDash/submit.php?project=S3D")
-set(CTEST_DROP_SITE_CDASH TRUE)

@@ -1,0 +1,63 @@
+#! /bin/bash
+
+#----------------------------------------------------------------------------
+#
+# examples tests script
+#
+# Tom Peterka
+# Argonne National Laboratory
+# 9700 S. Cass Ave.
+# Argonne, IL 60439
+# tpeterka@mcs.anl.gov
+#
+# (C) 2011 by Argonne National Laboratory.
+# See COPYRIGHT in top-level directory.
+#
+#----------------------------------------------------------------------------
+
+# execute this script from top level diy directory
+
+cd examples
+echo -e '\n\n'
+
+echo '*** BLOCK IO EXAMPLE ***'
+cd block_io
+mpiexec -n 4 ./example
+echo -e '\n\n'
+cd ..
+
+cd static
+echo '*** STATIC NEIGHBOR EXCHANGE EXAMPLE ***'
+mpiexec -n 8 ./neighbor
+echo -e '\n\n'
+
+echo '*** STATIC MERGE EXAMPLE ***'
+mpiexec -n 8 ./merge
+echo -e '\n\n'
+
+echo '*** STATIC SWAP EXAMPLE ***'
+mpiexec -n 2 ./swap
+echo -e '\n\n'
+
+echo '*** STATIC SEND-RECV EXAMPLE ***'
+mpiexec -n 4 ./send-recv
+echo -e '\n\n'
+cd ..
+
+echo '*** TIME-VARYING NEIGHBOR EXCHANGE EXAMPLE ***'
+cd time_varying
+mpiexec -n 4 ./example
+echo -e '\n\n'
+cd ..
+
+echo '*** MULTIPLE DOMAIN EXAMPLE ***'
+cd multimodel
+mpiexec -n 4 ./example
+echo -e '\n\n'
+cd ..
+
+echo '*** MOAB EXAMPLE ***'
+cd moab
+mpiexec -n 8 ./moab 512_hex.h5m
+echo -e '\n\n'
+cd ..

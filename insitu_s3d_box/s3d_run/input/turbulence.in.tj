@@ -1,6 +1,0 @@
-1.0         characteristic ignition length scale (m)                          df
-1.00        characteristic ignition velocity scale (m/s)                      sl
-0.00032    ratio of LT to ignition length scale                              lt/df
-9.700      ratio of rms velocity fluctuations to ignition velocity scale     up/sl
-103         seed for turbulence generator                                     seed
-PP          Turbulence spectrum choice.  Either "vkp" or "pp"                 spectrum_type
