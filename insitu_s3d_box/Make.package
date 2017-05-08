@@ -1,0 +1,23 @@
+#
+# $Id: Make.package,v 1.24 2004-08-25 16:06:52 car Exp $
+#
+#CEXE_headers += insituDescriptiveStats.h vtkS3DSource.h insitu_tools.h insitu_data_description.h multifab_tools.h insituTopology.h
+
+#CEXE_sources += insitu_tools.cpp main.cpp writebin_append.cpp insituDescriptiveStats.cpp vtkS3DSource.cpp  multifab_tools.cpp insituTopology.cpp
+
+CEXE_headers += insitu_tools.h insitu_data_description.h multifab_tools.h 
+CEXE_sources += insitu_tools.cpp main.cpp writebin_append.cpp multifab_tools.cpp
+
+#----------visualization-----------
+#CEXE_headers += s3d_box_viz.h
+#CEXE_sources += s3d_box_viz.cpp
+#----------------------------------
+
+FEXE_headers += 
+
+f90EXE_sources +=  s3d_initialize.f90 f_testing_tools.f90 \
+                   derivative_x_haloarray.f90 derivative_y_haloarray.f90 derivative_z_haloarray.f90 \
+                   rhsf.f90 rhs_tools_boxlib.f90 integrate_erk.f90 dump_klm_file.f90 \
+                   s3d_box_tools.f90 
+
+

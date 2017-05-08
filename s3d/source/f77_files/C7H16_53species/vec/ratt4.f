@@ -1,0 +1,506 @@
+C                                                                      C
+      SUBROUTINE RATT7 (VL, T, RF, RB, RKLOW, EG, PFAC1, 
+     &                   PFAC2, PFAC3, ALOGT)
+      USE chemkin_m, only : MAXVL
+      IMPLICIT DOUBLE PRECISION (A-H, O-Z), INTEGER (I-N)
+      PARAMETER (RU=8.31451D7, SMALL=1.D-200, PATM=1.01325D6)
+      DIMENSION RF(MAXVL,*), RB(MAXVL,*), RKLOW(MAXVL,*)
+      DIMENSION EQK(MAXVL), PFAC1(MAXVL), PFAC2(MAXVL), PFAC3(MAXVL)
+      DIMENSION T(MAXVL),ALOGT(MAXVL)
+      INTEGER VL
+      DIMENSION SMH(MAXVL,26), EG(MAXVL,26)
+
+C      R200: o2 + c3h4-a = ho2 + c3h3
+      RF(:VL,200) = 3.13199006D1 -1.97059647D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,200),RF(1,200))
+      RB(:VL,200) = 2.54897042D1 +3D-1*ALOGT(:VL)
+     * -1.91222334D1/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,200),RB(1,200))
+C      R201: h + c3h3 = h2 + c3h2
+      RF(:VL,201) = 5D13
+      RB(:VL,201) = 2.4374703D1 +3.8D-1*ALOGT(:VL)
+     * -2.31479667D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,201),RB(1,201))
+C      R202: oh + c3h4-a = h2o + c3h3
+      RF(:VL,202) = 1.61180957D1 +2D0*ALOGT(:VL)
+     * -5.03216668D2/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,202),RF(1,202))
+      RB(:VL,202) = 1.57618492D1 +1.97D0*ALOGT(:VL)
+     * -1.73710394D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,202),RB(1,202))
+C      R203: c3h5-a = h + c3h4-a
+      RF(:VL,203) = 3.64353462D1 -4.3D-1*ALOGT(:VL)
+     * -3.18133577D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,203),RF(1,203))
+      RB(:VL,203) = 2.62039048D1 +6.9D-1*ALOGT(:VL)
+     * -1.51317252D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,203),RB(1,203))
+C      R204: h + c3h4-a = h2 + c3h3
+      RF(:VL,204) = 1.68112428D1 +2D0*ALOGT(:VL)
+     * -2.51608334D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,204),RF(1,204))
+      RB(:VL,204) = 1.49895395D1 +1.97D0*ALOGT(:VL)
+     * -1.17551414D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,204),RB(1,204))
+C      R205: c3h4-p = h + c3h3
+      RF(:VL,205) = RF(:VL,198)
+      RB(:VL,205) = 2.72317369D1 +6.1D-1*ALOGT(:VL)
+     * -3.23065101D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,205),RB(1,205))
+C      R206: c3h4-p = ch3 + c2h
+      RF(:VL,206) = 3.8276446D1 -5.03216668D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,206),RF(1,206))
+      RB(:VL,206) = 2.7648861D1 +6.1D-1*ALOGT(:VL)
+     * +8.05146668D2/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,206),RB(1,206))
+C      R207: o2 + c3h4-p = ho2 + c3h3
+      RF(:VL,207) = 3.06267534D1 -2.09338134D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,207),RF(1,207))
+      RB(:VL,207) = 2.6184552D1 +1.4D-1*ALOGT(:VL)
+     * -3.92509001D1/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,207),RB(1,207))
+C      R208: oh + c3h4-p = h2o + c3h3
+      RF(:VL,208) = RF(:VL,202)
+      RB(:VL,208) = 1.71494992D1 +1.81D0*ALOGT(:VL)
+     * -1.61633194D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,208),RB(1,208))
+C      R209: h + c3h4-p = h2 + c3h3
+      RF(:VL,209) = RF(:VL,204)
+      RB(:VL,209) = 1.63773782D1 +1.81D0*ALOGT(:VL)
+     * -1.05474214D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,209),RB(1,209))
+C      R210: o + c3h3 = ch2o + c2h
+      RF(:VL,210) = 1D13
+      RB(:VL,210) = 3.39310727D1 -1.59066789D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,210),RB(1,210))
+C      R211: oh + c3h3 = h2o + c3h2
+      RF(:VL,211) = 1D13
+      RB(:VL,211) = 3.48336823D1 -7.89043735D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,211),RB(1,211))
+C      R212: o2 + c3h3 = hco + ch2co
+      RF(:VL,212) = 2.4127791D1 -1.44423184D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,212),RF(1,212))
+      RB(:VL,212) = 2.69137861D1 -2.99262952D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,212),RB(1,212))
+C      R213: c2h3o1-2 = ch3co
+      RF(:VL,213) = 8.5D2*RB(:VL,135)
+      RB(:VL,213) = 3.26336242D1 -1D-2*ALOGT(:VL)
+     * -2.39933707D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,213),RB(1,213))
+C      R214: c2h3o1-2 = ch2cho
+      RF(:VL,214) = 1D2*RB(:VL,135)
+      RB(:VL,214) = 3.50181114D1 -4.1D-1*ALOGT(:VL)
+     * -2.13665797D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,214),RB(1,214))
+C      R215: ch2cho = h + ch2co
+      RF(:VL,215) = 3.56682411D1 -2.6D-1*ALOGT(:VL)
+     * -2.5573471D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,215),RF(1,215))
+      RB(:VL,215) = 3.15430441D1 -6.18956501D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,215),RB(1,215))
+C      R216: o2 + ch2cho = oh + co + ch2o
+      RF(:VL,216) = 3.06267534D1 -2.11351D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,216),RF(1,216))
+      RB(:VL,216) = 0D0
+C      R217: o2 + c3h5-a = ho2 + c3h4-a
+      RF(:VL,217) = 4.91336118D1 -2.85D0*ALOGT(:VL)
+     * -1.54789447D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,217),RF(1,217))
+      RB(:VL,217) = 4.4738658D1 -2.4D0*ALOGT(:VL)
+     * -1.03159417D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,217),RB(1,217))
+C      R218: o2 + c3h5-a = ch2o + ch2cho
+      RF(:VL,218) = 3.65044892D1 -1.21D0*ALOGT(:VL)
+     * -1.05927109D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,218),RF(1,218))
+      RB(:VL,218) = 3.84395362D1 -1.4D0*ALOGT(:VL)
+     * -4.45950611D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,218),RB(1,218))
+C      R219: o2 + c3h5-a = oh + ch2o + c2h2
+      RF(:VL,219) = 6.90491533D1 -5.71D0*ALOGT(:VL)
+     * -1.07939975D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,219),RF(1,219))
+      RB(:VL,219) = 0D0
+C      R220: o2 + hcco = hco + co2
+      RF(:VL,220) = 2.62039048D1 +4.29747034D2/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,220),RF(1,220))
+      RB(:VL,220) = 3.26241711D1 -6.72297468D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,220),RB(1,220))
+C      R221: oh + ch2co = co + ch2oh
+      RF(:VL,221) = 2.89474293D1 +5.09758484D2/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,221),RF(1,221))
+      RB(:VL,221) = 1.60594067D1 +1.66D0*ALOGT(:VL)
+     * -1.38334262D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,221),RB(1,221))
+C      R222: o2 + ch3 = oh + ch2o
+      RF(:VL,222) = 2.7339331D1 -7.17083751D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,222),RF(1,222))
+      RB(:VL,222) = 2.73797353D1 -3.41029936D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,222),RB(1,222))
+C      R223: o2 + nc3h7cho = ho2 + nc3h7co
+      RF(:VL,223) = 3.06267534D1 +5D-1*ALOGT(:VL)
+     * -2.12357434D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,223),RF(1,223))
+      RB(:VL,223) = 1.61180957D1 +5D-1*ALOGT(:VL)
+     * -2.01286667D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,223),RB(1,223))
+C      R224: oh + nc3h7cho = h2o + nc3h7co
+      RF(:VL,224) = 2.40153921D1 +7.6D-1*ALOGT(:VL)
+     * +1.71093667D2/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,224),RF(1,224))
+      RB(:VL,224) = 2.36421171D1 +7.5D-1*ALOGT(:VL)
+     * -1.57104244D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,224),RB(1,224))
+C      R225: h + nc3h7cho = h2 + nc3h7co
+      RF(:VL,225) = 2D0*RF(:VL,216)
+      RB(:VL,225) = 3.05213929D1 -1.20772D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,225),RB(1,225))
+C      R226: o + nc3h7cho = oh + nc3h7co
+      RF(:VL,226) = 2.9240459D1 -9.00757835D2/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,226),RF(1,226))
+      RB(:VL,226) = 1.25944584D-3*RF(:VL,180)
+C      R227: ho2 + nc3h7cho = h2o2 + nc3h7co
+      RF(:VL,227) = 2.86606405D1 -6.84374668D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,227),RF(1,227))
+      RB(:VL,227) = 2.76310211D1 -5.03216668D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,227),RB(1,227))
+C      R228: ch3 + nc3h7cho = ch4 + nc3h7co
+      RF(:VL,228) = 2.81616494D1 -4.24714867D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,228),RF(1,228))
+      RB(:VL,228) = 3.03390713D1 -1.40900667D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,228),RB(1,228))
+C      R229: ch3o + nc3h7cho = ch3oh + nc3h7co
+      RF(:VL,229) = 2.5468198D1 -6.44117335D2/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,229),RF(1,229))
+      RB(:VL,229) = 2.64270483D1 -9.05790002D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,229),RB(1,229))
+C      R230: ch3o2 + nc3h7cho = ch3o2h + nc3h7co
+      RF(:VL,230) = 2.76310211D1 -4.78055834D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,230),RF(1,230))
+      RB(:VL,230) = 2.5D-2*RB(:VL,227)
+C      R231: nc3h7co = co + nc3h7
+      RF(:VL,231) = 3.62111891D1 -8.6D-1*ALOGT(:VL)
+     * -6.74310335D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,231),RF(1,231))
+      RB(:VL,231) = 2.57339011D1 -2.41544D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,231),RB(1,231))
+C      R232: oh + ch3chco = co2 + c2h5
+      RF(:VL,232) = 2.81791425D1 +5.08248834D2/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,232),RF(1,232))
+      RB(:VL,232) = 0D0
+C      R233: h + ch3chco = co + c2h5
+      RF(:VL,233) = 2.91126257D1 -7.34193118D2/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,233),RF(1,233))
+      RB(:VL,233) = 0D0
+C      R234: o + ch3chco = co + ch3cho
+      RF(:VL,234) = 2.87941719D1 +2.19905684D2/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,234),RF(1,234))
+      RB(:VL,234) = 0D0
+C      R235: c2h5coch2 = c2h5 + ch2co
+      RF(:VL,235) = 3.03846818D1 -1.50965D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,235),RF(1,235))
+      RB(:VL,235) = 2.6075124D1 -3.69864251D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,235),RB(1,235))
+C      R236: oh + nc3h7coch3 = h2o + nc3h7coch2
+      RF(:VL,236) = 2.69576766D1 -5.99834268D2/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,236),RF(1,236))
+      RB(:VL,236) = 3.21621141D1 -7.4D-1*ALOGT(:VL)
+     * -1.39541982D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,236),RB(1,236))
+C      R237: ho2 + nc3h7coch3 = h2o2 + nc3h7coch2
+      RF(:VL,237) = 1.00774409D1 +2.55D0*ALOGT(:VL)
+     * -7.39225285D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,237),RF(1,237))
+      RB(:VL,237) = 1.70627795D1 +1.48D0*ALOGT(:VL)
+     * -4.91240111D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,237),RB(1,237))
+C      R238: ch3o2 + nc3h7coch3 = ch3o2h + nc3h7coch2
+      RF(:VL,238) = 2.87329612D1 -8.84654902D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,238),RF(1,238))
+      RB(:VL,238) = 3.71317898D1 -1.25D0*ALOGT(:VL)
+     * -6.00337484D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,238),RB(1,238))
+C      R239: nc3h7coch2 = ch2co + nc3h7
+      RF(:VL,239) = 4.16502885D1 -1.4D0*ALOGT(:VL)
+     * -2.18647642D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,239),RF(1,239))
+      RB(:VL,239) = 2.5328436D1 -5.83731334D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,239),RB(1,239))
+      END
+C                                                                      C
+      SUBROUTINE RATT8 (VL, T, RF, RB, RKLOW, EG, PFAC1, 
+     &                   PFAC2, PFAC3, ALOGT)
+      USE chemkin_m, only : MAXVL
+      IMPLICIT DOUBLE PRECISION (A-H, O-Z), INTEGER (I-N)
+      PARAMETER (RU=8.31451D7, SMALL=1.D-200, PATM=1.01325D6)
+      DIMENSION RF(MAXVL,*), RB(MAXVL,*), RKLOW(MAXVL,*)
+      DIMENSION EQK(MAXVL), PFAC1(MAXVL), PFAC2(MAXVL), PFAC3(MAXVL)
+      DIMENSION T(MAXVL),ALOGT(MAXVL)
+      INTEGER VL
+      DIMENSION SMH(MAXVL,26), EG(MAXVL,26)
+C
+C
+C      R240: ch4 + ch2(s) = 2ch3
+      RF(:VL,240) = 4D13
+      RB(:VL,240) = 3.62305313D1 -8.9D-1*ALOGT(:VL)
+     * -7.87534085D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,240),RB(1,240))
+C      R241: c2h6 + ch2(s) = ch3 + c2h5
+      RF(:VL,241) = 1.2D14
+      RB(:VL,241) = 3.22763731D1 -3.3D-1*ALOGT(:VL)
+     * -9.97375435D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,241),RB(1,241))
+C      R242: o2 + ch2(s) = h + oh + co
+      RF(:VL,242) = 7D13
+      RB(:VL,242) = 0D0
+C      R243: h2 + ch2(s) = h + ch3
+      RF(:VL,243) = 7D13
+      RB(:VL,243) = 4.00530113D1 -8.9D-1*ALOGT(:VL)
+     * -8.11688485D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,243),RB(1,243))
+C      R244: co2 + ch2(s) = co + ch2o
+      RF(:VL,244) = 3D12
+      RB(:VL,244) = 3.55867969D1 -8.9D-1*ALOGT(:VL)
+     * -3.29707561D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,244),RB(1,244))
+C      R245: nc7h16 = h + c7h15
+      RF(:VL,245) = 2.03112996D2 -2.101D1*ALOGT(:VL)
+     * -7.01987251D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,245),RF(1,245))
+      RB(:VL,245) = 1.85856811D2 -1.967D1*ALOGT(:VL)
+     * -1.95700962D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,245),RB(1,245))
+C      R246: nc7h16 = c2h5 + c5h11-1
+      RF(:VL,246) = 1.79390916D2 -1.762D1*ALOGT(:VL)
+     * -6.05872868D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,246),RF(1,246))
+      RB(:VL,246) = 1.56389095D2 -1.605D1*ALOGT(:VL)
+     * -1.62790592D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,246),RB(1,246))
+C      R247: nc7h16 = nc3h7 + pc4h9
+      RF(:VL,247) = 1.79948767D2 -1.771D1*ALOGT(:VL)
+     * -6.07382518D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,247),RF(1,247))
+      RB(:VL,247) = 1.56885474D2 -1.611D1*ALOGT(:VL)
+     * -1.6334413D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,247),RB(1,247))
+C      R248: h + nc7h16 = h2 + c7h15-1
+      RF(:VL,248) = 1.21441972D1 +2.75D0*ALOGT(:VL)
+     * -3.16020067D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,248),RF(1,248))
+      RB(:VL,248) = 9.09672365D0 +2.7D0*ALOGT(:VL)
+     * -5.30893584D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,248),RB(1,248))
+C      R249: h + nc7h16 = h2 + c7h15
+      RF(:VL,249) = 1.56873127D1 +2.4D0*ALOGT(:VL)
+     * -2.24988172D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,249),RF(1,249))
+      RB(:VL,249) = 0D0
+C      R250: o + nc7h16 = oh + c7h15-1
+      RF(:VL,250) = 1.21704455D1 +2.68D0*ALOGT(:VL)
+     * -1.86995314D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,250),RF(1,250))
+      RB(:VL,250) = 8.30028019D0 +2.63D0*ALOGT(:VL)
+     * -2.96545582D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,250),RB(1,250))
+C      R251: o + nc7h16 = oh + c7h15
+      RF(:VL,251) = 1.23821246D1 +2.71D0*ALOGT(:VL)
+     * -1.0597743D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,251),RF(1,251))
+      RB(:VL,251) = 0D0
+C      R252: oh + nc7h16 = h2o + c7h15-1
+      RF(:VL,252) = 2.30746411D1 +9.7D-1*ALOGT(:VL)
+     * -8.00114502D2/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,252),RF(1,252))
+      RB(:VL,252) = 2.3431316D1 +1.05D0*ALOGT(:VL)
+     * -1.17400449D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,252),RB(1,252))
+C      R253: oh + nc7h16 = h2o + c7h15
+      RF(:VL,253) = 1.92750961D1 +1.61D0*ALOGT(:VL)
+     * +1.76125834D1/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,253),RF(1,253))
+      RB(:VL,253) = 0D0
+C      R254: ho2 + nc7h16 = h2o2 + c7h15-1
+      RF(:VL,254) = 3.04524D1 -1.02857487D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,254),RF(1,254))
+      RB(:VL,254) = 3.0651446D1 -3.8D-1*ALOGT(:VL)
+     * -4.22651679D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,254),RB(1,254))
+C      R255: ho2 + nc7h16 = h2o2 + c7h15
+      RF(:VL,255) = 3.09632256D1 -8.90190285D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,255),RF(1,255))
+      RB(:VL,255) = 2.6798152D1 +1D-2*ALOGT(:VL)
+     * -4.10876409D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,255),RB(1,255))
+C      R256: ch3 + nc7h16 = ch4 + c7h15-1
+      RF(:VL,256) = -1.00925919D-1 +3.65D0*ALOGT(:VL)
+     * -3.60001204D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,256),RF(1,256))
+      RB(:VL,256) = 1.14221144D-1 +3.6D0*ALOGT(:VL)
+     * -5.99331051D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,256),RB(1,256))
+C      R257: ch3 + nc7h16 = ch4 + c7h15
+      RF(:VL,257) = 1.18145104D1 +2.26D0*ALOGT(:VL)
+     * -3.66693986D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,257),RF(1,257))
+      RB(:VL,257) = 0D0
+C      R258: o2 + nc7h16 = ho2 + c7h15-1
+      RF(:VL,258) = 3.17253657D1 -2.65698401D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,258),RF(1,258))
+      RB(:VL,258) = 2.46696903D1 +2.8D-1*ALOGT(:VL)
+     * +2.04305967D2/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,258),RB(1,258))
+C      R259: o2 + nc7h16 = ho2 + c7h15
+      RF(:VL,259) = 3.22361913D1 -2.52363159D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,259),RF(1,259))
+      RB(:VL,259) = 2.08167562D1 +6.7D-1*ALOGT(:VL)
+     * +2.72240217D2/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,259),RB(1,259))
+C      R260: c2h5 + nc7h16 = c2h6 + c7h15-1
+      RF(:VL,260) = 2.5328436D1 -6.74310335D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,260),RF(1,260))
+      RB(:VL,260) = 6.4D-3*RB(:VL,215)
+C      R261: c2h5 + nc7h16 = c2h6 + c7h15
+      RF(:VL,261) = 2.62447268D1 -5.23345334D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,261),RF(1,261))
+      RB(:VL,261) = 2.5328436D1 -6.49149501D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,261),RB(1,261))
+C      R262: ch3o + nc7h16 = ch3oh + c7h15-1
+      RF(:VL,262) = 6.32D0*RB(:VL,118)
+      RB(:VL,262) = 2.32081725D1 -4.62959334D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,262),RB(1,262))
+C      R263: ch3o + nc7h16 = ch3oh + c7h15
+      RF(:VL,263) = 2.70286283D1 -2.51608334D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,263),RF(1,263))
+      RB(:VL,263) = 2.6969697D-2*RB(:VL,130)
+C      R264: ch3o2 + nc7h16 = ch3o2h + c7h15-1
+      RF(:VL,264) = 3.01242266D1 -1.02807165D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,264),RF(1,264))
+      RB(:VL,264) = 2.8911955D1 -4.93152334D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,264),RB(1,264))
+C      R265: ch3o2 + nc7h16 = ch3o2h + c7h15
+      RF(:VL,265) = 3.06347216D1 -8.90693502D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,265),RF(1,265))
+      RB(:VL,265) = 2.61938544D1 -1.86190167D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,265),RB(1,265))
+C      R266: c7h15-1 = c2h4 + c5h11-1
+      RF(:VL,266) = 4.1242823D1 -1.42D0*ALOGT(:VL)
+     * -1.5519202D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,266),RF(1,266))
+      RB(:VL,266) = 2.5328436D1 -4.12637667D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,266),RB(1,266))
+C      R267: c7h15 = c3h6 + pc4h9
+      RF(:VL,267) = 3.67216766D1 -8.9D-1*ALOGT(:VL)
+     * -1.51619182D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,267),RF(1,267))
+      RB(:VL,267) = RB(:VL,266)
+C      R268: c7h15 = nc3h7 + c4h8-1
+      RF(:VL,268) = 4.04927986D1 -1.42D0*ALOGT(:VL)
+     * -1.53883657D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,268),RF(1,268))
+      RB(:VL,268) = 2.5328436D1 -3.87476834D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,268),RB(1,268))
+C      R269: c7h15 = c2h5 + c5h10-1
+      RF(:VL,269) = 3.69229415D1 -8.9D-1*ALOGT(:VL)
+     * -1.53933979D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,269),RF(1,269))
+      RB(:VL,269) = RB(:VL,266)
+C      R270: c7h15-1 = c7h15
+      RF(:VL,270) = 2.16558235D1 +3.5D-1*ALOGT(:VL)
+     * -9.94356135D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,270),RF(1,270))
+      RB(:VL,270) = 1.88975358D1 +7.4D-1*ALOGT(:VL)
+     * -1.12116674D4/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,270),RB(1,270))
+C      R271: c7h15o2 = o2 + c7h15
+      RF(:VL,271) = 5.32959294D1 -2.36D0*ALOGT(:VL)
+     * -1.89561719D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,271),RF(1,271))
+      RB(:VL,271) = 7.54D12
+C      R272: c7h15o2 = c7h14ooh
+      RF(:VL,272) = 2.41244632D1 -1.04920675D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,272),RF(1,272))
+      RB(:VL,272) = 2.43827165D1 -5.1D-1*ALOGT(:VL)
+     * -4.06599067D3/T(:VL)
+      CALL VRDA_EXP(VL,RB(1,272),RB(1,272))
+C      R273: c7h14ooh = oh + c7h14o
+      RF(:VL,273) = 2.45299283D1 -7.67405418D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,273),RF(1,273))
+      RB(:VL,273) = 0D0
+C      R274: c7h14ooh = oh + ch3cho + c5h10-1
+      RF(:VL,274) = 3.99075522D1 -1.4D0*ALOGT(:VL)
+     * -1.34610459D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,274),RF(1,274))
+      RB(:VL,274) = 0D0
+C      R275: c7h14ooh = oh + c4h8-1 + c2h5cho
+      RF(:VL,275) = 4.14344591D1 -1.55D0*ALOGT(:VL)
+     * -1.35969144D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,275),RF(1,275))
+      RB(:VL,275) = 0D0
+C      R276: c7h14ooh = oh + c3h6 + nc3h7cho
+      RF(:VL,276) = 4.0099458D1 -1.49D0*ALOGT(:VL)
+     * -1.34862067D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,276),RF(1,276))
+      RB(:VL,276) = 0D0
+C      R277: c7h14ooho2 = o2 + c7h14ooh
+      RF(:VL,277) = 5.31826007D1 -2.38D0*ALOGT(:VL)
+     * -1.89209467D4/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,277),RF(1,277))
+      RB(:VL,277) = 7.54D12
+C      R278: c7h14ooho2 = oh + nc7ket
+      RF(:VL,278) = 2.32489945D1 -8.98241752D3/T(:VL)
+      CALL VRDA_EXP(VL,RF(1,278),RF(1,278))
+      RB(:VL,278) = 0D0
+C      R279: nc7ket = oh + ch3coch2 + nc3h7cho
+      RF(:VL,279) = 1.75D2*RF(:VL,207)
+      RB(:VL,279) = 0D0
+C      R280: nc7ket = oh + c2h5cho + c2h5coch2
+      RF(:VL,280) = 1.75D2*RF(:VL,207)
+      RB(:VL,280) = 0D0
+C      R281: nc7ket = oh + ch3cho + nc3h7coch2
+      RF(:VL,281) = 1.75D2*RF(:VL,207)
+      RB(:VL,281) = 0D0
+C      R282: oh + c7h14o = h2o + ch3co + c5h10-1
+      RF(:VL,282) = 2.5D12
+      RB(:VL,282) = 0D0
+C      R283: oh + c7h14o = h2o + c3h6 + nc3h7co
+      RF(:VL,283) = 2.5D12
+      RB(:VL,283) = 0D0
+C
+      RKLOW(:VL,1) = 7.0274501D1 -4D0*ALOGT(:VL) 
+     * -1.06078074D3/T(:VL)
+      CALL VRDA_EXP(VL,RKLOW(1,1),RKLOW(1,1))
+      RKLOW(:VL,2) = 7.83940534D1 -5D0*ALOGT(:VL) 
+     * -2.23830774D3/T(:VL)
+      CALL VRDA_EXP(VL,RKLOW(1,2),RKLOW(1,2))
+      RKLOW(:VL,3) = 1.02395549D2 -7.35D0*ALOGT(:VL) 
+     * -4.80370631D4/T(:VL)
+      CALL VRDA_EXP(VL,RKLOW(1,3),RKLOW(1,3))
+      RKLOW(:VL,4) = 8.3019696D1 -5.246D0*ALOGT(:VL) 
+     * -8.57984418D2/T(:VL)
+      CALL VRDA_EXP(VL,RKLOW(1,4),RKLOW(1,4))
+      RKLOW(:VL,5) = 3.80941245D1 -4.1D-1*ALOGT(:VL) 
+     * +5.61589801D2/T(:VL)
+      CALL VRDA_EXP(VL,RKLOW(1,5),RKLOW(1,5))
+      RKLOW(:VL,6) = 5.55621468D1 -2.788D0*ALOGT(:VL) 
+     * -2.10898105D3/T(:VL)
+      CALL VRDA_EXP(VL,RKLOW(1,6),RKLOW(1,6))
+      RKLOW(:VL,7) = 5.84164862D1 -2.7D0*ALOGT(:VL) 
+     * -1.539843D4/T(:VL)
+      CALL VRDA_EXP(VL,RKLOW(1,7),RKLOW(1,7))
+      RKLOW(:VL,8) = 3.49442415D1 -2.78998417D4/T(:VL)
+      CALL VRDA_EXP(VL,RKLOW(1,8),RKLOW(1,8))
+      RKLOW(:VL,9) = 7.01897392D1 -4.63D0*ALOGT(:VL) 
+     * -1.03109095D3/T(:VL)
+      CALL VRDA_EXP(VL,RKLOW(1,9),RKLOW(1,9))
+      RKLOW(:VL,10) = 9.29161101D1 -7.269D0*ALOGT(:VL) 
+     * -3.30965602D3/T(:VL)
+      CALL VRDA_EXP(VL,RKLOW(1,10),RKLOW(1,10))
+      RKLOW(:VL,11) = 7.77787328D1 -5.39D0*ALOGT(:VL) 
+     * -1.82164434D4/T(:VL)
+      CALL VRDA_EXP(VL,RKLOW(1,11),RKLOW(1,11))
+      RKLOW(:VL,12) = 3.4721098D1 -6.29926625D3/T(:VL)
+      CALL VRDA_EXP(VL,RKLOW(1,12),RKLOW(1,12))
+C
+      END
+

@@ -1,0 +1,15 @@
+#!/bin/sh
+#PBS -N S3D_BOX
+#PBS -A chm043dns
+#PBS -q debug
+#PBS -j oe
+#PBS -m a 
+#PBS -M jcbenne@sandia.gov
+#PBS -l walltime=1:00:00
+#PBS -l gres=widow2
+#PBS -l size=80
+
+cd $PBS_O_WORKDIR
+
+aprun -n 2 ./ds_rr_scheduler -s 2 -c 64 : -n 48 ./s3d_box3d.PGI.CC.MPI.ex : -n 16 ./intransit_driver 16
+

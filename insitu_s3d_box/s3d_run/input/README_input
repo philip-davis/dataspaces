@@ -1,0 +1,17 @@
+#Instructions on setting up an S3D problem of specific size
+
+1) The main input file is 's3d.in'. Change the numbers starting on the first column in various lines as described below.
+
+2) The No. of grid points in X\Y\Z directions (nx_g\ny_g\nz_g) are specified on lines 8-10 resp. The total grid count = nx_g*ny_g*nz_g.
+
+3) The number of processors in X\Y\Z dirs (npx\npy\npz) are on lines 11-13. Note that nx_g must be divisible by npx and so on. So the total nprocs = npx*npy*npz and number of grid points per proc = (nx_g/npx)*(ny_g/npy)*(nz_g/npz). 
+
+4) For optimal performance with S3D, each of (nx_g/npx) etc. must be ~ 20 but do not go below 12. 
+
+5) The physical size of the domain is specified (in cm) by xmax\ymax\zmax on lines 52-54. You must specify xmax = nx_g*0.004, ymax = ny_g*0.004 and zmax = nz_g*0.004 (the grid resolution is fixed to 0.004 cm and you shouldn't have to change that).
+
+6) The number of time steps is specified on line 19.
+
+7) The 's3d.in' in the git repo is an example of a 48 processor job with 384000 grid points and 20*20*20 grid points per processor running for 20 timesteps. 
+
+8) You shouldn't have to change any other input files.

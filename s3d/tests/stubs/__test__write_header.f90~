@@ -1,0 +1,14 @@
+  subroutine write_header(io,char_in)
+  implicit none
+
+  integer io
+  character*1 char_in
+
+  character*1 char(78)
+
+  char(:)=char_in
+  write(io,*) char(:)
+
+  return
+  end subroutine write_header
+

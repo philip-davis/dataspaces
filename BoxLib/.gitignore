@@ -1,0 +1,17 @@
+nohup.out
+*.[oa]
+*.ex
+*~
+d/
+f/
+o/
+t/
+TAGS
+
+# latex
+*.aux
+*.log
+*.bbl
+*.toc
+*.dvi
+*-eps-converted-to.pdf

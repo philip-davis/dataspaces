@@ -1,0 +1,50 @@
+
+#notes to build and run s3d_box
+
+#i think these notes are correct, please fix them
+#if you find errors or want to add clarifications.
+
+#vince.
+
+#Instructions to build with PGI/GNU compilers addd by Hemanth Kolla
+
+mkdir S3D_Box_Test
+cd S3D_Box_Test
+git clone yourname@battra.lbl.gov:/home/exascale_src/gitroot/BoxLib
+git clone yourname@battra.lbl.gov:/home/exascale_src/gitroot/s3d
+git clone yourname@battra.lbl.gov:/home/exascale_src/gitroot/insitu_s3d_box
+cd s3d
+git checkout for_s3d_box
+cd ../insitu_s3d_box/libs3d
+cmake ../../s3d
+vi CMakeCache.txt    (find the lines below and make the change)
+
+  //Build libs3d.a
+  BUILD_LIBS3D:BOOL=ON   (change this line from OFF to ON)
+
+make
+cd ..
+
+#The current GNUMakefile is configured to build with PGI compilers
+#If building with GNU compilers do the following in GNUMakefile before doing 'make'
+
+uncomment lines 32-36 and comment lines 39-42
+uncomment line 76 and comment line 77
+
+#Now make
+
+make
+
+cp s3d_box3d.Linux.($COMP).($FCOMP).MPI.ex s3d_run/run
+
+vi s3d_run/input/README_input (instructions on how to setup a problem of specific size)
+
+cd s3d_run/run
+mpiexec -n ($NPROCS) ./s3d_box3d.Linux.($COMP).($FCOMP).MPI.ex
+
+#this should run the default problem and create temperature.nnnnn files
+
+gnuplot
+plot "temperature.00000"
+
+

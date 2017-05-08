@@ -1,0 +1,17 @@
+const char* buildInfoGetBuildDate();
+const char* buildInfoGetBuildDir();
+const char* buildInfoGetBuildMachine();
+const char* buildInfoGetBoxlibDir();
+const char* buildInfoGetComp();
+const char* buildInfoGetCompilerLoc(int i);
+const char* buildInfoGetCompilerVer(int i);
+const char* buildInfoGetCompilerFlags(int i);
+const char* buildInfoGetFcomp();
+const char* buildInfoGetAux(int i);
+const char* buildInfoGetDif(int i);
+const char* buildInfoGetGitHash(int i);
+const char* buildInfoGetGitBranch(int i);
+const char* buildInfoGetLinkerInfo(int i);
+const char* buildInfoGetBuildGitName();
+const char* buildInfoGetBuildGitHash();
+

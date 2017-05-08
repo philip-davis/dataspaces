@@ -1,0 +1,582 @@
+# Make for Linux
+
+#
+# Generic C++ stuff.
+#
+ifeq ($(COMP),PathScale)
+  CXX = pathCC
+  CC  = pathcc
+  ifeq ($(USE_MPI),TRUE)
+    CXX = mpicxx
+  endif
+
+  ifeq ($(BL_FAST),TRUE)
+    CXXOPTF += -Ofast -Wno-deprecated
+  else
+    CXXOPTF += -O3 -Wno-deprecated
+  endif
+
+  CXXDEBF += -O0 -g -Wno-deprecated
+
+  ifeq ($(USE_OMP),TRUE)
+    CXXOPTF += -mp
+    CXXDEBF += -mp
+  endif
+else
+ifeq ($(COMP),Cray)
+  CXX = CC
+  CC  = craycc
+
+  CXXOPTF += -h nomessage=7221 -h fp0
+  CXXDEBF += -g -O0
+
+  ifneq ($(USE_OMP),TRUE)
+    CXXOPTF += -h noomp
+    CXXDEBF += -h noomp
+    COPTF += -h noomp
+    CDEBF += -h noomp
+  endif
+
+  ifneq ($(USE_ACC),TRUE)
+    CXXOPTF += -h noacc
+    CXXDEBF += -h noacc
+    COPTF += -h noacc
+    CDEBF += -h noacc
+  endif
+else
+ifeq ($(COMP),PGI)
+  CXX = pgCC
+  CXXDEBF += -g -O0
+
+  ifeq ($(BL_FAST),TRUE)
+    ifeq ($(WHICHLINUX), TITAN)
+      CXXOPTF += -O
+    else
+      COPTF += -fast
+      CXXOPTF += -fast -Minline=levels:10
+    endif
+  else
+    CXXOPTF += -O
+  endif
+
+#  ifneq ($(USE_MPI),TRUE)
+     ifeq ($(WHICHLINUX), CARVER)
+       override XTRALIBS += -lmpi_f90 -lmpi_f77 -lpgf90 -lpgf90_rpm1 -lpgf902 -lpgf90rtl -lpgftnrtl -lpghpf -lrt
+     else
+       override XTRALIBS += -lpgf90 -lpgf90_rpm1 -lpgf902 -lpgf90rtl -lpgftnrtl -lpghpf -lrt
+     endif
+#  endif
+
+  ifeq ($(USE_OMP),TRUE)
+    CXXOPTF += -mp=nonuma
+    CXXDEBF += -mp=nonuma
+    COPTF += -mp=nonuma
+    CDEBF += -mp=nonuma
+  endif
+
+  ifeq ($(USE_ACC),TRUE)
+    CXXOPTF += -acc
+    CXXDEBF += -acc
+    COPTF += -acc
+    CDEBF += -acc
+  endif
+
+else
+ifeq ($(COMP),xlC)
+  CXX     := xlC
+  CXXOPTF += -O2 -qsuppress=1500-029 -qmaxmem=-1
+  CXXDEBF += -g -qcheck=bounds
+endif
+endif
+endif
+endif
+#
+# Now Fortran stuff.
+#
+FORT_CPP := gcc -E -traditional
+FORT_CPP := cpp -E -traditional
+
+ifeq ($(FCOMP),PathScale)
+  FC  = pathf95
+  fC  = pathf95
+  F90 = pathf95 
+  FFLAGS += -fno-second-underscore
+  fFLAGS += -fno-second-underscore
+  F90FLAGS +=
+  FDEBF += -O0 -g
+  fDEBF += -O0 -g
+
+  ifeq ($(BL_FAST),TRUE)
+    FOPTF += -Ofast
+    fOPTF += -Ofast
+  else
+    FOPTF += -O3
+    fOPTF += -O3
+  endif
+
+  ifeq ($(USE_OMP),TRUE)
+    FOPTF += -mp
+    fOPTF += -mp
+    FDEBF += -mp
+    fDEBF += -mp
+  endif
+
+  fFLAGS += -extend-source -module $(objEXETempDir)
+  FORT_CPP := cpp -traditional
+  override XTRALIBS += -lpathfortran  #-lmv
+#  LDFLAGS += -static
+else
+ifeq ($(FCOMP),Cray)
+  FC  = crayftn
+  fC  = crayftn
+  F90 = crayftn 
+  FFLAGS +=
+  fFLAGS += -N 132 -I$(objEXETempDir) -J $(objEXETempDir) -em
+  F90FLAGS +=
+  FDEBF += -g -O0
+  fDEBF += -g -O0
+
+  FOPTF += -h fp0 -O vector1
+  fOPTF += -h fp0 -O vector1
+
+  ifneq ($(USE_OMP),TRUE)
+    FOPTF += -h noomp
+    fOPTF += -h noomp
+    FDEBF += -h noomp
+    fDEBF += -h noomp
+  endif
+
+  ifneq ($(USE_ACC),TRUE)
+    FOPTF += -h noacc
+    fOPTF += -h noacc
+    FDEBF += -h noacc
+    fDEBF += -h noacc
+  endif
+
+  FORT_CPP := cpp -traditional
+  override XTRALIBS += 
+#  LDFLAGS += -static
+else
+ifeq ($(FCOMP),Lahey)
+  FC    := lf95 --ml cdecl
+  fC    := $(FC)
+  # FDEBF += -H aesu
+  FDEBF += --chk u
+  FDEBF += --chk
+  fDEBF += --chk u
+  fDEBF += --chk
+  # fOPTF += -K fast
+  LIBRARY_LOCATIONS += /usr/local/lf9561/lib
+  override XTRALIBS += -lfj9f6 -lfj9i6 -lfj9e6
+else
+ifeq ($(FCOMP),Absoft)
+  FC  := f90 -B108 -YEXT_NAMES=LCS
+  fC  := $(FC)
+  LIBRARY_LOCATIONS += /usr/absoft/lib
+  override XTRALIBS += -lfio -lf77math
+  #override FORTLINK := LOWERCASE
+else
+
+ifeq ($(FCOMP),PGI)
+  FC := pgf90
+  fC := $(FC)
+
+  ifeq ($(BL_FAST),TRUE)
+    FOPTF  += -fast
+    fOPTF  += -fast
+  else
+    FOPTF  += -O
+    fOPTF  += -O
+  endif
+
+  ifeq ($(USE_OMP),TRUE)
+    FOPTF += -mp,nonuma -Minfo=mp
+    fOPTF += -mp,nonuma -Minfo=mp
+    FDEBF += -mp,nonuma -Minfo=mp
+    fDEBF += -mp,nonuma -Minfo=mp
+  endif
+
+  ifeq ($(USE_ACC),TRUE)
+    FOPTF += -acc -Minfo=acc
+    fOPTF += -acc -Minfo=acc
+    FDEBF += -acc -Minfo=acc
+    fDEBF += -acc -Minfo=acc
+  endif
+
+  fFLAGS += -Mextend -module $(objEXETempDir) -I$(objEXETempDir)
+  FDEBF += -g #-C
+  fDEBF += -g #-C
+#  LIBRARY_LOCATIONS += /usr/pgi/linux86/lib
+else
+ifeq ($(FCOMP),Intel)
+  # mostly in Make.defs
+  FDEBF += $(INTEL_EXTRA_DEBUG_FLAGS)
+  FOPTF += $(INTEL_EXTRA_OPT_FLAGS)
+  fDEBF += $(INTEL_EXTRA_DEBUG_FLAGS)
+  fOPTF += $(INTEL_EXTRA_OPT_FLAGS)
+else
+ifeq ($(FCOMP),f77)
+  FC       := g77 -fno-second-underscore
+  fC       := $(FC)
+  # default g77/f77 version
+  FOPTF += -O
+  fOPTF += -O
+  FDEBF += -g
+  fDEBF += -g
+  #DEFINES += -DBL_FORT_USE_UNDERSCORE
+  #override XTRALIBS +=  -lf2c
+# LIBRARY_LOCATIONS += /usr/lib/gcc-lib/i386-redhat-linux/2.96
+  override XTRALIBS += -lg2c
+  FDEBF += -ffortran-bounds-check 
+  FDEBF += -Wimplicit
+  fDEBF += -Wimplicit
+  fDEBF += -ffortran-bounds-check
+else
+ifeq ($(FCOMP),xlf)
+
+  ifeq ($(USE_OMP),TRUE)
+    CXX := xlc++_r
+    CC  := xlc_r
+    FC  := xlf_r
+    fC  := xlf_r
+    F90 := xlf90_r
+
+    F90FLAGS += -qsmp=noauto:omp
+    FFLAGS   += -qsmp=noauto:omp
+    CFLAGS   += -qsmp=noauto:omp
+  else
+    CXX := xlc++
+    CC  := xlc
+    FC  := xlf
+    fC  := xlf
+    F90 := xlf90
+  endif
+
+  F90FLAGS += -qsuffix=f=f90 -qfree=f90 -qmoddir=$(fmoddir) -I$(fmoddir)
+
+  ifeq ($(PRECISION),FLOAT)
+    FOPTF += -O2 -qarch=auto -qtune=auto -qmaxmem=-1
+    FDEBF += -g
+    fOPTF += -O2 -qarch=auto -qtune=auto -qmaxmem=-1
+    fDEBF += -g -C
+  else
+    FOPTF += -O2 -qdpc -qarch=auto -qtune=auto -qmaxmem=-1
+    FDEBF += -qdpc -g
+    fOPTF += -O2 -qdpc -qarch=auto -qtune=auto -qmaxmem=-1
+    fDEBF += -qdpc -g -C
+  endif
+
+  override FORTLINK := LOWERCASE
+  NEEDS_FLUSH_F := TRUE
+endif
+endif
+endif
+endif
+endif
+endif
+endif
+endif
+#
+# Overrides for specific machines.
+#
+ifeq ($(WHICHLINUX), RANGER)
+  DEFINES += -DMPICH_SKIP_MPICXX
+  ifeq ($(USE_MPI),TRUE)
+    CXX := mpicxx
+    FC  := mpif90
+    F90 := mpif90
+    fC  := mpif90 
+  endif
+endif
+
+ifeq ($(WHICHLINUX), DARTER)
+  DEFINES += -DMPICH_SKIP_MPICXX
+  ifeq ($(USE_MPI),TRUE)
+    CXX := CC
+    FC  := ftn
+    F90 := ftn
+    fC  := ftn
+  endif
+endif
+
+ifeq ($(WHICHLINUX), GRACE)
+  DEFINES += -DMPICH_SKIP_MPICXX
+  ifeq ($(USE_MPI),TRUE)
+    CXX := CC -target=linux
+    CC  := cc -target=linux
+    FC  := ftn -target=linux
+    F90 := ftn -target=linux
+    fC  := ftn -target=linux
+  endif
+endif
+
+ifeq ($(WHICHLINUX), ORION)
+  DEFINES += -DMPICH_SKIP_MPICXX
+  ifeq ($(USE_MPI),TRUE)
+    CXX := mpicxx
+  endif
+endif
+
+ifeq ($(WHICHLINUX), CARVER)
+  DEFINES += -DMPICH_SKIP_MPICXX
+  ifeq ($(USE_MPI),TRUE)
+    CXX := mpiCC
+    FC  := mpif90
+    F90 := mpif90
+    fC  := mpif90
+  endif
+endif
+
+ifeq ($(WHICHLINUX), FREEDOM)
+  DEFINES += -DMPICH_SKIP_MPICXX
+  ifeq ($(USE_MPI),TRUE)
+    CXX := CC -target=linux
+    CC  := cc -target=linux
+    FC  := ftn -target=linux
+    F90 := ftn -target=linux
+    fC  := ftn -target=linux
+  endif
+endif
+
+ifeq ($(WHICHLINUX), HOPPER)
+  DEFINES += -DMPICH_SKIP_MPICXX
+  DEFINES += -DBL_HOPPER
+  ifeq ($(USE_MPI),TRUE)
+    CXX := CC -target=linux
+    CC  := cc -target=linux
+    FC  := ftn -target=linux
+    F90 := ftn -target=linux
+    fC  := ftn -target=linux
+  endif
+  ifeq ($(USE_IPM),TRUE)
+    ifeq ($(COMP),PGI)
+      LIBRARIES += $(IPM)
+    else
+      LIBRARIES += $(IPM_GNU)
+    endif
+  endif
+  ifeq ($(USE_DUMPI),TRUE)
+    LIBRARIES += $(DUMPI_LINK_OPTS)
+  endif
+endif
+
+ifeq ($(WHICHLINUX), GARNET)
+  DEFINES += -DMPICH_SKIP_MPICXX
+  ifeq ($(USE_MPI),TRUE)
+    CXX := CC -target=linux
+    CC  := cc -target=linux
+    FC  := ftn -target=linux
+    F90 := ftn -target=linux
+    fC  := ftn -target=linux
+  endif
+  ifeq ($(USE_IPM),TRUE)
+    ifeq ($(COMP),PGI)
+      LIBRARIES += $(IPM)
+    else
+      LIBRARIES += $(IPM_GNU)
+    endif
+  endif
+endif
+
+ifeq ($(WHICHLINUX), HERA)
+  DEFINES += -DMPICH_SKIP_MPICXX
+  ifeq ($(USE_MPI),TRUE)
+    CXX := mpig++
+    CC  := gcc
+    FC  := gfortran
+    F90 := gfortran
+    fC  := gfortran
+  endif
+endif
+
+ifeq ($(WHICHLINUX), CAB)
+  DEFINES += -DMPICH_SKIP_MPICXX
+  ifeq ($(USE_MPI),TRUE)
+    ifeq ($(COMP), Intel)
+      CXX := mpiicc
+      CC  := mpiicc
+      F90 := mpiifort
+      FC  := mpiifort
+      fC  := mpiifort
+    else
+      CXX := mpiCC
+      CC  := gcc
+      FC  := gfortran
+      F90 := gfortran
+      fC  := gfortran
+    endif
+  endif
+endif
+
+ifeq ($(WHICHLINUX), EDISON)
+  DEFINES += -DMPICH_SKIP_MPICXX
+  ifeq ($(USE_MPI),TRUE)
+    CXX := CC 
+    CC  := cc 
+    FC  := ftn
+    F90 := ftn
+    fC  := ftn
+  endif
+  ifeq ($(USE_IPM),TRUE)
+    ifeq ($(COMP),PGI)
+      LIBRARIES += $(IPM)
+    else
+      LIBRARIES += $(IPM_GNU)
+    endif
+  endif
+  ifeq ($(USE_DUMPI),TRUE)
+    LIBRARIES += $(DUMPI_LINK_OPTS)
+  endif
+endif
+
+ifeq ($(HOSTNAME), hyades.ucsc.edu)
+  ifeq ($(USE_MPI),TRUE)
+    ifeq ($(COMP), Intel)
+      CXX := mpiicc
+      CC  := mpiicc
+      F90 := mpiifort
+      FC := mpiifort
+      fC := mpiifort
+      
+      ifeq ($(USE_OMP),TRUE)
+        CXXOPTF += -mt_mpi
+	CXXDEBF += -mt_mpi
+	LDFLAGS += -mt_mpi
+	F90FLAGS += -mt_mpi
+	FFLAGS += -mt_mpi
+	fFLAGS += -mt_mpi
+      endif
+    else
+      CXX := mpicxx
+      CC  := mpicc
+      F90 := mpifc
+      FC := mpifc
+      fC := mpifc
+    endif
+  endif
+endif 
+
+ifeq ($(WHICHLINUX), JVN)
+  ifeq ($(COMP),Intel)
+    CXX = icc
+    CXXOPTF +=
+    CXXDEBF += -g
+    ifeq ($(USE_MPI),TRUE)
+      CXX = mpiCC
+    endif
+  endif
+endif
+
+
+ifeq ($(WHICHLINUX), HYPERION)
+  ifeq ($(COMP),Intel)
+    CXX = icpc
+    CXXOPTF = -O3 -ip -mp
+    CXXDEBF = -g
+    ifeq ($(USE_MPI),TRUE)
+# MAS: 4.17.2008
+# works for chaos3, but doesn't seem to work for chaos4, so hard
+# code everything contained in this mpiicpc script -- to see what's
+# contained in mpiicpc script, type "mpiicpc -show"
+#      CXX = mpiicpc
+      CXX = icpc -Wl,-rpath,/usr/local/tools/mvapich-intel/lib/shared \
+	    -DUSE_STDARG -DHAVE_STDLIB_H=1 -DHAVE_STRING_H=1 \
+            -DHAVE_UNISTD_H=1 -DHAVE_STDARG_H=1 -DUSE_STDARG=1 \
+	    -DMALLOC_RET_VOID=1 -I/usr/local/tools/mvapich-intel/include \
+	    -L/usr/local/tools/mvapich-intel/lib/shared -L/usr/lib64 \
+	    -L/usr/local/tools/mvapich-intel/lib
+      CXX = icpc -Wl,-rpath,/usr/local/tools/mvapich-intel/lib/shared \
+            -DUSE_STDARG -DHAVE_STDLIB_H=1 -DHAVE_STRING_H=1 -DHAVE_UNISTD_H=1 \
+            -DHAVE_STDARG_H=1 -DUSE_STDARG=1 -DMALLOC_RET_VOID=1 \
+            -I/usr/local/tools/mvapich-intel/include \
+            -L/usr/local/tools/mvapich-intel/lib/shared -L/usr/lib64 \
+            -L/usr/local/tools/mvapich-intel/lib -lmpich -i-dynamic
+    endif
+  endif
+  ifeq ($(FCOMP),Intel)
+    FOPTF = -O3 -ip -mp
+    fOPTF = -O3 -ip -mp
+  endif
+  ifeq ($(COMP),PGI)
+    CXX = pgCC
+    CXXOPTF = -fast
+    CXXDEBF = -g
+    FC = pgf90
+    fC = pgf90
+    ifeq ($(USE_MPI),TRUE)
+      CXX = mpipgCC
+    endif
+  endif
+endif
+
+ifeq ($(WHICHLINUX), HOMER)
+  ifeq ($(USE_MPI),TRUE)
+    CXX = mpicxx
+    FC = mpif90 -module $(fmoddir)
+    fC = mpif90 -module $(fmoddir)    
+  endif
+endif
+
+ifeq ($(WHICHLINUX), COLUMBIA)
+  FOPTF   = -O3
+  fOPTF   = -O3
+  CXXOPTF = -O3
+  ifeq ($(COMP),Intel)
+    FOPTF   += -ip
+    fOPTF   += -ip
+    CXXOPTF += -ip
+  endif
+  DEFINES += -DCOLUMBIA
+endif
+
+ifeq ($(WHICHLINUX), ALPHACLUSTER)
+  FC  := fort -assume nounderscore
+#  FC  := fort
+  fC  := $(FC)
+  override FORTLINK := LOWERCASE
+  #FOPTF += -O5 -fast -transform_loops -speculate all -automatic
+  FOPTF = -O5 -fast
+  FOPTF = -O2
+  fOPTF = -O5 -fast
+  fOPTF = -O2
+  LIBRARY_LOCATIONS += /usr/local/pkg/gcc-2.95.1-generic/lib/gcc-lib/alpha-redhat-linux/2.95.1
+             #  this should be made into a link to the current version  ^^^^^^
+  LIBRARIES += -lfor
+endif
+
+CXXPRFF += -pg
+FPRF    += -pg
+
+override XTRALIBS += -lm
+
+ifeq ($(FCOMP), gfortran)
+  ifeq ($(__gcc_major_version),4)
+    ifeq ($(__gcc_minor_version),9)
+      override XTRALIBS += -lquadmath
+    endif
+  endif
+endif
+
+ifeq ($(WHICHLINUX), PCCLUSTER)
+  LIBRARY_LOCATIONS += /usr/local/pkg/gcc/lib/gcc-lib/i686-pc-linux-gnu/2.95.1
+             #  this should be made into a link to the current version  ^^^^^^
+endif
+
+# These are the machines in Gottingen
+ifeq ($(HOST), c1) 
+  CXX = mpic++   
+  FC  = mpif90
+endif    
+ifeq ($(HOST), c2) 
+  CXX = mpic++   
+  FC  = mpif90
+endif    
+ifeq ($(HOST), c3) 
+  CXX = mpic++   
+  FC  = mpif90
+endif    
+ifeq ($(HOST), c4) 
+  CXX = mpic++   
+  FC  = mpif90
+endif    
+
