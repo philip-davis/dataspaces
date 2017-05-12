@@ -68,7 +68,8 @@ enum lock_service {
         lock_unknown = 0,
         lock_generic,
         lock_custom,
-        lock_v3
+        lock_v3,
+        _lock_type_count
 };
 
 enum lock_state {
@@ -583,6 +584,7 @@ void lock_init_v3(struct dsg_lock *dl, int max_readers)
 
         dl->wr_epoch = 0;
 
+        uloga("Initializing lock type 3\n");
 
 }
 
@@ -995,6 +997,7 @@ static struct dsg_lock * dsg_lock_alloc(const char *lock_name,
 	}
 	memset(dl, 0, sizeof(*dl));
 
+    uloga("Allocating lock type %d\n", lock_type);
 	strncpy(dl->lk_name, lock_name, sizeof(dl->lk_name));
 	INIT_LIST_HEAD(&dl->wait_list);
 
@@ -1064,7 +1067,7 @@ static int dsgrpc_lock_service(struct rpc_server *rpc, struct rpc_cmd *cmd)
 
 	if (!dl) {
 		dl = dsg_lock_alloc(lh->name, 
-			(ds_conf.lock_type == 1) ? lock_generic : lock_custom, 
+			ds_conf.lock_type, 
 			ds_conf.max_readers);
 		/*
 		struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
@@ -2074,7 +2077,7 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name, void *comm)
         if (ds_conf.ndim > BBOX_MAX_NDIM) {
             uloga("%s(): ERROR maximum number of array dimension is %d but ndim is %d"
                 " in file '%s'\n", __func__, BBOX_MAX_NDIM, ds_conf.ndim, conf_name);
-            err = -ENOMEM;
+            err = -EINVAL;
             goto err_out;
         }
 
@@ -2083,9 +2086,17 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name, void *comm)
             (ds_conf.hash_version >= _ssd_hash_version_count)) {
             uloga("%s(): ERROR unknown hash version %d in file '%s'\n",
                 __func__, ds_conf.hash_version, conf_name);
-            err = -ENOMEM;
+            err = -EINVAL;
             goto err_out;
         }
+
+       if((ds_conf.lock_type < lock_generic) ||
+            (ds_conf.lock_type >= _lock_type_count)) {
+            uloga("%s(): ERROR unknown lock type %d in file '%s'\n",
+                __func__, ds_conf.lock_type, conf_name);
+            err = -EINVAL;
+            goto err_out;
+        } 
 
         struct bbox domain;
         memset(&domain, 0, sizeof(struct bbox));
