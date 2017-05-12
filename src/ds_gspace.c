@@ -68,7 +68,8 @@ struct req_pending {
 enum lock_service {
         lock_unknown = 0,
         lock_generic,
-        lock_custom
+        lock_custom,
+        lock_v3
 };
 
 enum lock_state {
@@ -569,6 +570,20 @@ void sem_init(struct dsg_lock *dl, int max_readers)
         dl->wr_epoch = 0;
 }
 
+/*
+  Lock v3 service.
+*/
+void lock_init_v3(struct dsg_lock *dl, int max_readers)
+{
+
+        dl->rd_lock_state = 
+        dl->wr_lock_state = unlocked;
+
+        dl->rd_cnt = 0;
+        dl->wr_cnt = 1;
+
+}
+
 static int dsg_lock_put_on_wait(struct dsg_lock *dl, struct rpc_cmd *cmd)
 {
         struct req_pending *rr;
@@ -789,6 +804,84 @@ static int sem_process_wait_list(struct dsg_lock *dl)
         ERROR_TRACE();
 }
 
+static enum lock_action 
+lock_process_request_v3(struct dsg_lock *dl, struct lockhdr *lh, int may_grant)
+{
+        enum lock_action f_lock = la_none;
+
+        switch (lh->type) {
+        case lk_read_get:
+                if (dl->wr_lock_state == unlocked && dl->wr_cnt == 0 && may_grant) {
+                        dl->rd_lock_state = locked;
+                        dl->rd_cnt++;
+                        f_lock = la_grant;
+                }
+        else    f_lock = la_wait;
+                break;
+
+        case lk_read_release:
+                dl->rd_cnt--;
+                if (dl->rd_cnt == 0) {
+                        dl->rd_lock_state = unlocked;
+                        f_lock = la_notify;
+                }
+                break;
+
+        case lk_write_get:
+                if (dl->rd_lock_state == unlocked && dl->wr_cnt == 1) { 
+                        dl->wr_lock_state = locked;
+                        dl->wr_cnt--;
+                        f_lock = la_grant;
+                }
+        else    f_lock = la_wait;
+                break;
+
+        case lk_write_release:
+                dl->wr_cnt = 1;
+                dl->wr_lock_state = unlocked;
+                f_lock = la_notify;
+        }
+
+        return f_lock;
+}
+
+static int lock_process_wait_list_v3(struct dsg_lock *dl)
+{
+        struct req_pending *rr; // , *tmp;
+        struct lockhdr *lh;
+        struct node_id *peer;
+        int err;
+
+        while (! list_empty(&dl->wait_list)) {
+                rr = list_entry(dl->wait_list.next, 
+                                struct req_pending, req_entry);
+
+                lh = (struct lockhdr *) rr->cmd.pad;
+                switch (lock_process_request(dl, lh, 1)) {
+                case la_none:
+                        /* Nothing to do. Yeah ... this should not happen! */
+                case la_wait:
+                        return 0;
+
+                case la_grant:
+                        peer = ds_get_peer(dsg->ds, rr->cmd.id);
+                        err = dsg_lock_grant(peer, lh);
+                        if (err < 0)
+                                goto err_out;
+                        break;
+
+                case la_notify:
+                        break;
+                }
+
+                list_del(&rr->req_entry);
+                free(rr);
+        }
+
+        return 0;
+ err_out:
+        ERROR_TRACE();
+}
 
 static int 
 lock_service(struct dsg_lock *dl, struct rpc_server *rpc, struct rpc_cmd *cmd)
@@ -853,6 +946,38 @@ sem_service(struct dsg_lock *dl, struct rpc_server *rpc, struct rpc_cmd *cmd)
         ERROR_TRACE();
 }
 
+static int 
+lock_service_v3(struct dsg_lock *dl, struct rpc_server *rpc, struct rpc_cmd *cmd)
+{
+        struct lockhdr *lh = (struct lockhdr *) cmd->pad;
+        struct node_id *peer;
+        int err = 0;
+
+        switch (lock_process_request_v3(dl, lh, list_empty(&dl->wait_list))) {
+
+        case la_none:
+        break;
+
+        case la_wait:
+                err = dsg_lock_put_on_wait(dl, cmd);
+                break;
+
+        case la_notify:
+                err = lock_process_wait_list_v3(dl);
+                break;
+
+        case la_grant:
+                peer = ds_get_peer(dsg->ds, cmd->id);
+                err = dsg_lock_grant(peer, lh);
+                break;
+        }
+
+        if (err == 0)
+                return 0;
+// err_out:
+        ERROR_TRACE();
+}
+
 static struct dsg_lock * dsg_lock_alloc(const char *lock_name,
 	enum lock_service lock_type, int max_readers)
 {
@@ -890,7 +1015,12 @@ static struct dsg_lock * dsg_lock_alloc(const char *lock_name,
 			__func__, lock_name);
 #endif
                 break;
-
+        case lock_v3:
+                dl->init = &lock_init_v3;
+                dl->process_request = &lock_process_request_v3;
+                dl->process_wait_list = &lock_process_wait_list_v3;
+                dl->service = &lock_service_v3;
+                break;
 	default:
 		// TODO: ERROR here, this should not happen. 
 		break;
