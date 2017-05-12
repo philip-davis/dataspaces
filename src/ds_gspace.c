@@ -579,8 +579,11 @@ void lock_init_v3(struct dsg_lock *dl, int max_readers)
         dl->rd_lock_state = 
         dl->wr_lock_state = unlocked;
 
-        dl->rd_cnt = 0;
-        dl->wr_cnt = 1;
+        dl->rd_cnt =
+        dl->wr_cnt = 0;
+
+        dl->wr_epoch = 0;
+
 
 }
 
@@ -811,7 +814,7 @@ lock_process_request_v3(struct dsg_lock *dl, struct lockhdr *lh, int may_grant)
 
         switch (lh->type) {
         case lk_read_get:
-                if (dl->wr_lock_state == unlocked && dl->wr_cnt == 0 && may_grant) {
+                if (dl->wr_lock_state == unlocked && dl->wr_epoch > 0 && may_grant) {
                         dl->rd_lock_state = locked;
                         dl->rd_cnt++;
                         f_lock = la_grant;
@@ -828,18 +831,21 @@ lock_process_request_v3(struct dsg_lock *dl, struct lockhdr *lh, int may_grant)
                 break;
 
         case lk_write_get:
-                if (dl->rd_lock_state == unlocked && dl->wr_cnt == 1) { 
+                if (dl->rd_lock_state == unlocked && dl->wr_cnt == 0) { 
                         dl->wr_lock_state = locked;
-                        dl->wr_cnt--;
+                        dl->wr_cnt++;
                         f_lock = la_grant;
                 }
         else    f_lock = la_wait;
                 break;
 
         case lk_write_release:
-                dl->wr_cnt = 1;
-                dl->wr_lock_state = unlocked;
-                f_lock = la_notify;
+                dl->wr_cnt--;
+                if (dl->wr_cnt == 0) {
+                        dl->wr_lock_state = unlocked;
+                        dl->wr_epoch++;
+                        f_lock = la_notify;
+                }
         }
 
         return f_lock;
@@ -857,7 +863,7 @@ static int lock_process_wait_list_v3(struct dsg_lock *dl)
                                 struct req_pending, req_entry);
 
                 lh = (struct lockhdr *) rr->cmd.pad;
-                switch (lock_process_request(dl, lh, 1)) {
+                switch (lock_process_request_v3(dl, lh, 1)) {
                 case la_none:
                         /* Nothing to do. Yeah ... this should not happen! */
                 case la_wait:
