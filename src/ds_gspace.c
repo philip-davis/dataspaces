@@ -585,8 +585,6 @@ void lock_init_v3(struct dsg_lock *dl, int max_readers)
 
         dl->wr_epoch = 0;
 
-        uloga("Initializing lock type 3\n");
-
 }
 
 static int dsg_lock_put_on_wait(struct dsg_lock *dl, struct rpc_cmd *cmd)
@@ -998,7 +996,6 @@ static struct dsg_lock * dsg_lock_alloc(const char *lock_name,
 	}
 	memset(dl, 0, sizeof(*dl));
 
-    uloga("Allocating lock type %d\n", lock_type);
 	strncpy(dl->lk_name, lock_name, sizeof(dl->lk_name));
 	INIT_LIST_HEAD(&dl->wait_list);
 
