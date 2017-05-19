@@ -651,6 +651,13 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
     ds->dart_ref = dart_ref;
     INIT_LIST_HEAD(&ds->app_list);
 
+    if(comm) {
+        ds->comm = malloc(sizeof(*ds->comm));
+        MPI_Comm_dup(*(MPI_Comm *)comm, ds->comm);
+    } else {
+        ds->comm = NULL;    
+    }
+
     char *interface = getenv("DATASPACES_TCP_INTERFACE");
     ds->rpc_s = rpc_server_init(interface, ds->size_sp, ds, DART_SERVER);
     if (ds->rpc_s == NULL) {
@@ -705,6 +712,10 @@ void ds_free(struct dart_server* ds) {
     list_for_each_entry_safe(app, t, &ds->app_list, struct app_info, app_entry) {
         list_del(&app->app_entry);
         free(app);
+    }
+
+    if(ds->comm) {
+        free(ds->comm);
     }
 
     free(ds);

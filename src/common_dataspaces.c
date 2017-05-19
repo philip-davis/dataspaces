@@ -129,7 +129,7 @@ int common_dspaces_init(int num_peers, int appid, void *comm, const char *parame
 		return err;
 	}
 
-	err = dcg_ss_info(dcg, &num_dims); 
+	err = dcg_ss_info(dcg, &num_dims);
 	if (err < 0) {
 		uloga("%s(): failed to obtain space info.\n", __func__);
 		return err;
