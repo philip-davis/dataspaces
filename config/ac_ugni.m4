@@ -76,6 +76,8 @@ if test "x$enable_drc" = "xyes" ; then
     have_drc=yes
     DRC_CPPFLAGS=$(pkg-config cray-drc --cflags 2>/dev/null)
     DRC_LIBS=$(pkg-config cray-drc --libs 2>/dev/null)
+else
+    AM_CONDITIONAL(HAVE_DRC,false)
 fi
 
 CPPFLAGS="$CPPFLAGS $PMI_CPPFLAGS $UGNI_CPPFLAGS $DRC_CPPFLAGS"
@@ -118,6 +120,8 @@ AC_SUBST(DRC_LIBS)
 if test "${CRAYPE_NETWORK_TARGET}" = aries -o \
         "${XTPE_NETWORK_TARGET}" = aries; then
     AM_CONDITIONAL(HAVE_ARIES, true)
+else
+    AM_CONDITIONAL(HAVE_ARIES, false)
 fi
 
 # Finally, execute ACTION-IF-FOUND/ACTION-IF-NOT-FOUND:
