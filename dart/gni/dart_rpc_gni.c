@@ -37,6 +37,7 @@
 #include <errno.h>
 #include "dart_rpc_gni.h"
 #include "debug.h"
+#include "inttypes.h"
 //#include "gni_pub.h"
 //#include "pmi.h"
 
