@@ -100,17 +100,6 @@ if test "x$enable_dimes" == "xyes"; then
         fi
 fi
 
-dnl added for Aries EOS
-dnl Check if it is Aries network
-AC_ARG_ENABLE(aries,
-    [AS_HELP_STRING([--enable-aries],
-        [Build Dart on Aries network. ])])
-if test "x$enable_aries" == "xyes"; then
-	AC_DEFINE(DS_HAVE_ARIES, 1, [uGNI-Aires is enabled])
-	echo "uGNI Aries version enabled!"
-fi
-dnl AM_CONDITIONAL(DS_HAVE_ARIES, true) 
-
 dnl Check the max array dimension
 
 if test -z "${HAVE_UGNI_TRUE}"; then
@@ -122,6 +111,10 @@ if test -z "${HAVE_UGNI_TRUE}"; then
   DSPACESLIB_CFLAGS+=""
   DSPACESLIB_LDFLAGS+=" ${UGNI_LDFLAGS}"
   DSPACESLIB_LDADD+=" ${UGNI_LIBS}"
+  if test -z "${HAVE_DRC_TRUE}" ; then
+    DSPACESLIB_CPPFLAGS+=" ${DRC_CPPFLAGS}"
+    DSPACESLIB_LDADD+=" ${DRC_LIBS}"
+  fi
 fi
 
 if test -z "${HAVE_PORTALS_TRUE}"; then
@@ -173,12 +166,19 @@ AC_OUTPUT
 echo "Network transport layer"
 if test -z "${HAVE_UGNI_TRUE}"; then
   echo "Cray UGNI enabled.";
-  echo "	- CRAY_PMI_CPPFLAGS = $PMI_CPPFLAGS";
-  echo "	- CRAY_PMI_LDFLAGS = $PMI_LDFLAGS";
-  echo "	- CRAY_PMI_LIBS = $PMI_LIBS";
-  echo "	- CRAY_UGNI_CPPFLAGS = $UGNI_CPPFLAGS";
-  echo "	- CRAY_UGNI_LDFLAGS = $UGNI_LDFLAGS";
-  echo "	- CRAY_UGNI_LIBS = $UGNI_LIBS";
+  echo "    - CRAY_PMI_CPPFLAGS = $PMI_CPPFLAGS";
+  echo "    - CRAY_PMI_LDFLAGS = $PMI_LDFLAGS";
+  echo "    - CRAY_PMI_LIBS = $PMI_LIBS";
+  echo "    - CRAY_UGNI_CPPFLAGS = $UGNI_CPPFLAGS";
+  echo "    - CRAY_UGNI_LDFLAGS = $UGNI_LDFLAGS";
+  echo "    - CRAY_UGNI_LIBS = $UGNI_LIBS";
+  if test -z "${HAVE_ARIES_TRUE}" ; then
+    echo "uGNI Aries version enabled."
+  fi
+  if test -z "${HAVE_DRC_TRUE}" ; then
+    echo "    - CRAY_DRC_CPPFLAGS = $DRC_CPPFLAGS";
+    echo "    - CRAY_DRC_LIBS = $DRC_LIBS";
+  fi
 else
   echo "No Cray UGNI."
 fi
