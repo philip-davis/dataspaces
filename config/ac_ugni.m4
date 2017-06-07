@@ -47,6 +47,9 @@ AC_ARG_WITH(ugni-libdir,
 	[ac_ugni_lib_ok=no;
 	 UGNI_LDFLAGS="-I$withval";])
 
+AC_ARG_ENABLE([drc],
+    AS_HELP_STRING([--enable-drc], [Enable Cray Dynamic RDMA Credential]))
+
 PMI_LIBS="-lpmi"
 UGNI_LIBS="-lugni"
 save_CPPFLAGS="$CPPFLAGS"
@@ -69,13 +72,31 @@ if test x"$ac_ugni_lib_ok" = xno; then
 	UGNI_LDFLAGS=$(pkg-config cray-ugni --libs-only-L 2>/dev/null)
 fi
 
-CPPFLAGS="$CPPFLAGS $PMI_CPPFLAGS $UGNI_CPPFLAGS"
+if test "x$enable_drc" = "xyes" ; then 
+    have_drc=yes
+    DRC_CPPFLAGS=$(pkg-config cray-drc --cflags 2>/dev/null)
+    DRC_LIBS=$(pkg-config cray-drc --libs 2>/dev/null)
+fi
+
+CPPFLAGS="$CPPFLAGS $PMI_CPPFLAGS $UGNI_CPPFLAGS $DRC_CPPFLAGS"
 LDFLAGS="$LDFLAGS $PMI_LDFLAGS $UGNI_LDFLAGS"
-LIBS="$LIBS -lpmi -lugni"
+LIBS="$LIBS -lpmi -lugni $DRC_LIBS"
 
 AC_CHECK_HEADERS(pmi.h, [:], [have_ugni=no])
 AC_CHECK_HEADERS(gni_pub.h, [:], [have_ugni=no])
 
+if test "x$enable_drc" = "xyes" ; then
+    AC_CHECK_HEADERS("rdmacred.h", [:], [have_drc=no])
+    AC_CHECK_LIB([drc], [drc_acquire], [:], [have_drc=no])
+fi
+
+if test "x$have_drc" = "xyes" ; then
+    AM_CONDITIONAL(HAVE_DRC,true)
+    AC_DEFINE([DS_HAVE_DRC], [1],
+        ["uGNI Dynamic Credentials is enabled"])
+elif test "x$have_drc" = "xno" ; then
+    AC_MSG_ERROR([Dynamic Credentials enabled, but not found on this machine.])
+fi
 
 if test "$have_ugni" = no; then
   AM_CONDITIONAL(HAVE_UGNI,false)
@@ -91,11 +112,20 @@ AC_SUBST(PMI_LIBS)
 AC_SUBST(UGNI_CPPFLAGS)
 AC_SUBST(UGNI_LDLAGS)
 AC_SUBST(UGNI_LIBS)
+AC_SUBST(DRC_CPPFLAGS)
+AC_SUBST(DRC_LIBS)
+
+if test "${CRAYPE_NETWORK_TARGET}" = aries -o \
+        "${XTPE_NETWORK_TARGET}" = aries; then
+    AM_CONDITIONAL(HAVE_ARIES, true)
+fi
 
 # Finally, execute ACTION-IF-FOUND/ACTION-IF-NOT-FOUND:
 if test -z "${HAVE_UGNI_TRUE}"; then
         ifelse([$1],,[AC_DEFINE(HAVE_UGNI,1,[Define if you have the Gemini.])],[$1])
-        :
+        if test -z "${HAVE_ARIES_TRUE}" ; then
+            AC_DEFINE(DS_HAVE_ARIES, 1, [uGNI-Aries is enabled])
+        fi         
 else
         $2
         :
