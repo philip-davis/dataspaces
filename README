@@ -146,6 +146,46 @@ Note: if you would like to write your own job script, please add command rm -f c
 srv.lck to your script in order to remove config files from previous run.
 
 
+4. Running DATASPACES with IO configuration file
+-------------------------------------------------
+This is experimental build and currently works with DATASPACES as transport layer only.
+In the test/C directory, you need to specify your IO pattern in the ior.conf file
+The format for the ior.conf is as below:
+
+0 0 lor A 
+0 0 r A 1024  2048
+0 0 uor A
+0 1 low A 
+0 1 w A 1024  2048
+0 1 w A 3048  1024
+0 1 uow A
+
+Here,
+First column is the version number of the variable you want to work with.
+Second column is the Application ID and your IO file should have id's from 0 to n, where n is the number of applicaions
+Third column can be either "r", "w", "lor", "low", "uor", "uor", which represents
+read, write, lock_on_read, lock_on_write, unlock_on_read, unlock_on_write.
+Fourth column is variable name.
+Fifth column is start offset in your 1-D dimention
+Sixth column is the number of elements you want to perform operation upon. Currently elem_size is 8 bytes.
+
+Now start your dataspace server as mentioned in previous section. The important thing to remember is that
+your lock-type should be kept as 3.
+
+You can now lunch your applications as:
+./test_benchmark.sh  -n 2 -f ior.conf -r 1 -p 2
+
+where, -n takes in number of applications running in the DataSpaces
+-f takes in your IO configuration file name
+-r is number of times do you want to repeat this IO trace
+-p is the number of processes per application id
+
+If you run the above command, it means that your ior.conf file has 2 applicaions with ID's 0 and 1
+and each of these applicaions will have 2 processes, and the IO trace for each applicaion will be run only once.
+
+
+
+
 FAQ
 ===
 

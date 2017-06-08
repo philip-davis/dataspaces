@@ -68,7 +68,9 @@ struct req_pending {
 enum lock_service {
         lock_unknown = 0,
         lock_generic,
-        lock_custom
+        lock_custom,
+        lock_v3,
+        _lock_type_count
 };
 
 enum lock_state {
@@ -569,6 +571,22 @@ void sem_init(struct dsg_lock *dl, int max_readers)
         dl->wr_epoch = 0;
 }
 
+/*
+  Lock v3 service.
+*/
+void lock_init_v3(struct dsg_lock *dl, int max_readers)
+{
+
+        dl->rd_lock_state = 
+        dl->wr_lock_state = unlocked;
+
+        dl->rd_cnt =
+        dl->wr_cnt = 0;
+
+        dl->wr_epoch = 0;
+
+}
+
 static int dsg_lock_put_on_wait(struct dsg_lock *dl, struct rpc_cmd *cmd)
 {
         struct req_pending *rr;
@@ -789,6 +807,87 @@ static int sem_process_wait_list(struct dsg_lock *dl)
         ERROR_TRACE();
 }
 
+static enum lock_action 
+lock_process_request_v3(struct dsg_lock *dl, struct lockhdr *lh, int may_grant)
+{
+        enum lock_action f_lock = la_none;
+
+        switch (lh->type) {
+        case lk_read_get:
+                if (dl->wr_lock_state == unlocked && dl->wr_epoch > 0 && may_grant) {
+                        dl->rd_lock_state = locked;
+                        dl->rd_cnt++;
+                        f_lock = la_grant;
+                }
+        else    f_lock = la_wait;
+                break;
+
+        case lk_read_release:
+                dl->rd_cnt--;
+                if (dl->rd_cnt == 0) {
+                        dl->rd_lock_state = unlocked;
+                        f_lock = la_notify;
+                }
+                break;
+
+        case lk_write_get:
+                if (dl->rd_lock_state == unlocked && dl->wr_cnt == 0) { 
+                        dl->wr_lock_state = locked;
+                        dl->wr_cnt++;
+                        f_lock = la_grant;
+                }
+        else    f_lock = la_wait;
+                break;
+
+        case lk_write_release:
+                dl->wr_cnt--;
+                if (dl->wr_cnt == 0) {
+                        dl->wr_lock_state = unlocked;
+                        dl->wr_epoch++;
+                        f_lock = la_notify;
+                }
+        }
+
+        return f_lock;
+}
+
+static int lock_process_wait_list_v3(struct dsg_lock *dl)
+{
+        struct req_pending *rr; // , *tmp;
+        struct lockhdr *lh;
+        struct node_id *peer;
+        int err;
+
+        while (! list_empty(&dl->wait_list)) {
+                rr = list_entry(dl->wait_list.next, 
+                                struct req_pending, req_entry);
+
+                lh = (struct lockhdr *) rr->cmd.pad;
+                switch (lock_process_request_v3(dl, lh, 1)) {
+                case la_none:
+                        /* Nothing to do. Yeah ... this should not happen! */
+                case la_wait:
+                        return 0;
+
+                case la_grant:
+                        peer = ds_get_peer(dsg->ds, rr->cmd.id);
+                        err = dsg_lock_grant(peer, lh);
+                        if (err < 0)
+                                goto err_out;
+                        break;
+
+                case la_notify:
+                        break;
+                }
+
+                list_del(&rr->req_entry);
+                free(rr);
+        }
+
+        return 0;
+ err_out:
+        ERROR_TRACE();
+}
 
 static int 
 lock_service(struct dsg_lock *dl, struct rpc_server *rpc, struct rpc_cmd *cmd)
@@ -853,6 +952,38 @@ sem_service(struct dsg_lock *dl, struct rpc_server *rpc, struct rpc_cmd *cmd)
         ERROR_TRACE();
 }
 
+static int 
+lock_service_v3(struct dsg_lock *dl, struct rpc_server *rpc, struct rpc_cmd *cmd)
+{
+        struct lockhdr *lh = (struct lockhdr *) cmd->pad;
+        struct node_id *peer;
+        int err = 0;
+
+        switch (lock_process_request_v3(dl, lh, list_empty(&dl->wait_list))) {
+
+        case la_none:
+        break;
+
+        case la_wait:
+                err = dsg_lock_put_on_wait(dl, cmd);
+                break;
+
+        case la_notify:
+                err = lock_process_wait_list_v3(dl);
+                break;
+
+        case la_grant:
+                peer = ds_get_peer(dsg->ds, cmd->id);
+                err = dsg_lock_grant(peer, lh);
+                break;
+        }
+
+        if (err == 0)
+                return 0;
+// err_out:
+        ERROR_TRACE();
+}
+
 static struct dsg_lock * dsg_lock_alloc(const char *lock_name,
 	enum lock_service lock_type, int max_readers)
 {
@@ -890,7 +1021,12 @@ static struct dsg_lock * dsg_lock_alloc(const char *lock_name,
 			__func__, lock_name);
 #endif
                 break;
-
+        case lock_v3:
+                dl->init = &lock_init_v3;
+                dl->process_request = &lock_process_request_v3;
+                dl->process_wait_list = &lock_process_wait_list_v3;
+                dl->service = &lock_service_v3;
+                break;
 	default:
 		// TODO: ERROR here, this should not happen. 
 		break;
@@ -929,7 +1065,7 @@ static int dsgrpc_lock_service(struct rpc_server *rpc, struct rpc_cmd *cmd)
 
 	if (!dl) {
 		dl = dsg_lock_alloc(lh->name, 
-			(ds_conf.lock_type == 1) ? lock_generic : lock_custom, 
+			ds_conf.lock_type, 
 			ds_conf.max_readers);
 		/*
 		struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
@@ -2030,7 +2166,7 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         if (ds_conf.ndim > BBOX_MAX_NDIM) {
             uloga("%s(): ERROR maximum number of array dimension is %d but ndim is %d"
                 " in file '%s'\n", __func__, BBOX_MAX_NDIM, ds_conf.ndim, conf_name);
-            err = -ENOMEM;
+            err = -EINVAL;
             goto err_out;
         }
 
@@ -2039,9 +2175,17 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
             (ds_conf.hash_version >= _ssd_hash_version_count)) {
             uloga("%s(): ERROR unknown hash version %d in file '%s'\n",
                 __func__, ds_conf.hash_version, conf_name);
-            err = -ENOMEM;
+            err = -EINVAL;
             goto err_out;
         }
+
+       if((ds_conf.lock_type < lock_generic) ||
+            (ds_conf.lock_type >= _lock_type_count)) {
+            uloga("%s(): ERROR unknown lock type %d in file '%s'\n",
+                __func__, ds_conf.lock_type, conf_name);
+            err = -EINVAL;
+            goto err_out;
+        } 
 
         struct bbox domain;
         memset(&domain, 0, sizeof(struct bbox));
