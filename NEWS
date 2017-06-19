@@ -1,3 +1,8 @@
+1.6.2 Released June 2017
+        - Added support for Cray Dynamic RDMA registration (necessary for Cori.)
+        - Improved support for IBM XL compiler.
+        - Fixed minor bugs.
+
 1.6.1 Released June 2016
 	- Added network support: Aries for Cray XC30
 	- Updated configuration files to support automake-1.12 version and above
