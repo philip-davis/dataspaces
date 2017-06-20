@@ -152,16 +152,16 @@ AC_SUBST(DSPACESLIB_LDADD)
 
 AC_CONFIG_HEADERS(config.h)
 AC_CONFIG_FILES([
-		Makefile
-		dart/Makefile
-		src/Makefile
-		tests/Makefile
-		tests/C/Makefile
-		tests/Fortran/Makefile
-		])
+                Makefile
+                dart/Makefile
+                src/Makefile
+                tests/Makefile
+                tests/C/Makefile
+                tests/Fortran/Makefile
+                scripts/dspaces_config.makesrc
+                ])
 
 AC_OUTPUT
-
 
 echo "Network transport layer"
 if test -z "${HAVE_UGNI_TRUE}"; then
