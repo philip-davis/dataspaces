@@ -1,5 +1,5 @@
 1.6.2 Released June 2017
-        - Added support for Cray Dynamic RDMA registration (necessary for Cori.)
+        - Added support for Cray Dynamic RDMA registration (necessary for Cori: use --enable-drc with configure)
         - Improved support for IBM XL compiler.
         - Fixed minor bugs.
 
