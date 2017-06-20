@@ -141,7 +141,7 @@ void dspaces_define_gdim (const char *var_name,
 int dspaces_put (const char *var_name,
         unsigned int ver, int size,
         int ndim, uint64_t *lb, uint64_t *ub,
-        void *data)
+        const void *data)
 {
     return common_dspaces_put(var_name, ver, size, ndim, lb, ub, data);
 }
