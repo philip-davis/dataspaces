@@ -1,17 +1,24 @@
 #!/bin/bash
 
-DSPACES_INC="-I%incdir% @DSPACESLIB_CPPFLAGS@ @DSPACESLIB_CFLAGS@"
-DSPACES_LIB="-L%libdir% -ldspaces -ldscommon -ldart @DSPACESLIB_LDFLAGS@ @DSPACESLIB_LDADD@ @LDFLAGS@ @LIBS@"
+DSPACES_INC="-I%incdir% @DSPACES_EXT_CPPFLAGS@ @DSPACES_EXT_CFLAGS@"
+DSPACES_LIB="-L%libdir% -ldspaces -ldscommon -ldart @DSPACES_EXT_LDFLAGS@ @DSPACES_EXT_LDADD@ @LDFLAGS@ @LIBS@"
 
 OPTIND=1
 
 PRINT_CFLAGS=no
 PRINT_LDFLAGS=no
 
+function usage() {
+    echo "`basename $0` [-c | -l]
+Arguments
+    -c Compiler flags
+    -l Linker flags"
+}
+
 while getopts "h?cl" opt; do
     case "$opt" in
     h|\?)
-        echo "Placeholder"
+        usage
         exit 0
         ;;
     c)
