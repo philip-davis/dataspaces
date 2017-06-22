@@ -79,6 +79,13 @@ else
   fi
 fi
 
+dnl uGNI and Infiniband are mutually exclusive. 
+dnl This is probably a Cray machine that happens to have working verbs (Cori)
+if test -z "${HAVE_UGNI_TRUE}" -a -z "${HAVE_INFINIBAND_TRUE}" ; then
+    echo "Both Cray UGNI and Infiniband are available...choosing UGNI."
+    AM_CONDITIONAL(HAVE_INFINIBAND, false)
+    AC_DEFINE(HAVE_INFINIBAND, 0, [])
+fi
 
 dnl Check if DIMES is enabled
 AC_ARG_ENABLE(dimes,
