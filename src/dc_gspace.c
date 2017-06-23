@@ -1527,7 +1527,7 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
         /* Added for ccgrid demo. */
         rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);	
 
-#ifdef HAVE_INFINIBAND
+#if HAVE_INFINIBAND
         dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
 #elif HAVE_PAMI
         dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
