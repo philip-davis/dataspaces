@@ -96,19 +96,25 @@ AM_CONDITIONAL([DIMES], [test "x$enable_dimes" == "xyes"])
 if test "x$enable_dimes" == "xyes"; then
         if test -z "${HAVE_UGNI_TRUE}"; then
             AC_DEFINE(DS_HAVE_DIMES, 1, [DIMES is enabled])
+            AM_CONDITIONAL(BUILD_DIMES, true)
             echo "DIMES enabled!"
         elif test -z "${HAVE_DCMF_TRUE}"; then
             AC_DEFINE(DS_HAVE_DIMES, 1, [DIMES is enabled])
+            AM_CONDITIONAL(BUILD_DIMES, true)
             echo "DIMES enabled!"
         elif test -z "${HAVE_PAMI_TRUE}"; then
             AC_DEFINE(DS_HAVE_DIMES, 1, [DIMES is enabled])
+            AM_CONDITIONAL(BUILD_DIMES, true)
             echo "DIMES enabled!"
         elif test -z "${HAVE_INFINIBAND_TRUE}"; then
             AC_DEFINE(DS_HAVE_DIMES, 1, [DIMES is enabled])
+            AM_CONDITIONAL(BUILD_DIMES, true)
             echo "DIMES enabled!"
         else
             echo "DIMES only supported on Cray UGNI, IBM PAMI, IBM DCMF"
         fi
+else
+        AM_CONDITIONAL(BUILD_DIMES, false)
 fi
 
 dnl Check the max array dimension
