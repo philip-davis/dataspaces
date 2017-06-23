@@ -1,4 +1,4 @@
-AC_INIT([dataspaces],[1.6.1])
+AC_INIT([dataspaces],[1.6.2])
 AC_CONFIG_AUX_DIR(config)
 
 dnl AM_INIT_AUTOMAKE([-Wall -Wno-extra-portability -Werror subdir-objects foreign])
@@ -9,6 +9,8 @@ AC_PROG_CXX
 AC_PROG_FC
 AC_PROG_RANLIB
 AM_PROG_CC_C_O
+
+AC_FC_WRAPPERS
 
 m4_ifdef([AM_PROG_AR],[AM_PROG_AR])
 
@@ -31,7 +33,11 @@ DSPACESLIB_CFLAGS=
 DSPACESLIB_CPPFLAGS=
 DSPACESLIB_LDFLAGS=
 DSPACESLIB_LDADD=
-
+dnl These flags will be present in the output of dspaces_config
+DSPACES_EXT_CFLAGS=
+DSPACES_EXT_CPPFLAGS=
+DSPACES_EXT_LDFLAGS=
+DSPACES_EXT_LDADD=
 
 dnl Check if DART_TCP is enabled
 AC_ARG_ENABLE(dart_tcp,
@@ -73,6 +79,13 @@ else
   fi
 fi
 
+dnl uGNI and Infiniband are mutually exclusive. 
+dnl This is probably a Cray machine that happens to have working verbs (Cori)
+if test -z "${HAVE_UGNI_TRUE}" -a -z "${HAVE_INFINIBAND_TRUE}" ; then
+    echo "Both Cray UGNI and Infiniband are available...choosing UGNI."
+    AM_CONDITIONAL(HAVE_INFINIBAND, false)
+    AC_DEFINE(HAVE_INFINIBAND, 0, [])
+fi
 
 dnl Check if DIMES is enabled
 AC_ARG_ENABLE(dimes,
@@ -83,31 +96,26 @@ AM_CONDITIONAL([DIMES], [test "x$enable_dimes" == "xyes"])
 if test "x$enable_dimes" == "xyes"; then
         if test -z "${HAVE_UGNI_TRUE}"; then
             AC_DEFINE(DS_HAVE_DIMES, 1, [DIMES is enabled])
+            AM_CONDITIONAL(BUILD_DIMES, true)
             echo "DIMES enabled!"
         elif test -z "${HAVE_DCMF_TRUE}"; then
             AC_DEFINE(DS_HAVE_DIMES, 1, [DIMES is enabled])
+            AM_CONDITIONAL(BUILD_DIMES, true)
             echo "DIMES enabled!"
         elif test -z "${HAVE_PAMI_TRUE}"; then
             AC_DEFINE(DS_HAVE_DIMES, 1, [DIMES is enabled])
+            AM_CONDITIONAL(BUILD_DIMES, true)
             echo "DIMES enabled!"
         elif test -z "${HAVE_INFINIBAND_TRUE}"; then
             AC_DEFINE(DS_HAVE_DIMES, 1, [DIMES is enabled])
+            AM_CONDITIONAL(BUILD_DIMES, true)
             echo "DIMES enabled!"
         else
             echo "DIMES only supported on Cray UGNI, IBM PAMI, IBM DCMF"
         fi
+else
+        AM_CONDITIONAL(BUILD_DIMES, false)
 fi
-
-dnl added for Aries EOS
-dnl Check if it is Aries network
-AC_ARG_ENABLE(aries,
-    [AS_HELP_STRING([--enable-aries],
-        [Build Dart on Aries network. ])])
-if test "x$enable_aries" == "xyes"; then
-	AC_DEFINE(DS_HAVE_ARIES, 1, [uGNI-Aires is enabled])
-	echo "uGNI Aries version enabled!"
-fi
-dnl AM_CONDITIONAL(DS_HAVE_ARIES, true) 
 
 dnl Check the max array dimension
 
@@ -120,6 +128,12 @@ if test -z "${HAVE_UGNI_TRUE}"; then
   DSPACESLIB_CFLAGS+=""
   DSPACESLIB_LDFLAGS+=" ${UGNI_LDFLAGS}"
   DSPACESLIB_LDADD+=" ${UGNI_LIBS}"
+  if test -z "${HAVE_DRC_TRUE}" ; then
+    DSPACESLIB_CPPFLAGS+=" ${DRC_CPPFLAGS}"
+    DSPACES_EXT_CPPFLAGS+=" ${DRC_CPPFLAGS}"
+    DSPACESLIB_LDADD+=" ${DRC_LIBS}"
+    DSPACES_EXT_LDADD+=" ${DRC_LIBS}"
+  fi
 fi
 
 if test -z "${HAVE_PORTALS_TRUE}"; then
@@ -154,29 +168,40 @@ AC_SUBST(DSPACESLIB_CFLAGS)
 AC_SUBST(DSPACESLIB_CPPFLAGS)
 AC_SUBST(DSPACESLIB_LDFLAGS)
 AC_SUBST(DSPACESLIB_LDADD)
+AC_SUBST(DSPACES_EXT_CFLAGS)
+AC_SUBST(DSPACES_EXT_CPPFLAGS)
+AC_SUBST(DSPACES_EXT_LDFLAGS)
+AC_SUBST(DSPACES_EXT_LDADD)
 
 AC_CONFIG_HEADERS(config.h)
 AC_CONFIG_FILES([
-		Makefile
-		dart/Makefile
-		src/Makefile
-		tests/Makefile
-		tests/C/Makefile
-		tests/Fortran/Makefile
-		])
+                Makefile
+                dart/Makefile
+                src/Makefile
+                tests/Makefile
+                tests/C/Makefile
+                tests/Fortran/Makefile
+                scripts/dspaces_config.makesrc
+                ])
 
 AC_OUTPUT
-
 
 echo "Network transport layer"
 if test -z "${HAVE_UGNI_TRUE}"; then
   echo "Cray UGNI enabled.";
-  echo "	- CRAY_PMI_CPPFLAGS = $PMI_CPPFLAGS";
-  echo "	- CRAY_PMI_LDFLAGS = $PMI_LDFLAGS";
-  echo "	- CRAY_PMI_LIBS = $PMI_LIBS";
-  echo "	- CRAY_UGNI_CPPFLAGS = $UGNI_CPPFLAGS";
-  echo "	- CRAY_UGNI_LDFLAGS = $UGNI_LDFLAGS";
-  echo "	- CRAY_UGNI_LIBS = $UGNI_LIBS";
+  echo "    - CRAY_PMI_CPPFLAGS = $PMI_CPPFLAGS";
+  echo "    - CRAY_PMI_LDFLAGS = $PMI_LDFLAGS";
+  echo "    - CRAY_PMI_LIBS = $PMI_LIBS";
+  echo "    - CRAY_UGNI_CPPFLAGS = $UGNI_CPPFLAGS";
+  echo "    - CRAY_UGNI_LDFLAGS = $UGNI_LDFLAGS";
+  echo "    - CRAY_UGNI_LIBS = $UGNI_LIBS";
+  if test -z "${HAVE_ARIES_TRUE}" ; then
+    echo "uGNI Aries version enabled."
+  fi
+  if test -z "${HAVE_DRC_TRUE}" ; then
+    echo "    - CRAY_DRC_CPPFLAGS = $DRC_CPPFLAGS";
+    echo "    - CRAY_DRC_LIBS = $DRC_LIBS";
+  fi
 else
   echo "No Cray UGNI."
 fi

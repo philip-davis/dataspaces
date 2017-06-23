@@ -56,6 +56,10 @@
 #include "config.h"
 #include "list.h"
 
+#ifdef DS_HAVE_DRC
+#include "rdmacred.h"
+#endif
+
 #define RPC_CMD_PAD_BASE_SIZE 296 
 #define RPC_CMD_PAD_SIZE RPC_CMD_PAD_BASE_SIZE+(BBOX_MAX_NDIM-3)*24
 
@@ -367,6 +371,8 @@ struct rpc_server{
 
 	int			num_md_posted;
 	int			num_md_unlinked;
+
+	uint32_t drc_credential_id; //used for DRC
 
 	enum rpc_component	cmp_type;
 

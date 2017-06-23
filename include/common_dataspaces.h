@@ -63,7 +63,7 @@ int common_dspaces_put (const char *var_name,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
-        void *data);
+        const void *data);
 
 int common_dspaces_remove (const char *var_name, unsigned int ver);
 
