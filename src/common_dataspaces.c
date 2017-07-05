@@ -281,7 +281,7 @@ int common_dspaces_put(const char *var_name,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
-        void *data)
+        const void *data)
 {
 #if defined(DS_HAVE_DSPACES_LOCATION_AWARE_WRITE)
         return common_dspaces_put_location_aware(var_name, ver, size, ndim,
@@ -413,7 +413,7 @@ int common_dspaces_remove(const char *var_name, unsigned int ver)
 {
 
 	if (!is_dspaces_lib_init())  {
-		return -EINVAL;
+		return 0;
 	}
 
 	int err = dcg_remove(var_name, ver);

@@ -963,7 +963,7 @@ static int dsgrpc_remove_service(struct rpc_server *rpc, struct rpc_cmd *cmd)
 
 
 	if (!dsg->ls) {
-		return -EINVAL;
+		return 0;
 	}
 
 	struct obj_data *od, *t;

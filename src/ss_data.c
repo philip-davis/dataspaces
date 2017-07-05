@@ -463,7 +463,7 @@ static void dht_entry_free(struct dht_entry *de)
 }
 
 static struct dht * 
-dht_alloc(struct sspace *ssd, struct bbox *bb_domain, int num_nodes, int size_hash)
+dht_alloc(struct sspace *ssd, const struct bbox *bb_domain, int num_nodes, int size_hash)
 {
 	struct dht *dht;
 	int i;
@@ -607,7 +607,7 @@ static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
         return err;
 }
 
-static struct sspace *ssd_alloc_v1(struct bbox *bb_domain, int num_nodes, int max_versions)
+static struct sspace *ssd_alloc_v1(const struct bbox *bb_domain, int num_nodes, int max_versions)
 {
         struct sspace *ssd;
         uint64_t max_dim;
@@ -853,7 +853,7 @@ int ssd_hash_v2(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_t
 /*
   Allocate the shared space structure.
 */
-struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions,
+struct sspace *ssd_alloc(const struct bbox *bb_domain, int num_nodes, int max_versions,
     enum sspace_hash_version hash_version)
 {
     struct sspace *ss = NULL;
@@ -1363,7 +1363,7 @@ struct obj_data * obj_data_alloc_no_data(struct obj_descriptor *odsc, void *data
         return od;
 }
 
-struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *odsc, void *data)
+struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *odsc, const void *data)
 {
         struct obj_data *od = obj_data_alloc(odsc);
         if (!od)

@@ -25,8 +25,10 @@ libdspacesf_a_SOURCES = dataspaces_fortran.c \
 			dimes_server.c \
 			dimes_client.c 
 
-include_HEADERS = ../include/dataspaces.h \
-		  ../include/dimes_interface.h
+include_HEADERS = ../include/dataspaces.h 
+if BUILD_DIMES
+    include_HEADERS += ../include/dimes_interface.h
+endif BUILD_DIMES
 
 noinst_HEADERS = ../include/sfc.h \
 		 ../include/timer.h \

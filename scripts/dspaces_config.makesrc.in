@@ -1,0 +1,40 @@
+#!/bin/bash
+
+DSPACES_INC="-I%incdir% @DSPACES_EXT_CPPFLAGS@ @DSPACES_EXT_CFLAGS@"
+DSPACES_LIB="-L%libdir% -ldspaces -ldscommon -ldart @DSPACES_EXT_LDFLAGS@ @DSPACES_EXT_LDADD@ @LDFLAGS@ @LIBS@"
+
+OPTIND=1
+
+PRINT_CFLAGS=no
+PRINT_LDFLAGS=no
+
+function usage() {
+    echo "`basename $0` [-c | -l]
+Arguments
+    -c Compiler flags
+    -l Linker flags"
+}
+
+while getopts "h?cl" opt; do
+    case "$opt" in
+    h|\?)
+        usage
+        exit 0
+        ;;
+    c)
+        PRINT_CFLAGS=yes
+        ;;
+    l)
+        PRINT_LDFLAGS=yes
+        ;;
+    esac
+done
+
+if [ "$PRINT_CFLAGS" == "yes" ]; then
+    echo $DSPACES_INC
+fi
+
+if [ "$PRINT_LDFLAGS" == "yes" ]; then
+    echo $DSPACES_LIB
+fi
+

@@ -229,7 +229,7 @@ struct hdr_bin_result {
 	unsigned char		pad[210]; // max is sizeof(struct rpc_cmd.pad == 218)
 } __attribute__((__packed__));
 
-struct sspace* ssd_alloc(struct bbox *, int, int, enum sspace_hash_version);
+struct sspace* ssd_alloc(const struct bbox *, int, int, enum sspace_hash_version);
 int ssd_init(struct sspace *, int);
 void ssd_free(struct sspace *);
 int ssd_copy(struct obj_data *, struct obj_data *);
@@ -257,7 +257,7 @@ struct obj_data * ls_find_no_version(struct ss_storage *, struct obj_descriptor 
 struct obj_data *obj_data_alloc(struct obj_descriptor *);
 struct obj_data *obj_data_allocv(struct obj_descriptor *);
 struct obj_data *obj_data_alloc_no_data(struct obj_descriptor *, void *);
-struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *, void *);
+struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *, const void *);
 
 void obj_data_free(struct obj_data *od);
 void obj_data_free_with_data(struct obj_data *);

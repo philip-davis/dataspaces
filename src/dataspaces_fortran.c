@@ -47,13 +47,6 @@
 #include "common_dataspaces.h"
 #include "dc_gspace.h"
 
-/* Name mangling for C functions to adapt Fortran compiler */
-#if defined(HAVE_DCMF) || defined(HAVE_PAMI) 
-#define FC_FUNC(name,NAME) name  
-#else
-#define FC_FUNC(name,NAME) name ## _
-#endif
-
 static struct timer timer;
 
 char *fstrncpy(char *cstr, const char *fstr, size_t len, size_t maxlen)
