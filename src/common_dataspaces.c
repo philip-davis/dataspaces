@@ -409,15 +409,20 @@ int common_dspaces_put_location_aware(const char *var_name,
         return 0;
 }
 
-int common_dspaces_remove (const char *var_name, unsigned int ver)
+int common_dspaces_remove(const char *var_name, unsigned int ver)
 {
 
-	if (!is_dspaces_lib_init()) return;
+	if (!is_dspaces_lib_init())  {
+		return -EINVAL;
+	}
 
-        int err = dcg_remove(var_name, ver);
-        if (err < 0)
-                ERROR_TRACE_AND_EXIT();
+	int err = dcg_remove(var_name, ver);
+	if (err < 0) {
+		ERROR_TRACE_AND_EXIT();
+	}
+
 	return err;
+
 }
 
 
