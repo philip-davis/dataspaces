@@ -1042,32 +1042,30 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
 	gni_return_t status;
 
 	dc = calloc(1, sizeof(*dc));
-	if (!dc)
+	if (!dc) {
 		return NULL;
-
+	}
 	dc->dart_ref = dart_ref;
 	dc->cp_in_job = num_peers;
 	dc->num_cp = num_peers;
 
 	dc->rpc_s = rpc_server_init(30, num_peers, dc, DART_CLIENT, appid);
-        if (!dc->rpc_s) {
-                free(dc);
-                return NULL;
+	if (!dc->rpc_s) {
+		free(dc);
+		return NULL;
 	}	
 	dc->rpc_s->app_minid = appid;
 	dc->rpc_s->app_num_peers = num_peers;
 
-        rpc_add_service(cn_register, dcrpc_register);
-        rpc_add_service(cp_barrier, dcrpc_barrier);
+	rpc_add_service(cn_register, dcrpc_register);
+	rpc_add_service(cp_barrier, dcrpc_barrier);
 	rpc_add_service(cn_unregister, dcrpc_unregister);
-	//rpc_add_service(sp_announce_cp, dcrpc_announce_cp);// dont need in GNI
 
-        err = dc_boot(dc, appid);
-        if (err < 0) {
-	  	rpc_server_free(dc->rpc_s);
-                free(dc);
-                return NULL;
-        }
+	err = dc_boot(dc, appid);
+	if (err < 0) {
+		rpc_server_free(dc->rpc_s);
+		goto err_free;
+	}
 
 	peer = dc->peer_tab;
 	for(i = 0; i < dc->peer_size - dc->num_cp; i++)
@@ -1095,7 +1093,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
         return dc;
 
  err_free:
-	printf("'%s()': failed.\n", __func__);
+	printf("'%s()': failed with %d.\n", __func__, err);
 	free(dc);
 	return NULL;
 }

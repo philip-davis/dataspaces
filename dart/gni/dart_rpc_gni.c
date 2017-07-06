@@ -1994,11 +1994,11 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 err_free:
 	free(rpc_s);
 	printf("'%s()': failed with %d.\n", __func__, err);
-        return 0;
+    return 0;
 err_out:
 	free(rpc_s);
 	printf("'%s()': failed with %d.\n", __func__, status);
-        return 0;	
+    return 0;
 }
 
 static int rpc_server_finish(struct rpc_server *rpc_s)
