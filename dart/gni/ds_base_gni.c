@@ -154,17 +154,15 @@ static int ds_register_cp(struct dart_server *ds, struct app_info *app)
 {
 	struct msg_buf *msg;
 	struct node_id *peer;
-        //struct app_info *app;
 	int err = -ENOMEM;
 	int i, j;
 
 	struct gni_smsg_attr_info *cur_attr_info;
 	struct gni_smsg_attr_info *attr_info;
 	gni_smsg_attr_t	*smsg_attr;
-
 	int info_size;	
 
-
+	peer = ds->peer_tab;
 	msg = msg_buf_alloc(ds->rpc_s, peer, 1);
 	if (!msg) 
 		goto err_out;
@@ -172,18 +170,16 @@ static int ds_register_cp(struct dart_server *ds, struct app_info *app)
 	msg->msg_rpc->cmd = sp_announce_cp;
 	msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
 
-		cur_attr_info = (struct gni_smsg_attr_info *)(msg->msg_rpc->pad);
+	cur_attr_info = (struct gni_smsg_attr_info *)(msg->msg_rpc->pad);
 	cur_attr_info->appid = app->app_id;
 
 	attr_info = ds->rpc_s->attr_info_start;
-	
+
 	while(attr_info->appid != app->app_id){
 		attr_info = attr_info->next;
 	}
 
 	cur_attr_info->local_smsg_attr = attr_info->local_smsg_attr;
-
-	peer = ds->peer_tab;
 
 	err = rpc_send(ds->rpc_s, peer, msg);
 	if (err != 0){
@@ -191,7 +187,7 @@ static int ds_register_cp(struct dart_server *ds, struct app_info *app)
 		goto err_out;
 	}
 
-        return 0;
+	return 0;
 
  err_out:
 	printf("(%s): failed. (%d)\n", __func__, err);
@@ -557,9 +553,9 @@ static int ds_free_app(struct dart_server *ds, struct app_info *app)
 	peer = app->app_peer_tab;
 	for(i=0; i<app->app_peer_tab->peer_num; i++, peer++){
 
-	  err = rpc_peer_cleanup(ds->rpc_s, peer);
-	  if (err != 0) 
-	        goto err_out;
+		err = rpc_peer_cleanup(ds->rpc_s, peer);
+		if (err != 0)
+			goto err_out;
 	}
 
 

@@ -234,7 +234,7 @@ static int init_gni (struct rpc_server *rpc_s)
     		//ACQUIRE
     		err = drc_acquire(&rpc_s->drc_credential_id,0);
     		if(err != DRC_SUCCESS){
-				printf("SERVER: Error Dynamic RDMA Credentials Acquire Failed (%s)", __func__);
+				uloga("SERVER: Error Dynamic RDMA Credentials Acquire Failed (%s)", __func__);
     			goto err_out;
     		}
     		//WRITE TO FILE
@@ -243,11 +243,11 @@ static int init_gni (struct rpc_server *rpc_s)
     	else if(rpc_s->cmp_type==DART_CLIENT){
     		err = rpc_read_drc(&rpc_s->drc_credential_id);
     		if(err != 0){
-    			printf("ERROR: DRC Client Could Not Read Credential from File (%s)", __func__);
+    			uloga("ERROR: DRC Client Could Not Read Credential from File (%s)", __func__);
     		}
     	}
     	else{
-    		printf("ERROR: cmp_type unknown (%s)", __func__);
+    		uloga("ERROR: cmp_type unknown (%s)", __func__);
     		goto err_out;
     	}
     }
@@ -259,7 +259,7 @@ static int init_gni (struct rpc_server *rpc_s)
     //OTHER RANKS: RECV CREDENTIAL
     err = PMI_Bcast(&rpc_s->drc_credential_id, 1);
     if(err != PMI_SUCCESS){
-    	printf("Error PMI_Bcast of RDMA Credential Failed: (%s)", __func__);
+    	uloga("Error PMI_Bcast of RDMA Credential Failed: (%s)", __func__);
     	drc_release(rpc_s->drc_credential_id,0);
     	goto err_out;
 	}
@@ -268,7 +268,7 @@ static int init_gni (struct rpc_server *rpc_s)
     err = drc_access(rpc_s->drc_credential_id,0,&drc_credential_info);
     if(err != DRC_SUCCESS){
     	//error in acquiring - release the credential 
-    	printf("Error on Access Dynamic RDMA Credentials, CMP_ID: %d, rank_id: %d, (%s)",rpc_s->cmp_type,rank_id_pmi,__func__);
+    	uloga("Error on Access Dynamic RDMA Credentials, CMP_ID: %d, rank_id: %d, (%s)",rpc_s->cmp_type,rank_id_pmi,__func__);
     	drc_release(rpc_s->drc_credential_id,0);
     	goto err_out;
     }
@@ -293,8 +293,8 @@ static int init_gni (struct rpc_server *rpc_s)
 		#ifdef DS_HAVE_ARIES
        	 	err = get_named_dom_aries("ADIOS", &cookie, &cookie2);
         	if(err != 0){
-				printf("Fail: cookie(%x) and cookie2(%d) returned error. %d.\n", err, cookie, cookie2);
-				printf("Please use 'apstat -P' to check if shared protection domain is activiated.\n"); 
+				uloga("Fail: cookie(%x) and cookie2(%d) returned error. %d.\n", err, cookie, cookie2);
+				uloga("Please use 'apstat -P' to check if shared protection domain is activiated.\n");
         		goto err_out;
         	}
 
@@ -303,7 +303,7 @@ static int init_gni (struct rpc_server *rpc_s)
 		#else
         	err = get_named_dom("ADIOS", &ptag, &cookie);
         	if(err != 0){
-            	printf("Fail: ptag and cookie returned error. %d.\n", err);
+            	uloga("Fail: ptag and cookie returned error. %d.\n", err);
            	 	goto err_out;
         	}
 		#endif //condition: ifdef DS_HAVE_AIRES
@@ -315,8 +315,8 @@ static int init_gni (struct rpc_server *rpc_s)
         	status = GNI_GetPtag(0, cookie, &ptag);
 
         	if(status != GNI_RC_SUCCESS){
-        		printf("Fail: DRC - GNI_GetPtag: ptag value not found. GNI Error: %d.\n", status);
-        		printf("Releasing credential %d. Something is wrong.\n", rpc_s->drc_credential_id);
+        		uloga("Fail: DRC - GNI_GetPtag: ptag value not found. GNI Error: %d.\n", status);
+        		uloga("Releasing credential %d. Something is wrong.\n", rpc_s->drc_credential_id);
         		drc_release(rpc_s->drc_credential_id,0);
         		goto err_out;
         	}
@@ -327,7 +327,7 @@ static int init_gni (struct rpc_server *rpc_s)
 	status = GNI_CdmCreate(rank_id_pmi, ptag, cookie, modes, &rpc_s->cdm_handle);
 	if (status != GNI_RC_SUCCESS) 
 	{
-		printf("Fail: GNI_CdmCreate returned error. Used ptag=%d cookie=%x status=%d.\n", 
+		uloga("Fail: GNI_CdmCreate returned error. Used ptag=%d cookie=%x status=%d.\n",
                         ptag, cookie, status);
 		goto err_out;
 	}
@@ -335,7 +335,7 @@ static int init_gni (struct rpc_server *rpc_s)
 	status = GNI_CdmAttach(rpc_s->cdm_handle, device_id, &rpc_s->ptlmap.nid, &rpc_s->nic_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
-		printf("Fail: GNI_CdmAttach returned error. Used ptag=%d cookie=%x status=%d.\n", 
+		uloga("Fail: GNI_CdmAttach returned error. Used ptag=%d cookie=%x status=%d.\n",
                         ptag, cookie, status);
 		goto err_out;
 	}
@@ -345,7 +345,7 @@ static int init_gni (struct rpc_server *rpc_s)
 	return 0;
 
 err_out:
-	printf("'%s()': failed with %d.\n", __func__, status);
+	uloga("'%s()': failed with %d.\n", __func__, status);
 	return status;	
 }
 
@@ -1152,10 +1152,10 @@ static int rpc_process_ack(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 int rpc_read_socket(struct sockaddr_in *address)
 {
-        char *ip;
+	char *ip;
 	char *port;
-        FILE *f;
-        int err;
+	FILE *f;
+	int err;
 	char ipstore[16];
 	char *tmp_ip;
 	tmp_ip = ipstore;
@@ -1163,38 +1163,39 @@ int rpc_read_socket(struct sockaddr_in *address)
 
 	system("sleep 5");
 
-        ip = getenv("P2TNID");
-        port = getenv("P2TPID");
+	ip = getenv("P2TNID");
+	port = getenv("P2TPID");
 
-        if (ip && port) {
-                address->sin_addr.s_addr = inet_addr(ip);
-                address->sin_port = htons(atoi(port));
+	if (ip && port) {
+		address->sin_addr.s_addr = inet_addr(ip);
+		address->sin_port = htons(atoi(port));
 
-                return 0;
-        }
+		return 0;
+	}
 
-        f = fopen("conf", "rt");
-        if (!f) {
+	f = fopen("conf", "rt");
+	if (!f) {
 		err = -ENOENT;
 		goto err_out;
-        }
+	}
 
-        char version[16];
-        err = fscanf(f, "P2TNID=%s\nP2TPID=%d\n%s\n", tmp_ip, &tmp_port, version);
+	char version[16];
+	err = fscanf(f, "P2TNID=%s\nP2TPID=%d\n%s\n", tmp_ip, &tmp_port, version);
 
-        if(strcmp(version,VERSION)!=0)
-                printf("Warning: DataSpaces sever(s) and client(s) have mis-matched version\n");
+	if(strcmp(version,VERSION)!=0)
+		printf("Warning: DataSpaces sever(s) and client(s) have mis-matched version\n");
 
 	address->sin_addr.s_addr = inet_addr(tmp_ip);
 	address->sin_port = htons(tmp_port);
 
-        fclose(f);
-        if (err == 2)
-                return 0;
+	fclose(f);
+	if (err == 3) {
+		return 0;
+	}
 
 	err = -EIO;
 
- err_out:
+err_out:
 	printf("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
@@ -1959,21 +1960,21 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
     status = GNI_CqCreate(rpc_s->nic_hndl, ENTRY_COUNT, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->sys_cq_hndl);
     if (status != GNI_RC_SUCCESS)
     {
-        printf("Fail: GNI_CqCreate SYS returned error. %d.\n", status);
+        uloga("Fail: GNI_CqCreate SYS returned error. %d.\n", status);
         goto err_out;
     }
 
 	status = GNI_CqCreate(rpc_s->nic_hndl,ENTRY_COUNT, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->src_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
-		printf("Fail: GNI_CqCreate SRC returned error. %d.\n", status);
+		uloga("Fail: GNI_CqCreate SRC returned error. %d.\n", status);
 		goto err_out;
 	}
 
 	status = GNI_CqCreate(rpc_s->nic_hndl, ENTRY_COUNT, 0, GNI_CQ_BLOCKING, NULL, NULL, &rpc_s->dst_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
 	{
-		printf("Fail: GNI_CqCreate DST returned error. %d.\n", status);
+		uloga("Fail: GNI_CqCreate DST returned error. %d.\n", status);
 		goto err_out;
 	}
 
@@ -1993,11 +1994,11 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 
 err_free:
 	free(rpc_s);
-	printf("'%s()': failed with %d.\n", __func__, err);
+	uloga("'%s()': failed with %d.\n", __func__, err);
     return 0;
 err_out:
 	free(rpc_s);
-	printf("'%s()': failed with %d.\n", __func__, status);
+	uloga("'%s()': failed with %d.\n", __func__, status);
     return 0;
 }
 
