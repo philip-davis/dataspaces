@@ -41,6 +41,7 @@
 #include "dart.h"
 #include "ds_gspace.h"
 #include "ss_data.h"
+#include "CppWrapper.h"
 #ifdef DS_HAVE_ACTIVESPACE
 #include "rexec.h"
 #endif
