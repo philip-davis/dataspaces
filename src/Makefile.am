@@ -7,7 +7,9 @@ lib_LIBRARIES =  libdscommon.a libdspaces.a libdspacesf.a
 libdscommon_a_SOURCES = bbox.c \
 			ss_data.c \
 			timer.c \
-			util.c 
+			util.c \
+			CppWrapper.cc \
+			MapWrap.cc
 
 libdspaces_a_SOURCES =  dataspaces.c \
 			common_dataspaces.c \
