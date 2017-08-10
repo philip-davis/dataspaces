@@ -75,6 +75,7 @@ static int socket_send_bytes(int sockfd, char *buffer, uint64_t size) {
         buffer += n;
         size -= n;
     }
+
     return 0;
 
     err_out:

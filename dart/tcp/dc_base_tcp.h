@@ -7,6 +7,8 @@ extern "C" {
 
 #include "dart_rpc_tcp.h"
 
+#include<mpi.h>
+
 struct dart_client{
         struct rpc_server       *rpc_s;
 
@@ -32,7 +34,7 @@ struct dart_client{
         void    *dart_ref;
         int     num_posted;
 
-	void* 	comm;	//MPI communicator for barrier
+	MPI_Comm    *comm;	//MPI communicator for barrier
 };
 
 #define dc_barrier(dc) rpc_barrier(dc->rpc_s, dc->comm)

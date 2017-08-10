@@ -1514,7 +1514,6 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
 
         dcg_l->num_pending = 0;
         qt_init(&dcg_l->qt);
-
         // rpc_add_service(ss_obj_get_dht_peers, dcgrpc_obj_get_dht_peers);
         rpc_add_service(ss_obj_get_desc, dcgrpc_obj_get_desc);
         rpc_add_service(ss_obj_cq_notify, dcgrpc_obj_cq_update);
@@ -1526,16 +1525,8 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
 #endif
         /* Added for ccgrid demo. */
         rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);	
-
-#if HAVE_INFINIBAND
-        dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
-#elif HAVE_PAMI
-        dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
-#elif HAVE_TCP_SOCKET
-        dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
-#else 
-        dcg_l->dc = dc_alloc(num_nodes, appid, dcg_l);
-#endif
+	
+        dcg_l->dc = dc_alloc(num_nodes, appid, dcg_l, comm);
         if (!dcg_l->dc) {
                 free(dcg_l);
                 goto err_out;
@@ -1550,7 +1541,6 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
         timer_init(&tm_perf, 1);
         timer_start(&tm_perf);
 #endif
-
         dcg = dcg_l;
         return dcg_l;
  err_out:
@@ -1569,12 +1559,12 @@ void dcg_free(struct dcg_space *dcg)
         uloga("'%s()': num pending = %d.\n", __func__, dcg->num_pending);
 #endif
 
-	while (dcg->num_pending)
+	while (dcg->num_pending) {
 	      dc_process(dcg->dc);
+	}
 
     dc_free(dcg->dc);
     qc_free(&dcg->qc);
-
 	lock_free();
 
     free_gdim_list(&dcg->gdim_list);

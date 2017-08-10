@@ -632,7 +632,7 @@ static int ds_boot(struct dart_server *ds) {
     return -1;
 }
 
-struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref) {
+struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm) {
     size_t size = sizeof(struct dart_server) + sizeof(struct node_id) * (size_t)(num_sp + num_cp);
     struct dart_server *ds = (struct dart_server *)malloc(size);
     if (ds == NULL) {
@@ -650,6 +650,13 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref) {
     ds->size_sp = num_sp;
     ds->dart_ref = dart_ref;
     INIT_LIST_HEAD(&ds->app_list);
+
+    if(comm) {
+        ds->comm = malloc(sizeof(*ds->comm));
+        MPI_Comm_dup(*(MPI_Comm *)comm, ds->comm);
+    } else {
+        ds->comm = NULL;    
+    }
 
     char *interface = getenv("DATASPACES_TCP_INTERFACE");
     ds->rpc_s = rpc_server_init(interface, ds->size_sp, ds, DART_SERVER);
@@ -705,6 +712,10 @@ void ds_free(struct dart_server* ds) {
     list_for_each_entry_safe(app, t, &ds->app_list, struct app_info, app_entry) {
         list_del(&app->app_entry);
         free(app);
+    }
+
+    if(ds->comm) {
+        free(ds->comm);
     }
 
     free(ds);

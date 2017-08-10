@@ -7,6 +7,8 @@ extern "C" {
 
 #include "dart_rpc_tcp.h"
 
+#include "mpi.h"
+
 struct app_info;
 
 /*
@@ -50,13 +52,16 @@ struct dart_server {
 
     int f_nacc;
     void *dart_ref;
+
+    MPI_Comm *comm;
+
 };
 
-struct dart_server* ds_alloc(int, int, void*);
+struct dart_server* ds_alloc(int, int, void*, void*);
 void ds_free(struct dart_server*);
 int ds_process(struct dart_server*);
 
-#define ds_barrier(ds) rpc_barrier(ds->rpc_s, NULL);
+#define ds_barrier(ds) rpc_barrier(ds->rpc_s, ds->comm);
 
 static inline struct dart_server *ds_ref_from_rpc(struct rpc_server *rpc_s) {
     return (struct dart_server *)rpc_s->dart_ref;
