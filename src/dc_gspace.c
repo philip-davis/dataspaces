@@ -1525,7 +1525,7 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
 #endif
         /* Added for ccgrid demo. */
         rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);	
-	dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
+	dcg_l->dc = dc_alloc(num_nodes, appid, dcg_l, comm);
 //#endif
         if (!dcg_l->dc) {
                 free(dcg_l);

@@ -889,7 +889,7 @@ static int dc_boot(struct dart_client *dc, int appid)
   Public API starts here.
 */
 
-struct dart_client *dc_alloc(int num_peers, int appid, void *comm, void *dart_ref)
+struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *comm)
 {
 	struct dart_client *dc;
 	struct node_id *peer_list, *peer;

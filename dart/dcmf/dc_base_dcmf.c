@@ -274,8 +274,7 @@ static int dc_unregister(struct dart_client *dc)
 /*
   Public API starts here.
 */
-struct dart_client *dc_alloc(int num_peers, int appid, void *comm, void *dart_re
-f)
+struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *comm)
 {
 	struct dart_client *dc;
 	size_t size;
