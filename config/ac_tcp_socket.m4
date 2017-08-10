@@ -10,7 +10,7 @@ ac_socket_lib_ok=no
 TCP_SOCKET_CFLAGS=""
 TCP_SOCKET_CPPFLAGS=""
 TCP_SOCKET_LDFLAGS=""
-TCP_SOCKET_LIBS=""
+TCP_SOCKET_LIBS="-lpthread -lm"
 
 AC_MSG_NOTICE([=== checking for TCP socket ===])
 

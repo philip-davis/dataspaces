@@ -47,6 +47,7 @@ struct app_info {
 	int			app_num_peers;  /* Total number of peers in app */
 	struct node_id		*app_peer_tab;  /* Reference to app nodes info */
 	int			app_cnt_peers;  /* Peers so far */
+	int     f_reg; //DSaaS: if this app has been registered. 0: not yet; 1: already.
 };
 
 struct dart_server {
@@ -78,6 +79,10 @@ struct dart_server {
 
 	/* Reference to the front end module used. */
 	void			*dart_ref;
+
+	pthread_t		comm_thread;
+	int			thread_alive;
+
 };
 
 struct dart_server* ds_alloc(int num_sp, int num_cp, void *dart_ref);
@@ -96,9 +101,25 @@ static inline int ds_get_rank(struct dart_server *ds)
 	return ds->self->ptlmap.id;
 }
 
-static inline struct node_id * ds_get_peer(struct dart_server *ds, int n)
+static inline struct node_id * ds_get_peer(struct dart_server *ds, int peer_id)
 {
-	return (ds->peer_tab + n);
+	int count=0;
+	struct node_id *cur_peer;
+
+	cur_peer = ds->peer_tab;
+
+	while(cur_peer){
+		//count = count + cur_peer->peer_num;
+
+	  if(peer_id < (cur_peer->ptlmap.id + cur_peer->peer_num ) && peer_id > (cur_peer->ptlmap.id - 1))
+			return cur_peer + peer_id - cur_peer->ptlmap.id;
+		else
+			cur_peer = (struct node_id *)(cur_peer + cur_peer->peer_num - 1)->next;	
+
+	}
+
+	printf("Rank %d: %s: cannot find peer %d in peer_tab error -1.\n", ds->rpc_s->ptlmap.id, __func__, peer_id);
+	return NULL;
 }
 
 static inline int ds_stop(struct dart_server *ds)

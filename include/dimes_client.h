@@ -58,6 +58,9 @@ struct fetch_entry {
     struct obj_descriptor src_odsc;
     struct obj_descriptor dst_odsc;
     struct dart_rdma_tran *read_tran;
+#ifdef DS_HAVE_DIMES_SHMEM
+    struct dimes_shmem_descriptor src_shmem_desc;
+#endif
 };
 
 struct query_dht_d {
@@ -102,6 +105,10 @@ struct dimes_client_option {
     size_t rdma_buffer_size;
     size_t rdma_buffer_usage;
     int max_num_concurrent_rdma_read_op;
+#ifdef DS_HAVE_DIMES_SHMEM
+    int enable_shmem_buffer;
+    int enable_get_local;
+#endif
 };
 
 struct dimes_client {
@@ -111,6 +118,16 @@ struct dimes_client {
     struct list_head gdim_list;
 	struct query_tran_d qt;
     struct list_head storage;
+#ifdef DS_HAVE_DIMES_SHMEM
+    struct list_head shmem_obj_list;
+    struct list_head node_local_obj_index;
+    struct node_id* local_peer_tab[MAX_NUM_PEER_PER_NODE];
+    int num_local_peer;
+    int node_master_dart_id;
+    uint32_t node_id;
+    int node_rank;
+    MPI_Comm node_mpi_comm;
+#endif
 };
 
 struct dimes_client* dimes_client_alloc(void *);
@@ -132,7 +149,40 @@ int dimes_client_put_sync_all(void); //TODO: rename to dimes_client_delete_all?
 int dimes_client_put_set_group(const char *group_name, int step);
 int dimes_client_put_unset_group();
 int dimes_client_put_sync_group(const char *group_name, int step); //TODO: rename to dimes_client_delete_group?
+#ifdef DS_HAVE_DIMES_SHMEM
+int dimes_client_shmem_init(void *comm, size_t shmem_obj_size);
+int dimes_client_shmem_finalize(unsigned int unlink);
 
+int dimes_client_shmem_checkpoint();
+int dimes_client_shmem_restart(void *comm);
+
+int dimes_client_shmem_reset_server_state(int server_id);
+int dimes_client_shmem_update_server_state();
+
+uint32_t dimes_client_shmem_get_nid();
+int dimes_client_shmem_get_node_rank();
+MPI_Comm dimes_client_shmem_get_node_mpi_comm();
+
+int dimes_client_shmem_clear_testing();
+
+size_t estimate_storage_restart_buf_size();
+size_t estimate_node_shmem_restart_buf_size();
+
+int dimes_client_shmem_checkpoint_storage(int shmem_obj_id, void *restart_buf);
+int dimes_client_shmem_restart_storage(void *restart_buf);
+int dimes_client_shmem_put_local(const char *var_name,
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        void *data);
+int dimes_client_shmem_get_local(const char *var_name,
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        void *data);
+#endif /*DS_HAVE_DIMES_SHMEM */
 #ifdef __cplusplus
 }
 #endif

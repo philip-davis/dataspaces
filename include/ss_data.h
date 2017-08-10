@@ -72,6 +72,9 @@ struct gdim_list_entry {
         struct global_dimension gdim; 
 };
 
+enum storage_level { in_memory, in_ssd, in_memory_ssd };/* storage level */
+enum storage_opera { normal, prefetching, caching };/* storage operation */
+
 struct obj_data {
         struct list_head        obj_entry;
 
@@ -89,11 +92,18 @@ struct obj_data {
 
         /* Flag to mark if we should free this data object. */
         unsigned int            f_free:1;
+
+	enum storage_level       sl; 
+	enum storage_opera       so;
+
+	void                    *s_data;	/* data pointer in ssd Duan*/
 };
 
 struct ss_storage {
         int                     num_obj;
         int                     size_hash;
+        uint64_t                mem_used;
+	uint64_t                mem_size;
         /* List of data objects. */
         struct list_head        obj_hash[1];
 };
@@ -229,7 +239,7 @@ struct hdr_bin_result {
 	unsigned char		pad[210]; // max is sizeof(struct rpc_cmd.pad == 218)
 } __attribute__((__packed__));
 
-struct sspace* ssd_alloc(const struct bbox *, int, int, enum sspace_hash_version);
+struct sspace* ssd_alloc(struct bbox *, int, int, enum sspace_hash_version);
 int ssd_init(struct sspace *, int);
 void ssd_free(struct sspace *);
 int ssd_copy(struct obj_data *, struct obj_data *);
@@ -257,7 +267,7 @@ struct obj_data * ls_find_no_version(struct ss_storage *, struct obj_descriptor 
 struct obj_data *obj_data_alloc(struct obj_descriptor *);
 struct obj_data *obj_data_allocv(struct obj_descriptor *);
 struct obj_data *obj_data_alloc_no_data(struct obj_descriptor *, void *);
-struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *, const void *);
+struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *, void *);
 
 void obj_data_free(struct obj_data *od);
 void obj_data_free_with_data(struct obj_data *);
@@ -283,4 +293,8 @@ struct gdim_list_entry* lookup_gdim_list(struct list_head *gdim_list, const char
 void free_gdim_list(struct list_head *gdim_list);
 void set_global_dimension(struct list_head *gdim_list, const char *var_name,
             const struct global_dimension *default_gdim, struct global_dimension *gdim);
+void obj_data_free_in_mem(struct obj_data *od);
+void obj_data_free_in_ssd(struct obj_data *od);
+void obj_data_copy_to_ssd(struct obj_data *od);
+void obj_data_copy_to_mem(struct obj_data *od);
 #endif /* __SS_DATA_H_ */

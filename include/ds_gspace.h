@@ -36,6 +36,7 @@
 
 #include "dart.h"
 #include "ss_data.h"
+#include "ds_cache_prefetch.h"
 
 struct ds_gspace {
         struct dart_server      *ds;

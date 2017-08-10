@@ -203,6 +203,7 @@ enum cmd_type {
     cp_barrier,
     cp_lock,
     /* Shared spaces specific. */
+    ss_obj_hint,
     ss_obj_put,
     ss_obj_update,
     ss_obj_get_dht_peers,

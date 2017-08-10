@@ -1,4 +1,4 @@
-AC_INIT([dataspaces],[1.6.3])
+AC_INIT([dataspaces],[1.6.2])
 AC_CONFIG_AUX_DIR(config)
 
 dnl AM_INIT_AUTOMAKE([-Wall -Wno-extra-portability -Werror subdir-objects foreign])
@@ -27,26 +27,17 @@ AC_TCP_SOCKET
 
 AC_CONFIGURE_OPTIONS
 
-ACX_PTHREAD
-
-save_LIBS=$LIBS
-LIBS=""
-AC_CHECK_LIB([m], [cos])
-if test -n $LIBS; then
-    MATH_LIBS=$LIBS
-fi
-LIBS=$save_LIBS
 
 dnl Generate flags for dataspaces lib creation which depends on the particular network transport layer. DSPACESLIB_* is used for compiling the lib, and linking testing codes.
-DSPACESLIB_CFLAGS="${PTHREAD_CFLAGS}"
-DSPACESLIB_CPPFLAGS="${PTHREAD_CFLAGS}"
-DSPACESLIB_LDFLAGS="${PTHREAD_CFLAGS}"
-DSPACESLIB_LDADD="${PTHREAD_LIBS} ${MATH_LIBS}"
+DSPACESLIB_CFLAGS=
+DSPACESLIB_CPPFLAGS=
+DSPACESLIB_LDFLAGS=
+DSPACESLIB_LDADD=
 dnl These flags will be present in the output of dspaces_config
-DSPACES_EXT_CFLAGS="${PTHREAD_CFLAGS}"
-DSPACES_EXT_CPPFLAGS="${PTHREAD_CFLAGS}"
-DSPACES_EXT_LDFLAGS="${PTHREAD_CFLAGS}"
-DSPACES_EXT_LDADD="${PTHREAD_LIBS} ${MATH_LIBS}"
+DSPACES_EXT_CFLAGS=
+DSPACES_EXT_CPPFLAGS=
+DSPACES_EXT_LDFLAGS=
+DSPACES_EXT_LDADD=
 
 dnl Check if DART_TCP is enabled
 AC_ARG_ENABLE(dart_tcp,
@@ -126,6 +117,15 @@ else
         AM_CONDITIONAL(BUILD_DIMES, false)
 fi
 
+dnl Check if DataSpaces location-aware write is enabled
+AC_ARG_ENABLE(dataspaces_location_aware_write,
+    [AS_HELP_STRING([--enable-dataspaces-location-aware-write],
+        [Include experimental feature. DataSpaces client writes data to
+         servers that running on local compute node. This feature is useful
+         when co-locating the execution of DataSpaces servers with application
+         on the same set of compute nodes. By default this is not included.])])
+AM_CONDITIONAL([DATASPACES_LOCATION_AWARE_WRITE], [test "x$enable_dataspaces_location_aware_write" == "xyes"])
+
 dnl Check the max array dimension
 
 if test -z "${HAVE_UGNI_TRUE}"; then
@@ -204,6 +204,7 @@ AC_CONFIG_FILES([
                 ])
 
 AC_OUTPUT
+
 
 echo "Network transport layer"
 if test -z "${HAVE_UGNI_TRUE}"; then
