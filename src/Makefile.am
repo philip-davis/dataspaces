@@ -13,7 +13,6 @@ libdscommon_a_SOURCES = bbox.c \
 libdspaces_a_SOURCES =  dataspaces.c \
 			common_dataspaces.c \
 			ds_gspace.c \
-			ds_cache_prefetch.c \
 			dc_gspace.c \
 			dimes_data.c \
 			dimes_server.c \
@@ -22,7 +21,6 @@ libdspaces_a_SOURCES =  dataspaces.c \
 libdspacesf_a_SOURCES = dataspaces_fortran.c \
 			common_dataspaces.c \
 			ds_gspace.c \
-			ds_cache_prefetch.c \
 			dc_gspace.c \
 			dimes_data.c \
 			dimes_server.c \
@@ -36,7 +34,6 @@ noinst_HEADERS = ../include/sfc.h \
 		 ../include/merge.h \
 		 ../include/queue.h \
 		 ../include/ds_gspace.h \
-		 ../include/ds_cache_prefetch.h \
 		 ../include/mem_persist.h \
 		 ../include/dc_gspace.h \
 		 ../include/ss_data.h \

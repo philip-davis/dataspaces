@@ -35,11 +35,9 @@
 #include <stdlib.h>
 #include "common.h"
 #include "mpi.h"
-#include "mem_persist.h" 
-#define DSG_ID                  dsg->ds->self->ptlmap.id
+#include "mem_persist.h" //duan
+#define DSG_ID                  dsg->ds->self->ptlmap.id	//Duan
 
-extern pthread_mutex_t pmutex;//init prefetching pthread function lock
-extern pthread_cond_t  pcond;//init prefetching pthread function cond
 
 int read_config_file(const char* fname,
 	int *num_sp, int *num_cp, int *iter,
@@ -232,40 +230,33 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
                 dsg = dsg_alloc(num_sp, num_cp, "dataspaces.conf");
                 if (!dsg)
                         return -1;
-		char dsg_id_str[100];//ssd storage file name
-		int_to_char(DSG_ID, dsg_id_str);
+				
+				char dsg_id_str[100];//ssd storage file name Duan
+				int_to_char(DSG_ID, dsg_id_str);
 #ifdef DEBUG
-		{
-			char *str;
-			asprintf(&str, "S%2d: common_run_server: dsg_id_str '%s'", DSG_ID, dsg_id_str);
-			uloga("'%s()': %s\n", __func__, str);
-			free(str);
-		}
+				{
+					char *str;
+					asprintf(&str, "S%2d: common_run_server: dsg_id_str '%s'", DSG_ID, dsg_id_str);
+					uloga("'%s()': %s\n", __func__, str);
+					free(str);
+				}
 #endif
-		pmem_init(dsg_id_str);//ssd storage initiate						
-		pthread_t t_pref;//prefetch thread
-		pthread_create(&t_pref, NULL, prefetch_thread, (void*)NULL); //Create thread
+				pmem_init(dsg_id_str);//ssd storage initiate Duan						
 
                 while (!dsg_complete(dsg)){
                         err = dsg_process(dsg);
                         if(err<0)
                                 break;
                 }
-
-#ifdef DEBUG
-		{
-		char *str;
-		asprintf(&str, "dataspaces closing!");
-		uloga("'%s()': %s\n", __func__, str);
-		free(str);
-		}
+#ifdef DEBUG//duan
+				{
+				char *str;
+				asprintf(&str, "dataspaces closing!");
+				uloga("'%s()': %s\n", __func__, str);
+				free(str);
+				}
 #endif
-		pthread_cancel(t_pref);//kill t_pref thread
-		pthread_join(t_pref, NULL);//wait t_pref thread end
-		pthread_mutex_destroy(&pmutex);//destroy mutex lock
-		pthread_cond_destroy(&pcond);//destroy condition
-		pmem_destroy();//ssd storage destroy
-
+				pmem_destroy();//ssd storage destroy Duan
                 //dsg_barrier(dsg);
 		MPI_Barrier(*(MPI_Comm*)gcomm);
                 dsg_free(dsg);

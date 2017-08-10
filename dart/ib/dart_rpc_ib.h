@@ -395,7 +395,6 @@ enum cmd_type {
 	ss_obj_cq_notify,
 	ss_obj_get,
 	ss_obj_filter,
-	ss_obj_hint,
 	ss_obj_info,
 	ss_info,
 	ss_code_put,

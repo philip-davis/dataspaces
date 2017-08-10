@@ -38,7 +38,7 @@
 #include "debug.h"
 #include "ss_data.h"
 #include "queue.h"
-#include "mem_persist.h"
+#include "mem_persist.h"//Duan
 
 #ifdef TIMING_SSD
 #include "timer.h"
@@ -464,7 +464,7 @@ static void dht_entry_free(struct dht_entry *de)
 }
 
 static struct dht * 
-dht_alloc(struct sspace *ssd, struct bbox *bb_domain, int num_nodes, int size_hash)
+dht_alloc(struct sspace *ssd, const struct bbox *bb_domain, int num_nodes, int size_hash)
 {
 	struct dht *dht;
 	int i;
@@ -608,7 +608,7 @@ static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
         return err;
 }
 
-static struct sspace *ssd_alloc_v1(struct bbox *bb_domain, int num_nodes, int max_versions)
+static struct sspace *ssd_alloc_v1(const struct bbox *bb_domain, int num_nodes, int max_versions)
 {
         struct sspace *ssd;
         uint64_t max_dim;
@@ -854,7 +854,7 @@ int ssd_hash_v2(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_t
 /*
   Allocate the shared space structure.
 */
-struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions,
+struct sspace *ssd_alloc(const struct bbox *bb_domain, int num_nodes, int max_versions,
     enum sspace_hash_version hash_version)
 {
     struct sspace *ss = NULL;
@@ -1364,7 +1364,7 @@ struct obj_data * obj_data_alloc_no_data(struct obj_descriptor *odsc, void *data
         return od;
 }
 
-struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *odsc, void *data)
+struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *odsc, const void *data)
 {
         struct obj_data *od = obj_data_alloc(odsc);
         if (!od)
@@ -1378,7 +1378,7 @@ struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *odsc, void *dat
 
 void obj_data_free_with_data(struct obj_data *od)
 {
-	if (od->sl == in_memory || od->sl == in_memory_ssd){
+	if (od->sl == in_memory || od->sl == in_memory_ssd){//Duan
 		if (od->_data) {
 			uloga("'%s()': explicit data free on descriptor %s.\n",
 				__func__, od->obj_desc.name);
@@ -1387,18 +1387,18 @@ void obj_data_free_with_data(struct obj_data *od)
 		else if (od->_data){
 			free(od->data); 
 		}
-		else{
+		else{//Duan
 			uloga("'%s()': ERROR double data free on descriptor %s.\n",
-			__func__, od->obj_desc.name);
+				__func__, od->obj_desc.name);
 		}
 	}
-	if ((od->sl == in_ssd || od->sl == in_memory_ssd) && od->s_data){
+	if ((od->sl == in_ssd || od->sl == in_memory_ssd) && od->s_data){//Duan
 		obj_data_free_in_ssd(od->s_data);
 	}
     free(od);
 }
 
-/*free object data in memory */
+/*free object data in memory Duan*/
 void obj_data_free_in_mem(struct obj_data *od)
 {
 #ifdef DEBUG
@@ -1427,7 +1427,7 @@ void obj_data_free_in_mem(struct obj_data *od)
 	od->so = normal;
 }
 
-/*free object data in ssd */
+/*free object data in ssd Duan*/
 void obj_data_free_in_ssd(struct obj_data *od)
 {
 	//pmem_free(od->s_data);
@@ -1437,7 +1437,8 @@ void obj_data_free_in_ssd(struct obj_data *od)
 	}
 }
 
-/*copy object data from memory to ssd */
+
+/*copy object data from memory to ssd Duan*/
 void obj_data_copy_to_ssd(struct obj_data *od)
 {
 	od->s_data = pmem_alloc(obj_data_size(&od->obj_desc));
@@ -1467,7 +1468,7 @@ void obj_data_copy_to_ssd(struct obj_data *od)
 	od->sl = in_memory_ssd;
 }
 
-/*copy object data from ssd to mem */
+/*copy object data from ssd to mem Duan*/
 void obj_data_copy_to_mem(struct obj_data *od)
 {
 	if (od->s_data) {
@@ -1489,10 +1490,10 @@ void obj_data_copy_to_mem(struct obj_data *od)
 
 void obj_data_free(struct obj_data *od)
 {
-	if ((od->sl == in_memory || od->sl == in_memory_ssd) && od->_data){
+	if ((od->sl == in_memory || od->sl == in_memory_ssd) && od->_data){//Duan
 		free(od->_data);
 	}
-	if ((od->sl == in_ssd || od->sl == in_memory_ssd) && od->s_data){
+	if ((od->sl == in_ssd || od->sl == in_memory_ssd) && od->s_data){//Duan
 		obj_data_free_in_ssd(od);
 	}
 	free(od);

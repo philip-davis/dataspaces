@@ -1,3 +1,4 @@
+
 /*
 * Copyright (c) 2009, NSF Cloud and Autonomic Computing Center, Rutgers University
 * All rights reserved.
@@ -52,7 +53,7 @@
 //#define PMEM_SIZE 8*1024*1024*1024L
 //#define PMEM_SIZE 1*1024*1024*1024L
 /* using /ssd1/sd904/ ssd file path for this example */
-#define PMEM_PATH "/ssd/users/pd439/"
+#define PMEM_PATH "/ssd1/sd904/"
 //#define PMEM_PATH "/home1/sd904/"
 //#define PMEM_PATH ""
 
