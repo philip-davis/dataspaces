@@ -1,6 +1,15 @@
-n-SSD DataSpaces version based on dataspaces as service 
+in-SSD DataSpaces version based on dataspaces as service 
 
-Add/update list:
+SSD file setting in src/mem_persist.c
+
+/* using 64M ssd file for this example */
+#define PMEM_SIZE 64*1024*1024L
+
+/* using /ccs/home/sd904/ ssd file path for this example */
+#define PMEM_PATH "/ccs/home/sd904/"
+
+
+Add/update file list:
 
 tests/C/common.c
 src/ds_gspace.c

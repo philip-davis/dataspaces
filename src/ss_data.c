@@ -1380,8 +1380,7 @@ void obj_data_free_with_data(struct obj_data *od)
 {
 	if (od->sl == in_memory || od->sl == in_memory_ssd){//Duan
 		if (od->_data) {
-			uloga("'%s()': explicit data free on descriptor %s.\n",
-				__func__, od->obj_desc.name);
+			//uloga("'%s()': explicit data free on descriptor %s.\n", __func__, od->obj_desc.name);
 			free(od->_data);
 		}
 		else if (od->_data){
@@ -1408,8 +1407,7 @@ void obj_data_free_in_mem(struct obj_data *od)
 	free(str);
 #endif
 	if (od->_data) {
-		uloga("'%s()': explicit data free on descriptor %s.\n",
-			__func__, od->obj_desc.name);
+		//uloga("'%s()': explicit data free on descriptor %s.\n", __func__, od->obj_desc.name);
 		free(od->_data);	
 	}
 	else if (od->data){
@@ -1424,7 +1422,6 @@ void obj_data_free_in_mem(struct obj_data *od)
 	if (od->sl == in_memory_ssd){ 
 		od->sl = in_ssd;
 	}
-	od->so = normal;
 }
 
 /*free object data in ssd Duan*/
@@ -1453,8 +1450,7 @@ void obj_data_copy_to_ssd(struct obj_data *od)
 			memcpy(od->s_data, od->_data, obj_data_size(&od->obj_desc) + 7); //void *memcpy(void *dest, const void *src, size_t n);
 			msync(od->s_data, obj_data_size(&od->obj_desc) + 7, MS_SYNC);//int msync ( void * ptr, size_t len, int flags) flags = MS_ASYNC|MS_SYNC
 
-			uloga("'%s()': explicit data copy to ssd on descriptor %s.\n",
-			__func__, od->obj_desc.name);
+			//uloga("'%s()': explicit data copy to ssd on descriptor %s.\n", __func__, od->obj_desc.name);
 		}
 		else{
 			memcpy(od->s_data, od->data, obj_data_size(&od->obj_desc)); //void *memcpy(void *dest, const void *src, size_t n);
@@ -1479,8 +1475,7 @@ void obj_data_copy_to_mem(struct obj_data *od)
 		}
 		ALIGN_ADDR_QUAD_BYTES(od->data);
 		memcpy(od->_data, od->s_data, obj_data_size(&od->obj_desc) + 7); //void *memcpy(void *dest, const void *src, size_t n);
-		uloga("'%s()': explicit data copy to mem on descriptor %s.\n",
-			__func__, od->obj_desc.name);
+		//uloga("'%s()': explicit data copy to mem on descriptor %s.\n", __func__, od->obj_desc.name);
 	}
 	else{
 		uloga("%s(): ERROR od->s_data %p is is NULL! \n", __func__, od->s_data);
