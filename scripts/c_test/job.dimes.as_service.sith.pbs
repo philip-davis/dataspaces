@@ -1,5 +1,5 @@
 #!/bin/bash
-#PBS -N test_dspaces_sith
+#PBS -N test_dimes_sith
 #PBS -A csc143 
 #PBS -j oe
 #PBS -q batch
@@ -52,7 +52,8 @@ lock_type = 2
 mpirun --hostfile hostfile-server --map-by ppr:4:node -n 4 dataspaces_server -s 4 -c 48 >& server.log &
 
 # Start testing applications
-mpirun --hostfile hostfile-app1 --map-by ppr:16:node -n 32 test_writer DATASPACES 32 3 2 4 4 128 64 64 20 1 >& writer.log &
-mpirun --hostfile hostfile-app2 --map-by ppr:16:node -n 16 test_reader DATASPACES 16 3 2 2 4 128 128 64 20 2 >& reader.log
+mpirun --hostfile hostfile-app1 --map-by ppr:16:node -n 32 test_writer DIMES 32 3 2 4 4 128 64 64 20 1 >& writer.log &
+mpirun --hostfile hostfile-app2 --map-by ppr:16:node -n 16 test_reader DIMES 16 3 2 2 4 128 128 64 20 2 >& reader.log
 
 #wait
+

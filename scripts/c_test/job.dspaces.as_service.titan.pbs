@@ -1,5 +1,5 @@
 #!/bin/sh
-#PBS -N test_dimes_titan 
+#PBS -N test_dspaces_titan 
 #PBS -A csc143titan 
 #PBS -q debug 
 #PBS -j oe
@@ -30,10 +30,11 @@ done
 sleep 5s  # wait server to fill up the conf file
 
 ## Run writer application
-aprun -n 32 ./test_writer DIMES 32 3 2 4 4 128 64 64 20 1 >& writer.log &
+aprun -n 32 ./test_writer DATASPACES 32 3 2 4 4 128 64 64 20 1 >& writer.log &
 
 ## Run reader application
-aprun -n 16 ./test_reader DIMES 16 3 2 2 4 128 128 64 20 2 >& reader.log
+aprun -n 16 ./test_reader DATASPACES 16 3 2 2 4 128 128 64 20 2 >& reader.log
 
 ## Wait for the entire workflow to finish
 #wait
+

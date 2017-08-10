@@ -112,6 +112,13 @@ struct dsg_lock {
 
 static struct ds_gspace *dsg;
 
+struct ss_storage       *ls;//local in-memory storage
+extern pthread_mutex_t pmutex;//init prefetching pthread function lock
+extern pthread_cond_t  pcond;//init prefetching pthread function cond
+
+extern int cond_index; //Prefetching thread global condition array index
+extern int cond_num; //Prefetching thread global condition number
+
 /* Server configuration parameters */
 static struct {
         int ndim;
@@ -120,6 +127,7 @@ static struct {
         int max_readers;
         int lock_type;		/* 1 - generic, 2 - custom */
         int hash_version;   /* 1 - ssd_hash_version_v1, 2 - ssd_hash_version_v2 */
+        int memory_size;  /* memory size */
 } ds_conf;
 
 static struct {
@@ -132,6 +140,7 @@ static struct {
         {"max_readers",         &ds_conf.max_readers},
         {"lock_type",           &ds_conf.lock_type},
         {"hash_version",        &ds_conf.hash_version}, 
+        {"memory_size",         &ds_conf.memory_size},
 };
 
 static void eat_spaces(char *line)
@@ -1242,10 +1251,49 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 */
 static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-    struct obj_data *od = msg->private;
-    ls_add_obj(dsg->ls, od);
+        struct obj_data *od = msg->private;
+	
+	if (ls == NULL){//init ls Duan
+		ls = dsg->ls;
+		//ls->mem_size = ds_conf.memory_size;
+		//ls->mem_size = 274877906944;	//256G
+		//ls->mem_size = 12884901888;	//12G
+		//ls->mem_size = 8589934592;	//8G
+		ls->mem_size = 6442450944;	//6G
+		//ls->mem_size = 4294967296;	//4G
+		//ls->mem_size = 2147483648;	//2G
+#ifdef DEBUG
+		{
+			char *str;
+			asprintf(&str, "S%2d: ls->mem_size=%llu, dsg->ls->mem_size=%llu, ds_conf.memory_size=%d",
+				DSG_ID, ls->mem_size, dsg->ls->mem_size, ds_conf.memory_size);
+			uloga("'%s()': %s\n", __func__, str);
+			free(str);
+		}
+#endif
+	}
+	
+#ifdef DEBUG
+	{
+		char *str;
+		asprintf(&str, "S%2d: dsg->ls->mem_used=%llu, obj_data_size(&od->obj_desc)=%d",
+			DSG_ID, dsg->ls->mem_used, obj_data_size(&od->obj_desc));
+		uloga("'%s()': %s\n", __func__, str);
+		free(str);
+	}
+#endif
+	od->sl = in_memory; //data storage level in memory Duan
+	od->so = caching; //data storage operation caching Duan
+	ls_add_obj(dsg->ls, od);
+
+	//cache data to memory and arrange memory if it is full Duan
+	cache_replacement(obj_data_size(&od->obj_desc));
+	pthread_mutex_lock(&pmutex); //lock
+	dsg->ls->mem_used += obj_data_size(&od->obj_desc);
+	pthread_mutex_unlock(&pmutex);
 
     free(msg);
+
 #ifdef DEBUG
     uloga("'%s()': server %d finished receiving  %s, version %d.\n",
         __func__, DSG_ID, od->obj_desc.name, od->obj_desc.version);
@@ -1264,6 +1312,19 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         struct node_id *peer;
         struct msg_buf *msg;
         int err;
+
+#ifdef DEBUG
+		{
+			char *str;
+
+			asprintf(&str, "S%2d: request for dsgrpc_obj_put '%s' ver %d from C%2d for  ",
+				DSG_ID, odsc->name, odsc->version, cmd->id);
+			str = str_append(str, bbox_sprint(&odsc->bb));
+
+			uloga("'%s()': %s\n", __func__, str);
+			free(str);
+		}
+#endif
 
         odsc->owner = DSG_ID;
 
@@ -1799,6 +1860,66 @@ static int obj_cq_forward_register(struct hdr_obj_get *oh)
 }
 
 /*
+Rpc routine  to respond to  an 'ss_obj_hint' request; we  assume that
+the requesting peer knows we have the data.
+*/
+static int dsgrpc_obj_hint(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+	struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
+	struct node_id *peer;
+	struct msg_buf *msg;
+	struct obj_data *od, *from_obj;
+	int fast_v;
+	int err = -ENOENT;
+	peer = ds_get_peer(dsg->ds, cmd->id);
+
+#ifdef DEBUG
+	{
+		char *str;
+
+		asprintf(&str, "S%2d: request for dsgrpc_obj_hint name '%s' ver %d from C%2d for ",
+			DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version, cmd->id);
+		str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
+		uloga("'%s()': %s\n", __func__, str);
+		free(str);
+	}
+#endif
+	
+	// CRITICAL: use version here !!!
+	from_obj = ls_find(dsg->ls, &oh->u.o.odsc);
+
+	if (!from_obj) {
+		char *str;
+		str = obj_desc_sprint(&oh->u.o.odsc);
+		uloga("'%s()': %s\n", __func__, str);
+		free(str);
+		goto err_out;
+	}
+	//prefetch data from ssd to memory
+	pthread_mutex_lock(&pmutex); //lock
+	if (from_obj->sl == in_ssd || from_obj->data == NULL || from_obj->_data == NULL){
+		cond_num = 1;
+#ifdef DEBUG
+	{
+		char *str;
+		asprintf(&str, "S%2d: prefetch_insert_tail: cond_num %d  name '%s' ver %d for", DSG_ID, cond_num, from_obj->obj_desc.name, from_obj->obj_desc.version);
+		str = str_append(str, bbox_sprint(&from_obj->obj_desc.bb));
+		uloga("'%s()': %s\n", __func__, str);
+		free(str);
+	}
+#endif
+		prefetch_insert_tail(from_obj, MAX_PREFETCH);
+		pthread_cond_signal(&pcond); //send signal to t_pref
+	}
+	pthread_mutex_unlock(&pmutex);
+
+	return 0;
+err_out:
+	uloga("'%s()': failed with %d.\n", __func__, err);
+	return err;
+}
+
+/*
   RPC routine  to register a  CQ (continuous query);  possible callers
   are (1) compute  peer to directly register a CQ,  or (2) server peer
   to forward a CQ registration to proper DHT entries.
@@ -1868,6 +1989,22 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             free(str);
             goto err_out;
         }
+
+	/*cache data from ssd to memory, if it isn't prefetched just moment */
+	while (from_obj->sl == in_ssd && from_obj->so == prefetching){}
+	if (from_obj->data == NULL && from_obj->_data == NULL){
+	//if (from_obj->sl == in_ssd || (from_obj->data == NULL && from_obj->_data == NULL)){
+		//pthread_mutex_lock(&pmutex); //lock
+		cache_replacement(obj_data_size(&from_obj->obj_desc));
+			
+		obj_data_copy_to_mem(from_obj);
+
+		from_obj->so = caching;
+		pthread_mutex_lock(&pmutex); //lock
+		dsg->ls->mem_used += obj_data_size(&from_obj->obj_desc);
+		pthread_mutex_unlock(&pmutex);
+        }
+
         //TODO:  if required  object is  not  found, I  should send  a
         //proper error message back, and the remote node should handle
         //the error.
@@ -2059,6 +2196,7 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         rpc_add_service(ss_obj_get_dht_peers, dsgrpc_obj_send_dht_peers);
         rpc_add_service(ss_obj_get_desc, dsgrpc_obj_get_desc);
         rpc_add_service(ss_obj_get, dsgrpc_obj_get);
+        rpc_add_service(ss_obj_hint, dsgrpc_obj_hint);
         rpc_add_service(ss_obj_put, dsgrpc_obj_put);
         rpc_add_service(ss_obj_update, dsgrpc_obj_update);
         rpc_add_service(ss_obj_filter, dsgrpc_obj_filter);

@@ -220,6 +220,63 @@ void common_dspaces_define_gdim(const char *var_name, int ndim, uint64_t *gdim)
     update_gdim_list(&dcg->gdim_list, var_name, ndim, gdim);
 }
 
+int common_dspaces_hint(const char *var_name,
+	unsigned int ver, int size,
+        int ndim,
+	uint64_t *lb,
+	uint64_t *ub)
+{
+	void *data;
+	if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) {
+		return -EINVAL;
+	}
+
+	struct obj_descriptor odsc = {
+		.version = ver, .owner = -1,
+		.st = st,
+		.size = size,
+		.bb = { .num_dims = ndim, }
+	};
+	memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+	memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+
+	memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
+	memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
+
+	struct obj_data *od;
+	int err = -ENOMEM;
+
+	strncpy(odsc.name, var_name, sizeof(odsc.name) - 1);
+	odsc.name[sizeof(odsc.name) - 1] = '\0';
+
+	od = obj_data_alloc_no_data(&odsc, data);
+
+	if (!od) {
+		uloga("'%s()': failed, can not allocate data object.\n",
+			__func__);
+		return -ENOMEM;
+	}
+
+	// set global dimension
+	set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
+		&od->gdim);
+#ifdef DEBUG
+	/*
+	uloga("%s(): %s default_gdim %llu %llu %llu od->gdim %llu %llu %llu\n",
+	__func__, var_name, dcg->default_gdim.sizes.c[0], dcg->default_gdim.sizes.c[1],
+	dcg->default_gdim.sizes.c[2], od->gdim.sizes.c[0], od->gdim.sizes.c[1],
+	od->gdim.sizes.c[2]);
+	*/
+#endif
+        err = dcg_obj_hint(od);//duan
+        obj_data_free(od);
+        if (err < 0 && err != -EAGAIN)
+                uloga("'%s()': failed with %d, can not get data object.\n",
+                __func__, err);
+
+        return err;
+}
+
 int common_dspaces_get(const char *var_name,
 	unsigned int ver, int size,
 	int ndim,
@@ -281,7 +338,7 @@ int common_dspaces_put(const char *var_name,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
-        const void *data)
+        void *data)
 {
         if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) {
             return -EINVAL;

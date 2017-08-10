@@ -56,3 +56,4 @@ mpirun --hostfile hostfile-app1 --map-by ppr:16:node -n 32 test_writer DATASPACE
 mpirun --hostfile hostfile-app2 --map-by ppr:16:node -n 16 test_reader DATASPACES 16 3 2 2 4 128 128 64 20 2 >& reader.log
 
 #wait
+
