@@ -1,0 +1,59 @@
+#!/bin/bash
+#PBS -N test_dspaces_hybrid_sith
+#PBS -A csc143 
+#PBS -j oe
+#PBS -q batch
+#PBS -l nodes=6:ppn=32,walltime=00:10:00
+
+cd $PBS_O_WORKDIR
+
+rm -f hostfile*
+rm -f conf* srv.lck* 
+rm -f dataspaces.conf
+
+#nodes=(`sort $PBS_NODEFILE | uniq`)
+nodes=(`cat $PBS_NODEFILE | uniq`)
+
+num_nodes_server=0
+idx=0
+# Put first $num_nodes_server to hostfile-server
+for ((i=0; i < $num_nodes_server; i++))
+do
+    echo "${nodes[$idx]}" >> hostfile-server
+    let "idx=idx+1"
+done
+
+num_nodes_app1=4
+num_nodes_app2=2
+# Put the first $num_nodes_app1 nodes to hostfile-app1
+for ((i=0; i < $num_nodes_app1; i++))
+do
+    echo "${nodes[$idx]} slots=32 max_slots=32" >> hostfile-app1
+    let "idx=idx+1"
+done
+
+# Put the next $num_nodes_app2 nodes to hostfile-app2
+for ((i=0; i < $num_nodes_app2; i++))
+do
+    echo "${nodes[$idx]} slots=32 max_slots=32" >> hostfile-app2
+    let "idx=idx+1"
+done
+
+# Write dataspaces config file
+echo "## Config file for DataSpaces
+ndim = 2
+dims = 8192,8192
+ 
+max_versions = 20
+lock_type = 2
+hash_version = 2" > dataspaces.conf
+
+# Start dataspaces servers
+mpirun --hostfile hostfile-app1 -npernode 1 -n 4 dataspaces_server -s 4 -c 96 >& server.log &
+
+# Start testing applications
+mpirun --hostfile hostfile-app1 --byslot -npernode 16 -n 64 test_writer DATASPACES_HYBRID 64 2 8 8 1024 1024 20 1 >& writer.log &
+mpirun --hostfile hostfile-app2 --byslot -npernode 16 -n 32 test_reader DATASPACES_HYBRID 32 2 4 8 2048 1024 20 2 >& reader.log
+
+#wait
+
