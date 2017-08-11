@@ -574,30 +574,46 @@ int ds_boot_slave(struct dart_server *ds) {
     return -1;
 }
 
-static int ds_boot(struct dart_server *ds) {
+static int ds_boot(struct dart_server *ds)
+{
+
+	const char *filename_lock = "srv.lck";
+	const char *filename_conf = "conf";
+	int fd;
+	int is_master = 0;
+	int rank;
+	struct stat stat_buf;
+	int ret;
+
     ds->rpc_s->thread_alive = 1;
     if (pthread_create(&ds->rpc_s->comm_thread, NULL, ds_listen, (void *)ds) != 0) {
         printf("[%s]: create pthread failed!\n", __func__);
         goto err_out;
     }
 
-    const char *filename_lock = "srv.lck";
-    const char *filename_conf = "conf";
-    int fd = open(filename_lock, O_WRONLY | O_CREAT, 0644);
-    if (fd < 0) {
-        printf("[%s]: open file %s failed!\n", __func__, filename_lock);
-        goto err_out;
-    }
-    /* The unique process which locked the file becomes the master */
-    file_lock(fd, 1);
+    if(ds->comm) {
+    	MPI_Comm_rank(ds->comm, &rank);
+    	if(rank == 0) {
+    		is_master = 1;
+    	}
+    } else {
+    	open(filename_lock, O_WRONLY | O_CREAT, 0644);
+    	if (fd < 0) {
+    		printf("[%s]: open file %s failed!\n", __func__, filename_lock);
+    		goto err_out;
+    	}
+    	/* The unique process which locked the file becomes the master */
+    	file_lock(fd, 1);
 
-    struct stat stat_buf;
-    int ret = stat(filename_conf, &stat_buf);
-    if (ret < 0 && errno != ENOENT) {
-        goto err_out;
+    	ret = stat(filename_conf, &stat_buf);
+    	if (ret < 0 && errno != ENOENT) {
+    		goto err_out;
+    	} else if(stat_buf.st_size == 0) {
+    		is_master = 1;
+    	}
     }
 
-    if (ret < 0 || stat_buf.st_size == 0) {
+    if (is_master) {
         if (rpc_write_config(ds->rpc_s, filename_conf) < 0) {
             printf("[%s]: write RPC config file failed!\n", __func__);
             goto err_out;
@@ -625,7 +641,7 @@ static int ds_boot(struct dart_server *ds) {
     return 0;
 
     err_out:
-    if (fd >= 0) {
+    if (fd >= 0 && ds->comm) {
         file_lock(fd, 0);
         close(fd);
     }
