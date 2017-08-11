@@ -936,32 +936,44 @@ static int ds_boot(struct dart_server *ds)	//Done
 	const char fil_lock[] = "srv.lck";
 	const char fil_conf[] = "conf";
 	int fd, err;
-	memset(&st_buff, 0, sizeof(st_buff));
-	err = fd = open(fil_lock, O_WRONLY | O_CREAT, 0644);
-	if(err < 0)
-		goto err_out;
+	int is_master = 0;
+	int rank;
 
-	/* File locking does not work on the login nodes :-( *///?test
-	err = file_lock(fd, 1);
-	if(err < 0)
-		goto err_fd;
-	err = stat(fil_conf, &st_buff);
-	if(err < 0 && errno != ENOENT)
-		goto err_flock;
-	if(st_buff.st_size == 0 || ds->size_sp == 1) {
+	memset(&st_buff, 0, sizeof(st_buff));
+
+	if(ds->comm) {
+		MPI_Comm_rank(ds->comm, &rank);
+		if(rank == 0) {
+			is_master = 1;
+		}
+	} else {
+		err = fd = open(fil_lock, O_WRONLY | O_CREAT, 0644);
+		if(err < 0) {
+			goto err_out;
+		}
+		err = file_lock(fd, 1);
+		if(err < 0)
+			goto err_fd;
+		err = stat(fil_conf, &st_buff);
+		if(err < 0 && errno != ENOENT) {
+			goto err_flock;
+		} else if(st_buff.st_size == 0) {
+			is_master = 1;
+		}
+	}
+	if(is_master || ds->size_sp == 1) {
 
 		/* Config file is empty, should run as master. */
 		ds->self = ds->peer_tab;
 		ds->self->ptlmap = ds->rpc_s->ptlmap;
 
-		//ds->self->num = ds->size_sp;//added in IB Version
 		err = rpc_write_config(ds->rpc_s);
 		if(err != 0)
 			goto err_flock;
-		file_lock(fd, 0);
+		if(!ds->comm) {
+			file_lock(fd, 0);
+		}
 
-		//added in IB version
-//printf("I am master server.\n");//DEBUG
 		err = ds_boot_master(ds);
 		if(err != 0)
 			goto err_flock;
@@ -970,36 +982,33 @@ static int ds_boot(struct dart_server *ds)	//Done
 	else {
 
 		/* Run as slave. */
-		file_lock(fd, 0);
+		if(!ds->comm) {
+			file_lock(fd, 0);
+		}
 
-//printf("I am slave server.\n");//DEBUG
 		err = ds_boot_slave(ds);
 		if(err != 0)
 			goto err_flock;
 	}
 
 
-//        printf("peer# %d address %s\n", ds->rpc_s->ptlmap.id,inet_ntoa(ds->rpc_s->ptlmap.address.sin_addr));
-
-
-/*
-	for(i=0;i<ds->peer_size;i++){
-		peer = ds_get_peer(ds, i);
-		if((peer->rpc_conn.f_connected && peer->sys_conn.f_connected) || i == ds->self->ptlmap.id)
-			continue;
-		printf("Peer %d is not connected!\n", i);
-		err = -1;
-		goto err_out;
-	}
-*/
 	ds->rpc_s->cur_num_peer = ds->rpc_s->num_rpc_per_buff;
-	close(fd);
-	remove(fil_lock);
+	if(is_master && !ds->comm) {
+		close(fd);
+		remove(fil_lock);
+	}
+
 	return 0;
-      err_flock:file_lock(fd, 0);
-      err_fd:close(fd);
-	remove(fil_lock);
-      err_out:printf("'%s()': failed with %d.\n", __func__, err);
+
+err_flock:
+	if(!ds->comm) { file_lock(fd, 0); }
+err_fd:
+	if(!ds->comm) {
+		close(fd);
+		remove(fil_lock);
+	}
+err_out:
+	printf("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 

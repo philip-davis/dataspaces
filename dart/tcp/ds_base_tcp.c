@@ -597,7 +597,7 @@ static int ds_boot(struct dart_server *ds)
     		is_master = 1;
     	}
     } else {
-    	open(filename_lock, O_WRONLY | O_CREAT, 0644);
+    	fd = open(filename_lock, O_WRONLY | O_CREAT, 0644);
     	if (fd < 0) {
     		printf("[%s]: open file %s failed!\n", __func__, filename_lock);
     		goto err_out;
@@ -618,13 +618,17 @@ static int ds_boot(struct dart_server *ds)
             printf("[%s]: write RPC config file failed!\n", __func__);
             goto err_out;
         }
-        file_lock(fd, 0);
+        if(!ds->comm) {
+        	file_lock(fd, 0);
+        }
         if (ds_boot_master(ds) < 0) {
             printf("[%s]: boot master server failed!\n", __func__);
             goto err_out;
         }
     } else {
-        file_lock(fd, 0);
+    	if(!ds->comm) {
+    		file_lock(fd, 0);
+    	}
         if (rpc_read_config(&ds->peer_tab[0].ptlmap.address, filename_conf) < 0) {
             printf("[%s]: read RPC config file failed!\n", __func__);
             goto err_out;
@@ -634,14 +638,15 @@ static int ds_boot(struct dart_server *ds)
             goto err_out;
         }
     }
-    close(fd);
-    /* TODO: should only be called by master after the registration phase */
-    remove(filename_lock);
+    if(is_master && !ds->comm) {
+    	close(fd);
+    	remove(filename_lock);
+    }
 
     return 0;
 
-    err_out:
-    if (fd >= 0 && ds->comm) {
+err_out:
+    if (fd >= 0 && !ds->comm) {
         file_lock(fd, 0);
         close(fd);
     }
