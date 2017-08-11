@@ -1,3 +1,7 @@
+1.6.4 Released August 2017
+    - Reduced dependency on file locks when MPI is available for TCP and IB communicators
+    - dspaces_init now honors passed communicator for uGNI, IB, and TCP.
+
 1.6.3 Released July 2017
     - Fixed build system bug that affected some Infiniband systems.
 
