@@ -942,7 +942,7 @@ static int ds_boot(struct dart_server *ds)	//Done
 	memset(&st_buff, 0, sizeof(st_buff));
 
 	if(ds->comm) {
-		MPI_Comm_rank(ds->comm, &rank);
+		MPI_Comm_rank(*ds->comm, &rank);
 		if(rank == 0) {
 			is_master = 1;
 		}
@@ -972,6 +972,8 @@ static int ds_boot(struct dart_server *ds)	//Done
 			goto err_flock;
 		if(!ds->comm) {
 			file_lock(fd, 0);
+		} else {
+			MPI_Barrier(*ds->comm);
 		}
 
 		err = ds_boot_master(ds);
@@ -984,6 +986,8 @@ static int ds_boot(struct dart_server *ds)	//Done
 		/* Run as slave. */
 		if(!ds->comm) {
 			file_lock(fd, 0);
+		} else {
+			MPI_Barrier(*ds->comm);
 		}
 
 		err = ds_boot_slave(ds);
@@ -1032,6 +1036,16 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 	if(!ds)
 		goto err_out;
 	ds->dart_ref = dart_ref;
+	if(comm) {
+		ds->comm = malloc(sizeof(*ds->comm));
+		err = MPI_Comm_dup(*(MPI_Comm *) comm, ds->comm);
+		if(err < 0) {
+			printf("MPI_Comm_dup failed\n");
+			goto err_out;
+		}
+	} else {
+		ds->comm = NULL;
+	}
 	ds->peer_tab = (struct node_id *) (ds + 1);
 	ds->cn_peers = ds->peer_tab + num_sp;
 	ds->peer_size = num_sp + num_cp;
@@ -1100,6 +1114,11 @@ void ds_free(struct dart_server *ds)
 		list_del(&app->app_entry);
 		free(app);
 	}
+
+	if(ds->comm) {
+		free(ds->comm);
+	}
+
 	free(ds);
 }
 

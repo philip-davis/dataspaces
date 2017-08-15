@@ -592,11 +592,12 @@ static int ds_boot(struct dart_server *ds)
     }
 
     if(ds->comm) {
-    	MPI_Comm_rank(ds->comm, &rank);
+    	MPI_Comm_rank(*ds->comm, &rank);
     	if(rank == 0) {
     		is_master = 1;
     	}
     } else {
+    	uloga("No MPI Comm\n");
     	fd = open(filename_lock, O_WRONLY | O_CREAT, 0644);
     	if (fd < 0) {
     		printf("[%s]: open file %s failed!\n", __func__, filename_lock);
@@ -620,6 +621,8 @@ static int ds_boot(struct dart_server *ds)
         }
         if(!ds->comm) {
         	file_lock(fd, 0);
+        } else {
+        	MPI_Barrier(*ds->comm);
         }
         if (ds_boot_master(ds) < 0) {
             printf("[%s]: boot master server failed!\n", __func__);
@@ -628,6 +631,8 @@ static int ds_boot(struct dart_server *ds)
     } else {
     	if(!ds->comm) {
     		file_lock(fd, 0);
+    	} else {
+    		MPI_Barrier(*ds->comm);
     	}
         if (rpc_read_config(&ds->peer_tab[0].ptlmap.address, filename_conf) < 0) {
             printf("[%s]: read RPC config file failed!\n", __func__);
