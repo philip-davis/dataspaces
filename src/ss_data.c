@@ -205,6 +205,7 @@ static void matrix_copy(struct matrix *a, struct matrix *b)
         uint64_t aloc=0, aloc1=0, aloc2=0, aloc3=0, aloc4=0, aloc5=0, aloc6=0, aloc7=0, aloc8=0, aloc9=0;
         uint64_t b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
         uint64_t bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
+    uint64_t numelem;
 
     switch(a->num_dims){
         case(1):    
@@ -277,13 +278,10 @@ dim2:                for(a1 = a->mat_view.lb[1], b1 = b->mat_view.lb[1];
                     a1 <= a->mat_view.ub[1]; a1++, b1++){
                     aloc1 = (aloc2 + a1) * a->dist[0];
                     bloc1 = (bloc2 + b1) * b->dist[0];
-dim1:                    for(a0 = a->mat_view.lb[0], b0 = b->mat_view.lb[0];
-                        a0 <= a->mat_view.ub[0]; a0++, b0++){
-                        aloc = aloc1 + a0;
-                        bloc = bloc1 + b0;
-                        //memcpy(&(*A)[aloc], &(*B)[bloc], a->size_elem);
-                        memcpy(&A[aloc*a->size_elem], &B[bloc*a->size_elem], a->size_elem);
-                    }
+dim1:               numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
+                    aloc = aloc1 + a->mat_view.lb[0];
+                    bloc = bloc1 + b->mat_view.lb[0];
+                    memcpy(&A[aloc*a->size_elem], &B[bloc*a->size_elem], (a->size_elem * numelem));     
             if(a->num_dims == 1)    return;
                 }
         if(a->num_dims == 2)    return;
