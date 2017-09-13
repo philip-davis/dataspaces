@@ -27,6 +27,9 @@
 /*
 *  Ciprian Docan (2009)  TASSL Rutgers University
 *  docan@cac.rutgers.edu
+*
+*    Pradeep Subedi (2017) RDI2 Rutgers University
+*    pradeep.subedi@rutgers.edu
 */
 
 #include <stdio.h>
@@ -206,6 +209,7 @@ static void matrix_copy(struct matrix *a, struct matrix *b)
         uint64_t aloc=0, aloc1=0, aloc2=0, aloc3=0, aloc4=0, aloc5=0, aloc6=0, aloc7=0, aloc8=0, aloc9=0;
         uint64_t b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
         uint64_t bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
+        int numelem;
 
     switch(a->num_dims){
         case(1):    
@@ -278,13 +282,10 @@ dim2:                for(a1 = a->mat_view.lb[1], b1 = b->mat_view.lb[1];
                     a1 <= a->mat_view.ub[1]; a1++, b1++){
                     aloc1 = (aloc2 + a1) * a->dist[0];
                     bloc1 = (bloc2 + b1) * b->dist[0];
-dim1:                    for(a0 = a->mat_view.lb[0], b0 = b->mat_view.lb[0];
-                        a0 <= a->mat_view.ub[0]; a0++, b0++){
-                        aloc = aloc1 + a0;
-                        bloc = bloc1 + b0;
-                        //memcpy(&(*A)[aloc], &(*B)[bloc], a->size_elem);
-                        memcpy(&A[aloc*a->size_elem], &B[bloc*a->size_elem], a->size_elem);
-                    }
+dim1:                   numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
+                        aloc = aloc1 + a->mat_view.lb[0];
+                        bloc = bloc1 + b->mat_view.lb[0];
+                        memcpy(&A[aloc*a->size_elem], &B[bloc*a->size_elem], (a->size_elem * numelem));
             if(a->num_dims == 1)    return;
                 }
         if(a->num_dims == 2)    return;
@@ -1322,6 +1323,26 @@ struct obj_data *obj_data_alloc(struct obj_descriptor *odsc)
     return od;
 }
 
+struct obj_data *obj_data_alloc_pmem(struct obj_descriptor *odsc)
+{
+    struct obj_data *od = 0;
+
+    od = malloc(sizeof(*od));
+    if (!od)
+        return NULL;
+    memset(od, 0, sizeof(*od));
+
+    od->_data = od->data = pmem_alloc(obj_data_size(odsc));
+    if (!od->_data) {
+        free(od);
+        return NULL;
+    }
+    //ALIGN_ADDR_QUAD_BYTES(od->data);
+    od->obj_desc = *odsc;
+
+    return od;
+}
+
 /*
   Allocate  space  for obj_data  structure  and  references for  data.
 */
@@ -1424,6 +1445,13 @@ void obj_data_free_in_mem(struct obj_data *od)
 	}
 }
 
+void obj_data_free_pointer(struct obj_data *od){
+    od->data = NULL;
+    od->_data = NULL;
+    if (od->sl == in_memory_ssd){ 
+        od->sl = in_ssd;
+    }
+}
 /*free object data in ssd Duan*/
 void obj_data_free_in_ssd(struct obj_data *od)
 {
@@ -1464,10 +1492,24 @@ void obj_data_copy_to_ssd(struct obj_data *od)
 	od->sl = in_memory_ssd;
 }
 
-/*copy object data from ssd to mem Duan*/
+void obj_data_copy_to_ssd_direct(struct obj_data *od)
+{
+    //od->s_data = pmem_alloc(obj_data_size(&od->obj_desc));
+    if(od->_data){
+        msync(od->_data, obj_data_size(&od->obj_desc) + 7, MS_SYNC);
+        od->s_data = od->_data;
+    }else{
+        msync(od->data, obj_data_size(&od->obj_desc), MS_SYNC);
+        od->s_data = od->data;
+
+    }
+    od->sl = in_memory_ssd;
+}
+/*Update ss_data pointer directly to memory*/
 void obj_data_copy_to_mem(struct obj_data *od)
 {
 	if (od->s_data) {
+        /*
 		od->_data = od->data = malloc(obj_data_size(&od->obj_desc) + 7);
 		if (!od->_data) {
 			free(od);
@@ -1476,6 +1518,9 @@ void obj_data_copy_to_mem(struct obj_data *od)
 		ALIGN_ADDR_QUAD_BYTES(od->data);
 		memcpy(od->_data, od->s_data, obj_data_size(&od->obj_desc) + 7); //void *memcpy(void *dest, const void *src, size_t n);
 		//uloga("'%s()': explicit data copy to mem on descriptor %s.\n", __func__, od->obj_desc.name);
+        */
+        od->data = od->s_data;
+        od->_data=od->data;
 	}
 	else{
 		uloga("%s(): ERROR od->s_data %p is is NULL! \n", __func__, od->s_data);

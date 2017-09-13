@@ -29,6 +29,9 @@
 *  docan@cac.rutgers.edu
 *  Tong Jin (2011) TASSL Rutgers University
 *  tjin@cac.rutgers.edu
+*  Pradeep Subedi (2017) RDI2 Rutgers University
+*  pradeep.subedi@rutgers
+*
 */
 
 #include <stdio.h>
@@ -46,6 +49,10 @@
 #endif
 #include "util.h"
 #include<time.h>//Duan
+
+#include "timer.h"
+static struct timer tm_perf;
+
 #define DSG_ID                  dsg->ds->self->ptlmap.id
 
 struct cont_query {
@@ -233,6 +240,8 @@ static inline struct ds_gspace * dsg_ref_from_rpc(struct rpc_server *rpc_s)
 static int init_sspace(struct bbox *default_domain, struct ds_gspace *dsg_l)
 {
     int err = -ENOMEM;
+    timer_init(&tm_perf, 1);
+    timer_start(&tm_perf);
     dsg_l->ssd = ssd_alloc(default_domain, dsg_l->ds->size_sp,
                             ds_conf.max_versions, ds_conf.hash_version);
     if (!dsg_l->ssd)
@@ -1255,9 +1264,14 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 #endif
 
 	ls_add_obj(dsg->ls, od);
-	obj_data_copy_to_ssd(od);//duan
-	obj_data_free_in_mem(od);//duan
-
+  // double tm_start, tm_ending;
+  //  tm_start = timer_read(&tm_perf);
+	obj_data_copy_to_ssd_direct(od);
+  //  tm_ending = timer_read(&tm_perf);
+   // uloga("SSD Write Time: %lf , Data Size: %d\n", tm_ending-tm_start, obj_data_size(&od->obj_desc));
+	obj_data_free_pointer(od);
+   // tm_ending = timer_read(&tm_perf);
+  //  uloga("SSD Write Overhead: %lf , Data Size: %d\n", tm_ending-tm_start, obj_data_size(&od->obj_desc));
     free(msg);
 
 #ifdef DEBUG
@@ -1297,7 +1311,8 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
         err = -ENOMEM;
         peer = ds_get_peer(dsg->ds, cmd->id);
-        od = obj_data_alloc(odsc);
+        //od = obj_data_alloc(odsc);
+        od = obj_data_alloc_pmem(odsc);
         if (!od)
                 goto err_out;
 
@@ -1897,8 +1912,12 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             goto err_out;
         }
 
-		/*cache data from ssd to memory, if it isn't prefetched just moment Duan*/		
+		/*cache data from ssd to memory, if it isn't prefetched just moment Duan*/
+        double tm_start, tm_ending, tm_starting, tm_ends;
+       // tm_start = timer_read(&tm_perf);		
 		obj_data_copy_to_mem(from_obj);//Duan
+      //  tm_ending = timer_read(&tm_perf);
+      //  uloga("SSD Read Time: %lf , Data Size: %d\n", tm_ending-tm_start, obj_data_size(&from_obj->obj_desc));
 
         //TODO:  if required  object is  not  found, I  should send  a
         //proper error message back, and the remote node should handle
@@ -1923,7 +1942,10 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
         (fast_v)? ssd_copyv(od, from_obj) : ssd_copy(od, from_obj);
         od->obj_ref = from_obj;
-		obj_data_free_in_mem(from_obj);//duan
+      //  tm_starting = timer_read(&tm_perf);
+		obj_data_free_pointer(from_obj);
+      //  tm_ends = timer_read(&tm_perf);
+     //   uloga("SSD Overhead: %lf , Data Size: %d\n", tm_ending-tm_start+tm_ends-tm_starting, obj_data_size(&from_obj->obj_desc));
         msg = msg_buf_alloc(rpc_s, peer, 0);
         if (!msg) {
                 obj_data_free(od);
