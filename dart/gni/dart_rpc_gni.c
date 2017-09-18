@@ -756,6 +756,9 @@ struct node_id *gather_node_id(int appid, void *comm)
 	local_addr.ptlmap.nid = get_gni_nic_address(0);
 	local_addr.ptlmap.pid = getpid();
 	local_addr.ptlmap.appid = appid;
+#ifdef DEBUG
+	uloga("Rank %d: local_addr.ptlmap.nid = %d, local_addr.ptlmap.pid = %d, local_addr.ptlmap.appid = %d\n", rank_id, local_addr.ptlmap.nid, local_addr.ptlmap.pid, local_addr.ptlmap.appid);
+#endif
     
 	addr_len = sizeof(struct node_id);
 
@@ -896,8 +899,11 @@ static int rpc_cb_decode(struct rpc_server *rpc_s, struct rpc_request *rr)
 
 
 
-
 	cmd = (struct rpc_cmd *) (rr->msg->msg_rpc);
+
+#ifdef DEBUG
+	uloga("Rank %d: doing rpc_cb_decode with rpc_cmd = %d.\n", rank_id, cmd->cmd);
+#endif
 
 	for (i = 0; i < num_service; i++) 
 	{
@@ -915,6 +921,10 @@ static int rpc_cb_decode(struct rpc_server *rpc_s, struct rpc_request *rr)
 
 	if(err<0)
 		printf("(%s): err.\n", __func__);
+
+#ifdef DEBUG
+	uloga("Rank %d: finished rpc_cb_decode with rpc_cmd = %d.\n", rank_id, cmd->cmd);
+#endif
 
 	return err;
 }
@@ -953,6 +963,10 @@ static int rpc_cb_req_completion(struct rpc_server *rpc_s, struct rpc_request *r
 	int err;
 	gni_return_t status = GNI_RC_SUCCESS;
 
+#ifdef DEBUG
+	uloga("Rank %d: in rpc_cb_req_completion.", rank_id);
+#endif
+
     rr->refcont--;
     if (rr->refcont == 0) {
        if(rr->type == 1 || rr->f_data == 1)
@@ -970,6 +984,10 @@ static int rpc_cb_req_completion(struct rpc_server *rpc_s, struct rpc_request *r
        if(err!=0)
              return -1;
     }
+
+#ifdef DEBUG
+	uloga("Rank %d: finished rpc_cb_req_completion.", rank_id);
+#endif
 
 	return 0;
 }
@@ -1017,6 +1035,8 @@ static int rpc_post_request(struct rpc_server *rpc_s, struct node_id *peer, stru
 	local = rr->index;
 
 	uint32_t hdr_size = hs ? (uint32_t)(sizeof(struct hdr_sys)) : 0;
+
+
 
 RESEND:
 
@@ -1178,6 +1198,10 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 	struct hdr_sys hs;
 	int err, i;
 
+#ifdef DEBUG
+	uloga("Rank %d: starting peer_process_send_list\n", rank_id);
+#endif
+
 	while (!list_empty(&peer->req_list))
 	{
 	    if(peer->num_msg_at_peer == 0)
@@ -1199,8 +1223,15 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 		// Sending credit is good, we will send the message.
 
 		rr = list_entry(peer->req_list.next, struct rpc_request, req_entry);
+#ifdef DEBUG
+	uloga("Rank %d: trying to send rr->msg->msg_rpc->cmd = %d to peer->ptlmap.id = %d right now.\n", rank_id, rr->msg->msg_rpc->cmd, peer->ptlmap.id);
+#endif
+
 		if (rr->msg->msg_data)
 		{
+#ifdef DEBUG
+	uloga("Rank %d: preparing data buffers.\n", rank_id);
+#endif
 			err = rpc_prepare_buffers(rpc_s, peer, rr, rr->iodir);
 			if (err != 0)
 				goto err_out;
@@ -1215,6 +1246,9 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 			goto err_out;
 
 		// Message is sent, consume one credit. 
+#ifdef DEBUG
+		uloga("Rank %d: sending was successful.\n", rank_id);
+#endif
 		peer->num_msg_at_peer--;
 		list_del(&rr->req_entry);
 		peer->num_req--;
@@ -1222,6 +1256,11 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 		list_add_tail(&rr->req_entry, &rpc_s->rpc_list);
 		rpc_s->rr_num++;
 	}
+
+#ifdef DEBUG
+	uloga("Rank %d: finished peer_process_send_list\n", rank_id);
+#endif
+
 
 	return 0;
 err_out:
@@ -1505,19 +1544,23 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
   struct hdr_sys *hs;
   int err =  -ENOMEM;
   uint32_t n;
+
   int check=0;
   int cnt=0;
   void *tmpcmd;
 
   status = GNI_CqVectorWaitEvent(cq_array, 3, (uint64_t)timeout, &event_data, &n);
-  if (status == GNI_RC_TIMEOUT)
+  if (status == GNI_RC_TIMEOUT) {
     return status;
-
-  else if (status != GNI_RC_SUCCESS)
+  } else if (status != GNI_RC_SUCCESS)
     {
       printf("(%s): GNI_CqVectorWaitEvent PROCESSING ERROR.\n", __func__);
       return status;
     }
+
+#ifdef DEBUG
+  uloga("Rank %d: caught event from CQ %d\n", rank_id, n);
+#endif
 
   event_type = GNI_CQ_GET_TYPE(event_data);
   //event_id = GNI_CQ_GET_MSG_ID(event_data);                                                                                           
@@ -1541,7 +1584,12 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	    }
 	}
 
+
       while(!GNI_CQ_STATUS_OK(event_data));
+
+#ifdef DEBUG
+  uloga("Rank %d: rr->type = %d, rr->index = %d\n", rank_id, rr->type, rr->index);
+#endif
 
       if(check == 0)
 	{
@@ -1744,6 +1792,10 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	}
 
     }
+
+#ifdef DEBUG
+  	  uloga("Rank %d: finished __process_event.\n", rank_id);
+#endif
 
   return 0;
 
@@ -2447,6 +2499,10 @@ int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg
 	struct rpc_request *rr;
 	int err = -ENOMEM;
 
+#ifdef DEBUG
+	uloga("Rank %d: doing rpc_send for peer->ptlmap.id = %d, peer->ptlmap.nid = %d, peer->ptlmap.pid = %d, peer->ptlmap.appid = %d, msg->msg_rpc->cmd = %d\n", rank_id, peer->ptlmap.id, peer->ptlmap.nid, peer->ptlmap.pid, peer->ptlmap.appid, msg->msg_rpc->cmd);
+#endif
+
 	rr = calloc(1, sizeof(struct rpc_request));
 	if(!rr)
 		goto err_out;
@@ -2465,8 +2521,12 @@ int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg
 	peer->num_req++;
 
 	err = peer_process_send_list(rpc_s, peer);
-	if(err == 0)
+	if(err == 0) {
+#ifdef DEBUG
+		uloga("Rank %d: finished rpc_send\n", rank_id);
+#endif
 		return 0;
+	}
 err_out:
 	printf("'%s()': failed with %d.\n", __func__, err);
 	return err;
