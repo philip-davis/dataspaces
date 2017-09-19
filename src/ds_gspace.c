@@ -1436,6 +1436,10 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
         int *peer_id_tab, peer_num, i;
         int err = -ENOMEM;
 
+#ifdef DEBUG
+        uloga("Rank %d: processing ss_obj_get_dht_peers from peer id %d, peer node %d, peer pid %d, peer app %d\n", rank_id, peer->ptlmap.id, peer->ptlmap.nid, peer->ptlmap.pid, peer->ptlmap.appid);
+#endif
+
         peer = ds_get_peer(dsg->ds, cmd->id);
 
         peer_num = ssd_hash(ssd, &oh->u.o.odsc.bb, de_tab);
@@ -1465,6 +1469,11 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
 
         free(peer_id_tab);
         free(msg);
+
+#ifdef DEBUG
+        uloga("Rank %d: done processing ss_obj_get_dht_peers from peer id %d.\n", rank_id, peer->ptlmap.id);
+#endif
+
  err_out:
         ERROR_TRACE();
 }
@@ -1659,6 +1668,11 @@ static int obj_desc_not_found(struct node_id *peer, int qid, int num_vers, int *
 
 static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
+
+#ifdef DEBUG
+	uloga("Rank %d: entereing obj_get_desc_completion.\n", rank_id);
+#endif
+
         free(msg->msg_data);
         free(msg);
         return 0;

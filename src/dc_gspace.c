@@ -948,10 +948,15 @@ static int get_dht_peers(struct query_tran_entry *qte)
         struct node_id *peer;
         int err = -ENOMEM;
 
+#ifdef DEBUG
+        uloga("Client %d: entering get_dht_peers.\n", DCG_ID);
+#endif
+
         peer = dcg_which_peer();
         msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
         if (!msg) 
                 goto err_out;
+
 
         msg->msg_rpc->cmd = ss_obj_get_dht_peers;
         msg->msg_rpc->id = DCG_ID;
@@ -967,6 +972,10 @@ static int get_dht_peers(struct query_tran_entry *qte)
         memcpy(&oh->gdim, &qte->gdim, sizeof(struct global_dimension));
 
         err = rpc_receive(dcg->dc->rpc_s, peer, msg);
+
+#ifdef DEBUG
+        uloga("Client %d: leaving get_dht_peers.\n", DCG_ID);
+#endif
         if (err == 0)
                 return 0;
 
@@ -991,6 +1000,9 @@ static int get_obj_descriptors(struct query_tran_entry *qte)
         peer_id = qte->qh->qh_peerid_tab;
         while (*peer_id != -1) {
                 peer = dc_get_peer(dcg->dc, *peer_id);
+#ifdef DEBUG
+	uloga("Rank %d: requesting objdesc from peer->ptlmap.id = %d, peer->ptlmap.nid = %d, peer->ptlmap.pid = %d, peer->ptlmap.appid = %d\n", rank_id, peer->ptlmap.id, peer->ptlmap.nid, peer->ptlmap.pid, peer->ptlmap.appid);
+#endif
 
                 err = -ENOMEM;
                 msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
@@ -1760,10 +1772,16 @@ int dcg_obj_get(struct obj_data *od)
         }
         else {
                 err = get_dht_peers(qte);
-                if (err < 0)
+                if (err < 0) {
                         goto err_qt_free;
+                }
+#ifdef DEBUG
+                uloga("Client %d: waiting for DHT peers.\n", DCG_ID);
+#endif
                 DC_WAIT_COMPLETION(qte->f_peer_received == 1);
-
+#ifdef DEBUG
+                uloga("Client %d: received DHT peers.\n", DCG_ID);
+#endif
                 err = get_obj_descriptors(qte);
                 if (err < 0) {
                     if (err == -EAGAIN)

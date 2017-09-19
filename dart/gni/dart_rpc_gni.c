@@ -964,7 +964,7 @@ static int rpc_cb_req_completion(struct rpc_server *rpc_s, struct rpc_request *r
 	gni_return_t status = GNI_RC_SUCCESS;
 
 #ifdef DEBUG
-	uloga("Rank %d: in rpc_cb_req_completion.", rank_id);
+	uloga("Rank %d: in rpc_cb_req_completion.\n", rank_id);
 #endif
 
     rr->refcont--;
@@ -980,13 +980,16 @@ static int rpc_cb_req_completion(struct rpc_server *rpc_s, struct rpc_request *r
 
        }
 
+#ifdef DEBUG
+       uloga("Rank %d: doing callback for rr->index = %d\n", rank_id, rr->index);
+#endif
        err = (*rr->msg->cb)(rpc_s, rr->msg);
        if(err!=0)
              return -1;
     }
 
 #ifdef DEBUG
-	uloga("Rank %d: finished rpc_cb_req_completion.", rank_id);
+	uloga("Rank %d: finished rpc_cb_req_completion.\n", rank_id);
 #endif
 
 	return 0;
@@ -1588,7 +1591,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
       while(!GNI_CQ_STATUS_OK(event_data));
 
 #ifdef DEBUG
-  uloga("Rank %d: rr->type = %d, rr->index = %d\n", rank_id, rr->type, rr->index);
+  uloga("Rank %d: rr->type = %d, rr->index = %d, check = %d\n", rank_id, rr->type, rr->index, check);
 #endif
 
       if(check == 0)
@@ -1602,9 +1605,11 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	  goto err_out;
 	}
 
-
       if(rr->type == 1)
 	{
+#ifdef DEBUG
+    	  uloga("Rank %d: about to run GNI_GetCompleted.\n", rank_id);
+#endif
 	  status = GNI_GetCompleted(rpc_s->src_cq_hndl, event_data, &post_des);
 	  if (status != GNI_RC_SUCCESS)
 	    {
@@ -2649,7 +2654,16 @@ int rpc_receive(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *
 {
 	int err;
 	
+#ifdef DEBUG
+	uloga("Rank %d: doing rpc_receive for peer->ptlmap.id = %d, peer->ptlmap.nid = %d, peer->ptlmap.pid = %d, peer->ptlmap.appid = %d, msg->msg_rpc->cmd = %d\n", rank_id, peer->ptlmap.id, peer->ptlmap.nid, peer->ptlmap.pid, peer->ptlmap.appid, msg->msg_rpc->cmd);
+#endif
+
 	err = __receive(rpc_s, peer, msg, unset);
+
+#ifdef DEBUG
+		uloga("Rank %d: finished rpc_send\n", rank_id);
+#endif
+
 	if(err == 0)
 		return 0;
 
