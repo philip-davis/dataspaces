@@ -1436,11 +1436,11 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
         int *peer_id_tab, peer_num, i;
         int err = -ENOMEM;
 
+        peer = ds_get_peer(dsg->ds, cmd->id);
+
 #ifdef DEBUG
         uloga("Rank %d: processing ss_obj_get_dht_peers from peer id %d, peer node %d, peer pid %d, peer app %d\n", rank_id, peer->ptlmap.id, peer->ptlmap.nid, peer->ptlmap.pid, peer->ptlmap.appid);
 #endif
-
-        peer = ds_get_peer(dsg->ds, cmd->id);
 
         peer_num = ssd_hash(ssd, &oh->u.o.odsc.bb, de_tab);
         peer_id_tab = malloc(sizeof(int) * (dsg->ds->size_sp+1));
