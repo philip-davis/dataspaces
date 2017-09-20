@@ -35,6 +35,7 @@
 #include <stdlib.h>
 #include "common.h"
 #include "mpi.h"
+#include <pthread.h>
 
 int read_config_file(const char* fname,
 	int *num_sp, int *num_cp, int *iter,
@@ -220,20 +221,49 @@ int common_put_sync(enum transport_type type) {
         return 0;
 }
 
+//Yubo add pthread
+static void *common_run_server_thread(void *dsgv)
+{
+	struct ds_gspace *dsg = (struct ds_gspace *)dsgv;
+	int err;
+
+	while(!dsg_complete(dsg))
+	{
+		err = dsg_process(dsg);
+		if(err < 0){
+			break;
+		}
+	}
+	return(NULL);
+
+}
+
+//Yubo edited to call pthread
 int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gcomm) {
-        int err;
+        int err, err_1, err_2;
+	pthread_t thread[2];
         if (type == USE_DSPACES) {
                 struct ds_gspace *dsg;
                 dsg = dsg_alloc(num_sp, num_cp, "dataspaces.conf", gcomm);
                 if (!dsg)
                         return -1;
+		err_1 = pthread_create(&thread[0], NULL, common_run_server_thread, dsg);
+		err_2 = pthread_create(&thread[1], NULL, common_run_server_thread, dsg);		 
+		
+		pthread_join(thread[0], NULL);
+		pthread_join(thread[1], NULL);
 
+		if (err_1 < 0 || err_1 < 0)
+			err = -1;
+		else
+			err = 0;
+/*
                 while (!dsg_complete(dsg)){
                         err = dsg_process(dsg);
                         if(err<0)
                                 break;
                 }
-
+*/
                 //dsg_barrier(dsg);
 		MPI_Barrier(*(MPI_Comm*)gcomm);
                 dsg_free(dsg);

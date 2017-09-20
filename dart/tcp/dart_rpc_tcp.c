@@ -4,6 +4,7 @@
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <pthread.h> //Yubo
 
 #include "dart_rpc_tcp.h"
 #include "debug.h"
@@ -13,6 +14,8 @@
 static uint64_t socket_best_write_size = 16384;
 /* Best size of bytes to be read in a single socket read call */
 static uint64_t socket_best_read_size = 87380;
+//Yubo
+extern pthread_mutex_t pmutex1 = PTHREAD_MUTEX_INITIALIZER;
 
 static uint64_t str_to_uint64(const char *s) {
     uint64_t res = 0;
@@ -384,7 +387,10 @@ static int rpc_process_cmd(struct rpc_server *rpc_s, struct rpc_cmd *cmd) {
 static int rpc_process_event_peer(struct rpc_server *rpc_s, struct node_id *peer) {
     while (1) {
         struct rpc_cmd cmd;
+//Yubo
+	//pthread_mutex_lock(&pmutex1);
         int ret = socket_recv_rpc_cmd(peer->sockfd, &cmd);
+	//pthread_mutex_unlock(&pmutex1);
         if (ret < 0) {
             printf("[%s]: receive RPC command from peer %d failed!\n", __func__, peer->ptlmap.id);
             goto err_out;
@@ -395,11 +401,15 @@ static int rpc_process_event_peer(struct rpc_server *rpc_s, struct node_id *peer
         }
 
         /* It is more convenient to set id here */
-        cmd.id = peer->ptlmap.id;
+        //pthread_mutex_lock(&pmutex1);
+	cmd.id = peer->ptlmap.id;
+	//pthread_mutex_unlock(&pmutex1);
+	pthread_mutex_lock(&pmutex1); 
         if (rpc_process_cmd(rpc_s, &cmd) < 0) {
             printf("[%s]: process RPC command failed!\n", __func__);
             goto err_out;
         }
+	pthread_mutex_unlock(&pmutex1);
     }
     return 0;
 
@@ -410,16 +420,20 @@ static int rpc_process_event_peer(struct rpc_server *rpc_s, struct node_id *peer
 int rpc_process_event(struct rpc_server *rpc_s) {
     int i;
     for (i = 0; i < rpc_s->num_peers; ++i) {
-        struct node_id *peer = &rpc_s->peer_tab[i];
+        pthread_mutex_lock(&pmutex1);
+	struct node_id *peer = &rpc_s->peer_tab[i];
+	pthread_mutex_unlock(&pmutex1);
         if (!peer->f_connected) {
             /* Not connected yet, no need for processing event */
             continue;
         }
-
+	//Yubo
+	//pthread_mutex_lock(&pmutex1);
         if (rpc_process_event_peer(rpc_s, peer) < 0) {
             printf("[%s]: process event for peer %d failed, skip!\n", __func__, peer->ptlmap.id);
             continue;
         }
+	//pthread_mutex_unlock(&pmutex1);
     }
     return 0;
 }
