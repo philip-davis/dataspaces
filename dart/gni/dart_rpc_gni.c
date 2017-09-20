@@ -1552,6 +1552,10 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
   int cnt=0;
   void *tmpcmd;
 
+#ifdef DEBUG
+  //uloga("Rank %d: (about to cqVectorWaitEvent) rpc_s->src_cq_hndl = %p, cq_array[0] = %p\n", rank_id, (void *)rpc_s->src_cq_hndl, (void *)cq_array[0]);
+#endif
+
   status = GNI_CqVectorWaitEvent(cq_array, 3, (uint64_t)timeout, &event_data, &n);
   if (status == GNI_RC_TIMEOUT) {
     return status;
@@ -1562,6 +1566,11 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
     }
 
 #ifdef DEBUG
+  uloga("Rank %d: (did cqVectorWaitEvent) rpc_s->src_cq_hndl = %p, cq_array[0] = %p\n", rank_id, (void *)rpc_s->src_cq_hndl, (void *)cq_array[0]);
+#endif
+
+
+#ifdef DEBUG
   uloga("Rank %d: caught event from CQ %d\n", rank_id, n);
 #endif
 
@@ -1570,6 +1579,10 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 
   if(GNI_CQ_STATUS_OK(event_data) == 0)
     printf("Rank %d: receive event_id (%d) not done.\n",rank_id, event_id);
+
+#ifdef DEBUG
+  uloga("Rank %d: (about to check n) rpc_s->src_cq_hndl = %p\n", rank_id, (void *)rpc_s->src_cq_hndl);
+#endif
 
   if(n == 0)
     {
@@ -1591,7 +1604,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
       while(!GNI_CQ_STATUS_OK(event_data));
 
 #ifdef DEBUG
-  uloga("Rank %d: rr->type = %d, rr->index = %d, check = %d\n", rank_id, rr->type, rr->index, check);
+  uloga("Rank %d: rr->type = %d, rr->index = %d, check = %d, rpc_s->src_cq_hndl = %p\n", rank_id, rr->type, rr->index, check, (void *)rpc_s->src_cq_hndl);
 #endif
 
       if(check == 0)
@@ -1608,12 +1621,12 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
       if(rr->type == 1)
 	{
 #ifdef DEBUG
-    	  uloga("Rank %d: about to run GNI_GetCompleted.\n", rank_id);
+    	  uloga("Rank %d: about to run GNI_GetCompleted. rpc_s->src_cq_hndl = %p\n", rank_id, (void *)rpc_s->src_cq_hndl);
 #endif
 	  status = GNI_GetCompleted(rpc_s->src_cq_hndl, event_data, &post_des);
 	  if (status != GNI_RC_SUCCESS)
 	    {
-	      printf("(%s): GNI_GetCompleted PROCESSING ERROR.\n", __func__);
+	      uloga("Rank %d: (%s): GNI_GetCompleted PROCESSING ERROR. rpc_s->src_cq_hndl = %p\n", rank_id, __func__, (void *)rpc_s->src_cq_hndl);
 	      goto err_status;
 	    }
 	}
@@ -1805,10 +1818,10 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
   return 0;
 
  err_out:
-  printf("(%s): err (%d).\n", __func__, err);
+  uloga("(%s): err (%d).\n", __func__, err);
   return err;
  err_status:
-  printf("(%s): status (%d).\n", __func__, status);
+  uloga("(%s): status (%d).\n", __func__, status);
   return status;
 }
 
