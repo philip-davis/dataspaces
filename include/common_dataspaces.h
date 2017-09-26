@@ -65,6 +65,13 @@ int common_dspaces_put (const char *var_name,
         uint64_t *ub,
         const void *data);
 
+int common_dspaces_put_ssd (const char *var_name, 
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        const void *data);
+
 int common_dspaces_remove (const char *var_name, unsigned int ver);
 
 int common_dspaces_put_sync(void);

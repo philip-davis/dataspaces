@@ -1503,7 +1503,7 @@ void obj_data_copy_to_ssd_direct(struct obj_data *od)
         od->s_data = od->data;
 
     }
-    od->sl = in_memory_ssd;
+    od->sl = in_ssd;
 }
 /*Update ss_data pointer directly to memory*/
 void obj_data_copy_to_mem(struct obj_data *od)

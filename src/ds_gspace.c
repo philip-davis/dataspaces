@@ -1266,12 +1266,11 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 	ls_add_obj(dsg->ls, od);
   // double tm_start, tm_ending;
   //  tm_start = timer_read(&tm_perf);
-	obj_data_copy_to_ssd_direct(od);
-  //  tm_ending = timer_read(&tm_perf);
-   // uloga("SSD Write Time: %lf , Data Size: %d\n", tm_ending-tm_start, obj_data_size(&od->obj_desc));
-	obj_data_free_pointer(od);
-   // tm_ending = timer_read(&tm_perf);
-  //  uloga("SSD Write Overhead: %lf , Data Size: %d\n", tm_ending-tm_start, obj_data_size(&od->obj_desc));
+    if(od->sl == in_memory_ssd){
+        obj_data_copy_to_ssd_direct(od);
+        obj_data_free_pointer(od);
+    }
+	
     free(msg);
 
 #ifdef DEBUG
@@ -1311,8 +1310,9 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
         err = -ENOMEM;
         peer = ds_get_peer(dsg->ds, cmd->id);
-        //od = obj_data_alloc(odsc);
-        od = obj_data_alloc_pmem(odsc);
+        od = obj_data_alloc(odsc);
+        od->sl = in_memory;
+        //od = obj_data_alloc_pmem(odsc);
         if (!od)
                 goto err_out;
 
@@ -1354,6 +1354,75 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         return err;
 }
 
+static int dsgrpc_obj_put_ssd(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+        struct hdr_obj_put *hdr = (struct hdr_obj_put *)cmd->pad;
+        struct obj_descriptor *odsc = &(hdr->odsc);
+        struct obj_data *od;
+        struct node_id *peer;
+        struct msg_buf *msg;
+        int err;
+        //----->Duan
+//#ifdef DEBUG
+        {
+            char *str;
+
+            asprintf(&str, "S%2d: request for dsgrpc_obj_put '%s' ver %d from C%2d for  ",
+                DSG_ID, odsc->name, odsc->version, cmd->id);
+            str = str_append(str, bbox_sprint(&odsc->bb));
+
+            uloga("'%s()': %s\n", __func__, str);
+            free(str);
+        }
+//#endif
+        //<-----Duan
+        odsc->owner = DSG_ID;
+
+        err = -ENOMEM;
+        peer = ds_get_peer(dsg->ds, cmd->id);
+        //od = obj_data_alloc(odsc);
+        od = obj_data_alloc_pmem(odsc);
+        od->sl = in_memory_ssd;
+        if (!od)
+                goto err_out;
+
+        od->obj_desc.owner = DSG_ID;
+        memcpy(&od->gdim, &hdr->gdim, sizeof(struct global_dimension));
+
+        msg = msg_buf_alloc(rpc_s, peer, 0);
+        if (!msg)
+                goto err_free_data;
+
+        msg->msg_data = od->data;
+        msg->size = obj_data_size(&od->obj_desc);
+        msg->private = od;
+        msg->cb = obj_put_completion;
+
+//#ifdef DEBUG
+        uloga("'%s()': server %d start receiving %s, version %d.\n", 
+            __func__, DSG_ID, odsc->name, odsc->version);
+//#endif
+        rpc_mem_info_cache(peer, msg, cmd); 
+        err = rpc_receive_direct(rpc_s, peer, msg);
+        rpc_mem_info_reset(peer, msg, cmd);
+
+        if (err < 0)
+                goto err_free_msg;
+
+    /* NOTE: This  early update, has  to be protected  by external
+       locks in the client code. */
+
+        err = obj_put_update_dht(dsg, od);
+        if (err == 0)
+            return 0;
+ err_free_msg:
+        free(msg);
+ err_free_data:
+        free(od);
+ err_out:
+        uloga("'%s()': failed with %d.\n", __func__, err);
+        return err;
+}
 static int obj_info_reply_descriptor(
         struct node_id *q_peer,
         const struct obj_descriptor *q_odsc) // __attribute__((__unused__))
@@ -1914,8 +1983,11 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 		/*cache data from ssd to memory, if it isn't prefetched just moment Duan*/
         double tm_start, tm_ending, tm_starting, tm_ends;
-       // tm_start = timer_read(&tm_perf);		
-		obj_data_copy_to_mem(from_obj);//Duan
+       // tm_start = timer_read(&tm_perf);	
+       if(from_obj->sl == in_ssd){
+            obj_data_copy_to_mem(from_obj);
+       }	
+		
       //  tm_ending = timer_read(&tm_perf);
       //  uloga("SSD Read Time: %lf , Data Size: %d\n", tm_ending-tm_start, obj_data_size(&from_obj->obj_desc));
 
@@ -1943,7 +2015,10 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         (fast_v)? ssd_copyv(od, from_obj) : ssd_copy(od, from_obj);
         od->obj_ref = from_obj;
       //  tm_starting = timer_read(&tm_perf);
-		obj_data_free_pointer(from_obj);
+        if(from_obj->sl == in_memory_ssd){
+            obj_data_free_pointer(from_obj);
+        }
+		
       //  tm_ends = timer_read(&tm_perf);
      //   uloga("SSD Overhead: %lf , Data Size: %d\n", tm_ending-tm_start+tm_ends-tm_starting, obj_data_size(&from_obj->obj_desc));
         msg = msg_buf_alloc(rpc_s, peer, 0);
@@ -2114,6 +2189,7 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         rpc_add_service(ss_obj_get_desc, dsgrpc_obj_get_desc);
         rpc_add_service(ss_obj_get, dsgrpc_obj_get);
         rpc_add_service(ss_obj_put, dsgrpc_obj_put);
+        rpc_add_service(ss_obj_put_ssd, dsgrpc_obj_put_ssd);
         rpc_add_service(ss_obj_update, dsgrpc_obj_update);
         rpc_add_service(ss_obj_filter, dsgrpc_obj_filter);
         rpc_add_service(ss_obj_cq_register, dsgrpc_obj_cq_register);

@@ -174,6 +174,11 @@ int common_put(const char *var_name,
 	void *data, enum transport_type type)
 {
 	if ( type == USE_DSPACES ) {
+        if(ver == 2 || ver==4 || ver==6 || ver==8){
+            uloga("%s(): Write to SSD, ts = %d!\n", __func__, ver);
+            return dspaces_put_ssd(var_name, ver, size,
+                        ndim,lb, ub,data);
+        }
 		return dspaces_put(var_name, ver, size,
                         ndim,lb, ub,data);
 	} else if (type == USE_DIMES) {

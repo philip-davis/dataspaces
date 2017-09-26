@@ -42,7 +42,7 @@
 #include <ctype.h>
 
 /* using 64M ssd file for this example */
-#define PMEM_SIZE 64*1024*1024L
+#define PMEM_SIZE 1*512*1024L
 //#define PMEM_SIZE 256*1024*1024*1024L
 //#define PMEM_SIZE 128*1024*1024*1024L
 //#define PMEM_SIZE 64*1024*1024*1024L
@@ -55,7 +55,7 @@
 //#define PMEM_SIZE 1*1024*1024*1024L
 
 /* using /ssd1/sd904/ ssd file path for this example */
-#define PMEM_PATH "/ccs/home/sd904/"
+#define PMEM_PATH "/home/subedip/"
 //#define PMEM_PATH "/home1/sd904/"
 //#define PMEM_PATH ""
 
@@ -73,14 +73,14 @@ static char *pmem_file;
 
 void *pmem_alloc(uint64_t num_bytes)
 {
-#ifdef DEBUG
+//#ifdef DEBUG
 	{
 	char *str;
 	asprintf(&str, "num_bytes %d ", num_bytes);
 	uloga("'%s()': %s\n", __func__, str);
 	free(str);
 	}
-#endif
+//#endif
 
 	struct PMemEntry *pmem_iter, *pmem_iter_succ, * pmem_splited;
 	if (num_bytes <= 0){
