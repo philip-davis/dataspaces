@@ -125,7 +125,8 @@ enum cmd_type {
   large_data_chunk_cmd,
   finished_large_data_recv_cmd,
   /*Added for SSD commands*/
-  ss_obj_put_ssd
+  ss_obj_put_ssd,
+  ss_obj_put_ceph
 };
 
 enum lock_type {

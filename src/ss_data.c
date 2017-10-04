@@ -200,7 +200,28 @@ static void matrix_init(struct matrix *mat, enum storage_type st,
     mat->size_elem = se;
 }
 
-static void matrix_copy(struct matrix *a, struct matrix *b)
+static void matrix_init_ceph(struct matrix *mat, enum storage_type st,
+                        struct bbox *bb_glb, struct bbox *bb_loc, 
+                        void *pdata, size_t se)
+{
+    int i;
+    int ndims = bb_glb->num_dims;
+    
+    memset(mat, 0, sizeof(struct matrix));
+
+    for(i = 0; i < ndims; i++){
+        mat->dist[i] = bbox_dist(bb_glb, i);
+        mat->mat_view.lb[i] = bb_loc->lb.c[i] - bb_glb->lb.c[i];
+        mat->mat_view.ub[i] = bb_loc->ub.c[i] - bb_glb->lb.c[i];
+    }
+
+    mat->num_dims = ndims;
+    mat->mat_storage = st;
+    //mat->pdata = pdata; //need to change pointer to ceph
+    mat->size_elem = se;
+}
+
+static void matrix_copy(struct matrix *a, struct matrix *b) //need to pass name for copy from ceph
 {
         char *A = a->pdata;
         char *B = b->pdata;
@@ -285,6 +306,7 @@ dim2:                for(a1 = a->mat_view.lb[1], b1 = b->mat_view.lb[1];
 dim1:                   numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
                         aloc = aloc1 + a->mat_view.lb[0];
                         bloc = bloc1 + b->mat_view.lb[0];
+                        //change this function for copy from ceph
                         memcpy(&A[aloc*a->size_elem], &B[bloc*a->size_elem], (a->size_elem * numelem));
             if(a->num_dims == 1)    return;
                 }
@@ -306,6 +328,149 @@ dim1:                   numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
     }
 }
 
+static void matrix_copy_ceph(struct matrix *a, struct matrix *b, char* name, uint64_t num_elems) //need to pass name for copy from ceph
+{
+        //B is ceph, A is to_obj
+        char *A = a->pdata;
+        //char *B = b->pdata;
+
+        uint64_t a0, a1, a2, a3, a4, a5, a6, a7, a8, a9;
+        uint64_t aloc=0, aloc1=0, aloc2=0, aloc3=0, aloc4=0, aloc5=0, aloc6=0, aloc7=0, aloc8=0, aloc9=0;
+        uint64_t b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
+        uint64_t bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
+        int numelem;
+        rados_ioctx_t io;
+        char *poolname = "dataspaces";
+        int err = rados_ioctx_create(cluster, poolname, &io);
+        if (err < 0) {
+                uloga("%s: cannot open rados pool %s: %s\n", __func__, poolname, strerror(-err));
+                rados_shutdown(cluster);
+                exit(EXIT_FAILURE);
+        } else {
+            //    uloga("\nCreated I/O context.\n");
+        }
+        rados_completion_t *comp;
+        comp = malloc(sizeof(rados_completion_t)*num_elems);
+        int counter =0;
+    switch(a->num_dims){
+        case(1):    
+            goto dim1;
+            break;
+        case(2):
+            goto dim2;
+            break;
+        case(3):
+            goto dim3;
+            break;
+        case(4):
+            goto dim4;
+            break;
+        case(5):
+            goto dim5;
+            break;
+        case(6):
+            goto dim6;
+            break;
+        case(7):
+            goto dim7;
+            break;
+        case(8):
+            goto dim8;
+            break;
+        case(9):
+            goto dim9;
+            break;
+        case(10):
+            goto dim10;
+            break;
+        default:
+            break;
+    }
+    
+dim10:        for(a9 = a->mat_view.lb[9], b9 = b->mat_view.lb[9];   //TODO-Q
+            a9 <= a->mat_view.ub[9]; a9++, b9++){
+            aloc9 = a9 * a->dist[8];
+            bloc9 = a9 * b->dist[8];
+dim9:        for(a8 = a->mat_view.lb[8], b8 = b->mat_view.lb[8];    //TODO-Q
+            a8 <= a->mat_view.ub[8]; a8++, b8++){
+            aloc8 = (aloc9 + a8) * a->dist[7];
+            bloc8 = (bloc9 + b8) * b->dist[7];
+dim8:        for(a7 = a->mat_view.lb[7], b7 = b->mat_view.lb[7];    //TODO-Q
+            a7 <= a->mat_view.ub[7]; a7++, b7++){
+            aloc7 = (aloc8 + a7) * a->dist[6];
+            bloc7 = (bloc8 + b7) * b->dist[6];
+dim7:        for(a6 = a->mat_view.lb[6], b6 = b->mat_view.lb[6];    //TODO-Q
+            a6 <= a->mat_view.ub[6]; a6++, b6++){
+            aloc6 = (aloc7 + a6) * a->dist[5];
+            bloc6 = (bloc7 + b6) * b->dist[5];
+dim6:        for(a5 = a->mat_view.lb[5], b5 = b->mat_view.lb[5];    //TODO-Q
+            a5 <= a->mat_view.ub[5]; a5++, b5++){
+            aloc5 = (aloc6 + a5) * a->dist[4];
+            bloc5 = (bloc6 + b5) * b->dist[4];
+dim5:        for(a4 = a->mat_view.lb[4], b4 = b->mat_view.lb[4];
+            a4 <= a->mat_view.ub[4]; a4++, b4++){
+            aloc4 = (aloc5 + a4) * a->dist[3];
+            bloc4 = (bloc5 + b4) * b->dist[3];
+dim4:        for(a3 = a->mat_view.lb[3], b3 = b->mat_view.lb[3];
+            a3 <= a->mat_view.ub[3]; a3++, b3++){
+            aloc3 = (aloc4 + a3) * a->dist[2];
+            bloc3 = (bloc4 + b3) * b->dist[2];
+dim3:            for(a2 = a->mat_view.lb[2], b2 = b->mat_view.lb[2];
+                a2 <= a->mat_view.ub[2]; a2++, b2++){
+                aloc2 = (aloc3 + a2) * a->dist[1];
+                bloc2 = (bloc3 + b2) * b->dist[1];
+dim2:                for(a1 = a->mat_view.lb[1], b1 = b->mat_view.lb[1];
+                    a1 <= a->mat_view.ub[1]; a1++, b1++){
+                    aloc1 = (aloc2 + a1) * a->dist[0];
+                    bloc1 = (bloc2 + b1) * b->dist[0];
+dim1:                   numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
+                        aloc = aloc1 + a->mat_view.lb[0];
+                        bloc = bloc1 + b->mat_view.lb[0];
+                        //change this function for copy from ceph
+                        int err = rados_aio_create_completion(NULL, NULL, NULL, &comp[counter]);
+                        if (err < 0) {
+                                uloga("%s: could not create aio completion: %s\n", __func__, strerror(-err));
+                                rados_ioctx_destroy(io);
+                                exit(1);
+                        }
+                        //uloga("Size of element %d, bloc:%d, start offset: %d, length: %d \n", a->size_elem, bloc, bloc*(a->size_elem), a->size_elem * numelem);
+                        err = rados_aio_read(io, name, comp[counter], &A[aloc*a->size_elem], (a->size_elem) * numelem, bloc*(a->size_elem));
+                        if (err < 0) {
+                                uloga( "%s: could not complete aio read: %s size:%d , offset: %d\n", __func__, strerror(-err), a->size_elem * numelem, bloc*(a->size_elem));
+                                rados_ioctx_destroy(io);
+                                exit(1);
+                        }
+                        //memcpy(&A[aloc*a->size_elem], &B[bloc*a->size_elem], (a->size_elem * numelem));
+                        counter++;
+            if(a->num_dims == 1)    goto wait_comp;
+                }
+        if(a->num_dims == 2)    goto wait_comp;
+            }
+        if(a->num_dims == 3)    goto wait_comp;
+        }
+    if(a->num_dims == 4)    goto wait_comp;
+    }
+    if(a->num_dims == 5)    goto wait_comp;
+    }
+    if(a->num_dims == 6)    goto wait_comp;
+    }
+    if(a->num_dims == 7)    goto wait_comp;
+    }
+    if(a->num_dims == 8)    goto wait_comp;
+    }
+    if(a->num_dims == 9)    goto wait_comp;
+    }
+    wait_comp:
+        for (int i = 0; i < counter; ++i)
+        {
+            rados_aio_wait_for_complete(comp[i]);
+            rados_aio_release(comp[i]);
+        }
+        rados_ioctx_destroy(io);
+        //uloga("Before Free \n");
+        free(comp);
+        return;
+}
 /* a = destination, b = source. Destination uses iovec_t format. */
 static void matrix_copyv(struct matrix *a, struct matrix *b)
 {
@@ -973,6 +1138,38 @@ int ssd_copy(struct obj_data *to_obj, struct obj_data *from_obj)
         return 0;
 }
 
+/*
+*/
+int ssd_copy_ceph(struct obj_data *to_obj, struct obj_data *from_obj, int id)
+{
+        struct matrix to_mat, from_mat;
+        struct bbox bbcom;
+
+        bbox_intersect(&to_obj->obj_desc.bb, &from_obj->obj_desc.bb, &bbcom);
+
+        matrix_init_ceph(&from_mat, from_obj->obj_desc.st,
+                    &from_obj->obj_desc.bb, &bbcom, 
+                    from_obj->data, from_obj->obj_desc.size);
+        //uloga("from_obj->obj_desc.size : %d \n", from_obj->obj_desc.size);
+
+        matrix_init(&to_mat, to_obj->obj_desc.st, 
+                    &to_obj->obj_desc.bb, &bbcom,
+                    to_obj->data, to_obj->obj_desc.size);
+        char ceph_name[100];
+        char name[100];
+            char lb_name[100];
+            char *ap = lb_name;
+            for (int i = 0; i < (from_obj->obj_desc).bb.num_dims; ++i)
+            {
+                ap+=sprintf(ap, "_%d_%d", (from_obj->obj_desc).bb.lb.c[i], (from_obj->obj_desc).bb.ub.c[i]);
+            }
+        sprintf(ceph_name, "%2d_%s_%d%s",id, &from_obj->obj_desc.name, (from_obj->obj_desc).version, lb_name);
+        //uloga("Reading %s\n", ceph_name);
+        uint64_t num_elems = bbox_volume(&to_obj->obj_desc.bb);
+        matrix_copy_ceph(&to_mat, &from_mat, ceph_name, num_elems);
+        return 0;
+}
+
 int ssd_copyv(struct obj_data *obj_dest, struct obj_data *obj_src)
 {
 	struct matrix mat_dest, mat_src;
@@ -1418,7 +1615,7 @@ void obj_data_free_with_data(struct obj_data *od)
     free(od);
 }
 
-/*free object data in memory Duan*/
+/*free object data in memory*/
 void obj_data_free_in_mem(struct obj_data *od)
 {
 #ifdef DEBUG
@@ -1443,6 +1640,9 @@ void obj_data_free_in_mem(struct obj_data *od)
 	if (od->sl == in_memory_ssd){ 
 		od->sl = in_ssd;
 	}
+    if (od->sl == in_memory_ceph){ 
+        od->sl = in_ceph;
+    }
 }
 
 void obj_data_free_pointer(struct obj_data *od){
@@ -1491,7 +1691,59 @@ void obj_data_copy_to_ssd(struct obj_data *od)
 	}
 	od->sl = in_memory_ssd;
 }
+void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id)
+{
+    
+    //create a rados ioctx
+    rados_ioctx_t io;
+    char *poolname = "dataspaces";
+    int err = rados_ioctx_create(cluster, poolname, &io);
+        if (err < 0) {
+                uloga("%s: cannot open rados pool %s: %s\n", __func__, poolname, strerror(-err));
+                rados_shutdown(cluster);
+                exit(EXIT_FAILURE);
+        } else {
+            //    uloga("\nCreated I/O context.\n");
+        }
+    //write data synchronously
+      //  uloga("sprintf start for %s ver %d\n", &od->obj_desc.name, (od->obj_desc).version);
+            char name[100];
+            char lb_name[100];
+            char *ap = lb_name;
+            //char ub_name[50];
+            for (int i = 0; i < (od->obj_desc).bb.num_dims; ++i)
+            {
+                ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+            }
+            sprintf(name, "%2d_%s_%d%s",id, &od->obj_desc.name, (od->obj_desc).version, lb_name);
+            //uloga ("%s writing \n", name);
+        if(od->_data){
+            err = rados_write(io, name, od->_data, obj_data_size(&od->obj_desc) + 7, 0);
+            if (err < 0) {
+                uloga("%s: Cannot write object to pool %s: %s\n", __func__, poolname, strerror(-err));
+                rados_ioctx_destroy(io);
+                rados_shutdown(cluster);
+                exit(1);
+            } else{
+              //  uloga("Finished ceph write %s \n", name);
+            }
+        }else{
+            err = rados_write(io, name, od->data, obj_data_size(&od->obj_desc), 0);
+            if (err < 0) {
+                uloga("%s: Cannot write object to pool %s: %s\n", __func__, poolname, strerror(-err));
+                rados_ioctx_destroy(io);
+                rados_shutdown(cluster);
+                exit(1);
+            }else{
+             //   uloga("Finished ceph write %s \n", name);
+            }
+        }
+        
 
+    //free the ioctx
+    rados_ioctx_destroy(io);
+    obj_data_free_in_mem(od);
+}
 void obj_data_copy_to_ssd_direct(struct obj_data *od)
 {
     //od->s_data = pmem_alloc(obj_data_size(&od->obj_desc));
@@ -1506,26 +1758,74 @@ void obj_data_copy_to_ssd_direct(struct obj_data *od)
     od->sl = in_ssd;
 }
 /*Update ss_data pointer directly to memory*/
-void obj_data_copy_to_mem(struct obj_data *od)
+void obj_data_copy_to_mem(struct obj_data *od, int id)
 {
-	if (od->s_data) {
-        /*
-		od->_data = od->data = malloc(obj_data_size(&od->obj_desc) + 7);
-		if (!od->_data) {
-			free(od);
-			uloga("%s(): ERROR malloc od->_data %p is is NULL! \n", __func__, od->_data);
-		}
-		ALIGN_ADDR_QUAD_BYTES(od->data);
-		memcpy(od->_data, od->s_data, obj_data_size(&od->obj_desc) + 7); //void *memcpy(void *dest, const void *src, size_t n);
-		//uloga("'%s()': explicit data copy to mem on descriptor %s.\n", __func__, od->obj_desc.name);
-        */
+	
+	if(od->sl == in_ceph){
+        struct obj_descriptor *odsc = &od->obj_desc;
+        //perform aio read
+        od->_data = od->data = malloc(obj_data_size(odsc)+7);
+       //create a rados ioctx
+        rados_ioctx_t io;
+        char *poolname = "dataspaces";
+        int err = rados_ioctx_create(cluster, poolname, &io);
+        if (err < 0) {
+                uloga( "%s: cannot open rados pool %s: %s\n", __func__, poolname, strerror(-err));
+                rados_shutdown(cluster);
+                exit(EXIT_FAILURE);
+        } else {
+            //    uloga("\nCreated I/O context.\n");
+        }
+
+        //uloga("sprintf start for %s ver %d\n", &od->obj_desc.name, (od->obj_desc).version);
+            char name[100];
+            char lb_name[100];
+            char *ap = lb_name;
+            for (int i = 0; i < (od->obj_desc).bb.num_dims; ++i)
+            {
+                ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+            }
+            sprintf(name, "%2d_%s_%d%s",id, &od->obj_desc.name, (od->obj_desc).version, lb_name);
+           // uloga("Reading %s \n", name);
+        if(od->_data){
+            err = rados_read(io, name, od->_data, obj_data_size(&od->obj_desc) + 7, 0);
+            if (err < 0) {
+                uloga("%s: Cannot read object from pool %s: %s\n", __func__, poolname, strerror(-err));
+                rados_ioctx_destroy(io);
+                rados_shutdown(cluster);
+                exit(1);
+            }
+            else{
+             //  uloga("Finished ceph to mem %s \n", name);
+            }
+        }else{
+            err = rados_read(io, name, od->data, obj_data_size(&od->obj_desc), 0);
+            if (err < 0) { 
+                uloga("%s: Cannot read object from pool %s: %s\n", __func__, poolname, strerror(-err));
+                rados_ioctx_destroy(io);
+                rados_shutdown(cluster);
+                exit(1);
+            }else{
+             //   uloga("Finished ceph to mem %s\n", name);
+            }
+        }
+        
+
+    //free the ioctx
+    rados_ioctx_destroy(io);
+    od->sl = in_memory_ceph;
+    }
+    if(od->sl == in_ssd){
+        if (od->s_data) {
         od->data = od->s_data;
         od->_data=od->data;
-	}
-	else{
-		uloga("%s(): ERROR od->s_data %p is is NULL! \n", __func__, od->s_data);
-	}
-	od->sl = in_memory_ssd;
+        od->sl = in_memory_ssd;
+    }
+    else{
+        uloga("%s(): ERROR od->s_data %p is is NULL! \n", __func__, od->s_data);
+    }
+    }
+    
 }
 
 void obj_data_free(struct obj_data *od)

@@ -29,15 +29,17 @@
 *  zhangfan@cac.rutgers.edu
 *  Qian Sun (2014) TASSL Rutgers University
 *  qiansun@cac.rutgers.edu
+*   Pradeep Subedi (2017)   Rutgers University
+*   pradeep.subedi@rutgers.edu
 */
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "common.h"
 #include "mpi.h"
 #include "mem_persist.h" //duan
 #define DSG_ID                  dsg->ds->self->ptlmap.id	//Duan
-
 
 int read_config_file(const char* fname,
 	int *num_sp, int *num_cp, int *iter,
@@ -174,9 +176,14 @@ int common_put(const char *var_name,
 	void *data, enum transport_type type)
 {
 	if ( type == USE_DSPACES ) {
-        if(ver == 2 || ver==4 || ver==6 || ver==8){
+        if(ver == 6 || ver==8 ){
             uloga("%s(): Write to SSD, ts = %d!\n", __func__, ver);
             return dspaces_put_ssd(var_name, ver, size,
+                        ndim,lb, ub,data);
+        }
+        if(ver==2 || ver==4){
+            uloga("%s(): Write to ceph, ts = %d!\n", __func__, ver);
+            return dspaces_put_ceph(var_name, ver, size,
                         ndim,lb, ub,data);
         }
 		return dspaces_put(var_name, ver, size,
@@ -247,6 +254,8 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
 				}
 #endif
 				pmem_init(dsg_id_str);//ssd storage initiate Duan						
+                /*  Starting Ceph Cluster */
+                //ceph_init();
 
                 while (!dsg_complete(dsg)){
                         err = dsg_process(dsg);
@@ -296,6 +305,7 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
         }
         return 0;
 }
+
 
 void check_data(const char *var_name, double *buf, int num_elem, int rank, int ts)
 {

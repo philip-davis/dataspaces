@@ -378,7 +378,8 @@ enum cmd_type {
 	CN_TIMING_AVG,
 	_CMD_COUNT,
     /*Added for SSD commands*/
-    ss_obj_put_ssd
+    ss_obj_put_ssd,
+    ss_obj_put_ceph
 };
 
 enum lock_type {

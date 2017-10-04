@@ -42,7 +42,7 @@
 #include <ctype.h>
 
 /* using 64M ssd file for this example */
-#define PMEM_SIZE 1*512*1024L
+//#define PMEM_SIZE 1*512*1024L
 //#define PMEM_SIZE 256*1024*1024*1024L
 //#define PMEM_SIZE 128*1024*1024*1024L
 //#define PMEM_SIZE 64*1024*1024*1024L
@@ -52,10 +52,10 @@
 //#define PMEM_SIZE 32*1024*1024*1024L
 //#define PMEM_SIZE 16*1024*1024*1024L
 //#define PMEM_SIZE 8*1024*1024*1024L
-//#define PMEM_SIZE 1*1024*1024*1024L
+#define PMEM_SIZE 1*1024*1024*1024L
 
 /* using /ssd1/sd904/ ssd file path for this example */
-#define PMEM_PATH "/home/subedip/"
+#define PMEM_PATH "/home/ceph-deploy/"
 //#define PMEM_PATH "/home1/sd904/"
 //#define PMEM_PATH ""
 
@@ -73,14 +73,14 @@ static char *pmem_file;
 
 void *pmem_alloc(uint64_t num_bytes)
 {
-//#ifdef DEBUG
+#ifdef DEBUG
 	{
 	char *str;
 	asprintf(&str, "num_bytes %d ", num_bytes);
 	uloga("'%s()': %s\n", __func__, str);
 	free(str);
 	}
-//#endif
+#endif
 
 	struct PMemEntry *pmem_iter, *pmem_iter_succ, * pmem_splited;
 	if (num_bytes <= 0){
@@ -264,92 +264,3 @@ void int_to_char(int n, char s[])
 		//printf("%c", s[j]);
 }
 
-/*
-int main(int argc, char *argv[]) {
-	//-----------------------------------case1---------------------------------------
-	printf("case1:add\n");
-	char *str_in_mem, *str_in_ssd, *str_in_mem_tmp;
-	int str_len;
-
-	int dsg_id = 0;
-	char dsg_id_str[100];
-
-	int_to_char(dsg_id, dsg_id_str);
-
-	pmem_init(dsg_id_str);//ssd storage initiate Duan
-	dsg_id = 1;
-	int_to_char(dsg_id, dsg_id_str);
-	pmem_init(dsg_id_str);//ssd storage initiate Duan
-	dsg_id = 2;
-	int_to_char(dsg_id, dsg_id_str);
-	pmem_init(dsg_id_str);//ssd storage initiate Duan
-	dsg_id = 3;
-	int_to_char(dsg_id, dsg_id_str);
-	pmem_init(dsg_id_str);//ssd storage initiate Duan
-	return 1;
-}
-
-	asprintf(&str_in_mem, "DataSpaces ");
-	str_len = strlen(str_in_mem);
-
-	str_in_ssd = pmem_alloc(str_len*sizeof(char));
-	printf("pmem_alloc:%s \n", str_in_mem);
-	printf("pmem_alloc: str_in_ssd:%p \n", str_in_ssd);
-	memcpy(str_in_ssd, str_in_mem, str_len*sizeof(char)); //void *memcpy(void *dest, const void *src, size_t n);
-	msync(str_in_ssd, str_len*sizeof(char), MS_ASYNC);//int msync ( void * ptr, size_t len, int flags) flags = MS_ASYNC|MS_SYNC
-	
-	//-----------------------------------case2---------------------------------------
-	printf("case2:add\n");
-	char *str_in_mem_2, *str_in_ssd_2;
-	int str_len_2;
-	asprintf(&str_in_mem_2, "ssd ");
-	str_len_2 = strlen(str_in_mem_2);
-
-	str_in_ssd_2 = pmem_alloc(str_len_2*sizeof(char));
-	printf("pmem_alloc:%s \n", str_in_mem_2);
-	printf("pmem_alloc: str_in_ssd_2:%p \n", str_in_ssd_2);
-	memcpy(str_in_ssd_2, str_in_mem_2, str_len_2*sizeof(char)); //void *memcpy(void *dest, const void *src, size_t n);
-	msync(str_in_ssd_2, str_len_2*sizeof(char), MS_ASYNC);//int msync ( void * ptr, size_t len, int flags) flags = MS_ASYNC|MS_SYNC
-	
-	//-----------------------------------case3---------------------------------------
-	printf("case3:add\n");
-	char *str_in_mem_3, *str_in_ssd_3;
-	int str_len_3;
-	asprintf(&str_in_mem_3, "data ");
-	str_len_3 = strlen(str_in_mem_3);
-
-	str_in_ssd_3 = pmem_alloc(str_len_3*sizeof(char));
-	printf("pmem_alloc:%s \n", str_in_mem_3);
-	printf("pmem_alloc: str_in_ssd:%p \n", str_in_ssd_3);
-	memcpy(str_in_ssd_3, str_in_mem_3, str_len_3*sizeof(char)); //void *memcpy(void *dest, const void *src, size_t n);
-	msync(str_in_ssd_3, str_len_3*sizeof(char), MS_ASYNC);//int msync ( void * ptr, size_t len, int flags) flags = MS_ASYNC|MS_SYNC
-
-	//-----------------------------------case4---------------------------------------
-	printf("case4:update\n");
-	asprintf(&str_in_mem_tmp, "DataSpaceS ");//DataSpaces ssd data stage text
-	str_len = strlen(str_in_mem_tmp);
-	memcpy(str_in_ssd, str_in_mem_tmp, str_len*sizeof(char));
-	printf("str_in_ssd: %s\n", str_in_ssd);
-	memcpy(str_in_mem, str_in_ssd, str_len*sizeof(char));
-	printf("str_in_mem: %s\n", str_in_mem);
-	
-	//-----------------------------------case5---------------------------------------
-	printf("case5:free\n");
-	printf("free 1 \n");
-	pmem_free(str_in_ssd);
-	printf("free 1 \n");
-	pmem_free(str_in_ssd);
-	printf("free 2 \n");
-	pmem_free(str_in_ssd_2);
-	printf("free 3 \n");
-	pmem_free(str_in_ssd_3);
-	
-	pmem_destroy();
-	free(str_in_mem);
-	free(str_in_mem_2);
-	free(str_in_mem_3);
-	free(str_in_mem_tmp);
-	
-	return 0;
-}
-*/

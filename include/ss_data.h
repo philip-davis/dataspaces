@@ -36,7 +36,9 @@
 
 #include "bbox.h"
 #include "list.h"
+#include <rados/librados.h>
 
+rados_t cluster;
 typedef struct {
 	void			*iov_base;
 	size_t			iov_len;
@@ -72,7 +74,7 @@ struct gdim_list_entry {
         struct global_dimension gdim; 
 };
 
-enum storage_level { in_memory, in_ssd, in_memory_ssd };/* storage level Duan*/
+enum storage_level { in_memory, in_ssd, in_memory_ssd, in_memory_ceph, in_ceph };/* storage level Duan*/
 
 struct obj_data {
         struct list_head        obj_entry;
@@ -239,6 +241,7 @@ struct sspace* ssd_alloc(const struct bbox *, int, int, enum sspace_hash_version
 int ssd_init(struct sspace *, int);
 void ssd_free(struct sspace *);
 int ssd_copy(struct obj_data *, struct obj_data *);
+int ssd_copy_ceph(struct obj_data *, struct obj_data *, int id);
 // TODO: ssd_copyv is not supported yet
 int ssd_copyv(struct obj_data *, struct obj_data *);
 int ssd_copy_list(struct obj_data *, struct list_head *);
@@ -266,6 +269,7 @@ struct obj_data *obj_data_alloc_no_data(struct obj_descriptor *, void *);
 struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *, const void *);
 
 void obj_data_free(struct obj_data *od);
+void obj_data_free_pointer(struct obj_data *od);
 void obj_data_free_with_data(struct obj_data *);
 uint64_t obj_data_size(struct obj_descriptor *);
 uint64_t obj_data_sizev(struct obj_descriptor *);
@@ -292,5 +296,7 @@ void set_global_dimension(struct list_head *gdim_list, const char *var_name,
 void obj_data_free_in_mem(struct obj_data *od);//Duan
 void obj_data_free_in_ssd(struct obj_data *od);//Duan
 void obj_data_copy_to_ssd(struct obj_data *od);//Duan
-void obj_data_copy_to_mem(struct obj_data *od);//Duan
+void obj_data_copy_to_mem(struct obj_data *od, int id);
+void obj_data_copy_to_ssd_direct(struct obj_data *od);
+void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id);
 #endif /* __SS_DATA_H_ */

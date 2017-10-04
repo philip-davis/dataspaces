@@ -39,7 +39,6 @@
 #include <string.h>
 
 #include <sys/mman.h>
-
 #include "debug.h"
 #include "dart.h"
 #include "ds_gspace.h"
@@ -1270,7 +1269,10 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
         obj_data_copy_to_ssd_direct(od);
         obj_data_free_pointer(od);
     }
-	
+	if(od->sl == in_memory_ceph){
+        obj_data_copy_to_ceph(od, cluster, DSG_ID);
+        //obj_data_free_pointer(od);
+    }
     free(msg);
 
 #ifdef DEBUG
@@ -1362,8 +1364,8 @@ static int dsgrpc_obj_put_ssd(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         struct node_id *peer;
         struct msg_buf *msg;
         int err;
-        //----->Duan
-//#ifdef DEBUG
+        
+#ifdef DEBUG
         {
             char *str;
 
@@ -1374,8 +1376,7 @@ static int dsgrpc_obj_put_ssd(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             uloga("'%s()': %s\n", __func__, str);
             free(str);
         }
-//#endif
-        //<-----Duan
+#endif
         odsc->owner = DSG_ID;
 
         err = -ENOMEM;
@@ -1398,10 +1399,78 @@ static int dsgrpc_obj_put_ssd(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         msg->private = od;
         msg->cb = obj_put_completion;
 
-//#ifdef DEBUG
+#ifdef DEBUG
         uloga("'%s()': server %d start receiving %s, version %d.\n", 
             __func__, DSG_ID, odsc->name, odsc->version);
-//#endif
+#endif
+        rpc_mem_info_cache(peer, msg, cmd); 
+        err = rpc_receive_direct(rpc_s, peer, msg);
+        rpc_mem_info_reset(peer, msg, cmd);
+
+        if (err < 0)
+                goto err_free_msg;
+
+    /* NOTE: This  early update, has  to be protected  by external
+       locks in the client code. */
+
+        err = obj_put_update_dht(dsg, od);
+        if (err == 0)
+            return 0;
+ err_free_msg:
+        free(msg);
+ err_free_data:
+        free(od);
+ err_out:
+        uloga("'%s()': failed with %d.\n", __func__, err);
+        return err;
+}
+
+static int dsgrpc_obj_put_ceph(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+        struct hdr_obj_put *hdr = (struct hdr_obj_put *)cmd->pad;
+        struct obj_descriptor *odsc = &(hdr->odsc);
+        struct obj_data *od;
+        struct node_id *peer;
+        struct msg_buf *msg;
+        int err;
+#ifdef DEBUG
+        {
+            char *str;
+
+            asprintf(&str, "S%2d: request for dsgrpc_obj_put '%s' ver %d from C%2d for  ",
+                DSG_ID, odsc->name, odsc->version, cmd->id);
+            str = str_append(str, bbox_sprint(&odsc->bb));
+
+            uloga("'%s()': %s\n", __func__, str);
+            free(str);
+        }
+#endif
+        odsc->owner = DSG_ID;
+
+        err = -ENOMEM;
+        peer = ds_get_peer(dsg->ds, cmd->id);
+        od = obj_data_alloc(odsc);
+        //od = obj_data_alloc_pmem(odsc);
+        od->sl = in_memory_ceph;
+        if (!od)
+                goto err_out;
+
+        od->obj_desc.owner = DSG_ID;
+        memcpy(&od->gdim, &hdr->gdim, sizeof(struct global_dimension));
+
+        msg = msg_buf_alloc(rpc_s, peer, 0);
+        if (!msg)
+                goto err_free_data;
+
+        msg->msg_data = od->data;
+        msg->size = obj_data_size(&od->obj_desc);
+        msg->private = od;
+        msg->cb = obj_put_completion;
+
+#ifdef DEBUG
+        uloga("'%s()': server %d start receiving %s, version %d.\n", 
+            __func__, DSG_ID, odsc->name, odsc->version);
+#endif
         rpc_mem_info_cache(peer, msg, cmd); 
         err = rpc_receive_direct(rpc_s, peer, msg);
         rpc_mem_info_reset(peer, msg, cmd);
@@ -1981,13 +2050,16 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             goto err_out;
         }
 
-		/*cache data from ssd to memory, if it isn't prefetched just moment Duan*/
+	
         double tm_start, tm_ending, tm_starting, tm_ends;
        // tm_start = timer_read(&tm_perf);	
-       if(from_obj->sl == in_ssd){
-            obj_data_copy_to_mem(from_obj);
-       }	
-		
+        /*
+       if(from_obj->sl == in_ssd || from_obj->sl == in_ceph){
+            obj_data_copy_to_mem(from_obj, DSG_ID);
+       }	*/
+		if(from_obj->sl == in_ssd){
+            obj_data_copy_to_mem(from_obj, DSG_ID);
+       }
       //  tm_ending = timer_read(&tm_perf);
       //  uloga("SSD Read Time: %lf , Data Size: %d\n", tm_ending-tm_start, obj_data_size(&from_obj->obj_desc));
 
@@ -2011,13 +2083,21 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         od = (fast_v)? obj_data_allocv(&oh->u.o.odsc) : obj_data_alloc(&oh->u.o.odsc);
         if (!od)
                 goto err_out;
-
-        (fast_v)? ssd_copyv(od, from_obj) : ssd_copy(od, from_obj);
+        if(from_obj->sl == in_ceph){
+            ssd_copy_ceph(od, from_obj, DSG_ID);
+        }else{
+            (fast_v)? ssd_copyv(od, from_obj) : ssd_copy(od, from_obj);
+        }
+        
         od->obj_ref = from_obj;
       //  tm_starting = timer_read(&tm_perf);
         if(from_obj->sl == in_memory_ssd){
             obj_data_free_pointer(from_obj);
         }
+        /*
+        if(from_obj->sl == in_memory_ceph){
+            obj_data_free_in_mem(from_obj);
+        }*/
 		
       //  tm_ends = timer_read(&tm_perf);
      //   uloga("SSD Overhead: %lf , Data Size: %d\n", tm_ending-tm_start+tm_ends-tm_starting, obj_data_size(&from_obj->obj_desc));
@@ -2038,7 +2118,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         rpc_mem_info_reset(peer, msg, cmd);
         if (err == 0)
                 return 0;
-
+        
         obj_data_free(od);
         free(msg);
  err_out:
@@ -2130,6 +2210,59 @@ static int dsgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	ERROR_TRACE();
 }
 
+void ceph_init(){
+    /* Declare the cluster handle and required arguments. */
+        char cluster_name[] = "ceph";
+        char user_name[] = "client.admin";
+        uint64_t flags;
+
+        /* Initialize the cluster handle with the "ceph" cluster name and the "client.admin" user */
+        int err;
+        err = rados_create2(&cluster, cluster_name, user_name, flags);
+
+        if (err < 0) {
+                uloga("%s: Couldn't create the cluster handle! %s\n", __func__, strerror(-err));
+                exit(EXIT_FAILURE);
+        } else {
+                uloga("\nCreated a cluster handle.\n");
+        }
+
+
+        /* Read a Ceph configuration file to configure the cluster handle. */
+        err = rados_conf_read_file(cluster, "/etc/ceph/ceph.conf");
+        if (err < 0) {
+                uloga("%s: cannot read config file: %s\n", __func__, strerror(-err));
+                exit(EXIT_FAILURE);
+        } else {
+                uloga("\nRead the config file.\n");
+        }
+
+        /* Connect to the cluster */
+        err = rados_connect(cluster);
+        if (err < 0) {
+                uloga("%s: cannot connect to cluster: %s\n", __func__, strerror(-err));
+                exit(EXIT_FAILURE);
+        } else {
+                uloga("\nConnected to the cluster.\n");
+        }
+
+        char *poolname = "dataspaces";
+        int64_t poolid = rados_pool_lookup(cluster, poolname);
+        if(poolid == -ENOENT){
+            err = rados_pool_create(cluster, "dataspaces");
+            if (err < 0) {
+                    uloga("%s: cannot create dataspaces pool: %s\n", __func__, strerror(-err));
+                    exit(EXIT_FAILURE);
+            } else {
+                    uloga("\nCreated Dataspaces pool.\n");
+            }
+        }else{
+            uloga("\nDataspaces pool already available.\n");
+        }
+        
+
+
+}
 /*
   Public API starts here.
 */
@@ -2190,6 +2323,7 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         rpc_add_service(ss_obj_get, dsgrpc_obj_get);
         rpc_add_service(ss_obj_put, dsgrpc_obj_put);
         rpc_add_service(ss_obj_put_ssd, dsgrpc_obj_put_ssd);
+        rpc_add_service(ss_obj_put_ceph, dsgrpc_obj_put_ceph);
         rpc_add_service(ss_obj_update, dsgrpc_obj_update);
         rpc_add_service(ss_obj_filter, dsgrpc_obj_filter);
         rpc_add_service(ss_obj_cq_register, dsgrpc_obj_cq_register);
@@ -2218,7 +2352,7 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
             uloga("%s(): ERROR ls_alloc() failed\n", __func__);
             goto err_free;
         }
-
+        ceph_init();
         return dsg_l;
  err_free:
         free(dsg_l);
