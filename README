@@ -1,5 +1,7 @@
-Put your current directory in $SCRIPT_DIR
+To use this test-suite, we need to first open run_test_suite.sh
+	Put your current directory in $SCRIPT_DIR
+	Put your DataSpaces Executable file directory in $DATASPACES_DIR
 
-Put your DataSpaces Executable file directory in $DATASPACES_DIR
+Then, write your input in directory $SCRIPT_DIR/input/
 
-Write your input in directory $SCRIPT_DIR/input/
+Finally, run script run_test_suite.sh
