@@ -1,0 +1,5 @@
+Put your current directory in $SCRIPT_DIR
+
+Put your DataSpaces Executable file directory in $DATASPACES_DIR
+
+Write your input in directory $SCRIPT_DIR/input/
