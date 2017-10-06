@@ -5,6 +5,8 @@
 #SBATCH -t TBD
 #SBATCH -C TBD
 
+#Stampede2
+
 ###########################
 # GET PARAMETER FROM CONF #
 ###########################
@@ -292,22 +294,23 @@ NUM_READER_ARR=($(awk 'BEGIN{
 
 }
 
-#Run on Cori with srun
+#Run on Stampede2 with ibrun
+# ibrun options: https://github.com/glennklockwood/ibrun/blob/master/ibrun
 function run_dataspaces {
 	NUM_CLIENT=$(($NUM_WRITER+$NUM_READER))
-	SERVER_NODE=$(ceiling_divide $NUM_SERVER $PPN)
-	WRITER_NODE=$(ceiling_divide $NUM_WRITER $PPN)
-	READER_NODE=$(ceiling_divide $NUM_READER $PPN)
+	#SERVER_NODE=$(ceiling_divide $NUM_SERVER $PPN)
+	#WRITER_NODE=$(ceiling_divide $NUM_WRITER $PPN)
+	#READER_NODE=$(ceiling_divide $NUM_READER $PPN)
 
 
 	#init
 	parse_config_writer $NUM_WRITER
 	parse_config_reader $NUM_READER
 	write_dataspaces_conf
-	srun_config
+	#srun_config
 
 	## Server start
-	srun -N $SERVER_NODE -n $NUM_SERVER -c $C_SP --cpu_bind=cores .$DATASPACES_DIR/dataspaces_server -s $NUM_SERVER -c $NUM_CLIENT >& $SCRIPT_DIR/output/log.server &
+	ibrun -n $NUM_SERVER -npernode $PPN .$DATASPACES_DIR/dataspaces_server -s $NUM_SERVER -c $NUM_CLIENT >& $SCRIPT_DIR/output/log.server &
 
 	## WAIT FOR SERVER START TO COMPLETE
 	sleep 1s
@@ -317,10 +320,10 @@ function run_dataspaces {
 	sleep 10s  # wait server to fill up the conf file
 
 	## Writer start
-	srun -N $WRITER_NODE -n $NUM_WRITER -c $C_SP --cpu_bind=cores .$DATASPACES_DIR/test_writer $METHOD $NUM_WRITER $NDIM $NUM_PROC_W_X $NUM_PROC_W_Y $NUM_PROC_W_Z $BLK_SIZE_W_X $BLK_SIZE_W_Y $BLK_SIZE_W_Z $NUM_TS $ID_WRITER >& $SCRIPT_DIR/output/log.writer &
+	ibrun -n $NUM_WRITER -npernode $PPN .$DATASPACES_DIR/test_writer $METHOD $NUM_WRITER $NDIM $NUM_PROC_W_X $NUM_PROC_W_Y $NUM_PROC_W_Z $BLK_SIZE_W_X $BLK_SIZE_W_Y $BLK_SIZE_W_Z $NUM_TS $ID_WRITER >& $SCRIPT_DIR/output/log.writer &
 
 	## Reader start 
-	srun -N $READER_NODE -n $NUM_READER -c $C_SP --cpu_bind=cores .$DATASPACES_DIR/test_reader $METHOD $NUM_READER $NDIM $NUM_PROC_R_X $NUM_PROC_R_Y $NUM_PROC_R_Z $BLK_SIZE_R_X $BLK_SIZE_R_Y $BLK_SIZE_R_Z $NUM_TS $ID_READER >& $SCRIPT_DIR/output/log.reader &
+	ibrun -n $NUM_READER -npernode $PPN .$DATASPACES_DIR/test_reader $METHOD $NUM_READER $NDIM $NUM_PROC_R_X $NUM_PROC_R_Y $NUM_PROC_R_Z $BLK_SIZE_R_X $BLK_SIZE_R_Y $BLK_SIZE_R_Z $NUM_TS $ID_READER >& $SCRIPT_DIR/output/log.reader &
 
 
 	wait
@@ -358,18 +361,18 @@ function dummy_run {
 	write_dataspaces_conf
 	srun_config
 
-	echo "srun -N $SERVER_NODE -n $NUM_SERVER -c $C_SP --cpu_bind=cores ./dataspaces_server -s $NUM_SERVER -c $NUM_CLIENT"
+	echo "ibrun -n $NUM_SERVER -npernode $PPN ./dataspaces_server -s $NUM_SERVER -c $NUM_CLIENT"
 
 	## Server start
-	#srun -N $SERVER_NODE -n $NUM_SERVER -c $C_SP --cpu_bind=cores .$DATA_DIR/dataspaces_server -s $NUM_SERVER -c $NUM_CLIENT >& $DATA_DIR/log.server &
-	echo "srun -N $WRITER_NODE -n $NUM_WRITER -c $C_SP --cpu_bind=cores ./test_writer $METHOD $NUM_WRITER $NDIM $NUM_PROC_W_X $NUM_PROC_W_Y $NUM_PROC_W_Z $BLK_SIZE_W_X $BLK_SIZE_W_Y $BLK_SIZE_W_Z $NUM_TS $ID_WRITER"
+	#ibrun -n $NUM_SERVER -npernode $PPN .$DATA_DIR/dataspaces_server -s $NUM_SERVER -c $NUM_CLIENT >& $DATA_DIR/log.server &
+	echo "ibrun -n $NUM_WRITER -npernode $PPN ./test_writer $METHOD $NUM_WRITER $NDIM $NUM_PROC_W_X $NUM_PROC_W_Y $NUM_PROC_W_Z $BLK_SIZE_W_X $BLK_SIZE_W_Y $BLK_SIZE_W_Z $NUM_TS $ID_WRITER"
 
 	## Writer start
-	#srun -N $WRITER_NODE -n $NUM_WRITER -c $C_SP --cpu_bind=cores .$DATA_DIR//test_writer $METHOD $NUM_WRITER $NDIM $NUM_PROC_W_X $NUM_PROC_W_Y $NUM_PROC_W_Z $BLK_SIZE_W_X $BLK_SIZE_W_Y $BLK_SIZE_W_Z $NUM_TS $ID_WRITER >& $DATA_DIR/log.writer &
+	#ibrun -n $NUM_WRITER -npernode $PPN .$DATA_DIR/test_writer $METHOD $NUM_WRITER $NDIM $NUM_PROC_W_X $NUM_PROC_W_Y $NUM_PROC_W_Z $BLK_SIZE_W_X $BLK_SIZE_W_Y $BLK_SIZE_W_Z $NUM_TS $ID_WRITER >& $DATA_DIR/log.writer &
 
-	echo "srun -N $READER_NODE -n $NUM_READER -c $C_SP --cpu_bind=cores ./test_reader $METHOD $NUM_READER $NDIM $NUM_PROC_R_X $NUM_PROC_R_Y $NUM_PROC_R_Z $BLK_SIZE_R_X $BLK_SIZE_R_Y $BLK_SIZE_R_Z $NUM_TS $ID_READER"
+	echo "ibrun -n $NUM_READER -npernode $PPN ./test_reader $METHOD $NUM_READER $NDIM $NUM_PROC_R_X $NUM_PROC_R_Y $NUM_PROC_R_Z $BLK_SIZE_R_X $BLK_SIZE_R_Y $BLK_SIZE_R_Z $NUM_TS $ID_READER"
 	## Reader start 
-	#srun -N $READER_NODE -n $NUM_READER -c $C_SP --cpu_bind=cores .$DATA_DIR//test_reader $METHOD $NUM_READER $NDIM $NUM_PROC_R_X $NUM_PROC_R_Y $NUM_PROC_R_Z $BLK_SIZE_R_X $BLK_SIZE_R_Y $BLK_SIZE_R_Z $NUM_TS $ID_READER >& $DATA_DIR/log.reader &
+	#ibrun -n $NUM_READER -npernode $PPN .$DATA_DIR/test_reader $METHOD $NUM_READER $NDIM $NUM_PROC_R_X $NUM_PROC_R_Y $NUM_PROC_R_Z $BLK_SIZE_R_X $BLK_SIZE_R_Y $BLK_SIZE_R_Z $NUM_TS $ID_READER >& $DATA_DIR/log.reader &
 
 
 }
