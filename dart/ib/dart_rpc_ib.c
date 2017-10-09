@@ -1562,7 +1562,7 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 
 			err = rdma_resolve_route(event_copy.id, INFINIBAND_TIMEOUT);
 			if(err != 0) {
-				printf("rdma_resolve_route %d in %s.\n", err, __func__);
+				printf("rdma_resolve_route %d in %s.\n", errno, __func__);
 				goto err_out;
 			}
 		} else if(event_copy.event == RDMA_CM_EVENT_ROUTE_RESOLVED) {
