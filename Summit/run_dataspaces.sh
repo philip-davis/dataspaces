@@ -5,6 +5,8 @@
 #SBATCH -t TBD
 #SBATCH -C TBD
 
+#Summit
+
 ###########################
 # GET PARAMETER FROM CONF #
 ###########################
@@ -31,7 +33,7 @@ NUM_SERVER=
 NUM_CLIENT=
 NUM_WRITER=
 NUM_READER=
-NUM_TS=5 #number of timestep
+
 NUM_SCALE=1
 METHOD="DATASPACES"
 ID_WRITER=1
@@ -59,10 +61,6 @@ SERVER_NODE=
 WRITER_NODE=
 READER_NODE=
 
-#Configure value files
-DATA_SIZE_FILE="$SCRIPT_DIR/input/datasize"
-RATIO_FILE="$SCRIPT_DIR/input/ratio"
-PPN_FILE="$SCRIPT_DIR/input/ppn"
 
 
 
@@ -201,7 +199,7 @@ function parse_config_reader {	#$1 is NUM_WRITER or NUM_READER
 
 function write_dataspaces_conf {
 
-	rm -f conf cred dataspaces.conf
+	rm -f $SCRIPT_DIR/conf $SCRIPT_DIR/cred $SCRIPT_DIR/dataspaces.conf
 
 	echo "## Config file for DataSpaces
 	ndim = $NDIM 
@@ -213,82 +211,21 @@ function write_dataspaces_conf {
 }
 
 
-function srun_config {
-
-######################################################################################################################
-# Reference http://www.nersc.gov/users/computational-systems/cori/running-jobs/general-running-jobs-recommendations/ #
-# -c Set the value as "number of of logical cores (CPUs) per MPI task"												 #
-######################################################################################################################
-
-if ! ((LOGICAL_CORES_PER_NODE_HASWELL%PPN)); then
-	#HOLD FOR FLOOR
-	let "C_SP=(PHYSICAL_CORES_PER_NODE_HASWELL/PPN)*2"
-else
-	let "C_SP=LOGICAL_CORES_PER_NODE_HASWELL/PPN"
-fi
-}
-
 function read_input_to_array {
 	#Get data size
-DATA_SIZE_X_ARR=($(awk 'BEGIN{ 
-						while (getline < "'"$DATA_SIZE_FILE"'")
-						{
-							split($0,ft,",");
-							print ft[1]
-						}
-						}'))
+	# if found keyword, then from the next line, get and process content, till match then next keyword
+DATA_SIZE_X_ARR=($(awk '/DATA_SIZE_START:/{f=1;next}/DATA_SIZE_END/{f=0}f{split($0,ft,",");print ft[1]}' $CONFIG_FILE))
+DATA_SIZE_Y_ARR=($(awk '/DATA_SIZE_START:/{f=1;next}/DATA_SIZE_END/{f=0}f{split($0,ft,",");print ft[2]}' $CONFIG_FILE))
+DATA_SIZE_Z_ARR=($(awk '/DATA_SIZE_START:/{f=1;next}/DATA_SIZE_END/{f=0}f{split($0,ft,",");print ft[3]}' $CONFIG_FILE))
 
-DATA_SIZE_Y_ARR=($(awk 'BEGIN{ 
-						while (getline < "'"$DATA_SIZE_FILE"'")
-						{
-							split($0,ft,",");
-							print ft[2]
-						}
-						}'))
+PPN_ARR=($(awk '/PPN_START:/{f=1;next}/PPN_END/{f=0}f{split($0,ft);print ft[1]}' $CONFIG_FILE))
 
-DATA_SIZE_Z_ARR=($(awk 'BEGIN{ 
-						while (getline < "'"$DATA_SIZE_FILE"'")
-						{
-							split($0,ft,",");
-							print ft[3]
-						}
-						close("'"$DATA_SIZE_FILE"'")
-						}'))
+NUM_SERVER_ARR=($(awk '/RATIO_START:/{f=1;next}/RATIO_END/{f=0}f{split($0,ft,":");print ft[2]}' $CONFIG_FILE))
+NUM_WRITER_ARR=($(awk '/RATIO_START:/{f=1;next}/RATIO_END/{f=0}f{split($0,ft,":");print ft[1]}' $CONFIG_FILE))
+NUM_READER_ARR=($(awk '/RATIO_START:/{f=1;next}/RATIO_END/{f=0}f{split($0,ft,":");print ft[3]}' $CONFIG_FILE))
 
-PPN_ARR=($(awk 'BEGIN{ 
-						while (getline < "'"$PPN_FILE"'")
-						{
-							split($0,ft);
-							print ft[1]
-						}
-						close("'"$PPN_FILE"'")
-						}'))
-
-NUM_SERVER_ARR=($(awk 'BEGIN{ 
-						while (getline < "'"$RATIO_FILE"'")
-						{
-							split($0,ft,":");
-							print ft[2]
-						}
-						}'))
-
-NUM_WRITER_ARR=($(awk 'BEGIN{ 
-						while (getline < "'"$RATIO_FILE"'")
-						{
-							split($0,ft,":");
-							print ft[1]
-						}
-						}'))
-
-NUM_READER_ARR=($(awk 'BEGIN{ 
-						while (getline < "'"$RATIO_FILE"'")
-						{
-							split($0,ft,":");
-							print ft[3]
-						}
-						close("'"$RATIO_FILE"'")
-						}'))
-
+#SYSTEM=$(awk -F '=' '/^SYSTEM/{gsub(/ /, "", $2);print $2}' "${CONFIG_FILE}") #gsub to remove space
+#TIME_LIMIT=$(awk -F '=' '/^TIME_LIMIT/{gsub(/ /, "", $2);print $2}' "${CONFIG_FILE}")
 
 }
 
@@ -307,7 +244,7 @@ function run_dataspaces {
 	srun_config
 
 	## Server start
-	srun -N $SERVER_NODE -n $NUM_SERVER -c $C_SP --cpu_bind=cores .$DATASPACES_DIR/dataspaces_server -s $NUM_SERVER -c $NUM_CLIENT >& $SCRIPT_DIR/output/log.server &
+	srun -N $SERVER_NODE -n $NUM_SERVER -c $C_SP --cpu_bind=cores .$DATASPACES_DIR/dataspaces_server -s $NUM_SERVER -c $NUM_CLIENT &>> $SCRIPT_DIR/output/log.server &
 
 	## WAIT FOR SERVER START TO COMPLETE
 	sleep 1s
@@ -317,16 +254,14 @@ function run_dataspaces {
 	sleep 10s  # wait server to fill up the conf file
 
 	## Writer start
-	srun -N $WRITER_NODE -n $NUM_WRITER -c $C_SP --cpu_bind=cores .$DATASPACES_DIR/test_writer $METHOD $NUM_WRITER $NDIM $NUM_PROC_W_X $NUM_PROC_W_Y $NUM_PROC_W_Z $BLK_SIZE_W_X $BLK_SIZE_W_Y $BLK_SIZE_W_Z $NUM_TS $ID_WRITER >& $SCRIPT_DIR/output/log.writer &
+	srun -N $WRITER_NODE -n $NUM_WRITER -c $C_SP --cpu_bind=cores .$DATASPACES_DIR/test_writer $METHOD $NUM_WRITER $NDIM $NUM_PROC_W_X $NUM_PROC_W_Y $NUM_PROC_W_Z $BLK_SIZE_W_X $BLK_SIZE_W_Y $BLK_SIZE_W_Z $NUM_TS $ID_WRITER &>> $SCRIPT_DIR/output/log.writer &
 
 	## Reader start 
-	srun -N $READER_NODE -n $NUM_READER -c $C_SP --cpu_bind=cores .$DATASPACES_DIR/test_reader $METHOD $NUM_READER $NDIM $NUM_PROC_R_X $NUM_PROC_R_Y $NUM_PROC_R_Z $BLK_SIZE_R_X $BLK_SIZE_R_Y $BLK_SIZE_R_Z $NUM_TS $ID_READER >& $SCRIPT_DIR/output/log.reader &
+	srun -N $READER_NODE -n $NUM_READER -c $C_SP --cpu_bind=cores .$DATASPACES_DIR/test_reader $METHOD $NUM_READER $NDIM $NUM_PROC_R_X $NUM_PROC_R_Y $NUM_PROC_R_Z $BLK_SIZE_R_X $BLK_SIZE_R_Y $BLK_SIZE_R_Z $NUM_TS $ID_READER &>> $SCRIPT_DIR/output/log.reader &
 
 
 	wait
 
-	mkdir logdir_setup1_strong_scaling
-	mv log.server log.writer log.reader ./logdir_setup1_strong_scaling
 
 }
 
@@ -401,8 +336,13 @@ function main {
 
 
 				#Run DataSpaces Benchmark
-				#run_dataspaces
-				dummy_run
+				echo "Data Size: $DATA_SIZE_X, $DATA_SIZE_Y, $DATA_SIZE_Z" &>> $SCRIPT_DIR/output/log.writer
+				echo "Writer:Server:Reader: $NUM_WRITER:$NUM_SERVER:$NUM_READER" &>> $SCRIPT_DIR/output/log.writer
+				echo "Data Size: $DATA_SIZE_X, $DATA_SIZE_Y, $DATA_SIZE_Z" &>> $SCRIPT_DIR/output/log.reader
+				echo "Writer:Server:Reader: $NUM_WRITER:$NUM_SERVER:$NUM_READER" &>> $SCRIPT_DIR/output/log.reader
+
+				#dummy_run
+				run_dataspaces
 
 			done
 		done

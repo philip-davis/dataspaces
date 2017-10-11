@@ -1,0 +1,82 @@
+Data Size: 128, 128, 128
+Writer:Server:Reader: 1:1:1
+TS= 1 TRANSPORT_TYPE= DATASPACES read MAX time= 0.131471
+TS= 2 TRANSPORT_TYPE= DATASPACES read MAX time= 0.114510
+test_get_run(): done
+Data Size: 128, 128, 128
+Writer:Server:Reader: 1:1:2
+TS= 1 TRANSPORT_TYPE= DATASPACES read MAX time= 0.122858
+TS= 2 TRANSPORT_TYPE= DATASPACES read MAX time= 0.104607
+test_get_run(): done
+Data Size: 128, 128, 128
+Writer:Server:Reader: 2:1:1
+TS= 1 TRANSPORT_TYPE= DATASPACES read MAX time= 0.168981
+TS= 2 TRANSPORT_TYPE= DATASPACES read MAX time= 0.144477
+test_get_run(): done
+Data Size: 128, 128, 128
+Writer:Server:Reader: 2:1:2
+TS= 1 TRANSPORT_TYPE= DATASPACES read MAX time= 0.120303
+TS= 2 TRANSPORT_TYPE= DATASPACES read MAX time= 0.099697
+test_get_run(): done
+Data Size: 128, 128, 128
+Writer:Server:Reader: 2:1:4
+TS= 1 TRANSPORT_TYPE= DATASPACES read MAX time= 0.058145
+TS= 2 TRANSPORT_TYPE= DATASPACES read MAX time= 0.090713
+test_get_run(): done
+Data Size: 128, 128, 128
+Writer:Server:Reader: 1:1:1
+TS= 1 TRANSPORT_TYPE= DATASPACES read MAX time= 0.142469
+TS= 2 TRANSPORT_TYPE= DATASPACES read MAX time= 0.111175
+test_get_run(): done
+Data Size: 128, 128, 128
+Writer:Server:Reader: 1:1:2
+TS= 1 TRANSPORT_TYPE= DATASPACES read MAX time= 0.114873
+TS= 2 TRANSPORT_TYPE= DATASPACES read MAX time= 0.066731
+test_get_run(): done
+Data Size: 128, 128, 128
+Writer:Server:Reader: 2:1:1
+TS= 1 TRANSPORT_TYPE= DATASPACES read MAX time= 0.124011
+TS= 2 TRANSPORT_TYPE= DATASPACES read MAX time= 0.158193
+test_get_run(): done
+Data Size: 128, 128, 128
+Writer:Server:Reader: 2:1:2
+TS= 1 TRANSPORT_TYPE= DATASPACES read MAX time= 0.105422
+TS= 2 TRANSPORT_TYPE= DATASPACES read MAX time= 0.104129
+test_get_run(): done
+Data Size: 128, 128, 128
+Writer:Server:Reader: 2:1:4
+TS= 1 TRANSPORT_TYPE= DATASPACES read MAX time= 0.063491
+TS= 2 TRANSPORT_TYPE= DATASPACES read MAX time= 0.051233
+test_get_run(): done
+Data Size: 256, 256, 256
+Writer:Server:Reader: 1:1:1
+TS= 1 TRANSPORT_TYPE= DATASPACES read MAX time= 0.342387
+TS= 2 TRANSPORT_TYPE= DATASPACES read MAX time= 0.285388
+test_get_run(): done
+Data Size: 256, 256, 256
+Writer:Server:Reader: 1:1:2
+TS= 1 TRANSPORT_TYPE= DATASPACES read MAX time= 0.240591
+TS= 2 TRANSPORT_TYPE= DATASPACES read MAX time= 0.192621
+test_get_run(): done
+Data Size: 256, 256, 256
+Writer:Server:Reader: 2:1:1
+TS= 1 TRANSPORT_TYPE= DATASPACES read MAX time= 0.408750
+TS= 2 TRANSPORT_TYPE= DATASPACES read MAX time= 0.307313
+test_get_run(): done
+Data Size: 256, 256, 256
+Writer:Server:Reader: 2:1:2
+TS= 1 TRANSPORT_TYPE= DATASPACES read MAX time= 0.254199
+TS= 2 TRANSPORT_TYPE= DATASPACES read MAX time= 0.191730
+test_get_run(): done
+Data Size: 256, 256, 256
+Writer:Server:Reader: 2:1:4
+TS= 1 TRANSPORT_TYPE= DATASPACES read MAX time= 0.249793
+TS= 2 TRANSPORT_TYPE= DATASPACES read MAX time= 0.132540
+test_get_run(): done
+Data Size: 256, 256, 256
+Writer:Server:Reader: 1:1:1
+TS= 1 TRANSPORT_TYPE= DATASPACES read MAX time= 0.368748
+TS= 2 TRANSPORT_TYPE= DATASPACES read MAX time= 0.268007
+test_get_run(): done
+Data Size: 256, 256, 256
+Writer:Server:Reader: 1:1:2

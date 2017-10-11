@@ -1,3 +1,20 @@
+Type your system to SYSTEM parameter from following options, 
+	Summit
+	Cori
+	Theta
+	Stampede2
+	Caliburn
+
+
+Put time limit (in seconds) to TIME_LIMIT
+
+Data size is 3D by-default
+
+Enter DataSpaces time steps to NUM_TS 
+
+If you enter multiple value, separate by colon
+
+
 To use this test-suite, we need to first open run_test_suite.sh
 	Put your current directory in $SCRIPT_DIR
 	Put your DataSpaces Executable file directory in $DATASPACES_DIR
@@ -5,3 +22,6 @@ To use this test-suite, we need to first open run_test_suite.sh
 Then, write your input in directory $SCRIPT_DIR/input/
 
 Finally, run script run_test_suite.sh
+
+DataSpaces output raw data is in directory /output, log.* files
+Statistic result is in result.csv file
