@@ -209,6 +209,7 @@ static int parse_conf(char *fname)
 
         fin = fopen(fname, "rt");
         if (!fin)
+        		//TODO: set reasonable defaults instead of failing.
                 return -errno;
 
         while (fgets(buff, sizeof(buff), fin) != NULL) {
