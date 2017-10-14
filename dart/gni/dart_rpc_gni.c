@@ -1543,13 +1543,14 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	gni_return_t status;
 
 	struct node_id *peer;
-	struct rpc_request *rr, *tmp;
+	struct rpc_request *rr, *rr2, *tmp;
 	struct hdr_sys *hs;
 	int err =  -ENOMEM;
 	uint32_t n;
 
 	int check=0;
 	int cnt=0;
+	int nfound = 0;
 	void *tmpcmd;
 
 	status = GNI_CqVectorWaitEvent(cq_array, 3, (uint64_t)timeout, &event_data, &n);
@@ -1593,10 +1594,22 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 			}
 		}
 
+#ifdef DEBUG
+		list_for_each_entry_safe(rr2, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry)
+		{
+			if(rr2->index == event_id) {
+				nfound++;
+			}
+		}
+		if(nfound != 1) {
+			uloga("Rank %d, found %d events with the same index.\n", rank_id, nfound);
+		}
+#endif
+
 		while(!GNI_CQ_STATUS_OK(event_data));
 
 #ifdef DEBUG
-		uloga("Rank %d: rr->type = %d, rr->index = %d, check = %d, rpc_s->src_cq_hndl = %p\n", rank_id, rr->type, rr->index, check, (void *)rpc_s->src_cq_hndl);
+		uloga("Rank %d: rr = %p, rr->type = %d, rr->index = %d, check = %d, rpc_s->src_cq_hndl = %p\n", rank_id, (void *)rr, rr->type, rr->index, check, (void *)rpc_s->src_cq_hndl);
 #endif
 
 		if(check == 0)
@@ -2611,7 +2624,7 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 	while(rr->index == -1);
 
 #ifdef DEBUG
-	uloga("Rank %d: doing rpc_receive_direct for rr->index = %d\n", rank_id, rr->index);
+	uloga("Rank %d: doing rpc_receive_direct for rr = %p, rr->index = %d\n", rank_id, (void *)rr, rr->index);
 #endif
 
 	list_add_tail(&rr->req_entry, &rpc_s->rpc_list);
