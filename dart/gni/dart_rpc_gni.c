@@ -2610,6 +2610,10 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 		rr->index = rpc_get_index();
 	while(rr->index == -1);
 
+#ifdef DEBUG
+	uloga("Rank %d: doing rpc_receive_direct for rr->index = %d\n", rank_id, rr->index);
+#endif
+
 	list_add_tail(&rr->req_entry, &rpc_s->rpc_list);
 	rpc_s->rr_num++;
 
