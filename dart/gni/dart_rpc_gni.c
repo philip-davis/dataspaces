@@ -1162,10 +1162,6 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
             goto err_status;
         }
 
-#ifdef DEBUG
-        uloga("rpc_fetch_request: peer->mdh_addr.address = %p, rr->msg->size = %d\n", (void *)peer->mdh_addr.address, rr->msg->size);
-#endif
-
         rdma_data_desc = calloc(1, sizeof(*rdma_data_desc));
         rdma_data_desc->type = GNI_POST_RDMA_GET;
         rdma_data_desc->cq_mode = GNI_CQMODE_GLOBAL_EVENT | GNI_CQMODE_REMOTE_EVENT; //?reconsider, need some tests.
@@ -1188,6 +1184,10 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
               uloga("Fail: GNI_PostRdma returned error with %d.\n", status);
               goto err_status;
         }
+
+#ifdef DEBUG
+        uloga("rpc_fetch_request: peer->mdh_addr.address = %p, rr->msg->size = %d, rdma_data_desc=%p\n", (void *)peer->mdh_addr.address, rr->msg->size, (void *)rdma_data_desc);
+#endif
 	}
 
 	rr->refcont++;
@@ -1639,6 +1639,9 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 			}
 		}
 
+#ifdef DEBUG
+		uloga("Rank %d: got post_des=%p\n", rank_id, (void *)post_des);
+#endif
 		err = rpc_cb_req_completion(rpc_s, rr);
 		if(err!=0)
 			goto err_out;
