@@ -1901,14 +1901,17 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 
 
 	  if(rr->type == 1)
-	    {
-	      status = GNI_GetCompleted(rpc_s->src_cq_hndl, event_data, &post_des);
-	      if (status != GNI_RC_SUCCESS)
-		{
-		  printf("(%s): GNI_GetCompleted PROCESSING ERROR.\n", __func__);
-		  goto err_status;
-		}
-	    }
+	  {
+		  status = GNI_GetCompleted(rpc_s->src_cq_hndl, event_data, &post_des);
+		  if (status != GNI_RC_SUCCESS)
+		  {
+			  printf("(%s): GNI_GetCompleted PROCESSING ERROR.\n", __func__);
+			  goto err_status;
+		  }
+#ifdef DEBUG
+		  uloga("Rank %d: post_des = %p\n", rank_id, (void *)post_des);
+#endif
+	  }
 
 	  err = rpc_cb_req_completion(rpc_s, rr);
 	  if(err!=0)
