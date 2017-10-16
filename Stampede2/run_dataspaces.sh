@@ -255,9 +255,12 @@ function run_dataspaces {
 	ibrun -n $NUM_WRITER $DATASPACES_DIR/test_writer $METHOD $NUM_WRITER $NDIM $NUM_PROC_W_X $NUM_PROC_W_Y $NUM_PROC_W_Z $BLK_SIZE_W_X $BLK_SIZE_W_Y $BLK_SIZE_W_Z $NUM_TS $ID_WRITER &>> $SCRIPT_DIR/output/log.writer &
 
 	## Reader start 
-	ibrun -n $NUM_READER $DATASPACES_DIR/test_reader $METHOD $NUM_READER $NDIM $NUM_PROC_R_X $NUM_PROC_R_Y $NUM_PROC_R_Z $BLK_SIZE_R_X $BLK_SIZE_R_Y $BLK_SIZE_R_Z $NUM_TS $ID_READER &>> $SCRIPT_DIR/output/log.reader &
+	ibrun -n $NUM_READER $DATASPACES_DIR/test_reader $METHOD $NUM_READER $NDIM $NUM_PROC_R_X $NUM_PROC_R_Y $NUM_PROC_R_Z $BLK_SIZE_R_X $BLK_SIZE_R_Y $BLK_SIZE_R_Z $NUM_TS $ID_READER &>> $SCRIPT_DIR/output/log.reader 
 
-	wait
+	#remove wait and & sign in the last test_reader line
+	#Because Stampede2 test is based on DataSpaces-as-a-service branch
+	#DataSpaces server will running in the background forever waiting for clients to connect
+	#Therefore, the script won't stop and cannot start the rest of input combination
 
 
 }
