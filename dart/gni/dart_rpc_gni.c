@@ -1032,7 +1032,7 @@ static int rpc_post_request(struct rpc_server *rpc_s, struct node_id *peer, stru
 {
 	int err;
 	gni_return_t status = GNI_RC_SUCCESS;
-	gni_post_descriptor_t rdma_data_desc;
+	gni_post_descriptor_t *rdma_data_desc;
 	uint32_t local, remote;
 
 	local = rr->index;
@@ -1105,18 +1105,19 @@ RESEND:
 			goto err_status;
 		}
 	
-		rdma_data_desc.type = GNI_POST_RDMA_PUT;
-		rdma_data_desc.cq_mode = GNI_CQMODE_GLOBAL_EVENT | GNI_CQMODE_REMOTE_EVENT;
-		rdma_data_desc.dlvr_mode = GNI_DLVMODE_PERFORMANCE;
-		rdma_data_desc.local_addr = (uint64_t) rr->msg->msg_data;
-		rdma_data_desc.local_mem_hndl = rr->mdh_data;
-		rdma_data_desc.remote_addr = peer->mdh_addr.address;
-		rdma_data_desc.remote_mem_hndl = peer->mdh_addr.mdh;
-		rdma_data_desc.length = rr->msg->size;
-		rdma_data_desc.rdma_mode = 0;
-		rdma_data_desc.src_cq_hndl = rpc_s->src_cq_hndl;
+		rdma_data_desc = calloc(1, sizeof(*rdma_data_desc));
+		rdma_data_desc->type = GNI_POST_RDMA_PUT;
+		rdma_data_desc->cq_mode = GNI_CQMODE_GLOBAL_EVENT | GNI_CQMODE_REMOTE_EVENT;
+		rdma_data_desc->dlvr_mode = GNI_DLVMODE_PERFORMANCE;
+		rdma_data_desc->local_addr = (uint64_t) rr->msg->msg_data;
+		rdma_data_desc->local_mem_hndl = rr->mdh_data;
+		rdma_data_desc->remote_addr = peer->mdh_addr.address;
+		rdma_data_desc->remote_mem_hndl = peer->mdh_addr.mdh;
+		rdma_data_desc->length = rr->msg->size;
+		rdma_data_desc->rdma_mode = 0;
+		rdma_data_desc->src_cq_hndl = rpc_s->src_cq_hndl;
 
-		status = GNI_PostRdma(peer->ep_hndl, &rdma_data_desc);
+		status = GNI_PostRdma(peer->ep_hndl, rdma_data_desc);
 		if (status != GNI_RC_SUCCESS)
 		{
 		  printf("Fail: GNI_PostRdma returned error. %d\n", status);
@@ -1637,11 +1638,11 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 				uloga("Rank %d: (%s): GNI_GetCompleted PROCESSING ERROR. rpc_s->src_cq_hndl = %p\n", rank_id, __func__, (void *)rpc_s->src_cq_hndl);
 				goto err_status;
 			}
-		}
-
 #ifdef DEBUG
 		uloga("Rank %d: got post_des=%p\n", rank_id, (void *)post_des);
 #endif
+			free(post_des);
+		}
 		err = rpc_cb_req_completion(rpc_s, rr);
 		if(err!=0)
 			goto err_out;
@@ -1911,6 +1912,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 #ifdef DEBUG
 		  uloga("Rank %d: post_des = %p\n", rank_id, (void *)post_des);
 #endif
+		  free(post_des);
 	  }
 
 	  err = rpc_cb_req_completion(rpc_s, rr);
