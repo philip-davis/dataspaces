@@ -20,29 +20,6 @@ SYS_NUM=
 TIMEOUT_FLAG=
 TIME_LIMIT=10
 
-#function print_options {
-
-#echo "Select the number of your system from following options:
-#1. Summit
-#2. Cori
-#3. Theta
-#4. Stampede2
-#5. Caliburn
-#6. Quit"
-
-#echo "Please type the sytem number, followed by [ENTER]: "
-#read SYS_NUM
-
-#if [ $SYS_NUM -gt 6 ] || [ $SYS_NUM -lt 1 ]
-#	then
-#	echo "Wrong number and exit"
-#	exit 1
-#fi
-
-#echo "Please type the execution time limit in seconds, followed by [ENTER]: "
-#read TIME_LIMIT
-
-#}
 
 function read_system_config {
 	SYSTEM=$(awk -F '=' '/^SYSTEM/{gsub(/ /, "", $2);print $2}' "${CONFIG_FILE}")
@@ -58,6 +35,7 @@ function main {
 	export DATASPACES_DIR 
 	export CONFIG_FILE
 	export NUM_TS
+	export TIME_LIMIT
 
 	read_system_config
 	
@@ -67,7 +45,7 @@ function main {
 			then 
 			SYSTEM="Summit"
 		fi
-		timeout $TIME_LIMIT bash $SCRIPT_DIR/$SYSTEM/run_dataspaces.sh
+		bash $SCRIPT_DIR/$SYSTEM/run_dataspaces.sh
 		;;
 
 		"Cori" | "cori" )
@@ -75,7 +53,7 @@ function main {
 			then 
 			SYSTEM="Cori"
 		fi
-		timeout $TIME_LIMIT bash $SCRIPT_DIR/$SYSTEM/run_dataspaces.sh
+		bash $SCRIPT_DIR/$SYSTEM/run_dataspaces.sh
 		;;
 
 		"Theta" | "theta" )
@@ -83,7 +61,7 @@ function main {
 			then 
 			SYSTEM="Theta"
 		fi
-		timeout $TIME_LIMIT bash $SCRIPT_DIR/$SYSTEM/run_dataspaces.sh
+		bash $SCRIPT_DIR/$SYSTEM/run_dataspaces.sh
 		;;
 
 		"Stampede2" | "stampede2" )
@@ -91,7 +69,7 @@ function main {
 			then 
 			SYSTEM="Stampede2"
 		fi
-		timeout $TIME_LIMIT bash $SCRIPT_DIR/$SYSTEM/run_dataspaces.sh
+		bash $SCRIPT_DIR/$SYSTEM/run_dataspaces.sh
 		;;
 
 		"Caliburn" | "caliburn" )
@@ -99,7 +77,7 @@ function main {
 			then 
 			SYSTEM="Caliburn"
 		fi
-		timeout $TIME_LIMIT bash $SCRIPT_DIR/$SYSTEM/run_dataspaces.sh
+		bash $SCRIPT_DIR/$SYSTEM/run_dataspaces.sh
 		;;
 
 		* )
@@ -109,18 +87,8 @@ function main {
 
 	esac
 
-	TIMEOUT_FLAG=$?
-
-	if [ $TIMEOUT_FLAG -eq 124 ]
-	then
-		echo "ERROR: Timeout after $TIME_LIMIT seconds"
-		#Process all we have
-		bash $SCRIPT_DIR/postprocess/postprocess.sh
-	else
-		#Calling postprocess
-		bash $SCRIPT_DIR/postprocess/postprocess.sh
-		echo "Succeed!"
-	fi
+	#Calling postprocess
+	bash $SCRIPT_DIR/postprocess/postprocess.sh
 }
 
 
