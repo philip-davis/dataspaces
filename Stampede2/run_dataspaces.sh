@@ -237,6 +237,7 @@ NUM_READER_ARR=($(awk '/RATIO_START:/{f=1;next}/RATIO_END/{f=0}f{split($0,ft,":"
 function run_dataspaces {
 	NUM_CLIENT=$(($NUM_WRITER+$NUM_READER))
 
+	export IBRUN_TASKS_PER_NODE=$PPN #set the number of processes per node
 
 	#init
 	parse_config_writer $NUM_WRITER
