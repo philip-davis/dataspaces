@@ -237,7 +237,11 @@ enum cmd_type {
 #endif
     /* Added for CCGrid Demo. */
     CN_TIMING_AVG,
-    _CMD_COUNT
+    _CMD_COUNT,
+    /* Added for dcg_obj_put_yubo*/
+    ss_obj_put_yubo,
+    ss_obj_get_yubo,
+    dc_say_hi_to_ds
 };
 
 enum lock_type {
