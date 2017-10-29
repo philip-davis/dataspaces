@@ -87,8 +87,7 @@ static void set_offset_nd(int rank, int dims)
 static int generate_nd(double *mnd, unsigned int ts, int dims)
 {
     //double value = 1.0*(rank_) + 0.0001*ts;
-	//double value = ts;
-    double value=ts;
+	double value = ts;
     int i;
 	uint64_t mnd_size = 1;
     for(i = 0; i < dims; i++)
@@ -140,27 +139,18 @@ static int couple_write_nd(unsigned int ts, int num_vars, enum transport_type ty
 			uloga("%s(): allocate_nd() failed.\n", __func__);
             return -1; // TODO: free buffers
 		}
-
+		
 		generate_nd(data, ts, dims);
-
 		data_tab[i] = data;
 	}
-
-
-
-	
-
 
 	MPI_Barrier(gcomm_);
     tm_st = timer_read(&timer_);
 
-
 	for(i = 0; i < num_vars; i++){
 		sprintf(var_name, "mnd_%d", i);
-
 		common_put(var_name, ts, elem_size, dims, lb, ub,
 			data_tab[i], type);
-
 		if(type == USE_DSPACES){
 			common_put_sync(type);
 		}

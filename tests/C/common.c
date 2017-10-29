@@ -123,7 +123,7 @@ int parse_args(int argc, char** argv, enum transport_type *type, int *npapp,
 	if(argc >= ++count + 1)
 		*num_vars = atoi(argv[count]);
 	else
-		*num_vars = 1; 
+		*num_vars = 1;
 
 	return 0;
 }
@@ -184,21 +184,6 @@ int common_put(const char *var_name,
 	}
     return 0;
 }
-
-//yubo
-int common_put_yubo(const char *var_name, 
-    unsigned int ver, int size,
-    int ndim,
-    uint64_t *lb, uint64_t *ub,
-    void *data, enum transport_type type)
-{
-
-        return dspaces_put(var_name, ver, size,
-                        ndim,lb, ub,data);
-    
-    return 0;
-}
-
 
 int common_get(const char *var_name,
 	unsigned int ver, int size,
@@ -286,7 +271,7 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
 
 void check_data(const char *var_name, double *buf, int num_elem, int rank, int ts)
 {
-        double max, min, sum, avg, first; 
+        double max, min, sum, avg;
         int i;
         int cnt = 0;
 
@@ -306,17 +291,9 @@ void check_data(const char *var_name, double *buf, int num_elem, int rank, int t
                 }
         }
         avg = sum / num_elem;
-
-        //Get first element in the data buf
-        first = buf[0];
-
 #ifdef DEBUG
           uloga("%s(): var= %s, rank= %d, max= %f, min= %f, avg= %f\n",
                           __func__, var_name, rank, max, min, avg);
-#endif
-
-#ifdef YUBO //add print output.
-          uloga("%s(): print the first element: %f\n", __func__, first);
 #endif
 
         if (cnt > 0) {

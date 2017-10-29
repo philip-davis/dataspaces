@@ -91,9 +91,6 @@ int dcg_obj_cq_register(struct obj_data *);
 int dcg_obj_cq_update(int);
 int dcg_obj_sync(int);
 
-//Yubo
-int dcg_say_hi();
-
 int dcg_lock_on_read(const char *, void *comm);
 int dcg_unlock_on_read(const char *, void *comm);
 int dcg_lock_on_write(const char *, void *comm);

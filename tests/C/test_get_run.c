@@ -146,13 +146,6 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
 	uloga("TIMING_PERF get_data ts %u peer %d time %lf\n",
             ts, common_rank(), tm_diff);
 #endif
-
-	double yubo=data_tab[0][0]; 
-
-#ifdef YUBO
-	uloga("%s(): data_tab[0][0]: %f\n",__func__,yubo);
-#endif
-
     if (rank_ == root) {
         uloga("TS= %u TRANSPORT_TYPE= %s read MAX time= %lf\n",
                 ts, transport_type_str_, tm_max);

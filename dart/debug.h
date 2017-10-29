@@ -36,7 +36,6 @@
 #include <stdio.h>
 #include <errno.h>
 
-#define YUBO   //enable YUBO flag
 #ifdef DEBUG
 #define ulog(f, a...) fprintf(stderr, "'%s()': " f, __func__, ##a)
 #else

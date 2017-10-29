@@ -1285,9 +1285,6 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         msg->private = od;
         msg->cb = obj_put_completion;
 
-        //Yubo print a flag here
-        uloga("%s(), here I am\n",__func__);
-
 #ifdef DEBUG
         uloga("'%s()': server %d start receiving %s, version %d.\n", 
             __func__, DSG_ID, odsc->name, odsc->version);
@@ -1295,16 +1292,6 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         rpc_mem_info_cache(peer, msg, cmd); 
         err = rpc_receive_direct(rpc_s, peer, msg);
         rpc_mem_info_reset(peer, msg, cmd);
-
-//#ifdef YUBO
-    //uloga("%s(): msg->msg_rpc->cmd: %u\n",__func__,msg->msg_rpc->cmd);
-//#endif
-    double *yubo;
-    yubo = msg->msg_data;
-
-    #ifdef YUBO
-        uloga("%s(): put first element from msg->msg_data: %f\n", __func__, yubo[0]);
-    #endif
 
         if (err < 0)
                 goto err_free_msg;
@@ -1323,22 +1310,6 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         uloga("'%s()': failed with %d.\n", __func__, err);
         return err;
 }
-
-
-
-static int dsgrpc_say_hi(struct rpc_server *rpc_s, struct rpc_cmd *cmd){
-    int err;
-
-
-
-    uloga("%s(): Hello YUBO!\n",__func__);
-
-
-
-    return err;
-}
-
-
 
 static int obj_info_reply_descriptor(
         struct node_id *q_peer,
@@ -1918,16 +1889,6 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         if (!od)
                 goto err_out;
 
-        //Try to get a data
-    double *yubo;
-    yubo = od->data;
-
-#ifdef YUBO
-   uloga("%s(): get ob->data: %f\n", __func__, yubo[0]);
-#endif
-
-
-
         (fast_v)? ssd_copyv(od, from_obj) : ssd_copy(od, from_obj);
         od->obj_ref = from_obj;
 
@@ -1936,12 +1897,6 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
                 obj_data_free(od);
                 goto err_out;
         }
-
-            yubo = od->data;
-
-#ifdef YUBO
-   uloga("%s(): #2 get ob->data: %f\n", __func__, yubo[0]);
-#endif
 
         msg->msg_data = od->data;
         msg->size = (fast_v)? obj_data_sizev(&od->obj_desc) / sizeof(iovec_t) : obj_data_size(&od->obj_desc);
@@ -1954,7 +1909,6 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         rpc_mem_info_reset(peer, msg, cmd);
         if (err == 0)
                 return 0;
-
 
         obj_data_free(od);
         free(msg);
@@ -2112,7 +2066,6 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name, void *comm)
         rpc_add_service(cp_lock, dsgrpc_lock_service);
         rpc_add_service(cp_remove, dsgrpc_remove_service);
         rpc_add_service(ss_info, dsgrpc_ss_info);
-        rpc_add_service(dc_say_hi_to_ds, dsgrpc_say_hi); //yubo
 #ifdef DS_HAVE_ACTIVESPACE
         rpc_add_service(ss_code_put, dsgrpc_bin_code_put);
 #endif

@@ -267,16 +267,6 @@ int common_dspaces_get(const char *var_name,
 */
 #endif
     err = dcg_obj_get(od);
-
-//Try to get a data
-    double *yubo;
-    yubo = od->data;
-
-#ifdef YUBO
-    uloga("%s(): try to get first element from ob->data: %f\n", __func__, yubo[0]);
-#endif
-
-
     obj_data_free(od);
     if (err < 0 && err != -EAGAIN) 
         uloga("'%s()': failed with %d, can not get data object.\n",
@@ -311,7 +301,6 @@ int common_dspaces_put(const char *var_name,
 
         struct obj_data *od;
         int err = -ENOMEM;
-        int err_1 = -ENOMEM; //yubo
 
         strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
         odsc.name[sizeof(odsc.name)-1] = '\0';
@@ -326,21 +315,7 @@ int common_dspaces_put(const char *var_name,
         // set global dimension
         set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
                              &od->gdim); 
-
-        //Try to get a data
-    double *yubo;
-    yubo = od->data;
-
-    #ifdef YUBO
-        uloga("%s(): put first element from ob->data: %f\n", __func__, yubo[0]);
-    #endif
-
-
         err = dcg_obj_put(od);
-        //yubo call rpc function
-        //err_1 = dcg_say_hi();
-
-        
         if (err < 0) {
             obj_data_free(od);
             uloga("'%s()': failed with %d, can not put data object.\n", 
