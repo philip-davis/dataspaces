@@ -207,7 +207,31 @@ static struct query_tran_entry * qte_alloc(struct obj_data *od, int alloc_data)
 
 	return qte;
 }
+static struct query_tran_entry * qte_alloc_promote(struct obj_data *od)
+{
+    struct query_tran_entry *qte;
 
+
+    qte = malloc(sizeof(*qte));
+    if (!qte) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    memset(qte, 0, sizeof(*qte));
+
+    INIT_LIST_HEAD(&qte->od_list);
+    qte->q_id = qt_gen_qid();
+    qte->q_obj = od->obj_desc;
+    memcpy(&qte->gdim, &od->gdim, sizeof(struct global_dimension));
+
+    qte->qh = qh_alloc(dcg->dc->num_sp);
+    if (!qte->qh) {
+        free(qte);
+        errno = ENOMEM;
+        return NULL;
+    }
+    return qte;
+}
 static void qte_free(struct query_tran_entry *qte)
 {
         free(qte->qh);
@@ -282,6 +306,13 @@ static void qt_free_obj_data(struct query_tran_entry *qte, int unlink)
 			qt_remove_obj(qte, od);
         }
 }
+
+static void qt_unlk(struct query_tran_entry *qte){
+    struct obj_data *od, *t;
+
+        list_for_each_entry_safe(od, t, &qte->od_list, struct obj_data, obj_entry) 
+            qt_remove_obj(qte, od);
+        }
 
 /*
   Allocate obj data storage for a given transaction, i.e., allocate
@@ -1135,6 +1166,13 @@ static int obj_data_get_completion(struct rpc_server *rpc_s, struct msg_buf *msg
         return 0;
 }
 
+static int obj_data_promote_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+        free(msg);
+
+        dcg_dec_pending();
+        return 0;
+}
 /*
   Fetch a data object from the distributed storage. We call this
   routine when we have all object descriptors for all parts.
@@ -1919,7 +1957,6 @@ int dcg_obj_get(struct obj_data *od)
                 err = -ENODATA;
                 goto out_no_data;
         }
-
         err = dcg_obj_assemble(qte, od);
 #ifdef TIMING_PERF
         tm_end = timer_read(&tm_perf);
@@ -1937,6 +1974,260 @@ int dcg_obj_get(struct obj_data *od)
  err_qt_free:
         qt_remove(&dcg->qt, qte);
         free(qte);
+ err_out:
+        ERROR_TRACE();
+}
+
+static int dcg_obj_data_promote(struct query_tran_entry *qte){
+
+        struct msg_buf *msg;
+        struct node_id *peer;
+        struct hdr_obj_get *oh;
+        struct obj_data *od;
+        int sync_op_id;
+        int err;
+
+        err = qt_alloc_obj_data(qte);
+        if (err < 0)
+                goto err_out;
+
+        list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
+                //uloga("Object %d, %d, %d, and ub %d, %d, %d", od->obj_desc.bb.lb.c[0], od->obj_desc.bb.lb.c[1], od->obj_desc.bb.lb.c[2], od->obj_desc.bb.ub.c[0], od->obj_desc.bb.ub.c[1], od->obj_descvim.bb.ub.c[2]);
+                    peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
+
+                    err = -ENOMEM;
+                    sync_op_id = syncop_next();
+                    msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+                    if (!msg) {
+                            goto err_out;
+                    }
+
+                    msg->msg_data = od->data;
+                    msg->size = 0;
+                    //might need to process this
+                    msg->cb = obj_data_promote_completion;
+                    //msg->private = qte;
+
+                    msg->sync_op_id = syncop_ref(sync_op_id);
+
+                    msg->msg_rpc->cmd = ss_obj_promote;
+                    msg->msg_rpc->id = DCG_ID;
+
+                    oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
+                    oh->qid = qte->q_id;
+                    oh->u.o.odsc = od->obj_desc;
+                    oh->u.o.odsc.version = qte->q_obj.version;
+                    memcpy(&oh->gdim, &qte->gdim,
+                        sizeof(struct global_dimension));
+
+                    err = rpc_send(dcg->dc->rpc_s, peer, msg);
+                    if (err < 0) {
+                            free(msg);
+                            od->data = NULL;
+                            goto err_out;
+                    }
+                    dcg_inc_pending();
+        }
+
+        return sync_op_id;
+ err_out:
+        //uloga("'%s()': failed with %d.\n", __func__, err);
+        return err;
+
+
+}
+static int dcg_obj_data_demote(struct query_tran_entry *qte){
+
+        struct msg_buf *msg;
+        struct node_id *peer;
+        struct hdr_obj_get *oh;
+        struct obj_data *od;
+        int sync_op_id;
+        int err;
+
+        err = qt_alloc_obj_data(qte);
+        if (err < 0)
+                goto err_out;
+
+        list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
+                //uloga("Object %d, %d, %d, and ub %d, %d, %d", od->obj_desc.bb.lb.c[0], od->obj_desc.bb.lb.c[1], od->obj_desc.bb.lb.c[2], od->obj_desc.bb.ub.c[0], od->obj_desc.bb.ub.c[1], od->obj_descvim.bb.ub.c[2]);
+                peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
+
+                err = -ENOMEM;
+                sync_op_id = syncop_next();
+                msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+                if (!msg) {
+                        goto err_out;
+                }
+
+                msg->msg_data = od->data;
+                msg->size = 0;
+                //might need to process this
+                msg->cb = obj_data_promote_completion;
+                //msg->private = qte;
+
+                msg->sync_op_id = syncop_ref(sync_op_id);
+
+                msg->msg_rpc->cmd = ss_obj_demote;
+                msg->msg_rpc->id = DCG_ID;
+
+                oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
+                oh->qid = qte->q_id;
+                oh->u.o.odsc = od->obj_desc;
+                oh->u.o.odsc.version = qte->q_obj.version;
+                memcpy(&oh->gdim, &qte->gdim,
+                    sizeof(struct global_dimension));
+
+                err = rpc_send(dcg->dc->rpc_s, peer, msg);
+                if (err < 0) {
+                        free(msg);
+                        od->data = NULL;
+                        goto err_out;
+                }
+                dcg_inc_pending();
+        }
+
+        return sync_op_id;
+ err_out:
+        //uloga("'%s()': failed with %d.\n", __func__, err);
+        return err;
+
+
+}
+int dcg_obj_promote(struct obj_data *od)
+{
+        struct query_tran_entry *qte;
+        const struct query_cache_entry *qce;
+        int err = -ENOMEM;
+#ifdef TIMING_PERF
+        double tm_st, tm_end;
+        tm_st = timer_read(&tm_perf);
+#endif
+
+        qte = qte_alloc_promote(od);
+        if (!qte)
+                goto err_out;
+
+        qt_add(&dcg->qt, qte);
+
+        versions_reset();
+
+        // TODO:  I have  intentionately  disabled the  cache here.  I
+        // should reconsider.
+        // qce = qc_find(&dcg->qc, &od->obj_desc);{
+                err = get_dht_peers(qte);
+                if (err < 0)
+                        goto err_qt_free;
+                DC_WAIT_COMPLETION(qte->f_peer_received == 1);
+
+                err = get_obj_descriptors(qte);
+                if (err < 0) {
+                    if (err == -EAGAIN)
+                        goto out_no_data;
+                    else    goto err_qt_free;
+                }
+                DC_WAIT_COMPLETION(qte->f_odsc_recv == 1);
+
+        if (qte->f_err != 0) {
+                err = -EAGAIN;
+                goto out_no_data;
+        }
+
+#ifdef TIMING_PERF
+        tm_end = timer_read(&tm_perf);
+        uloga("TIMING_PERF locate_data ts %d peer %d time %lf %s\n",
+            od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
+        tm_st = tm_end;
+#endif
+
+        err = dcg_obj_data_promote(qte);
+        if (err < 0) {
+             uloga("Received error in dcg_obj_data_promote\n");
+            goto out_no_data;
+                
+        }
+#ifdef TIMING_PERF
+        tm_end = timer_read(&tm_perf);
+        uloga("TIMING_PERF promote_data ts %d peer %d time %lf %s\n",
+            od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
+#endif 
+ out_no_data:
+            qt_unlk(qte);
+ err_qt_free:
+        qt_remove(&dcg->qt, qte);
+        free(qte);
+
+        return err;
+ err_out:
+        ERROR_TRACE();
+}
+
+int dcg_obj_demote(struct obj_data *od)
+{
+        struct query_tran_entry *qte;
+        const struct query_cache_entry *qce;
+        int err = -ENOMEM;
+#ifdef TIMING_PERF
+        double tm_st, tm_end;
+        tm_st = timer_read(&tm_perf);
+#endif
+
+        qte = qte_alloc_promote(od);
+        if (!qte)
+                goto err_out;
+
+        qt_add(&dcg->qt, qte);
+
+        versions_reset();
+
+        // TODO:  I have  intentionately  disabled the  cache here.  I
+        // should reconsider.
+        // qce = qc_find(&dcg->qc, &od->obj_desc);{
+                err = get_dht_peers(qte);
+                if (err < 0)
+                        goto err_qt_free;
+                DC_WAIT_COMPLETION(qte->f_peer_received == 1);
+
+                err = get_obj_descriptors(qte);
+                if (err < 0) {
+                    if (err == -EAGAIN)
+                        goto out_no_data;
+                    else    goto err_qt_free;
+                }
+                DC_WAIT_COMPLETION(qte->f_odsc_recv == 1);
+
+        if (qte->f_err != 0) {
+                err = -EAGAIN;
+                goto out_no_data;
+        }
+
+#ifdef TIMING_PERF
+        tm_end = timer_read(&tm_perf);
+        uloga("TIMING_PERF locate_data ts %d peer %d time %lf %s\n",
+            od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
+        tm_st = tm_end;
+#endif
+
+        err = dcg_obj_data_demote(qte);
+        if(err == 0)
+            uloga("Err is 0 \n");
+        if (err < 0) {
+             uloga("Received error in dcg_obj_data_demoten");
+            goto out_no_data;
+                
+        }
+#ifdef TIMING_PERF
+        tm_end = timer_read(&tm_perf);
+        uloga("TIMING_PERF demote ts %d peer %d time %lf %s\n",
+            od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
+#endif 
+ out_no_data:
+            qt_unlk(qte);
+ err_qt_free:
+        qt_remove(&dcg->qt, qte);
+        free(qte);
+
+        return err;
  err_out:
         ERROR_TRACE();
 }

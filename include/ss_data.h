@@ -267,6 +267,7 @@ struct obj_data *obj_data_alloc(struct obj_descriptor *);
 struct obj_data *obj_data_allocv(struct obj_descriptor *);
 struct obj_data *obj_data_alloc_no_data(struct obj_descriptor *, void *);
 struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *, const void *);
+struct obj_data *obj_data_alloc_with_data_split(struct obj_descriptor *, const void *, struct obj_descriptor *);
 
 void obj_data_free(struct obj_data *od);
 void obj_data_free_pointer(struct obj_data *od);
@@ -297,6 +298,7 @@ void obj_data_free_in_mem(struct obj_data *od);//Duan
 void obj_data_free_in_ssd(struct obj_data *od);//Duan
 void obj_data_copy_to_ssd(struct obj_data *od);//Duan
 void obj_data_copy_to_mem(struct obj_data *od, int id);
+void obj_data_move_to_mem(struct obj_data *od, int id);
 void obj_data_copy_to_ssd_direct(struct obj_data *od);
 void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id);
 #endif /* __SS_DATA_H_ */

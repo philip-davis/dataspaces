@@ -41,7 +41,7 @@
 #include "debug.h"
 #include "ss_data.h"
 #include "queue.h"
-#include "mem_persist.h"//Duan
+#include "mem_persist.h"
 
 #ifdef TIMING_SSD
 #include "timer.h"
@@ -1594,9 +1594,39 @@ struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *odsc, const voi
         return od;
 }
 
+struct obj_data *obj_data_alloc_with_data_split(struct obj_descriptor *odsc, const void *data, struct obj_descriptor *odsc_big)
+{
+        struct obj_data *od = obj_data_alloc(odsc);
+        if (!od)
+                return NULL;
+
+        struct matrix to_mat, from_mat;
+        //struct bbox bb;
+        struct bbox bbcom;
+        //uloga("Before memset \n");
+        //memset(bb.lb.c, 0, sizeof(uint64_t)*(odsc->bb.num_dims));
+        //memset(bb.ub.c, 0, sizeof(uint64_t)*(odsc->bb.num_dims));
+        //uloga("After memset \n");
+        //memcpy(bb.lb.c, lb, sizeof(uint64_t)*(odsc->bb.num_dims));
+        //memcpy(bb.ub.c, ub, sizeof(uint64_t)*(odsc->bb.num_dims));
+        //uloga("Before bbox_intersect \n");
+        bbox_intersect(&od->obj_desc.bb, &odsc_big->bb, &bbcom);
+        //uloga("After bbox intersect \n");
+        matrix_init(&from_mat, odsc->st, &odsc_big->bb, &bbcom, data, odsc->size);
+        // uloga("After from_mat \n");
+        matrix_init(&to_mat, odsc->st,&od->obj_desc.bb, &bbcom, od->data, odsc->size);
+        // uloga("After to_mat \n");
+        matrix_copy(&to_mat, &from_mat);
+        // uloga("After mat_copy\n");
+        //memcpy(od->data, data, obj_data_size(odsc));
+        //TODO: what about the descriptor ?
+
+        return od;
+}
+
 void obj_data_free_with_data(struct obj_data *od)
 {
-	if (od->sl == in_memory || od->sl == in_memory_ssd){//Duan
+	if (od->sl == in_memory || od->sl == in_memory_ssd){
 		if (od->_data) {
 			//uloga("'%s()': explicit data free on descriptor %s.\n", __func__, od->obj_desc.name);
 			free(od->_data);
@@ -1604,12 +1634,12 @@ void obj_data_free_with_data(struct obj_data *od)
 		else if (od->_data){
 			free(od->data); 
 		}
-		else{//Duan
+		else{
 			uloga("'%s()': ERROR double data free on descriptor %s.\n",
 				__func__, od->obj_desc.name);
 		}
 	}
-	if ((od->sl == in_ssd || od->sl == in_memory_ssd) && od->s_data){//Duan
+	if ((od->sl == in_ssd || od->sl == in_memory_ssd) && od->s_data){
 		obj_data_free_in_ssd(od->s_data);
 	}
     free(od);
@@ -1644,7 +1674,25 @@ void obj_data_free_in_mem(struct obj_data *od)
         od->sl = in_ceph;
     }
 }
-
+void obj_data_free_in_mem_ceph(struct obj_data *od)
+{
+#ifdef DEBUG
+    char *str;
+    asprintf(&str, "obj_data_free_in_mem: od->_data %p, od->data %p", od->_data, od->data);
+    uloga("'%s()': %s\n", __func__, str);
+    free(str);
+#endif
+    if (od->s_data){
+        od->s_data = NULL;
+    }
+    od->data = NULL;
+    od->_data = NULL;
+    if (od->sl == in_memory_ssd){
+        od->sl = in_ceph;
+    }if (od->sl == in_memory_ceph){ 
+        od->sl = in_ceph;
+    }
+}
 void obj_data_free_pointer(struct obj_data *od){
     od->data = NULL;
     od->_data = NULL;
@@ -1652,18 +1700,18 @@ void obj_data_free_pointer(struct obj_data *od){
         od->sl = in_ssd;
     }
 }
-/*free object data in ssd Duan*/
+/*free object data in ssd */
 void obj_data_free_in_ssd(struct obj_data *od)
 {
 	//pmem_free(od->s_data);
 	od->s_data = NULL;
 	if (od->sl == in_memory_ssd){
 		od->sl = in_memory;
+        //uloga("Object descriptor changed to in_memory \n");
 	}
 }
 
-
-/*copy object data from memory to ssd Duan*/
+/*copy object data from memory to ssd */
 void obj_data_copy_to_ssd(struct obj_data *od)
 {
 	od->s_data = pmem_alloc(obj_data_size(&od->obj_desc));
@@ -1703,7 +1751,7 @@ void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id)
                 rados_shutdown(cluster);
                 exit(EXIT_FAILURE);
         } else {
-            //    uloga("\nCreated I/O context.\n");
+             //   uloga("\nCreated I/O context.\n");
         }
     //write data synchronously
       //  uloga("sprintf start for %s ver %d\n", &od->obj_desc.name, (od->obj_desc).version);
@@ -1716,7 +1764,7 @@ void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id)
                 ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
             }
             sprintf(name, "%2d_%s_%d%s",id, &od->obj_desc.name, (od->obj_desc).version, lb_name);
-            //uloga ("%s writing \n", name);
+           // uloga ("%s writing \n", name);
         if(od->_data){
             err = rados_write(io, name, od->_data, obj_data_size(&od->obj_desc) + 7, 0);
             if (err < 0) {
@@ -1725,7 +1773,7 @@ void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id)
                 rados_shutdown(cluster);
                 exit(1);
             } else{
-              //  uloga("Finished ceph write %s \n", name);
+               // uloga("Finished ceph write %s \n", name);
             }
         }else{
             err = rados_write(io, name, od->data, obj_data_size(&od->obj_desc), 0);
@@ -1735,14 +1783,14 @@ void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id)
                 rados_shutdown(cluster);
                 exit(1);
             }else{
-             //   uloga("Finished ceph write %s \n", name);
+                //uloga("Finished ceph write %s \n", name);
             }
         }
         
 
     //free the ioctx
     rados_ioctx_destroy(io);
-    obj_data_free_in_mem(od);
+    obj_data_free_in_mem_ceph(od);
 }
 void obj_data_copy_to_ssd_direct(struct obj_data *od)
 {
@@ -1814,26 +1862,113 @@ void obj_data_copy_to_mem(struct obj_data *od, int id)
     //free the ioctx
     rados_ioctx_destroy(io);
     od->sl = in_memory_ceph;
+
     }
     if(od->sl == in_ssd){
         if (od->s_data) {
-        od->data = od->s_data;
-        od->_data=od->data;
-        od->sl = in_memory_ssd;
-    }
-    else{
-        uloga("%s(): ERROR od->s_data %p is is NULL! \n", __func__, od->s_data);
-    }
+            od->data = od->s_data;
+            od->_data=od->data;
+            od->sl = in_memory_ssd;
+        }
+        else{
+            uloga("%s(): ERROR od->s_data %p is is NULL! \n", __func__, od->s_data);
+        }
     }
     
+}
+/*copy object data from ssd to mem */
+void obj_data_move_to_mem(struct obj_data *od, int id)
+{
+    if(od->sl == in_ssd){
+        if (od->s_data) {
+            od->_data = od->data = malloc(obj_data_size(&od->obj_desc) + 7);
+            if (!od->_data) {
+                free(od);
+                uloga("%s(): ERROR malloc od->_data %p is is NULL! \n", __func__, od->_data);
+            }
+            ALIGN_ADDR_QUAD_BYTES(od->data);
+            memcpy(od->_data, od->s_data, obj_data_size(&od->obj_desc) + 7); //void *memcpy(void *dest, const void *src, size_t n);
+            //uloga("'%s()': explicit data copy to mem on descriptor %s.\n",
+            //    __func__, od->obj_desc.name);
+        }
+        else{
+            uloga("%s(): ERROR od->s_data %p is is NULL! \n", __func__, od->s_data);
+        }
+        od->sl = in_memory_ssd;
+        obj_data_free_in_ssd(od);
+    }
+
+    if(od->sl == in_ceph){
+        struct obj_descriptor *odsc = &od->obj_desc;
+        //perform aio read
+        od->_data = od->data = malloc(obj_data_size(odsc)+7);
+       //create a rados ioctx
+        rados_ioctx_t io;
+        char *poolname = "dataspaces";
+        int err = rados_ioctx_create(cluster, poolname, &io);
+        if (err < 0) {
+                uloga( "%s: cannot open rados pool %s: %s\n", __func__, poolname, strerror(-err));
+                rados_shutdown(cluster);
+                exit(EXIT_FAILURE);
+        } else {
+            //    uloga("\nCreated I/O context.\n");
+        }
+
+        //uloga("sprintf start for %s ver %d\n", &od->obj_desc.name, (od->obj_desc).version);
+            char name[100];
+            char lb_name[100];
+            char *ap = lb_name;
+            for (int i = 0; i < (od->obj_desc).bb.num_dims; ++i)
+            {
+                ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+            }
+            sprintf(name, "%2d_%s_%d%s",id, &od->obj_desc.name, (od->obj_desc).version, lb_name);
+           // uloga("Reading %s \n", name);
+        if(od->_data){
+            err = rados_read(io, name, od->_data, obj_data_size(&od->obj_desc) + 7, 0);
+            if (err < 0) {
+                uloga("%s: Cannot read object from pool %s: %s\n", __func__, poolname, strerror(-err));
+                rados_ioctx_destroy(io);
+                rados_shutdown(cluster);
+                exit(1);
+            }
+            else{
+             //  uloga("Finished ceph to mem %s \n", name);
+            }
+        }else{
+            err = rados_read(io, name, od->data, obj_data_size(&od->obj_desc), 0);
+            if (err < 0) { 
+                uloga("%s: Cannot read object from pool %s: %s\n", __func__, poolname, strerror(-err));
+                rados_ioctx_destroy(io);
+                rados_shutdown(cluster);
+                exit(1);
+            }else{
+             //   uloga("Finished ceph to mem %s\n", name);
+            }
+        }
+        err = rados_remove(io, name);
+        if (err < 0) {
+                uloga("%s: Cannot remove object. %s %s\n", __func__, poolname, strerror(-err));
+                rados_ioctx_destroy(io);
+                rados_shutdown(cluster);
+                exit(1);
+        } else {
+                //printf("\nRemoved object \"hw\".\n");
+        }
+
+    //free the ioctx
+    rados_ioctx_destroy(io);
+    od->sl = in_memory;
+
+    }
 }
 
 void obj_data_free(struct obj_data *od)
 {
-	if ((od->sl == in_memory || od->sl == in_memory_ssd) && od->_data){//Duan
+	if ((od->sl == in_memory || od->sl == in_memory_ssd) && od->_data){
 		free(od->_data);
 	}
-	if ((od->sl == in_ssd || od->sl == in_memory_ssd) && od->s_data){//Duan
+	if ((od->sl == in_ssd || od->sl == in_memory_ssd) && od->s_data){
 		obj_data_free_in_ssd(od);
 	}
 	free(od);

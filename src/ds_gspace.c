@@ -2049,14 +2049,29 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             free(str);
             goto err_out;
         }
-
-	
-        double tm_start, tm_ending, tm_starting, tm_ends;
+        /*
+        if(from_obj->sl == in_ssd){
+            uloga("Object in SSD %s, ver = %d\n",(from_obj->obj_desc).name, (from_obj->obj_desc).version);
+        }
+	   if(from_obj->sl == in_ceph){
+            uloga("Object in Ceph %s, ver = %d\n" ,(from_obj->obj_desc).name, (from_obj->obj_desc).version);
+        }
+        if(from_obj->sl == in_memory){
+            uloga("Object in memory %s, ver = %d\n", (from_obj->obj_desc).name, (from_obj->obj_desc).version);
+        }
+        if(from_obj->sl == in_memory_ssd){
+            uloga("Object in memory_ssd %s, ver = %d\n", (from_obj->obj_desc).name, (from_obj->obj_desc).version);
+        }
+        if(from_obj->sl == in_memory_ceph){
+            uloga("Object in memory_ceph %s, ver = %d\n", (from_obj->obj_desc).name, (from_obj->obj_desc).version);
+        }
+        //double tm_start, tm_ending, tm_starting, tm_ends;
        // tm_start = timer_read(&tm_perf);	
         /*
        if(from_obj->sl == in_ssd || from_obj->sl == in_ceph){
             obj_data_copy_to_mem(from_obj, DSG_ID);
-       }	*/
+       }	
+       */
 		if(from_obj->sl == in_ssd){
             obj_data_copy_to_mem(from_obj, DSG_ID);
        }
@@ -2125,7 +2140,128 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         uloga("'%s()': failed with %d.\n", __func__, err);
         return err;
 }
+static int dsgrpc_obj_promote(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+        struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
+        struct node_id *peer;
+        struct msg_buf *msg;
+        struct obj_data *od, *from_obj;
+        int fast_v;
+        int err = -ENOENT; 
 
+        peer = ds_get_peer(dsg->ds, cmd->id);
+
+        // CRITICAL: use version here !!!
+        from_obj = ls_find(dsg->ls, &oh->u.o.odsc);
+        if (!from_obj) {
+            char *str;
+            str = obj_desc_sprint(&oh->u.o.odsc);
+            uloga("'%s()': %s\n", __func__, str);
+            free(str);
+            goto err_out;
+        }
+
+    
+        double tm_start, tm_ending, tm_starting, tm_ends;
+       // tm_start = timer_read(&tm_perf);  
+        /*
+       if(from_obj->sl == in_ssd || from_obj->sl == in_ceph){
+            obj_data_copy_to_mem(from_obj, DSG_ID);
+       }    */
+        if(from_obj->sl == in_ssd || from_obj->sl == in_ceph){
+            //uloga("Before data movement promote\n");
+            obj_data_move_to_mem(from_obj, DSG_ID);
+            //uloga("After data movement promote\n");
+       }
+       
+        //here receive just the rpc message
+       od = malloc(sizeof(int));
+        msg = msg_buf_alloc(rpc_s, peer, 0);
+        msg->msg_data = od;
+        msg->size = 0;
+        //msg->private = od;
+        //msg->cb = obj_put_completion;
+        //uloga("Before RPC receive \n");
+        rpc_mem_info_cache(peer, msg, cmd); 
+        err = rpc_receive_direct(rpc_s, peer, msg);
+        rpc_mem_info_reset(peer, msg, cmd);
+
+        //uloga("After RPC receive \n");
+        if (err == 0)
+                return 0;
+
+        free(msg);
+        free(od);
+ err_out:
+        uloga("'%s()': failed with %d.\n", __func__, err);
+        return err;
+}
+static int dsgrpc_obj_demote(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+        struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
+        struct node_id *peer;
+        struct msg_buf *msg;
+        struct obj_data *od, *from_obj;
+        int fast_v;
+        int err = -ENOENT; 
+
+        peer = ds_get_peer(dsg->ds, cmd->id);
+
+        // CRITICAL: use version here !!!
+        from_obj = ls_find(dsg->ls, &oh->u.o.odsc);
+        if (!from_obj) {
+            char *str;
+            str = obj_desc_sprint(&oh->u.o.odsc);
+            uloga("'%s()': %s\n", __func__, str);
+            free(str);
+            goto err_out;
+        }
+
+    
+        double tm_start, tm_ending, tm_starting, tm_ends;
+       // tm_start = timer_read(&tm_perf);  
+        /*
+       if(from_obj->sl == in_ssd || from_obj->sl == in_ceph){
+            obj_data_copy_to_mem(from_obj, DSG_ID);
+       }    */
+       if(from_obj->sl == in_memory){
+            //uloga("Before data movement demote\n");
+            obj_data_copy_to_ssd(from_obj);
+            obj_data_free_in_mem(from_obj);
+            //uloga("After data movement promote\n");
+       }else {
+            if(from_obj->sl == in_ssd){
+                 //uloga("Before data movement demote\n");
+                obj_data_copy_to_mem(from_obj, DSG_ID);
+                //uloga("Before copy to ceph\n");
+                obj_data_copy_to_ceph(from_obj, cluster, DSG_ID);
+                //uloga("After copy to ceph\n");
+            }
+
+        }
+
+        //here receive just the rpc message
+       od = malloc(sizeof(int));
+        msg = msg_buf_alloc(rpc_s, peer, 0);
+        msg->msg_data = od;
+        msg->size = 0;
+        //msg->private = od;
+        //msg->cb = obj_put_completion;
+        //uloga("Before RPC receive \n");
+        rpc_mem_info_cache(peer, msg, cmd); 
+        err = rpc_receive_direct(rpc_s, peer, msg);
+        rpc_mem_info_reset(peer, msg, cmd);
+
+        //uloga("After RPC receive \n");
+        if (err == 0)
+                return 0;
+
+        free(msg);
+        free(od);
+ err_out:
+        uloga("'%s()': failed with %d.\n", __func__, err);
+        return err;
+}
 /*
   Routine to execute "custom" application filters.
 */
@@ -2324,6 +2460,8 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         rpc_add_service(ss_obj_put, dsgrpc_obj_put);
         rpc_add_service(ss_obj_put_ssd, dsgrpc_obj_put_ssd);
         rpc_add_service(ss_obj_put_ceph, dsgrpc_obj_put_ceph);
+        rpc_add_service(ss_obj_promote, dsgrpc_obj_promote);
+        rpc_add_service(ss_obj_demote, dsgrpc_obj_demote);
         rpc_add_service(ss_obj_update, dsgrpc_obj_update);
         rpc_add_service(ss_obj_filter, dsgrpc_obj_filter);
         rpc_add_service(ss_obj_cq_register, dsgrpc_obj_cq_register);
@@ -2352,7 +2490,7 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
             uloga("%s(): ERROR ls_alloc() failed\n", __func__);
             goto err_free;
         }
-        ceph_init();
+       // ceph_init();
         return dsg_l;
  err_free:
         free(dsg_l);

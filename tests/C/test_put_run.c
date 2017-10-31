@@ -139,8 +139,13 @@ static int couple_write_nd(unsigned int ts, int num_vars, enum transport_type ty
 			uloga("%s(): allocate_nd() failed.\n", __func__);
             return -1; // TODO: free buffers
 		}
+		//if(ts==3 || ts==4 || ts==5 || ts==6){
+		//	int changed_ts = 2;
+		//	generate_nd(data, changed_ts, dims);
+		//}else{
+			generate_nd(data, ts, dims);
+		//}
 		
-		generate_nd(data, ts, dims);
 		data_tab[i] = data;
 	}
 

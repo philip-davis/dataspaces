@@ -87,6 +87,7 @@ int dcg_obj_put(struct obj_data *);
 int dcg_obj_put_ssd(struct obj_data *);
 int dcg_obj_put_ceph(struct obj_data *);
 int dcg_obj_get(struct obj_data *);
+int dcg_obj_promote(struct obj_data *);
 int dcg_obj_hint(struct obj_data *);
 int dcg_get_versions(int **);
 int dcg_obj_filter(struct obj_data *);

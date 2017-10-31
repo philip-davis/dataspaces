@@ -241,7 +241,9 @@ enum cmd_type {
     _CMD_COUNT,
     /*Added for SSD commands*/
     ss_obj_put_ssd,
-    ss_obj_put_ceph
+    ss_obj_put_ceph,
+    ss_obj_promote,
+    ss_obj_demote
 };
 
 enum lock_type {

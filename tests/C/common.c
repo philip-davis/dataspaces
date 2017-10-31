@@ -176,14 +176,15 @@ int common_put(const char *var_name,
 	void *data, enum transport_type type)
 {
 	if ( type == USE_DSPACES ) {
+        /*
         if(ver == 6 || ver==8 ){
             uloga("%s(): Write to SSD, ts = %d!\n", __func__, ver);
             return dspaces_put_ssd(var_name, ver, size,
                         ndim,lb, ub,data);
-        }
-        if(ver==2 || ver==4){
-            uloga("%s(): Write to ceph, ts = %d!\n", __func__, ver);
-            return dspaces_put_ceph(var_name, ver, size,
+        }*/
+        if(ver==2 || ver==3 || ver==4 || ver ==5 || ver==6 || ver==7 || ver==8 || ver==9){
+            //uloga("%s(): Write val split, ts = %d!\n", __func__, ver);
+            return dspaces_put_split(var_name, ver, size,
                         ndim,lb, ub,data);
         }
 		return dspaces_put(var_name, ver, size,
@@ -206,8 +207,16 @@ int common_get(const char *var_name,
 	uint64_t *lb, uint64_t *ub,
 	void *data, enum transport_type type)
 {
-	if ( type == USE_DSPACES ) {
-		return dspaces_get(var_name, ver, size,
+
+    if ( type == USE_DSPACES ) {
+        if(ver ==2 || ver ==4){
+            ver =2;
+            dspaces_promote(var_name, ver, ndim, lb, ub);
+        }
+        if(ver ==3 || ver==5 || ver==6){
+            ver = 2;
+        }
+		  return dspaces_get(var_name, ver, size,
                         ndim,lb, ub,data);
 	} else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
@@ -255,7 +264,7 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
 #endif
 				pmem_init(dsg_id_str);//ssd storage initiate Duan						
                 /*  Starting Ceph Cluster */
-                //ceph_init();
+                ceph_init();
 
                 while (!dsg_complete(dsg)){
                         err = dsg_process(dsg);

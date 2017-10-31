@@ -146,6 +146,13 @@ int dspaces_put (const char *var_name,
     return common_dspaces_put(var_name, ver, size, ndim, lb, ub, data);
 }
 
+int dspaces_put_split(const char *var_name,
+        unsigned int ver, int size,
+        int ndim, uint64_t *lb, uint64_t *ub,
+        const void *data)
+{
+    return common_dspaces_put_split(var_name, ver, size, ndim, lb, ub, data);
+}
 int dspaces_put_ssd (const char *var_name,
         unsigned int ver, int size,
         int ndim, uint64_t *lb, uint64_t *ub,
@@ -168,6 +175,19 @@ int dspaces_get (const char *var_name,
         void *data)
 {
     return common_dspaces_get(var_name, ver, size, ndim, lb, ub, data);    
+}
+int dspaces_promote (const char *var_name,
+        unsigned int ver,
+        int ndim, uint64_t *lb, uint64_t *ub)
+{
+    return common_dspaces_promote(var_name, ver, ndim, lb, ub);
+}
+
+int dspaces_demote(const char *var_name,
+        unsigned int ver,
+        int ndim, uint64_t *lb, uint64_t *ub)
+{
+    return common_dspaces_demote(var_name, ver, ndim, lb, ub);
 }
 
 int dspaces_remove (const char *var_name,
