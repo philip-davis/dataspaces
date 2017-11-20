@@ -449,9 +449,9 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl,
 
     // Update RDMA memory usage
     if (use_rdma_memory) options.rdma_buffer_usage += size;
-#ifdef DEBUG
+if(DEBUG_OPT){ 
     if (use_rdma_memory) print_rdma_buffer_usage();
-#endif
+}
     return 0;
  err_out_malloc:
     uloga("%s(): ERROR malloc() failed\n", __func__);
@@ -490,9 +490,9 @@ static int dimes_memory_free(struct dart_rdma_mem_handle *rdma_hndl)
 
     // Update RDMA buffer usage
     if (use_rdma_memory) options.rdma_buffer_usage -= rdma_hndl->size; 
-#ifdef DEBUG
+if(DEBUG_OPT){
     if (use_rdma_memory) print_rdma_buffer_usage();
-#endif
+}
     return 0;
  err_out:
     return -1;
@@ -739,10 +739,10 @@ static int dcgrpc_dimes_locate_data(struct rpc_server *rpc_s,
 	struct msg_buf *msg;
 	int err = -ENOMEM;
 
-#ifdef DEBUG
+if(DEBUG_OPT){
 	uloga("%s(): peer #%d query id %d rpc return code %d number of obj to fetch %d\n",
         __func__, DIMES_CID, oh->qid, oh->rc, oh->num_obj);
-#endif
+}
 
 	if (oh->rc == -1) {
 		// Server has no location information.
@@ -1401,9 +1401,9 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
     list_for_each_entry(fetch, &qte->fetch_list, struct fetch_entry, entry)
     {
         if (is_peer_myself(fetch->read_tran->remote_peer)) {
-#ifdef DEBUG
+if(DEBUG_OPT){
             uloga("%s(): peer %d fetch data from local memory.\n", __func__, DIMES_CID);
-#endif
+}
             // Data is in local memory, fetch directly
             struct dimes_memory_obj *mem_obj = storage_lookup_obj(&fetch->remote_obj_id,
                                                        fetch->src_odsc.version);
@@ -1515,9 +1515,9 @@ static int dimes_obj_get(struct obj_data *od)
 	}
 	DIMES_WAIT_COMPLETION(qte->f_locate_data_complete == 1);
     // TODO: check the received data location information
-#ifdef DEBUG
+if(DEBUG_OPT){
 	//uloga("%s(): #%d locate data complete!\n", __func__, DIMES_CID);
-#endif
+}
 #ifdef TIMING_PERF
     tm_end = timer_read(&tm_perf);
     uloga("TIMING_PERF locate_data ts %d peer %d time %lf %s\n",
@@ -1535,9 +1535,9 @@ static int dimes_obj_get(struct obj_data *od)
 		err = -ENODATA;
 		goto out_no_data;
 	}
-#ifdef DEBUG
+if(DEBUG_OPT){
 	//uloga("%s(): #%d fetch data complete!\n", __func__, DIMES_CID);
-#endif
+}
 #ifdef TIMING_PERF
     tm_end = timer_read(&tm_perf);
     uloga("TIMING_PERF fetch_data ts %d peer %d time %lf %s\n",
@@ -1607,9 +1607,9 @@ struct dimes_client* dimes_client_alloc(void * ptr)
     timer_init(&tm_perf, 1);
     timer_start(&tm_perf);
 #endif
-#ifdef DEBUG
+if(DEBUG_OPT){
 	uloga("%s(): OK.\n", __func__);
-#endif
+}
 	return dimes_c;
  err_free:
     if (dimes_c) free(dimes_c);

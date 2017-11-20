@@ -122,14 +122,15 @@ static int couple_write_nd(unsigned int ts, int num_vars, enum transport_type ty
 	double tm_st, tm_end, tm_max, tm_diff;
 	int root = 0;
 
-#ifdef DEBUG
+
+if(DEBUG_OPT){
 	char str_lb[100]="", str_ub[100]="";
 	for(i = 0; i < dims; i++){
 		sprintf(str_lb+strlen(str_lb), "%llu,", lb[i]);
 		sprintf(str_ub+strlen(str_ub), "%llu,", ub[i]);
 	}
     uloga("Timestep=%u, %d write mnd (%s),(%s) into space\n", ts, rank_, str_lb, str_ub);
-#endif
+}
 
 	//allocate data
 	double *data = NULL;
@@ -240,6 +241,8 @@ int test_put_run(enum transport_type type, int npapp, int ndims, int* npdim,
 #ifdef TIMING_PERF
 	uloga("TIMING_PERF fini_dspaces peer %d time= %lf\n", ds_rank, tm_end-tm_st);
 #endif
+
+
 
         return 0;
 }

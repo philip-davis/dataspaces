@@ -32,15 +32,16 @@
 */
 #include <stdio.h>
 #include <stdint.h>
-
 #include "debug.h"
 #include "common.h"
-
 #include "mpi.h"
 
 extern int test_get_run(enum transport_type, int npapp, int dims,
 	int *npdim, uint64_t *spdim, int timestep, int appid, 
 	size_t elem_size, int num_vars, MPI_Comm gcomm);
+
+
+
 
 int main(int argc, char **argv)
 {
@@ -59,11 +60,14 @@ int main(int argc, char **argv)
     int dims; // number of dimensions
     size_t elem_size; // Optional: size of one element in the global array. Default value is 8 (bytes).
     int num_vars; // Optional: number of variables to be shared in the testing. Default value is 1.
+    //add debug option
+    enum debug_type debug; //DEBUG or NO_DEBUG
 
 	if (parse_args(argc, argv, &type, &npapp, &dims, np, sp,
-    		&timestep, &appid, &elem_size, &num_vars) != 0) {
+    		&timestep, &appid, &elem_size, &debug, &num_vars) != 0) {  //add debug option
 		goto err_out;
 	}
+
 
 	// Using SPMD style programming
 	MPI_Init(&argc, &argv);
@@ -85,5 +89,8 @@ int main(int argc, char **argv)
 	return 0;
 err_out:
 	uloga("error out!\n");
+
+
+
 	return -1;	
 }

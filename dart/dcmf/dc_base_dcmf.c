@@ -73,11 +73,7 @@ static int register_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 	free(msg);
 	dc->f_reg = 1;
 	
-//#ifdef DEBUG
-//	uloga("%s(): #%u(dart_id=%d), job has %d peers, starting at %d.\n",
-//		__func__, rpc_s->ptlmap.rank_dcmf, rpc_s->ptlmap.id, 
-//		dc->cp_in_job, dc->cp_min_rank);
-//#endif	
+
 
 	return 0;
 }
@@ -307,9 +303,9 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 
 void dc_free(struct dart_client *dc)
 {
-#ifdef DEBUG
+if(DEBUG_OPT){
 	uloga("'%s()': #%u num_posted = %d.\n", __func__,dc->self->ptlmap.rank_dcmf, dc->num_posted);
-#endif
+}
 	while (dc->num_posted)
 			rpc_process_event(dc->rpc_s);
 

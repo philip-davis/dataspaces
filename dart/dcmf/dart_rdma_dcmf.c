@@ -283,9 +283,9 @@ int dart_rdma_perform_reads(int tran_id)
 		cnt++;
 	}
 
-#ifdef DEBUG
+if(DEBUG_OPT){
 	uloga("%s(): tran_id=%d num_read_ops=%d\n", __func__, tran_id, cnt);
-#endif
+}
 
 	return 0;
 err_out:

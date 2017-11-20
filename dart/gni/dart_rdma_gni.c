@@ -408,9 +408,9 @@ int dart_rdma_perform_reads(int tran_id)
 		return -1;
 	}
 
-#ifdef DEBUG
+if(DEBUG_OPT){
 	uloga("%s(): tran_id= %d num_rdma_op= %d\n", __func__, tran_id, tran->num_rdma_op);
-#endif
+}
 	if (drh->rpc_s->ptlmap.id == tran->remote_peer->ptlmap.id) {
 		dart_perform_local_copy(tran);
 		return 0;
@@ -490,9 +490,9 @@ int dart_rdma_perform_writes(int tran_id)
         return -1;
     }
 
-#ifdef DEBUG
+if(DEBUG_OPT){
     uloga("%s(): tran_id= %d num_rdma_op= %d\n", __func__, tran_id, tran->num_rdma_op);
-#endif
+}
     if (drh->rpc_s->ptlmap.id == tran->remote_peer->ptlmap.id) {
         dart_perform_local_copy(tran);
         return 0;

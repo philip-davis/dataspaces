@@ -258,14 +258,14 @@ int common_dspaces_get(const char *var_name,
     // set global dimension
     set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
                          &od->gdim);
-#ifdef DEBUG
+if(DEBUG_OPT){
 /*
     uloga("%s(): %s default_gdim %llu %llu %llu od->gdim %llu %llu %llu\n",
         __func__, var_name, dcg->default_gdim.sizes.c[0], dcg->default_gdim.sizes.c[1],
         dcg->default_gdim.sizes.c[2], od->gdim.sizes.c[0], od->gdim.sizes.c[1],
         od->gdim.sizes.c[2]);
 */
-#endif
+}
     err = dcg_obj_get(od);
     obj_data_free(od);
     if (err < 0 && err != -EAGAIN) 

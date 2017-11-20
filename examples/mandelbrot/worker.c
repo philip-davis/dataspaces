@@ -126,7 +126,7 @@ int main(int argc, char **argv){
 	dspaces_unlock_on_read("taskLock",&gcomm);
 
 	for(k=0;k<count;k++){
-			#ifdef DEBUG
+			if(DEBUG_OPT){
 			printf("rank:%d\n",rank);
 			printf("xCenter:%f\n",mb[k].xCenter);
 			printf("yCenter:%f\n",mb[k].yCenter);
@@ -134,7 +134,7 @@ int main(int argc, char **argv){
 			printf("Max Iter:%d\n",mb[k].max_iter);
 			printf("Index:%d\n",mb[k].index);
 			printf("\n\n");
-			#endif
+			}
 
 		// We will scale from 2 down to the 
 		// input scale size (given via CL to master.c)

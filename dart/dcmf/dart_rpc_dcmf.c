@@ -174,10 +174,7 @@ static inline int sys_update_credits(struct rpc_server *rpc_s, struct hdr_sys *h
 */
 static int sys_credits_return(struct rpc_server *rpc_s, struct hdr_sys *hs)
 {
-//#ifdef DEBUG
-//	uloga("%s(): #%u, from peer hs->sys_id=%d\n",
-//		__func__, DCMF_Messager_rank(), hs->sys_id);
-//#endif
+
 
 	struct node_id * to;
 	struct hdr_sys ret_hs;
@@ -399,9 +396,9 @@ Callback function(handler) to invoke when (short) RPC message is received
 static void rpc_cb_recv_short(void *clientdata, const DCQuad *msginfo, unsigned count,
 			size_t peer, const char *src, size_t bytes)
 {
-#ifdef DEBUG
+if(DEBUG_OPT){
 	uloga("'%s()': #%u, bytes_size=%u\n", __func__, DCMF_Messager_rank(), bytes);
-#endif
+}
 }
 
 /*
@@ -720,12 +717,12 @@ static int rpc_prepare_buffers(struct rpc_server *rpc_s, const struct node_id *p
 		goto err_out;
 	}
 
-#ifdef DEBUG
+if(DEBUG_OPT){
 	if (bytes_out != msg->size) {
 		uloga("%s(): bytes_out=%u, msg->size=%u\n",
 			__func__, bytes_out, msg->size);
 	}
-#endif
+}
 
 	return 0;
 err_out:
@@ -1286,9 +1283,9 @@ void rpc_server_free(struct rpc_server *rpc_s)
 	if(rpc_s)
 		free(rpc_s);
 
-#ifdef DEBUG
+if(DEBUG_OPT){
 	uloga("'%s()': OK, bye.\n",__func__);
-#endif
+}
 }
 
 int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)

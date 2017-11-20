@@ -55,6 +55,7 @@
 #include <rca_lib.h>
 #endif
 
+
 #if defined(HAVE_UGNI)
 int get_topology_info(int *out_pmi_rank, int *out_nid, 
     rca_mesh_coord_t *out_xyz)

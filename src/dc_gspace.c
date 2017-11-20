@@ -41,6 +41,7 @@
 #include "dc_gspace.h"
 #include "ss_data.h"
 
+
 #define DC_WAIT_COMPLETION(x)                                   \
         do {                                                    \
                 err = dc_process(dcg->dc);                      \
@@ -1555,9 +1556,9 @@ int dcg_barrier(struct dcg_space *dcg)
 
 void dcg_free(struct dcg_space *dcg)
 {
-#ifdef DEBUG
+if(DEBUG_OPT){
         uloga("'%s()': num pending = %d.\n", __func__, dcg->num_pending);
-#endif
+}
 
 	while (dcg->num_pending) {
 	      dc_process(dcg->dc);
@@ -1784,6 +1785,7 @@ int dcg_obj_get(struct obj_data *od)
             od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
         tm_st = tm_end;
 #endif
+
 
         err = dcg_obj_data_get(qte);
         if (err < 0) {

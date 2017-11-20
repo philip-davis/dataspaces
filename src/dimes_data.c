@@ -278,11 +278,11 @@ void dimes_ls_add_obj(struct ss_storage *ls, struct obj_data_wrapper *od_w)
 
 	od_w_existing = dimes_ls_find_no_version(ls, &od_w->od->obj_desc);
 	if (od_w_existing) {
-#ifdef DEBUG
+if(DEBUG_OPT){
 		uloga("%s(): to evict data obj, name=%s, version=%u\n", 
 					__func__, od_w_existing->od->obj_desc.name,
 		od_w_existing->od->obj_desc.version);
-#endif
+}
 
 		od_w_existing->od->f_free = 1;
 		if (od_w_existing->od->refcnt == 0){
@@ -300,11 +300,11 @@ void dimes_ls_add_obj(struct ss_storage *ls, struct obj_data_wrapper *od_w)
 	//NOTE: new object comes first in the list.
 	list_add(&od_w->obj_entry, bin);
 	ls->num_obj++;
-#ifdef DEBUG
+if(DEBUG_OPT){
 	uloga("%s(): add new obj, name=%s, version=%u, ls->num_obj=%d\n",
 				__func__, od_w->od->obj_desc.name, od_w->od->obj_desc.version,
 	ls->num_obj);
-#endif
+}
 }
 
 /*

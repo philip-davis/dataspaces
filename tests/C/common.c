@@ -36,6 +36,7 @@
 #include "common.h"
 #include "mpi.h"
 
+
 int read_config_file(const char* fname,
 	int *num_sp, int *num_cp, int *iter,
 	int *num_writer, int *w,
@@ -84,8 +85,9 @@ err_out:
         return -1;
 }
 
+//Add global DEBUG parameter
 int parse_args(int argc, char** argv, enum transport_type *type, int *npapp, 
-	int *dims, int* npdim, uint64_t* spdim, int *timestep, int *appid, 
+	int *dims, int* npdim, uint64_t* spdim, int *timestep, int *appid, enum debug_type *debug, 
 	size_t *elem_size, int *num_vars)
 {
 	int i = 0, j = 0, count = 0;
@@ -114,6 +116,24 @@ int parse_args(int argc, char** argv, enum transport_type *type, int *npapp,
 
 	*timestep = atoi(argv[++count]);
 	*appid = atoi(argv[++count]);
+
+    
+    //Add DEBUG flag option
+    if(argc >= ++count + 1){
+        //argv[count] == "DEBUG"
+        *debug = DEBUG;
+        DEBUG_OPT = 1; //Global var 
+        if (0 == strcmp(argv[count], "NO_DEBUG")){
+        *debug = NO_DEBUG;
+        DEBUG_OPT = 0; 
+        } 
+    }
+    else{
+        *debug = NO_DEBUG;
+        DEBUG_OPT = 0; 
+    }
+    
+
 
 	if(argc >= ++count + 1)
 		*elem_size = atoi(argv[count]);
@@ -291,10 +311,10 @@ void check_data(const char *var_name, double *buf, int num_elem, int rank, int t
                 }
         }
         avg = sum / num_elem;
-#ifdef DEBUG
+if(DEBUG_OPT){
           uloga("%s(): var= %s, rank= %d, max= %f, min= %f, avg= %f\n",
                           __func__, var_name, rank, max, min, avg);
-#endif
+}
 
         if (cnt > 0) {
                 uloga("%s(): var= %s, rank= %d, ts= %d, "

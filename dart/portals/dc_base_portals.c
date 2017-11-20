@@ -271,9 +271,9 @@ static int dcrpc_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 	dc->f_reg = 0;
 
-#ifdef DEBUG
+if(DEBUG_OPT){
 	uloga("'%s()': unregister confirmed and complete.\n", __func__);
-#endif
+}
 
 	return 0;
 }
@@ -477,9 +477,9 @@ int dc_barrier(struct dart_client *dc)
 
 void dc_free(struct dart_client *dc)
 {
-#ifdef DEBUG
+if(DEBUG_OPT){
         uloga("'%s()': num_posted = %d.\n", __func__, dc->num_posted);
-#endif
+}
         /* TODO: is this ending condition correct ? */
         while (dc->num_posted)
                 rpc_process_event(dc->rpc_s);

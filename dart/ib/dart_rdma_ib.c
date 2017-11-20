@@ -134,9 +134,9 @@ static int dart_perform_local_copy(struct dart_rdma_tran *tran)
         free(op);
     }
 
-#ifdef DEBUG
+if(DEBUG_OPT){
     uloga("%s(): read tran %d complete.\n", __func__, tran->tran_id);
-#endif
+}
     return 0;
 }
 
@@ -222,9 +222,9 @@ int dart_rdma_create_read_tran(struct node_id *remote_peer, struct dart_rdma_tra
     if (!remote_peer) uloga("%s(): ERROR remote_peer is NULL.\n", __func__);
 	if (!remote_peer->rpc_conn.f_connected &&
         drh->rpc_s->ptlmap.id != remote_peer->ptlmap.id) {
-#ifdef DEBUG
+if(DEBUG_OPT){
 		uloga("%s(): #%d to connect peer #%d\n", __func__, drh->rpc_s->ptlmap.id, remote_peer->ptlmap.id);
-#endif
+}
 		rpc_connect(drh->rpc_s, remote_peer);
 	}
 
@@ -359,13 +359,13 @@ int dart_rdma_check_reads(int tran_id)
 		}
 	}
 
-#ifdef DEBUG
+if(DEBUG_OPT){
 	uloga("%s(): tran_id=%d num_read_ops=%d available_rdma_credit= %d\n", __func__, tran_id, cnt, read_tran->avail_rdma_credit);
-#endif
+}
 
-#ifdef DEBUG
+if(DEBUG_OPT){
 	uloga("%s(): read transaction %d complete!\n", __func__, tran_id);
-#endif
+}
 
 	done = 1;
 	return done;

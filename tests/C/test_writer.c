@@ -59,9 +59,11 @@ int main(int argc, char **argv)
     int dims; // number of dimensions
     size_t elem_size; // Optional: size of one element in the global array. Default value is 8 (bytes).
     int num_vars; // Optional: number of variables to be shared in the testing. Default value is 1.
+    //Yubo add debug option
+    enum debug_type debug; //DEBUG or NO_DEBUG
 
 	if (parse_args(argc, argv, &type, &npapp, &dims, np, sp,
-    		&timestep, &appid, &elem_size, &num_vars) != 0) {
+    		&timestep, &appid, &debug, &elem_size, &num_vars) != 0) { //Yubo
 		goto err_out;
 	}
 
@@ -85,6 +87,12 @@ int main(int argc, char **argv)
 	return 0;	
 err_out:
 	uloga("error out!\n");
+
+
+
+
+
+
 	return -1;	
 }
 

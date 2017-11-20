@@ -49,7 +49,17 @@
         uloga("'%s()': failed with %d.\n", __func__, err);      \
         return err
 
+
+
+//declare global debug option, Yubo
+int DEBUG_OPT; 
+
 #endif
+
+
+
+
+
 
 
 

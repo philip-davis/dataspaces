@@ -47,6 +47,16 @@ enum transport_type {
 	USE_DIMES = 1
 };
 
+
+//Declare global DEBUG 
+enum debug_type {
+	DEBUG = 1,
+	NO_DEBUG = 0
+};
+
+extern int DEBUG_OPT; //Define global var
+
+
 // wrapper functions of DataSpaces/DIMES APIs
 int common_init(int num_peers, int appid, void* comm, const char* parameters);
 int common_rank(); 
@@ -77,3 +87,12 @@ int read_data_file(const char* fname);
 
 int commom_get_transport_type_str(enum transport_type type, char* str);
 #endif //end of __TEST_COMMON_H_
+
+
+
+
+
+
+
+
+

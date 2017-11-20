@@ -1237,20 +1237,20 @@ void rpc_server_free(struct rpc_server *rpc_s)
 	        err = rpc_process_event_with_timeout(rpc_s, 100);
 	}
 
-#ifdef DEBUG
+if(DEBUG_OPT){
 	if (n > 0)
 		uloga("'%s()': flushed %d events from the queue.\n",
 			__func__, n);
-#endif
+}
 	if (err != -ETIME)
 		uloga("'%s()': error at flushing the event queue %d!\n", 
 			__func__, err);
-#ifdef DEBUG
+if(DEBUG_OPT){
 	peer = rpc_s->peer_tab;
 	for (n = 0; n < rpc_s->num_peers; n++, peer++)
 		uloga("'%s()': for peer %d, there are %d reqs not processed.\n",
 			__func__, peer->ptlmap.id, peer->num_req);
-#endif
+}
 	n = 0;
         /* Unlink RPC communication buffers posted for incomming requests. */
         list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry) {
@@ -1275,17 +1275,16 @@ void rpc_server_free(struct rpc_server *rpc_s)
                 free(rr);
         }
 
-#ifdef DEBUG
+if(DEBUG_OPT){
         uloga("'%s()': number of buffers unlinked = %d.\n", __func__, n);
-#endif
+}
         err = PtlEQFree(rpc_s->eqh);
         if (err != PTL_OK)
                 uloga("'%s()' free event queue error %s.\n", 
                         __func__, ptl_err_str[err]);
-#ifdef DEBUG
+if(DEBUG_OPT){
 	rpc_report_md_usage(rpc_s);
-        // list_credits(rpc_s);
-#endif
+}
         sys_cleanup(rpc_s);
 
         clean_portals(rpc_s);
