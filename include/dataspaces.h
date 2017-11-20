@@ -46,6 +46,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+extern int DEBUG_OPT; //define global var in debug.h
 
 /**
  * @file dataspaces.h
