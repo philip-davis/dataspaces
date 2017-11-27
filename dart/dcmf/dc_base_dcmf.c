@@ -303,9 +303,12 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 
 void dc_free(struct dart_client *dc)
 {
+
+#ifndef NODEBUG
 if(DEBUG_OPT){
 	uloga("'%s()': #%u num_posted = %d.\n", __func__,dc->self->ptlmap.rank_dcmf, dc->num_posted);
 }
+#endif
 	while (dc->num_posted)
 			rpc_process_event(dc->rpc_s);
 

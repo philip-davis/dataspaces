@@ -61,7 +61,7 @@ int main(int argc, char **argv)
     size_t elem_size; // Optional: size of one element in the global array. Default value is 8 (bytes).
     int num_vars; // Optional: number of variables to be shared in the testing. Default value is 1.
     //add debug option
-    enum debug_type debug; //DEBUG or NO_DEBUG
+    enum debug_type debug; //"-d" to enable debug option
 
 	if (parse_args(argc, argv, &type, &npapp, &dims, np, sp,
     		&timestep, &appid, &elem_size, &debug, &num_vars) != 0) {  //add debug option

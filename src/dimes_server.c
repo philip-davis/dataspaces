@@ -66,12 +66,14 @@ static int locate_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd,
 	struct list_head obj_loc_wrapper_list;
 	INIT_LIST_HEAD(&obj_loc_wrapper_list);
 
+#ifndef NODEBUG
 if(DEBUG_OPT){
 	uloga("%s(): get request from peer #%d "
 	"name= %s version= %d data_size= %u\n",
 		__func__, cmd->id, hdr->odsc.name,
 		hdr->odsc.version, obj_data_size(&hdr->odsc));
 }
+#endif
 
     struct hdr_dimes_get *hdr2 = hdr;
 
@@ -121,10 +123,12 @@ if(DEBUG_OPT){
 	msg->msg_rpc->cmd = reply_msg_type;
 	msg->msg_rpc->id = DIMES_SID;
 
+#ifndef NODEBUG
 if(DEBUG_OPT){
 	uloga("%s(): #%d num_obj= %d for request from #%d\n",
 		__func__, DIMES_SID, num_obj, cmd->id);
 }
+#endif
 
 	err = rpc_send(rpc_s, peer, msg);
     //uloga("%s(): %lf name=%s version=%d num_obj=%d process_time %lf\n",
@@ -154,11 +158,13 @@ static int dsgrpc_dimes_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	
     metadata_s_add_obj_location(dimes_s->meta_store, cmd);
 
+#ifndef NODEBUG
 if(DEBUG_OPT){   
 	uloga("%s(): get request from peer #%d "
            "name= %s version= %d data_size= %u\n",
             __func__, cmd->id, odsc->name, odsc->version, obj_data_size(odsc));
 }
+#endif
     
     //uloga("%s(): %lf name=%s version=%d process_time %lf from peer %d\n", __func__,
     //        t1, odsc->name, odsc->version, t2-t1, cmd->id);
@@ -196,9 +202,12 @@ struct dimes_server *dimes_server_alloc(int num_sp, int num_cp, char *conf_name,
 
 	dimes_s = dimes_s_l;
 
+#ifndef NODEBUG
 if(DEBUG_OPT){
 	uloga("%s(): #%d complete!\n", __func__, DIMES_SID);
 }
+#endif
+
 	return dimes_s;
 err_out:
 	uloga("%s(): failed with %d.\n", __func__, err);

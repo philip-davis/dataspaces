@@ -36,10 +36,10 @@
 #include <stdio.h>
 #include <errno.h>
 
-#ifdef DEBUG
-#define ulog(f, a...) fprintf(stderr, "'%s()': " f, __func__, ##a)
-#else
+#ifdef NODEBUG
 #define ulog(f, a...)
+#else
+#define ulog(f, a...) fprintf(stderr, "'%s()': " f, __func__, ##a)
 #endif
 
 #define uloga(f, a...)  fprintf(stderr, f, ##a)

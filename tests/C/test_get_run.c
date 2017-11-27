@@ -106,6 +106,7 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
 	double tm_st, tm_end, tm_max, tm_diff;
 	int root = 0;
 
+#ifndef NODEBUG
 if(DEBUG_OPT){
 	char str_lb[100]="", str_ub[100]="";
     for(i = 0; i < dims; i++){
@@ -114,6 +115,7 @@ if(DEBUG_OPT){
     }
     uloga("Timestep=%u, %d read mnd (%s),(%s) from space\n", ts, rank_, str_lb, str_ub);
 }
+#endif
 
 	//allocate data
 	double *data = NULL;

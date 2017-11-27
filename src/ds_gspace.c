@@ -321,12 +321,14 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
         return dsg_l->ssd;
     }
 
+#ifndef NODEBUG
 if(DEBUG_OPT){
 /*
     uloga("%s(): add new shared space ndim= %d global dimension= %llu %llu %llu\n",
         __func__, gdim.ndim, gdim.sizes.c[0], gdim.sizes.c[1], gdim.sizes.c[2]);
 */
 }
+#endif
 
     list_add(&ssd_entry->entry, &dsg_l->sspace_list);
     return ssd_entry->ssd;
@@ -406,9 +408,12 @@ bin_code_local_exec(
 	rargs->kM = bb.ub.c[bb_z];
 
 	err = ptr_fn(rargs);
+
+#ifndef NODEBUG
 if(DEBUG_OPT){
 	uloga("'%s()': execution succedeed, rc = %d.\n", __func__, err);
 }
+#endif
 	return err;
 }
 
@@ -462,9 +467,12 @@ static int bin_code_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg
 	// void *ptr_res;
 
 	r_enter++;
+
+#ifndef NODEBUG
 if(DEBUG_OPT){
 	uloga("'%s()': got the code, should execute it.\n", __func__);
 }
+#endif
 	bin_code_local_bind(msg->msg_data, hc->offset);
 
 	/* NOTE: On Cray the heap is already marked as executable !
@@ -875,10 +883,13 @@ static struct dsg_lock * dsg_lock_alloc(const char *lock_name,
                 dl->process_request = &lock_process_request;
                 dl->process_wait_list = &lock_process_wait_list;
                 dl->service = &lock_service;
+
+#ifndef NODEBUG
 if(DEBUG_OPT){
 		uloga("'%s()': generic lock %s created.\n", 
 			__func__, lock_name);
 }
+#endif
                 break;
 
         case lock_custom:
@@ -886,10 +897,13 @@ if(DEBUG_OPT){
                 dl->process_request = &sem_process_request;
                 dl->process_wait_list = &sem_process_wait_list;
                 dl->service = &sem_service;
+
+#ifndef NODEBUG
 if(DEBUG_OPT){
 		uloga("'%s()': custom lock %s created.\n", 
 			__func__, lock_name);
 }
+#endif
                 break;
 
 	default:
@@ -1125,8 +1139,10 @@ static int dsgrpc_obj_update(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         struct dht_entry *de = ssd->ent_self;
         int err;
 
+#ifndef NODEBUG
 if(DEBUG_OPT){
- {
+    {
+ 
 	 char *str;
 
 	 asprintf(&str, "S%2d: update obj_desc '%s' ver %d from S%2d for  ",
@@ -1135,8 +1151,11 @@ if(DEBUG_OPT){
 
 	 uloga("'%s()': %s\n", __func__, str);
 	 free(str);
- }
+    }
 }
+#endif
+
+
         oh->u.o.odsc.owner = cmd->id;
         err = dht_add_entry(de, &oh->u.o.odsc);
         if (err < 0)
@@ -1184,6 +1203,7 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 			uloga("Obj desc version %d, for myself ... owner is %d\n",
 				od->obj_desc.version, od->obj_desc.owner);
 			*/
+#ifndef NODEBUG           
 if(DEBUG_OPT){
 			char *str;
 
@@ -1194,6 +1214,7 @@ if(DEBUG_OPT){
 			uloga("'%s()': %s\n", __func__, str);
 			free(str);
 }
+#endif
 			dht_add_entry(ssd->ent_self, odsc);
 			if (peer->ptlmap.id == min_rank) {
 				err = cq_check_match(odsc);
@@ -1202,6 +1223,7 @@ if(DEBUG_OPT){
 			}
 			continue;
 		}
+#ifndef NODEBUG  
 if(DEBUG_OPT){
 		{
 			char *str;
@@ -1214,6 +1236,7 @@ if(DEBUG_OPT){
 			free(str);
 		}
 }
+#endif
 		err = -ENOMEM;
 		msg = msg_buf_alloc(dsg->ds->rpc_s, peer, 1);
 		if (!msg)
@@ -1247,10 +1270,12 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
     ls_add_obj(dsg->ls, od);
 
     free(msg);
+#ifndef NODEBUG  
 if(DEBUG_OPT){
     uloga("'%s()': server %d finished receiving  %s, version %d.\n",
         __func__, DSG_ID, od->obj_desc.name, od->obj_desc.version);
 }
+#endif
 
     return 0;
 }
@@ -1286,10 +1311,12 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         msg->private = od;
         msg->cb = obj_put_completion;
 
+#ifndef NODEBUG
 if(DEBUG_OPT){
         uloga("'%s()': server %d start receiving %s, version %d.\n", 
             __func__, DSG_ID, odsc->name, odsc->version);
 }
+#endif
         rpc_mem_info_cache(peer, msg, cmd); 
         err = rpc_receive_direct(rpc_s, peer, msg);
         rpc_mem_info_reset(peer, msg, cmd);
@@ -1683,6 +1710,7 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
         num_odsc = dht_find_entry_all(ssd->ent_self, &oh->u.o.odsc, podsc);
         if (!num_odsc) {
+#ifndef NODEBUG
 if(DEBUG_OPT){
 		char *str = 0;
 
@@ -1692,6 +1720,7 @@ if(DEBUG_OPT){
 		uloga("'%s()': %s\n", __func__, str);
 		free(str);
 }
+#endif
 		i = dht_find_versions(ssd->ent_self, &oh->u.o.odsc, obj_versions);
                 err = obj_desc_not_found(peer, oh->qid, i, obj_versions);
                 if (err < 0)
@@ -1847,6 +1876,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
         peer = ds_get_peer(dsg->ds, cmd->id);
 
+#ifndef NODEBUG
 if(DEBUG_OPT){
  {
 	 char *str;
@@ -1859,6 +1889,7 @@ if(DEBUG_OPT){
 	 free(str);
  }
 }
+#endif
 
         // CRITICAL: use version here !!!
         from_obj = ls_find(dsg->ls, &oh->u.o.odsc);

@@ -143,11 +143,13 @@ static int register_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
         free(msg);
         dc->f_reg = 1;
 
+#ifndef NODEBUG
 if(DEBUG_OPT){
         uloga("%s(): #%u(dart_id=%d), job has %d peers, starting at %d.\n",
                 __func__, rpc_s->ptlmap.rank_pami, rpc_s->ptlmap.id,
                 dc->cp_in_job, dc->cp_min_rank);
 }
+#endif
 
         return 0;
 
@@ -370,11 +372,14 @@ static int dc_unregister(struct dart_client *dc)
         hreg->num_sp = dc->num_sp;
         hreg->pm_cp = dc->self->ptlmap;
         hreg->pm_sp = peer->ptlmap;
+
+#ifndef NODEBUG
 if(DEBUG_OPT){
         uloga("%s(): #%u(dart_id=%d) send cn_unregister to #%u(dart_id=%d), hreg->num_sp=%d\n",
                 __func__,dc->self->ptlmap.rank_pami,dc->self->ptlmap.id,
                 peer->ptlmap.rank_pami,peer->ptlmap.id,hreg->num_sp);
 }
+#endif
 
         err = rpc_send(dc->rpc_s, peer, msg);
         if(err < 0)
@@ -396,9 +401,11 @@ if(DEBUG_OPT){
 
 void dc_free(struct dart_client *dc)
 {
+#ifndef NODEBUG
 if(DEBUG_OPT){
         uloga("'%s()': #%u num_posted = %d.\n", __func__,dc->self->ptlmap.rank_pami, dc->num_posted);
 }
+#endif
 
 	while(dc->num_posted)
 		rpc_process_event(dc->rpc_s);

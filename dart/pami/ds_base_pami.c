@@ -319,19 +319,23 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         /* Wait for all of the peers to join in. */
         if (app->app_cnt_peers != app->app_num_peers)
                 return 0;
+#ifndef NODEBUG
 if(DEBUG_OPT){
         uloga("%s(): all %d compute peers for app %d have joined.\n",
                 __func__, app->app_num_peers, app->app_id);
 }
+#endif
 
         err = ds_announce_cp(ds, app);
         if(err < 0)
                 goto err_out;
 
         if (ds->num_cp == ds->size_cp){ //all apps have joined
+#ifndef NODEBUG
 if(DEBUG_OPT){
                 uloga("All apps has registered in the master server!\n");
 }
+#endif
                 list_for_each_entry(app, &ds->app_list, struct app_info, app_entry){
                         if(app->app_cnt_peers != app->app_num_peers)
                                 return 0;
@@ -448,9 +452,11 @@ static int dsrpc_cn_unregister_old(struct rpc_server *rpc_s, struct rpc_cmd *cmd
         if((++num_unreg) == ds->num_cp){
                 ds->f_stop = 1;
                 //printf("%s(): #%u ds->f_stop flag is set as %d\n", __func__, ds->self->ptlmap.rank_pami, ds->f_stop);
+#ifndef NODEBUG
 if(DEBUG_OPT){
                 uloga("%s(): #%u ds->f_stop flag is set as %d\n", __func__, ds->self->ptlmap.rank_pami, ds->f_stop);
 }
+#endif
         }
 
 	//printf("rank%d ds->num_sp=%d ds->num_cp=%d, num_unreg=%d\n", rpc_s->ptlmap.rank_pami, ds->num_sp, ds->num_cp, num_unreg);
@@ -462,11 +468,14 @@ if(DEBUG_OPT){
 
         /* Forwarding the unregister rpc message in a ring manner*/
         hreg->num_sp--; //the rest number of forwarding
+#ifndef NODEBUG
 if(DEBUG_OPT){
         uloga("%s(): #%u(dart_id=%d) get cn_unregister of #%u(dart_id=%d) ds->num_cp=%d, num_unreg=%d, num_to_forward_sp=%d\n",
                 __func__,ds->self->ptlmap.rank_pami,ds->self->ptlmap.id,
                 hreg->pm_cp.rank_pami,hreg->pm_cp.id,ds->num_cp,num_unreg,hreg->num_sp);
 }
+#endif
+
         if(hreg->num_sp){
                 peer = ds_get_peer(ds, (ds->self->ptlmap.id+1)%ds->num_sp);
                 msg = msg_buf_alloc(rpc_s, peer, 1);
@@ -514,9 +523,11 @@ int dsrpc_sp_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//TODO func
         //Wait for all nodes to join in before sending back registration info
         if(ds->num_sp < ds->size_sp)
                 return 0;
+#ifndef NODEBUG
 if(DEBUG_OPT){ 
         uloga("'%s()': all space peers joined.\n", __func__);
 }
+#endif
         //Send back registration info to space peers(excluding itself)
         struct ptlid_map *pptlmap;
         for(i=1; i<ds->size_sp; i++){
@@ -914,10 +925,12 @@ int dsrpc_cn_read(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		//uloga("%f\n", *((double*)msg->msg_data+i));
         }
 
+#ifndef NODEBUG
 if(DEBUG_OPT){
         uloga("%s(): #%u(dart_id=%d), get cn_read(msg->size=%d) from compute node #%u(dart_id=%d)\n",
                 __func__,rpc_s->ptlmap.rank_pami,rpc_s->ptlmap.id,msg->size,peer->ptlmap.rank_pami,peer->ptlmap.id);
 }
+#endif
 
 	rpc_mem_info_cache(peer, msg, cmd);
 

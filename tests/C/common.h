@@ -50,7 +50,7 @@ enum transport_type {
 
 //Declare global DEBUG 
 enum debug_type {
-	DEBUG = 1,
+	DEBUG = 1, 
 	NO_DEBUG = 0
 };
 

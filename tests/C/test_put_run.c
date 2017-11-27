@@ -123,6 +123,7 @@ static int couple_write_nd(unsigned int ts, int num_vars, enum transport_type ty
 	int root = 0;
 
 
+#ifndef NODEBUG
 if(DEBUG_OPT){
 	char str_lb[100]="", str_ub[100]="";
 	for(i = 0; i < dims; i++){
@@ -131,6 +132,7 @@ if(DEBUG_OPT){
 	}
     uloga("Timestep=%u, %d write mnd (%s),(%s) into space\n", ts, rank_, str_lb, str_ub);
 }
+#endif
 
 	//allocate data
 	double *data = NULL;

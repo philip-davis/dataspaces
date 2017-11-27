@@ -106,9 +106,11 @@ int main(int argc, char **argv)
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Barrier(MPI_COMM_WORLD);
 
+#ifndef NODEBUG
 if(DEBUG_OPT){
 	uloga("dataspaces server starts...\n");
 }
+#endif
 
 	color = 0;
 	MPI_Comm_split(MPI_COMM_WORLD, 0, rank, &gcomm);

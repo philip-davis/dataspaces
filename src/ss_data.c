@@ -168,10 +168,12 @@ void sh_free(void)
                 free(l);
                 n++;
         }
+#ifndef NODEBUG
 if(DEBUG_OPT){
         uloga("'%s()': SFC cached %d object descriptors, size = %zu.\n", 
             __func__, n, sizeof(*l) *n);
 }
+#endif
         is_sfc_hash_list_free = 1;
 }
 
@@ -1492,9 +1494,11 @@ void free_gdim_list(struct list_head *gdim_list) {
         cnt++;
     }
 
+#ifndef NODEBUG
 if(DEBUG_OPT){
     uloga("%s(): number of user-defined global dimension is %d\n", __func__, cnt);
 }
+#endif
 } 
 
 struct gdim_list_entry* lookup_gdim_list(struct list_head *gdim_list,

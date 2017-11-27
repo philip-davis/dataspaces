@@ -1556,9 +1556,11 @@ int dcg_barrier(struct dcg_space *dcg)
 
 void dcg_free(struct dcg_space *dcg)
 {
+#ifndef NODEBUG
 if(DEBUG_OPT){
         uloga("'%s()': num pending = %d.\n", __func__, dcg->num_pending);
 }
+#endif
 
 	while (dcg->num_pending) {
 	      dc_process(dcg->dc);

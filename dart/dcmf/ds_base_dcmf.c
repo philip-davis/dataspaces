@@ -251,19 +251,24 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	/* Wait for all of the peers to join in. */
 	if (app->app_cnt_peers != app->app_num_peers)
 		return 0;
+#ifndef NODEBUG
 if(DEBUG_OPT){
 	uloga("%s(): all %d compute peers for app %d have joined.\n", 
 		__func__, app->app_num_peers, app->app_id);
 }
+#endif
 	
 	err = ds_announce_cp(ds, app);
 	if(err < 0)
 		goto err_out;
 
 	if (ds->num_cp == ds->size_cp){ //all apps have joined
+
+#ifndef NODEBUG
 if(DEBUG_OPT){
    		uloga("All apps has registered in the master server!\n");         
 }
+#endif
 		list_for_each_entry(app, &ds->app_list, struct app_info, app_entry){
 			if(app->app_cnt_peers != app->app_num_peers)
 				return 0;
@@ -428,10 +433,12 @@ static int dsrpc_cn_read(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		*((char*)msg->msg_data + i) = 'A' + (i%len);
 	}
 
+#ifndef NODEBUG
 if(DEBUG_OPT){
 	uloga("%s(): #%u(dart_id=%d), get cn_read(msg->size=%d) from compute node #%u(dart_id=%d)\n",
 		__func__,rpc_s->ptlmap.rank_dcmf,msg->size,rpc_s->ptlmap.id,peer->ptlmap.rank_dcmf,peer->ptlmap.id); 
 }
+#endif
 	
 	rpc_mem_info_cache(peer, msg, cmd);
 	err = rpc_send_direct(rpc_s, peer, msg);
@@ -475,9 +482,11 @@ static int dsrpc_sp_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	if(ds->num_sp < ds->size_sp)
 		return 0;
 
+#ifndef NODEBUG
 if(DEBUG_OPT){
 	uloga("'%s()': all space peers joined.\n", __func__);
 }
+#endif
 	
 	//Send back registration info to space peers(excluding itself)
 	int i, k, err;
@@ -844,9 +853,11 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 	if(err<0)
 		goto err_free_dsrv;
         
+#ifndef NODEBUG
 if(DEBUG_OPT){
 	uloga("'%s()': rank=%u, init ok.\n", __func__, DCMF_Messager_rank());
 }       
+#endif
 
 	return ds;
 err_free_dsrv:
@@ -868,9 +879,11 @@ void ds_free(struct dart_server *ds)
 		free(app);
 	}
 	free(ds);
+#ifndef NODEBUG
 if(DEBUG_OPT){
 	uloga("%s(): OK\n", __func__);
 }
+#endif
 }
 
 int ds_process(struct dart_server *ds){

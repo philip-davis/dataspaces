@@ -396,9 +396,11 @@ Callback function(handler) to invoke when (short) RPC message is received
 static void rpc_cb_recv_short(void *clientdata, const DCQuad *msginfo, unsigned count,
 			size_t peer, const char *src, size_t bytes)
 {
+#ifndef NODEBUG
 if(DEBUG_OPT){
 	uloga("'%s()': #%u, bytes_size=%u\n", __func__, DCMF_Messager_rank(), bytes);
 }
+#endif
 }
 
 /*
@@ -717,12 +719,14 @@ static int rpc_prepare_buffers(struct rpc_server *rpc_s, const struct node_id *p
 		goto err_out;
 	}
 
+#ifndef NODEBUG
 if(DEBUG_OPT){
 	if (bytes_out != msg->size) {
 		uloga("%s(): bytes_out=%u, msg->size=%u\n",
 			__func__, bytes_out, msg->size);
 	}
 }
+#endif
 
 	return 0;
 err_out:
@@ -1283,9 +1287,11 @@ void rpc_server_free(struct rpc_server *rpc_s)
 	if(rpc_s)
 		free(rpc_s);
 
+#ifndef NODEBUG
 if(DEBUG_OPT){
 	uloga("'%s()': OK, bye.\n",__func__);
 }
+#endif
 }
 
 int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)

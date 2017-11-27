@@ -126,6 +126,7 @@ int main(int argc, char **argv){
 	dspaces_unlock_on_read("taskLock",&gcomm);
 
 	for(k=0;k<count;k++){
+			#ifndef NODEBUG
 			if(DEBUG_OPT){
 			printf("rank:%d\n",rank);
 			printf("xCenter:%f\n",mb[k].xCenter);
@@ -135,6 +136,7 @@ int main(int argc, char **argv){
 			printf("Index:%d\n",mb[k].index);
 			printf("\n\n");
 			}
+			#endif
 
 		// We will scale from 2 down to the 
 		// input scale size (given via CL to master.c)

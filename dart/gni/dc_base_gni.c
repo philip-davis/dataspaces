@@ -955,9 +955,12 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 		assert(err == PMI_SUCCESS);
 	}
 
+#ifndef NODEBUG
 if(DEBUG_OPT){
 	printf("'%s(%d:%d:%d:%d)': init ok.\n", __func__, dc->self->ptlmap.id, dc->self->ptlmap.appid, dc->self->ptlmap.pid, dc->self->ptlmap.nid);//partial debug
 }
+#endif
+
         return dc;
 
  err_free:

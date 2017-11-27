@@ -121,11 +121,11 @@ int parse_args(int argc, char** argv, enum transport_type *type, int *npapp,
     //Add DEBUG flag option
     if(argc >= ++count + 1){
         //argv[count] == "DEBUG"
-        *debug = DEBUG;
-        DEBUG_OPT = 1; //Global var 
-        if (0 == strcmp(argv[count], "NO_DEBUG")){
         *debug = NO_DEBUG;
-        DEBUG_OPT = 0; 
+        DEBUG_OPT = 0; //Global var 
+        if (0 == strcmp(argv[count], "-d")){   
+        *debug = DEBUG;
+        DEBUG_OPT = 1; 
         } 
     }
     else{
@@ -311,11 +311,13 @@ void check_data(const char *var_name, double *buf, int num_elem, int rank, int t
                 }
         }
         avg = sum / num_elem;
+
+#ifndef NODEBUG
 if(DEBUG_OPT){
           uloga("%s(): var= %s, rank= %d, max= %f, min= %f, avg= %f\n",
                           __func__, var_name, rank, max, min, avg);
 }
-
+#endif
         if (cnt > 0) {
                 uloga("%s(): var= %s, rank= %d, ts= %d, "
                 "error elem cnt= %d, total elem= %d\n",
