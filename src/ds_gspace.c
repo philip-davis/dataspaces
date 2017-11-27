@@ -197,7 +197,7 @@ static int parse_line(int lineno, char *line)
         }
 
         if (i == n) {
-                printf("Unknown option '%s' at line %d.\n", line, lineno);
+                uloga("Unknown option '%s' at line %d.\n", line, lineno);
         }
         return 0;
 }

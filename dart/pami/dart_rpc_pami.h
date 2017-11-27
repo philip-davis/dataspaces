@@ -285,13 +285,13 @@ enum lock_type {
 static inline void rpc_server_inc_reply(struct rpc_server *rpc_s)
 {
         rpc_s->num_rep_posted++;
-	//printf("rank%d posted ++\n", rpc_s->ptlmap.rank_pami);
+	//uloga("rank%d posted ++\n", rpc_s->ptlmap.rank_pami);
 }
 
 static inline void rpc_server_dec_reply(struct rpc_server *rpc_s)
 {
         rpc_s->num_rep_freed++;
-	//printf("rank%d freed ++\n", rpc_s->ptlmap.rank_pami);
+	//uloga("rank%d freed ++\n", rpc_s->ptlmap.rank_pami);
 }
 
 /*

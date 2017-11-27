@@ -404,7 +404,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 	//        size_t size;
         int err;
 
-        // printf("sizeof struct rpc_cmd = %d.\n", sizeof(struct rpc_cmd));
+        // uloga("sizeof struct rpc_cmd = %d.\n", sizeof(struct rpc_cmd));
 
         dc = calloc(1, sizeof(*dc));
         if (!dc)

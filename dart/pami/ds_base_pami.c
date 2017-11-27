@@ -17,7 +17,7 @@ static int ds_register_cp(struct dart_server *ds, struct app_info *app);
 static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
 	rpc_s->flag--;
-	printf("all the data has been acquited by the server\n");
+	uloga("all the data has been acquited by the server\n");
 }
 
 static int cn_read_transfer_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
@@ -86,7 +86,7 @@ static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 
 static int dsrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	//printf("get into dsrpc_announce_cp\n");
+	//uloga("get into dsrpc_announce_cp\n");
         struct dart_server *ds = ds_ref_from_rpc(rpc_s);
         struct hdr_register *hreg = (struct hdr_register *)cmd->pad;
         struct node_id *peer;
@@ -142,7 +142,7 @@ err_out:
  */
 static int ds_announce_cp(struct dart_server *ds, struct app_info *app)
 {
-	//printf("get into ds_announce_cp\n");
+	//uloga("get into ds_announce_cp\n");
         struct msg_buf *msg;
         struct hdr_register *hreg;
         struct node_id *peer, *cpeer;
@@ -185,7 +185,7 @@ static int ds_announce_cp(struct dart_server *ds, struct app_info *app)
                 hreg->num_cp = app->app_num_peers;
                 //hreg->num_cp = ds->size_cp;
 
-		//printf("ds_announce_cp send to %d\n", peer->ptlmap.rank_pami);
+		//uloga("ds_announce_cp send to %d\n", peer->ptlmap.rank_pami);
                 err = rpc_send(ds->rpc_s, peer, msg);
                 if(err<0){
                         free(msg->msg_data);
@@ -430,7 +430,7 @@ err_out:
 
 static int dsrpc_cn_unregister_old(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	//printf("get into dsrpc_cn_unregister\n");
+	//uloga("get into dsrpc_cn_unregister\n");
         struct dart_server *ds = ds_ref_from_rpc(rpc_s);
         struct hdr_register *hreg = (struct hdr_register *) cmd->pad;
         struct msg_buf *msg;
@@ -441,7 +441,7 @@ static int dsrpc_cn_unregister_old(struct rpc_server *rpc_s, struct rpc_cmd *cmd
 	static int unreg_count=0;
 	if(hreg->pm_cp.id%ds->num_sp == ds->self->ptlmap.id){
 		unreg_count++;
-		//printf("rank%d unreg_count=%d\n", ds->self->ptlmap.rank_pami, unreg_count);
+		//uloga("rank%d unreg_count=%d\n", ds->self->ptlmap.rank_pami, unreg_count);
 	}
 
         static int num_unreg = 0;
@@ -451,7 +451,7 @@ static int dsrpc_cn_unregister_old(struct rpc_server *rpc_s, struct rpc_cmd *cmd
 
         if((++num_unreg) == ds->num_cp){
                 ds->f_stop = 1;
-                //printf("%s(): #%u ds->f_stop flag is set as %d\n", __func__, ds->self->ptlmap.rank_pami, ds->f_stop);
+                //uloga("%s(): #%u ds->f_stop flag is set as %d\n", __func__, ds->self->ptlmap.rank_pami, ds->f_stop);
 #ifndef NODEBUG
 if(DEBUG_OPT){
                 uloga("%s(): #%u ds->f_stop flag is set as %d\n", __func__, ds->self->ptlmap.rank_pami, ds->f_stop);
@@ -459,7 +459,7 @@ if(DEBUG_OPT){
 #endif
         }
 
-	//printf("rank%d ds->num_sp=%d ds->num_cp=%d, num_unreg=%d\n", rpc_s->ptlmap.rank_pami, ds->num_sp, ds->num_cp, num_unreg);
+	//uloga("rank%d ds->num_sp=%d ds->num_cp=%d, num_unreg=%d\n", rpc_s->ptlmap.rank_pami, ds->num_sp, ds->num_cp, num_unreg);
         /* 
  *            After  the first  compute peer  'unregister'  request, stop
  *                       accepting new requests and terminate pending ones.
@@ -501,11 +501,11 @@ err_out:
  */
 int dsrpc_sp_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//TODO functionshould be static
 {
-	//printf("get into dsrpc_sp_register\n");
+	//uloga("get into dsrpc_sp_register\n");
 
 	int i, k, err;
 	struct dart_server *ds = ds_ref_from_rpc(rpc_s);
-//	printf("master server=%d\n", ds->rpc_s->ptlmap.rank_pami);
+//	uloga("master server=%d\n", ds->rpc_s->ptlmap.rank_pami);
         struct hdr_register *hreg = (struct hdr_register *)cmd->pad;
         struct node_id *peer;
         struct msg_buf *msg;
@@ -580,7 +580,7 @@ err_out:
 
 static int sp_ack_register_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-	//printf("get into sp_ack_register_completion\n");
+	//uloga("get into sp_ack_register_completion\n");
         struct dart_server *ds = ds_ref_from_rpc(rpc_s);
         struct ptlid_map *pptlmap = msg->msg_data;
         struct node_id *peer;
@@ -660,7 +660,7 @@ static int file_exist_nonempty(const char *path)
 
 static int ds_register_at_master(struct dart_server *ds)
 {
-	//printf("get into ds_register_at_master\n");
+	//uloga("get into ds_register_at_master\n");
         struct node_id *peer = ds_get_peer(ds,0);
         struct msg_buf *msg;
         struct hdr_register *hreg;
@@ -674,7 +674,7 @@ static int ds_register_at_master(struct dart_server *ds)
         err = rpc_read_config(&peer->ptlmap.rank_pami, "conf.srv");
         if (err<0)
                 goto err_out;
-//	printf("read_config rank=%llu\n",peer->ptlmap.rank_pami);
+//	uloga("read_config rank=%llu\n",peer->ptlmap.rank_pami);
 
         err = -ENOMEM;
         msg = msg_buf_alloc(ds->rpc_s, peer, 1);
@@ -728,7 +728,7 @@ static int file_lock(int fd, int op)
 
 static int ds_boot(struct dart_server *ds)
 {
-	//printf("get into ds_boot\n");
+	//uloga("get into ds_boot\n");
         struct stat st_buff;
         char lck_file[] = "srv.lck";
         char conf_file[] = "conf.srv";
@@ -760,7 +760,7 @@ static int ds_boot(struct dart_server *ds)
         //        file_lock(fd, 0);
         	
 		if(ds->size_sp == 1){
-			printf("only one server\n");
+			uloga("only one server\n");
 			rename(conf_file, "conf");
 		}
         }
@@ -794,7 +794,7 @@ err:
 
 struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 {
-	//printf("get into ds alloc\n");
+	//uloga("get into ds alloc\n");
 	struct dart_server *ds = NULL;
 	struct node_id *peer;
 	size_t size;
@@ -852,7 +852,7 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 			ds->num_charge++;
 	}
 	ds->num_charge_cp = ds->num_charge;
-	//printf("rank%d, ds->num_charge_cp=%d\n", ds->rpc_s->ptlmap.id, ds->num_charge_cp);
+	//uloga("rank%d, ds->num_charge_cp=%d\n", ds->rpc_s->ptlmap.id, ds->num_charge_cp);
 
 	return ds;
 	
@@ -869,7 +869,7 @@ err_out:
 //****************************************************
 int dsrpc_cn_data(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	//printf("get into dsrpc_cn_data\n");
+	//uloga("get into dsrpc_cn_data\n");
 	//struct node_id *peer;
 	struct msg_buf *msg;
 	int err;

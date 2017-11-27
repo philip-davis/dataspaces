@@ -150,7 +150,7 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 	return 0;
  err_out:
-	printf("(%s): failed. (%d)\n", __func__, err);
+	uloga("(%s): failed. (%d)\n", __func__, err);
 	return err;
 }
 
@@ -202,13 +202,13 @@ static char *ip_search(void)
 	struct ifconf ifc;
 	sfd = socket (AF_INET, SOCK_DGRAM, 0); 
 	if (sfd < 0){
-	  printf("CANNOT FIND HOST IP\n");
+	  uloga("CANNOT FIND HOST IP\n");
 		return "cannot find ip";
 	}
 	ifc.ifc_len = sizeof(buf);
 	ifc.ifc_buf = (caddr_t)buf;
 	if (ioctl(sfd, SIOCGIFCONF, (char *)&ifc)){
-	  printf("CANNOT FIND HOST IP\n");
+	  uloga("CANNOT FIND HOST IP\n");
 		return "cannot find ip";
 	}
 	intr = ifc.ifc_len / sizeof(struct ifreq);
@@ -328,8 +328,8 @@ static int ds_master_init(struct dart_server *ds)//testing
 
 	ds->rpc_s->address.address.sin_port = htons(err);
 
-	printf("ip=%s port=%d\n", inet_ntoa(ds->rpc_s->address.address.sin_addr), ntohs(ds->rpc_s->address.address.sin_port));
-	//printf("nid=%d pid=%d\n", ds->rpc_s->ptlmap.nid, ds->rpc_s->ptlmap.pid);
+	uloga("ip=%s port=%d\n", inet_ntoa(ds->rpc_s->address.address.sin_addr), ntohs(ds->rpc_s->address.address.sin_port));
+	//uloga("nid=%d pid=%d\n", ds->rpc_s->ptlmap.nid, ds->rpc_s->ptlmap.pid);
 
 	//use socket address
 	err = rpc_write_socket(ds->rpc_s);
@@ -359,7 +359,7 @@ static int ds_master_init(struct dart_server *ds)//testing
 				goto err_out;
 			}
 			else if (0 == err) {
-				printf("%s(): recv return 0?\n",__func__);
+				uloga("%s(): recv return 0?\n",__func__);
 			}
 
 			tmp_size += err;
@@ -377,7 +377,7 @@ static int ds_master_init(struct dart_server *ds)//testing
 				goto err_out;
 			}
 			else if (0 == err) {
-				printf("%s(): recv return 0?\n",__func__);
+				uloga("%s(): recv return 0?\n",__func__);
 			}
 
 			tmp_size += err;
@@ -453,7 +453,7 @@ static int ds_master_init(struct dart_server *ds)//testing
 	    assert(err == MPI_SUCCESS);
 	    err = MPI_Bcast(send_buffer, ds->peer_size * sizeof(struct ptlid_map), MPI_BYTE, 0, *ds->comm);
 	    if(err != MPI_SUCCESS) {
-		    printf("Rank 0: failed for broadcast Address information to slave servers. (%d)\n", err);
+		    uloga("Rank 0: failed for broadcast Address information to slave servers. (%d)\n", err);
             goto err_out;
         }
 	    err = MPI_Barrier(*ds->comm);
@@ -465,7 +465,7 @@ static int ds_master_init(struct dart_server *ds)//testing
 
 	    err = PMI_Bcast(send_buffer, ds->peer_size * sizeof(struct ptlid_map));
 	    if (err != PMI_SUCCESS){
-		    printf("Rank 0: failed for broadcast Address information to slave servers. (%d)\n", err);			
+		    uloga("Rank 0: failed for broadcast Address information to slave servers. (%d)\n", err);			
 		    goto err_out;
 	    }
 
@@ -488,27 +488,27 @@ static int ds_master_init(struct dart_server *ds)//testing
 		status = GNI_EpCreate(ds->rpc_s->nic_hndl, ds->rpc_s->src_cq_hndl, &ds->peer_tab[i].ep_hndl);
 		if (status != GNI_RC_SUCCESS)
 		{
-			printf("Fail: GNI_EpCreate returned error. %d.\n", status);
+			uloga("Fail: GNI_EpCreate returned error. %d.\n", status);
 			goto err_free;
 		}
 
 		status = GNI_EpBind(ds->peer_tab[i].ep_hndl, ds->peer_tab[i].ptlmap.nid, ds->peer_tab[i].ptlmap.id);
 		if (status != GNI_RC_SUCCESS)
 		{
-			printf("Fail: GNI_EpBind returned error. %d.\n", status);
+			uloga("Fail: GNI_EpBind returned error. %d.\n", status);
 			goto err_free;
 		}
 
 		status = GNI_EpCreate(ds->rpc_s->nic_hndl, ds->rpc_s->sys_cq_hndl, &peer->sys_ep_hndl);
 		if (status != GNI_RC_SUCCESS)
 		{
-			printf("Rank %d: Fail GNI_EpCreate SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
+			uloga("Rank %d: Fail GNI_EpCreate SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
 			goto err_out;
 		}
 		status = GNI_EpBind(peer->sys_ep_hndl, peer->ptlmap.nid, peer->ptlmap.id);
 		if (status != GNI_RC_SUCCESS)
 		{
-			printf("Rank %d: Fail GNI_EpBind SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
+			uloga("Rank %d: Fail GNI_EpBind SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
 			goto err_out;
 		}
 
@@ -516,7 +516,7 @@ static int ds_master_init(struct dart_server *ds)//testing
 
 		err = rpc_smsg_init(ds->rpc_s, ds->peer_size);
 		if (err != 0){
-			printf("Rank 0: failed for rpc_smsg_init %d. (%d)\n", peer->ptlmap.id, err);
+			uloga("Rank 0: failed for rpc_smsg_init %d. (%d)\n", peer->ptlmap.id, err);
 			goto err_out;
 		}
 
@@ -526,7 +526,7 @@ static int ds_master_init(struct dart_server *ds)//testing
 		/*
 		err = sys_smsg_init(ds->rpc_s, ds->peer_size);
 		if (err != 0){
-			printf("Rank 0: failed for sys_smsg_init. (%d)\n", err);
+			uloga("Rank 0: failed for sys_smsg_init. (%d)\n", err);
 			goto err_out;
 		}
 		*///SCA SYS
@@ -569,7 +569,7 @@ static int ds_master_init(struct dart_server *ds)//testing
 				goto err_out;
 			}
 			else if (0 == err) {
-				printf("%s(): recv return 0?\n",__func__);
+				uloga("%s(): recv return 0?\n",__func__);
 			}
 
 			tmp_size += err;
@@ -587,7 +587,7 @@ static int ds_master_init(struct dart_server *ds)//testing
 				goto err_out;
 			}
 			else if (0 == err) {
-				printf("%s(): recv return 0?\n",__func__);
+				uloga("%s(): recv return 0?\n",__func__);
 			}
 
 			tmp_size += err;
@@ -671,7 +671,7 @@ static int ds_master_init(struct dart_server *ds)//testing
         assert(err == MPI_SUCCESS);
 	    err = MPI_Bcast(send_buffer, ds->peer_size * sizeof(gni_smsg_attr_t), MPI_BYTE, 0, *ds->comm);
 	    if (err != MPI_SUCCESS){
-            printf("Rank 0: failed for broadcast smsg attributes information to slave servers. (%d)\n", err);
+            uloga("Rank 0: failed for broadcast smsg attributes information to slave servers. (%d)\n", err);
             goto err_out;
         }
 	} else {
@@ -681,7 +681,7 @@ static int ds_master_init(struct dart_server *ds)//testing
 
 	    err = PMI_Bcast(send_buffer, ds->peer_size * sizeof(gni_smsg_attr_t));//SCA SYS
 	    if (err != PMI_SUCCESS){
-		    printf("Rank 0: failed for broadcast smsg attributes information to slave servers. (%d)\n", err);	
+		    uloga("Rank 0: failed for broadcast smsg attributes information to slave servers. (%d)\n", err);	
 		    goto err_out;
 	    }
 	}
@@ -708,13 +708,13 @@ static int ds_master_init(struct dart_server *ds)//testing
 
 		err = rpc_smsg_config(ds->rpc_s, peer);
 		if (err != 0){
-		  printf("Rank 0: failed for config RPC SMSG for peer %d i is %d. (%d)\n", peer->ptlmap.id, i, err);
+		  uloga("Rank 0: failed for config RPC SMSG for peer %d i is %d. (%d)\n", peer->ptlmap.id, i, err);
 			goto err_out;
 		}
 		/*
 		err = sys_smsg_config(ds->rpc_s, peer);
 		if (err != 0){
-			printf("Rank 0: failed for config SYS SMSG for peer %d. (%d)\n", peer->ptlmap.id, err);
+			uloga("Rank 0: failed for config SYS SMSG for peer %d. (%d)\n", peer->ptlmap.id, err);
 			goto err_out;
 			}*///SCA SYS
 	}
@@ -727,10 +727,10 @@ static int ds_master_init(struct dart_server *ds)//testing
 	return 0;
 
 err_free:
-	printf("'%s()': failed with %d.\n", __func__, status);
+	uloga("'%s()': failed with %d.\n", __func__, status);
 	return status;
 err_out:
-	printf("'%s()': failed with %d.\n", __func__, err);
+	uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -743,16 +743,16 @@ static int ds_boot_master(struct dart_server *ds)
 
 	err = ds_master_init(ds);
 	if (err != 0){
-		printf("Rank 0: failed for ds_master_init. (%d)\n", err);
+		uloga("Rank 0: failed for ds_master_init. (%d)\n", err);
 		goto err_out;
 	}
 
-	//printf("PASS ds_master_init.\n");//debug
+	//uloga("PASS ds_master_init.\n");//debug
 
 	return 0;
 
  err_out:
-        printf("'%s()': failed with %d.\n", __func__, err);
+        uloga("'%s()': failed with %d.\n", __func__, err);
         return err;		
 
 }
@@ -785,7 +785,7 @@ static int ds_boot_slave(struct dart_server *ds)
 	    assert(err == MPI_SUCCESS);
 	    err = MPI_Bcast(recv_buffer, ds->peer_size * sizeof(struct ptlid_map), MPI_BYTE, 0, *ds->comm);
 	    if (err != MPI_SUCCESS){
-            printf("Rank %d: failed for broadcast ptlmap information from master server. (%d)\n", ds->rpc_s->ptlmap.id, err);
+            uloga("Rank %d: failed for broadcast ptlmap information from master server. (%d)\n", ds->rpc_s->ptlmap.id, err);
             goto err_out;
         }
 	    err = MPI_Barrier(*ds->comm);
@@ -795,7 +795,7 @@ static int ds_boot_slave(struct dart_server *ds)
         assert(err == PMI_SUCCESS);	
 	    err = PMI_Bcast(recv_buffer, ds->peer_size * sizeof(struct ptlid_map));
 	    if (err != PMI_SUCCESS){
-	        printf("Rank %d: failed for broadcast ptlmap information from master server. (%d)\n", ds->rpc_s->ptlmap.id, err);			
+	        uloga("Rank %d: failed for broadcast ptlmap information from master server. (%d)\n", ds->rpc_s->ptlmap.id, err);			
 		    goto err_out;
 	    }   
         err = PMI_Barrier();
@@ -809,7 +809,7 @@ static int ds_boot_slave(struct dart_server *ds)
 		ds->peer_tab[j].ptlmap.id = ptlmap->id;
 		ptlmap++;
 
-		//		printf("Rank %d: peer[nid %d, pid %d, id %d, appid %d].\n", ds->rpc_s->ptlmap.id, ds->peer_tab[j].ptlmap.nid, ds->peer_tab[j].ptlmap.pid, ds->peer_tab[j].ptlmap.id, ds->peer_tab[j].ptlmap.appid);
+		//		uloga("Rank %d: peer[nid %d, pid %d, id %d, appid %d].\n", ds->rpc_s->ptlmap.id, ds->peer_tab[j].ptlmap.nid, ds->peer_tab[j].ptlmap.pid, ds->peer_tab[j].ptlmap.id, ds->peer_tab[j].ptlmap.appid);
 
 	}
 
@@ -825,27 +825,27 @@ static int ds_boot_slave(struct dart_server *ds)
 		status = GNI_EpCreate(ds->rpc_s->nic_hndl, ds->rpc_s->src_cq_hndl, &ds->peer_tab[i].ep_hndl);
 		if (status != GNI_RC_SUCCESS)
 		{
-			printf("Fail: GNI_EpCreate returned error. %d.\n", status);
+			uloga("Fail: GNI_EpCreate returned error. %d.\n", status);
 			goto err_free;
 		}
 
 		status = GNI_EpBind(ds->peer_tab[i].ep_hndl, ds->peer_tab[i].ptlmap.nid, ds->peer_tab[i].ptlmap.id);
 		if (status != GNI_RC_SUCCESS)
 		{
-			printf("Fail: GNI_EpBind returned error. %d.\n", status);
+			uloga("Fail: GNI_EpBind returned error. %d.\n", status);
 			goto err_free;
 		}
 
 		status = GNI_EpCreate(ds->rpc_s->nic_hndl, ds->rpc_s->sys_cq_hndl, &peer->sys_ep_hndl);
 		if (status != GNI_RC_SUCCESS)
 		{
-			printf("Rank %d: Fail GNI_EpCreate SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
+			uloga("Rank %d: Fail GNI_EpCreate SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
 			goto err_out;
 		}
 		status = GNI_EpBind(peer->sys_ep_hndl, peer->ptlmap.nid, peer->ptlmap.id);
 		if (status != GNI_RC_SUCCESS)
 		{
-			printf("Rank %d: Fail GNI_EpBind SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
+			uloga("Rank %d: Fail GNI_EpBind SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
 			goto err_out;
 		}
 
@@ -853,7 +853,7 @@ static int ds_boot_slave(struct dart_server *ds)
 
 		err = rpc_smsg_init(ds->rpc_s, ds->peer_size);
 		if (err != 0){
-			printf("Rank 0: failed for rpc_smsg_init %d. (%d)\n", peer->ptlmap.id, err);
+			uloga("Rank 0: failed for rpc_smsg_init %d. (%d)\n", peer->ptlmap.id, err);
 			goto err_out;
 		}
 
@@ -879,7 +879,7 @@ static int ds_boot_slave(struct dart_server *ds)
         assert(err == MPI_SUCCESS);
 	    err = MPI_Bcast(recv_buffer, ds->peer_size * sizeof(gni_smsg_attr_t), MPI_BYTE, 0, *ds->comm);
 	    if (err != MPI_SUCCESS){
-            printf("Rank %d: failed for broadcast smsg attributes information to slave servers. (%d)\n", ds->rpc_s->ptlmap.id, err);
+            uloga("Rank %d: failed for broadcast smsg attributes information to slave servers. (%d)\n", ds->rpc_s->ptlmap.id, err);
             goto err_out;
         }
 	    err = MPI_Barrier(*ds->comm);
@@ -890,7 +890,7 @@ static int ds_boot_slave(struct dart_server *ds)
 
 	    err = PMI_Bcast(recv_buffer, ds->peer_size * sizeof(gni_smsg_attr_t));//SCA SYS
 	    if (err != PMI_SUCCESS){
-		    printf("Rank %d: failed for broadcast smsg attributes information to slave servers. (%d)\n", ds->rpc_s->ptlmap.id, err);			
+		    uloga("Rank %d: failed for broadcast smsg attributes information to slave servers. (%d)\n", ds->rpc_s->ptlmap.id, err);			
 		    goto err_out;
 	    }  
 	
@@ -918,13 +918,13 @@ static int ds_boot_slave(struct dart_server *ds)
 
 		err = rpc_smsg_config(ds->rpc_s, peer);
 		if (err != 0){
-			printf("Rank %d: failed for config SMSG for peer %d. (%d)\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id, err);
+			uloga("Rank %d: failed for config SMSG for peer %d. (%d)\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id, err);
 			goto err_out;
 		}
 		/*
 		err = sys_smsg_config(ds->rpc_s, peer);
 		if (err != 0){
-			printf("Rank %d: failed for config SYS SMSG for peer %d. (%d)\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id, err);
+			uloga("Rank %d: failed for config SYS SMSG for peer %d. (%d)\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id, err);
 			goto err_out;
 			}*///SCA SYS
 	}
@@ -933,11 +933,11 @@ static int ds_boot_slave(struct dart_server *ds)
 	return 0;
 
  err_free:
-	printf("'%s()': failed with %d.\n", __func__, status);
+	uloga("'%s()': failed with %d.\n", __func__, status);
 	return status;
 
  err_out:
-        printf("'%s()': failed with %d.\n", __func__, err);
+        uloga("'%s()': failed with %d.\n", __func__, err);
         return err;	
 }
 
@@ -996,7 +996,7 @@ static int ds_boot(struct dart_server *ds)
 
 	return 0;
  err_out:
-	printf("'%s()': failed.\n", __func__);
+	uloga("'%s()': failed.\n", __func__);
 	return -1;
 }
 
@@ -1101,17 +1101,17 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 		assert(err == PMI_SUCCESS);
 	}
 
-	printf("'%s(%d)': init ok.\n", __func__, ds->self->ptlmap.id);
+	uloga("'%s(%d)': init ok.\n", __func__, ds->self->ptlmap.id);
 	//print_ds(ds);
 
 	return ds;
 
  err_free_dsrv:
-	printf("'%s()': failed with %d.\n", __func__, err);
+	uloga("'%s()': failed with %d.\n", __func__, err);
 	free(ds);
 	return NULL;
  err_out:
-	printf("'%s()': failed with %d.\n", __func__, err);
+	uloga("'%s()': failed with %d.\n", __func__, err);
 	return NULL;
 }
 
@@ -1119,11 +1119,11 @@ int print_ds(struct dart_server *ds)
 {
   int i;
 
-  printf("ds is:\n ds->rpc_s: ptlmap[nid(%d),pid(%d),id(%d),appid(%d)];\n num_buf(%d);num_rpc_per_buff(%d);max_num_msg(%d);com_type(%d);num_peers(%d);bar_num(%d);app_minid(%d);app_num_peers(%d);num_md_posted(%d);num_md_unlinked(%d);\n ds->peer_size(%d), ds->num_cp(%d), ds->num_sp(%d), ds->size_cp(%d), ds->size_sp(%d), f_reg(%d), f_stop(%d), f_nacc(%d);\n ds->self:[nid(%d),pid(%d),id(%d),appid(%d), num_req(%d), f_reg_msg(%d), f_need_msg(%d), num_msg_at_peer(%d), num_msg_ret(%d)];\n", ds->rpc_s->ptlmap.nid, ds->rpc_s->ptlmap.pid, ds->rpc_s->ptlmap.id, ds->rpc_s->ptlmap.appid,ds->rpc_s->num_buf, ds->rpc_s->num_rpc_per_buff, ds->rpc_s->max_num_msg, ds->rpc_s->cmp_type, ds->rpc_s->num_peers, ds->rpc_s->bar_num, ds->rpc_s->app_minid, ds->rpc_s->app_num_peers, ds->rpc_s->num_md_posted, ds->rpc_s->num_md_unlinked, ds->peer_size,ds->num_cp, ds->num_sp, ds->size_cp, ds->size_sp, ds->f_reg, ds->f_stop, ds->f_nacc, ds->self->ptlmap.nid, ds->self->ptlmap.pid, ds->self->ptlmap.id, ds->self->ptlmap.appid, ds->self->num_req, ds->self->f_req_msg, ds->self->f_need_msg, ds->self->num_msg_at_peer, ds->self->num_msg_ret);
+  uloga("ds is:\n ds->rpc_s: ptlmap[nid(%d),pid(%d),id(%d),appid(%d)];\n num_buf(%d);num_rpc_per_buff(%d);max_num_msg(%d);com_type(%d);num_peers(%d);bar_num(%d);app_minid(%d);app_num_peers(%d);num_md_posted(%d);num_md_unlinked(%d);\n ds->peer_size(%d), ds->num_cp(%d), ds->num_sp(%d), ds->size_cp(%d), ds->size_sp(%d), f_reg(%d), f_stop(%d), f_nacc(%d);\n ds->self:[nid(%d),pid(%d),id(%d),appid(%d), num_req(%d), f_reg_msg(%d), f_need_msg(%d), num_msg_at_peer(%d), num_msg_ret(%d)];\n", ds->rpc_s->ptlmap.nid, ds->rpc_s->ptlmap.pid, ds->rpc_s->ptlmap.id, ds->rpc_s->ptlmap.appid,ds->rpc_s->num_buf, ds->rpc_s->num_rpc_per_buff, ds->rpc_s->max_num_msg, ds->rpc_s->cmp_type, ds->rpc_s->num_peers, ds->rpc_s->bar_num, ds->rpc_s->app_minid, ds->rpc_s->app_num_peers, ds->rpc_s->num_md_posted, ds->rpc_s->num_md_unlinked, ds->peer_size,ds->num_cp, ds->num_sp, ds->size_cp, ds->size_sp, ds->f_reg, ds->f_stop, ds->f_nacc, ds->self->ptlmap.nid, ds->self->ptlmap.pid, ds->self->ptlmap.id, ds->self->ptlmap.appid, ds->self->num_req, ds->self->f_req_msg, ds->self->f_need_msg, ds->self->num_msg_at_peer, ds->self->num_msg_ret);
 
 for(i=0; i<ds->peer_size;i++)
   {
-  printf("ds->peer_tab(%d):[nid(%d),pid(%d),id(%d),appid(%d), num_req(%d), f_reg_msg(%d), f_need_msg(%d), num_msg_at_peer(%d), num_msg_ret(%d)];\n", i, ds->peer_tab[i].ptlmap.nid, ds->peer_tab[i].ptlmap.pid, ds->peer_tab[i].ptlmap.id, ds->peer_tab[i].ptlmap.appid, ds->peer_tab[i].num_req, ds->peer_tab[i].f_req_msg, ds->peer_tab[i].f_need_msg, ds->peer_tab[i].num_msg_at_peer, ds->peer_tab[i].num_msg_ret);
+  uloga("ds->peer_tab(%d):[nid(%d),pid(%d),id(%d),appid(%d), num_req(%d), f_reg_msg(%d), f_need_msg(%d), num_msg_at_peer(%d), num_msg_ret(%d)];\n", i, ds->peer_tab[i].ptlmap.nid, ds->peer_tab[i].ptlmap.pid, ds->peer_tab[i].ptlmap.id, ds->peer_tab[i].ptlmap.appid, ds->peer_tab[i].num_req, ds->peer_tab[i].f_req_msg, ds->peer_tab[i].f_need_msg, ds->peer_tab[i].num_msg_at_peer, ds->peer_tab[i].num_msg_ret);
   }
 
  return 0;
@@ -1140,14 +1140,14 @@ void ds_free(struct dart_server *ds)//not done
 
 	err = rpc_server_free(ds->rpc_s, ds->comm);//not done
 	if(err!=0)
-		printf("(%s): rpc server free failed.\n", __func__);
-	//printf("Rank(%d): step2.1.\n",track);//debug
+		uloga("(%s): rpc server free failed.\n", __func__);
+	//uloga("Rank(%d): step2.1.\n",track);//debug
 	list_for_each_entry_safe(app, t, &ds->app_list, struct app_info, app_entry) 
 	{
 		list_del(&app->app_entry);
 		free(app);
         }
-	//printf("Rank(%d): step2.2.\n",track);//debug
+	//uloga("Rank(%d): step2.2.\n",track);//debug
 	if(ds->comm) {
 	    MPI_Comm_free(ds->comm);
 	    free(ds->comm);

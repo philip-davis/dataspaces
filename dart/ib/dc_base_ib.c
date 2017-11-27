@@ -83,7 +83,8 @@ static int dcrpc_barrier(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		dc->f_bar = 1;
 	}
 	return 0;
-      err_out:printf("'%s()': failed with %d.\n", __func__, err);
+      err_out:
+      uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -103,7 +104,7 @@ static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 	for(i = 0; i < dc->num_sp + dc->num_cp - 1; i++) {
 		peer->ptlmap = *pm;
 
-//      printf("Client %d peer %d:  %s %d \n",rpc_s->ptlmap.id, i+1, inet_ntoa(peer->ptlmap.address.sin_addr),ntohs(peer->ptlmap.address.sin_port));
+//      uloga("Client %d peer %d:  %s %d \n",rpc_s->ptlmap.id, i+1, inet_ntoa(peer->ptlmap.address.sin_addr),ntohs(peer->ptlmap.address.sin_port));
 
 
 		if(peer->ptlmap.address.sin_addr.s_addr == dc->rpc_s->ptlmap.address.sin_addr.s_addr && peer->ptlmap.address.sin_port == dc->rpc_s->ptlmap.address.sin_port)
@@ -144,7 +145,7 @@ static int announce_cp_completion_all(struct rpc_server *rpc_s, struct msg_buf *
 			pm = pm + 1;
 			continue;
 		}
-		//        printf("2X Client %d peer %d:  %s %d \n",rpc_s->ptlmap.id,peer->ptlmap.id, inet_ntoa(peer->ptlmap.address.sin_addr),ntohs(peer->ptlmap.address.sin_port));
+		//        uloga("2X Client %d peer %d:  %s %d \n",rpc_s->ptlmap.id,peer->ptlmap.id, inet_ntoa(peer->ptlmap.address.sin_addr),ntohs(peer->ptlmap.address.sin_port));
 
 		INIT_LIST_HEAD(&peer->req_list);
 		peer->num_msg_at_peer = rpc_s->max_num_msg;
@@ -191,7 +192,7 @@ static int dcrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Do
 		goto err_out;
 	}
 	return 0;
-      err_out:printf("'%s()' failed with %d.\n", __func__, err);
+      err_out:uloga("'%s()' failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -229,7 +230,7 @@ static int dcrpc_announce_cp_all(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	
 		goto err_out;
 	}
 	return 0;
-      err_out:printf("'%s()' failed with %d.\n", __func__, err);
+      err_out:uloga("'%s()' failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -272,7 +273,7 @@ static int dc_unregister(struct dart_client *dc)	//Done
 	}
 	return 0;
       err_out_free:free(msg);
-      err_out:printf("'%s()': failed.\n", __func__);
+      err_out:uloga("'%s()': failed.\n", __func__);
 	return err;
 }
 
@@ -314,7 +315,7 @@ static void *dc_listen(void *client)
 			conpara = *(struct con_param *) event_copy.param.conn.private_data;
 			peer = dc_get_peer(dc, conpara.pm_cp.id);
 			if(conpara.type == 0) {
-//                              printf("Client %d: SYS connect request from %d\n",dc->rpc_s->ptlmap.id,peer->ptlmap.id);
+//                              uloga("Client %d: SYS connect request from %d\n",dc->rpc_s->ptlmap.id,peer->ptlmap.id);
 				con = &peer->sys_conn;
 			} else {
 				con = &peer->rpc_conn;
@@ -323,7 +324,7 @@ static void *dc_listen(void *client)
 			build_qp_attr(&con->qp_attr, con, dc->rpc_s);
 			err = rdma_create_qp(event_copy.id, con->pd, &con->qp_attr);
 			if(err != 0) {
-				printf("rdma_create_qp %d in %s.\n", err, __func__);
+				uloga("rdma_create_qp %d in %s.\n", err, __func__);
 				goto err_out;
 			}
 			event_copy.id->context = con;
@@ -345,7 +346,7 @@ static void *dc_listen(void *client)
 			cm_params.rnr_retry_count = 7;	//infinite retry
 			err = rdma_accept(event_copy.id, &cm_params);
 			if(err != 0) {
-				printf("rdma_accept %d in %s.\n", err, __func__);
+				uloga("rdma_accept %d in %s.\n", err, __func__);
 				goto err_out;
 			}
 			con->f_connected = 1;
@@ -355,7 +356,7 @@ static void *dc_listen(void *client)
 		} else if(event_copy.event == RDMA_CM_EVENT_DISCONNECTED) {
 		} else {
 			rpc_print_connection_err(dc->rpc_s, peer, event_copy);
-			printf("event is %d with status %d.\n", event_copy.event, event_copy.status);
+			uloga("event is %d with status %d.\n", event_copy.event, event_copy.status);
 			err = event_copy.status;
 		}
 
@@ -363,7 +364,7 @@ static void *dc_listen(void *client)
 
 	pthread_exit(0);
 	return 0;
-      err_out:printf("'%s()': failed with %d.\n", __func__, err);
+      err_out:uloga("'%s()': failed with %d.\n", __func__, err);
 	pthread_exit(0);
 	return 0;
 }
@@ -391,7 +392,7 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 	//Connect to master server, build rpc channel and sys channel;
 	err = rpc_connect(dc->rpc_s, peer);
 	if(err != 0) {
-		printf("rpc_connect err %d in %s.\n", err, __func__);
+		uloga("rpc_connect err %d in %s.\n", err, __func__);
 		goto err_out;
 	}
 
@@ -423,7 +424,7 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 			count++;
 		} while(count < 3 && err != 0);
 		if(err != 0) {
-			printf("rpc_connect err %d in %s.\n", err, __func__);
+			uloga("rpc_connect err %d in %s.\n", err, __func__);
 			goto err_out;
 		}
 		dc->rpc_s->cur_num_peer++;
@@ -442,7 +443,7 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 	dc->rpc_s->thread_alive = 1;
 	rc = pthread_create(&(dc->rpc_s->comm_thread), NULL, dc_listen, (void *) dc);
 	if(rc) {
-		printf("ERROR; return code from pthread_create() is %d\n", rc);
+		uloga("ERROR; return code from pthread_create() is %d\n", rc);
 		exit(-1);
 	}
 
@@ -505,7 +506,7 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 				count++;
 			} while(count < 3 && err != 0);
 			if(err != 0) {
-				printf("rpc_connect err %d in %s.\n", err, __func__);
+				uloga("rpc_connect err %d in %s.\n", err, __func__);
 				goto err_out;
 			}
 
@@ -514,12 +515,12 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 		if(check_cp[peer->ptlmap.id] == 1 && dc->comm == NULL) {
 			count = 0;
 			do {
-//                              printf("SYS connect %d %d\n",dc->rpc_s->ptlmap.id,peer->ptlmap.id);
+//                              uloga("SYS connect %d %d\n",dc->rpc_s->ptlmap.id,peer->ptlmap.id);
 				err = sys_connect(dc->rpc_s, peer);
 				count++;
 			} while(count < 3 && err != 0);
 			if(err != 0) {
-				printf("sys_connect err %d in %s.\n", err, __func__);
+				uloga("sys_connect err %d in %s.\n", err, __func__);
 				goto err_out;
 			}
 		}
@@ -544,10 +545,10 @@ static int dc_boot(struct dart_client *dc, int appid)	//Done
 	dc->rpc_s->num_sp = dc->num_sp;
 
 //        if(dc->rpc_s->ptlmap.id == 7 || dc->rpc_s->ptlmap.id == 17){
-//                printf("Client %d %d %d %d\n",dc->rpc_s->ptlmap.id,smaller_cid, greater_cid,greater_cid + smaller_cid);
+//                uloga("Client %d %d %d %d\n",dc->rpc_s->ptlmap.id,smaller_cid, greater_cid,greater_cid + smaller_cid);
 //        }
 	return 0;
-      err_out:printf("'%s()': failed with %d.\n", __func__, err);
+      err_out:uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -591,7 +592,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 		MPI_Comm dup_comm;
 		err = MPI_Comm_dup(*(MPI_Comm *) comm, &dc->comm);
 		if(err < 0) {
-			printf("MPI_Comm_dup failed\n");
+			uloga("MPI_Comm_dup failed\n");
 			goto err_out;
 		}
 	}
@@ -604,7 +605,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 	dc->rpc_s->ptlmap.appid = appid;
 	err = dc_boot(dc, appid);
 
-	//printf("peer# %d address %s\n", dc->rpc_s->ptlmap.id,inet_ntoa(dc->rpc_s->ptlmap.address.sin_addr));
+	//uloga("peer# %d address %s\n", dc->rpc_s->ptlmap.id,inet_ntoa(dc->rpc_s->ptlmap.address.sin_addr));
 
 
 	if(err < 0) {
@@ -614,15 +615,15 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 	}
 	dc->rpc_s->app_num_peers = num_peers;
 	dc->rpc_s->num_peers = dc->peer_size = dc->rpc_s->cur_num_peer;
-	printf("dc_alloc succeed %d.\n", dc->rpc_s->ptlmap.id);
+	uloga("dc_alloc succeed %d.\n", dc->rpc_s->ptlmap.id);
 	err = dc_barrier(dc);
 	if(err < 0) {
 		free(dc);
 		goto err_out;
 	}
-//printf("barrier is ok.\n");
+//uloga("barrier is ok.\n");
 	return dc;
-      err_out:printf("'%s()': failed with %d.\n", __func__, err);
+      err_out:uloga("'%s()': failed with %d.\n", __func__, err);
 	return NULL;
 }
 
@@ -637,7 +638,7 @@ void dc_free(struct dart_client *dc)
 	dc_unregister(dc);
 	err = rpc_server_free(dc->rpc_s);
 	if(err != 0)
-		printf("rpc_server_free err in %s.\n", __func__);
+		uloga("rpc_server_free err in %s.\n", __func__);
 	if(dc->peer_tab)
 		free(dc->peer_tab);
 	free(dc);

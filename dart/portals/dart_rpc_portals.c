@@ -106,7 +106,7 @@ static int init_portals(struct rpc_server *rpc_s)
         // jaguar service node
         // ni = IFACE_FROM_BRIDGE_AND_NALID( PTL_BRIDGE_UK, PTL_IFACE_SS );
         ni = CRAY_USER_NAL;
-        // printf( "using CRAY_USER_NAL\n" );
+        // uloga( "using CRAY_USER_NAL\n" );
 #else
         /* 
            This should give a compile error, HAVE_CRAY_PORTALS is not
@@ -1624,7 +1624,7 @@ int __main(void)
         struct rpc_server *rpc_s;
         int err;
 
-        // printf("struct rsfhdr = %d bytes\n", sizeof(struct rfshdr));
+        // uloga("struct rsfhdr = %d bytes\n", sizeof(struct rfshdr));
 
         rpc_s = rpc_server_init(8, NULL);
         if (!rpc_s)

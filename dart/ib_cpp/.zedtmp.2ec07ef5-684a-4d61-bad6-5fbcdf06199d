@@ -165,7 +165,7 @@ static int sys_bar_arrive(struct rpc_server *rpc_s, struct hdr_sys *hs)	//Done
 {
 	rpc_s->bar_tab[hs->sys_id] = hs->sys_pad1;
 
-//printf("inside %s\n", __func__);
+//uloga("inside %s\n", __func__);
 	return 0;
 }
 
@@ -176,9 +176,9 @@ static int sys_bar_send(struct rpc_server *rpc_s, int peerid)	//Done
 	struct hdr_sys hs;
 	int err;
 
-//printf("inside %s\n", __func__);
+//uloga("inside %s\n", __func__);
 
-//      printf("sys_bar_send %d %d %d\n",rpc_s->ptlmap.id, peer->ptlmap.id, peerid);
+//      uloga("sys_bar_send %d %d %d\n",rpc_s->ptlmap.id, peer->ptlmap.id, peerid);
 
 	memset(&hs, 0, sizeof(struct hdr_sys));
 	hs.sys_cmd = sys_bar_enter;
@@ -187,7 +187,7 @@ static int sys_bar_send(struct rpc_server *rpc_s, int peerid)	//Done
 
 	err = sys_send(rpc_s, peer, &hs);
 	if(err != 0)
-		printf("(%s) failed with (%d).\n", __func__, err);
+		uloga("(%s) failed with (%d).\n", __func__, err);
 	return err;
 }
 
@@ -198,7 +198,7 @@ static int sys_send(struct rpc_server *rpc_s, struct node_id *peer, struct hdr_s
 {
 
 	while(peer->sys_conn.f_connected != 1) {
-		//      printf("SYS channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
+		//      uloga("SYS channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
 		//      sys_connect(rpc_s,peer);
 //              goto err_out;
 //              sleep(1);
@@ -217,7 +217,7 @@ static int sys_send(struct rpc_server *rpc_s, struct node_id *peer, struct hdr_s
 	sm->hs = *hs;
 	sm->sys_mr = ibv_reg_mr(peer->sys_conn.pd, &sm->hs, sizeof(struct hdr_sys), IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ);
 	if(sm->sys_mr == NULL) {
-		printf("ibv_reg_mr return NULL.\n");
+		uloga("ibv_reg_mr return NULL.\n");
 		err = -ENOMEM;
 		goto err_out;
 	}
@@ -233,17 +233,17 @@ static int sys_send(struct rpc_server *rpc_s, struct node_id *peer, struct hdr_s
 	sge.length = sizeof(struct hdr_sys);
 	sge.lkey = sm->sys_mr->lkey;
 
-  // printf("inside %s\n", __func__);
+  // uloga("inside %s\n", __func__);
 	err = ibv_post_send(peer->sys_conn.qp, &wr, &bad_wr);
 	if(err < 0) {
-		printf("Fail: ibv_post_send returned error in %s. (%d)\n", __func__, err);
+		uloga("Fail: ibv_post_send returned error in %s. (%d)\n", __func__, err);
 		goto err_out;
 	}
 
 	return 0;
 
       err_out:
-	printf("'%s()': failed with %d.\n", __func__, err);
+	uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -251,7 +251,7 @@ static int sys_dispatch_event(struct rpc_server *rpc_s, struct hdr_sys *hs)	//Do
 {
 	int err = 0;
 
-//printf("inside %s\n", __func__);
+//uloga("inside %s\n", __func__);
 	switch (hs->sys_cmd) {
 	case sys_none:
 		break;
@@ -271,7 +271,7 @@ static int sys_dispatch_event(struct rpc_server *rpc_s, struct hdr_sys *hs)	//Do
 	}
 
 	if(err != 0)
-		printf("(%s) failed with (%d).\n", __func__, err);
+		uloga("(%s) failed with (%d).\n", __func__, err);
 
 	return err;
 }
@@ -323,11 +323,11 @@ static int sys_process_event(struct rpc_server *rpc_s)
 
 				err = ibv_get_cq_event(peer->sys_conn.comp_channel, &ev_cq, &ev_ctx);
 				if(err == -1 && errno == EAGAIN) {
-					//printf("comp_events_completed is %d.\n", peer->sys_conn.cq->comp_events_completed);//debug
+					//uloga("comp_events_completed is %d.\n", peer->sys_conn.cq->comp_events_completed);//debug
 					break;
 				}
 				if(err == -1 && errno != EAGAIN) {
-					printf("Failed to get cq_event with (%s).\n", strerror(errno));
+					uloga("Failed to get cq_event with (%s).\n", strerror(errno));
 					err = errno;
 					goto err_out;
 				}
@@ -348,7 +348,7 @@ static int sys_process_event(struct rpc_server *rpc_s)
 						continue;
 
 					if(wc.status != IBV_WC_SUCCESS) {
-						printf("Status (%d) is not IBV_WC_SUCCESS.\n", wc.status);
+						uloga("Status (%d) is not IBV_WC_SUCCESS.\n", wc.status);
 						err = wc.status;
 						goto err_out;
 					}
@@ -372,7 +372,7 @@ static int sys_process_event(struct rpc_server *rpc_s)
 
 						err = ibv_post_recv(peer->sys_conn.qp, &wr, &bad_wr);
 						if(err != 0) {
-							printf("ibv_post_recv fails with %d in %s.\n", err, __func__);
+							uloga("ibv_post_recv fails with %d in %s.\n", err, __func__);
 						}
 					} else if(wc.opcode == IBV_WC_SEND) {
 						sm = (struct sys_msg *) (uintptr_t) wc.wr_id;
@@ -383,7 +383,7 @@ static int sys_process_event(struct rpc_server *rpc_s)
 						}
 						free(sm);
 					} else {
-						printf("Weird wc.opcode %d.\n", wc.opcode);	//debug
+						uloga("Weird wc.opcode %d.\n", wc.opcode);	//debug
 						err = wc.opcode;
 						goto err_out;
 					}
@@ -397,13 +397,13 @@ static int sys_process_event(struct rpc_server *rpc_s)
 			}
 		}
 	}
-	//printf("barrier is ok with err %d.\n", err);//debug
+	//uloga("barrier is ok with err %d.\n", err);//debug
 
 	return 0;
 	if(err == 0)
 		return 0;
       err_out:
-	printf("(%s): err (%d).\n", __func__, err);
+	uloga("(%s): err (%d).\n", __func__, err);
 	return err;
 }
 
@@ -418,7 +418,7 @@ static int sys_cleanup(struct rpc_server *rpc_s)
 			continue;
 		err = rdma_destroy_id(peer->sys_conn.id);
 		if(err < 0) {
-			printf("Failed to rdma_destroy_id with err(%d).\n", err);
+			uloga("Failed to rdma_destroy_id with err(%d).\n", err);
 			goto err_out;
 		}
 		peer->sys_conn.f_connected = 0;
@@ -426,7 +426,7 @@ static int sys_cleanup(struct rpc_server *rpc_s)
 	return 0;
 
       err_out:
-	printf("(%s): err (%d).\n", __func__, err);
+	uloga("(%s): err (%d).\n", __func__, err);
 	return err;
 }
 
@@ -437,7 +437,7 @@ static int sys_cleanup(struct rpc_server *rpc_s)
 // this function can only be used after rpc_server is fully initiated
 static struct node_id *rpc_get_peer(struct rpc_server *rpc_s, int peer_id)
 {
-//      printf("I am %d ask for %d %d %d\n",rpc_s->ptlmap.id, peer_id, rpc_s->app_minid, rpc_s->app_num_peers);
+//      uloga("I am %d ask for %d %d %d\n",rpc_s->ptlmap.id, peer_id, rpc_s->app_minid, rpc_s->app_num_peers);
 	if(rpc_s->ptlmap.appid == 0 || peer_id >= rpc_s->app_minid + rpc_s->app_num_peers)
 		return rpc_s->peer_tab + peer_id;
 	else {
@@ -453,7 +453,7 @@ static int rpc_cb_cleanup(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
 //      struct rpc_request *rr = (struct rpc_request *) (uintptr_t) cmd->wr_id;
 
-//printf("Get %ld in %s.\n", cmd->wr_id, __func__);
+//uloga("Get %ld in %s.\n", cmd->wr_id, __func__);
 //
 //      if(rpc_s->no_more == 1){
 //              return 0;
@@ -493,7 +493,7 @@ static int rpc_cb_decode(struct rpc_server *rpc_s, struct ibv_wc *wc)	//Done
 	//Added in IB version: point rpc_s->tmp_peer to current working peer.
 	//cmd->qp_num = wc->qp_num;
 
-//printf("Network command %d from %d!\n", cmd->cmd, cmd->id);//debug
+//uloga("Network command %d from %d!\n", cmd->cmd, cmd->id);//debug
 	for(i = 0; i < num_service; i++) {
 		if(cmd->cmd == rpc_commands[i].rpc_cmd) {
 			err = rpc_commands[i].rpc_func(rpc_s, cmd);
@@ -502,12 +502,12 @@ static int rpc_cb_decode(struct rpc_server *rpc_s, struct ibv_wc *wc)	//Done
 	}
 
 	if(i == num_service) {
-		printf("Network command unknown %d!\n", cmd->cmd);
+		uloga("Network command unknown %d!\n", cmd->cmd);
 		err = -EINVAL;
 	}
 
 	if(err < 0)
-		printf("(%s): err.\n", __func__);
+		uloga("(%s): err.\n", __func__);
 
 	return err;
 }
@@ -528,48 +528,48 @@ int rpc_cb_decode(struct rpc_server *rpc_s, struct ibv_wc *wc)	//Done
 //      if(cmd->cmd == 7 || cmd->cmd == 320){
 //      if(1){
 
-//              printf("unreg from %d to %d\n", cmd->id, rpc_s->ptlmap.id);
+//              uloga("unreg from %d to %d\n", cmd->id, rpc_s->ptlmap.id);
 
 
 //      if(0 && (rpc_s->ptlmap.id == 3 || rpc_s->ptlmap.id == 0 || rpc_s->ptlmap.appid == 0)) {
 /*
 		if(cmd->cmd == 16)
-			printf("lock from %d to %d\n", cmd->id, rpc_s->ptlmap.id);
+			uloga("lock from %d to %d\n", cmd->id, rpc_s->ptlmap.id);
 
 		if(cmd->cmd == 17)
-			printf("%ld %ld put from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
+			uloga("%ld %ld put from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
 		if(cmd->cmd == 18)
-			printf("%ld %ld update from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
+			uloga("%ld %ld update from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
 		if(cmd->cmd == 19)
-			printf("%ld %ld getdht from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
+			uloga("%ld %ld getdht from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
 
 
 
 		if(cmd->cmd == 20)
-			printf("%ld %ld getdesc from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
+			uloga("%ld %ld getdesc from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
 
 		if(cmd->cmd == 21)
-			printf("%ld %ld query from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
+			uloga("%ld %ld query from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
 
 		if(cmd->cmd == 22)
-			printf("%ld %ld cq_reg from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
+			uloga("%ld %ld cq_reg from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
 		if(cmd->cmd == 23)
-			printf("%ld %ld cq_not from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
+			uloga("%ld %ld cq_not from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
 		if(cmd->cmd == 25)
-			printf("%ld %ld filter from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
+			uloga("%ld %ld filter from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
 		if(cmd->cmd == 26)
-			printf("%ld %ld info from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
+			uloga("%ld %ld info from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
 
 
 
 		if(cmd->cmd == 15)
-			printf("barrier from %d to %d\n", cmd->id, rpc_s->ptlmap.id);
+			uloga("barrier from %d to %d\n", cmd->id, rpc_s->ptlmap.id);
 
 		if(cmd->cmd == 24)
-			printf("%ld %ld get from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
+			uloga("%ld %ld get from %d to %d\n", tv.tv_sec, tv.tv_usec, cmd->id, rpc_s->ptlmap.id);
 		else
 */
-//                      printf("Rank %d: Network command %d from %d: address %ld!\n", rpc_s->ptlmap.id, cmd->cmd, cmd->id,cmd->wr_id);
+//                      uloga("Rank %d: Network command %d from %d: address %ld!\n", rpc_s->ptlmap.id, cmd->cmd, cmd->id,cmd->wr_id);
 
 //      }
 	for(i = 0; i < num_service; i++) {
@@ -580,12 +580,12 @@ int rpc_cb_decode(struct rpc_server *rpc_s, struct ibv_wc *wc)	//Done
 	}
 
 	if(i == num_service) {
-		printf("Network command unknown %d!\n", cmd->cmd);
+		uloga("Network command unknown %d!\n", cmd->cmd);
 		err = -EINVAL;
 	}
 
 	if(err < 0)
-		printf("(%s) err: Peer# %d Network command %d from %d.\n", __func__, rpc_s->ptlmap.id, cmd->cmd, cmd->id);
+		uloga("(%s) err: Peer# %d Network command %d from %d.\n", __func__, rpc_s->ptlmap.id, cmd->cmd, cmd->id);
 
 
 	return err;
@@ -640,7 +640,7 @@ static int rpc_cb_req_completion(struct rpc_server *rpc_s, struct ibv_wc *wc)	//
 	   err = rpc_process_event(rpc_s);
 	   if (err != 0) 
 	   {
-	   printf("'%s()': failed with %d.\n", __func__, err);
+	   uloga("'%s()': failed with %d.\n", __func__, err);
 	   return err;
 	   }
 
@@ -661,7 +661,7 @@ static int rpc_cb_req_completion(struct rpc_server *rpc_s, struct ibv_wc *wc)	//
 
 		msg->msg_rpc->wr_id = rr->msg->id;
 
-//                printf("Peer %d Send to peer(%d) with wrid (%ld). in %ld\n", rpc_s->ptlmap.id, peer->ptlmap.id, msg->msg_rpc->wr_id,rr);
+//                uloga("Peer %d Send to peer(%d) with wrid (%ld). in %ld\n", rpc_s->ptlmap.id, peer->ptlmap.id, msg->msg_rpc->wr_id,rr);
 
 		err = rpc_send(rpc_s, peer, msg);
 		if(err < 0) {
@@ -670,7 +670,7 @@ static int rpc_cb_req_completion(struct rpc_server *rpc_s, struct ibv_wc *wc)	//
 		}
 	}
 //      if(rpc_s->ptlmap.appid==0&&peer->ptlmap.appid!=0)
-//              printf("nextmsg %d %d %ld %d\n",rpc_s->ptlmap.id,peer->ptlmap.id,rr,rr->msg->refcont);
+//              uloga("nextmsg %d %d %ld %d\n",rpc_s->ptlmap.id,peer->ptlmap.id,rr,rr->msg->refcont);
 	if(rr->msg) {
 		if(rr->msg->refcont == 0) {
 			if(rr->rpc_mr != 0) {
@@ -693,7 +693,7 @@ static int rpc_cb_req_completion(struct rpc_server *rpc_s, struct ibv_wc *wc)	//
 	return 0;
 
       err_out:
-	printf("'%s()' failed with %d.\n", __func__, err);
+	uloga("'%s()' failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -708,7 +708,7 @@ static int rpc_prepare_buffers(struct rpc_server* rpc_s, const struct node_id* p
 	rr->msg->msg_rpc->wr_id = (uintptr_t) rr;
 	rr->data_mr = ibv_reg_mr(peer->rpc_conn.pd, rr->msg->msg_data, rr->msg->size, IBV_ACCESS_LOCAL_WRITE | ((dir == io_send) ? IBV_ACCESS_REMOTE_READ : IBV_ACCESS_REMOTE_WRITE));
 	if (!rr->data_mr) {
-		printf("ibv_reg_mr fails with (%s).\n", strerror(errno));
+		uloga("ibv_reg_mr fails with (%s).\n", strerror(errno));
 		err = errno;
 		goto err_out;
 	}
@@ -718,7 +718,7 @@ static int rpc_prepare_buffers(struct rpc_server* rpc_s, const struct node_id* p
   
 	return 0;
   
-  err_out: printf("'%s()': failed with %d.\n", __func__, err);
+  err_out: uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -734,7 +734,7 @@ static int rpc_post_request(struct rpc_server *rpc_s, const struct node_id *peer
 	if (rr->type == 0) {
 		rr->rpc_mr = ibv_reg_mr(peer->rpc_conn.pd, rr->data, rr->size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ);
 		if (rr->rpc_mr == NULL) {
-			printf("ibv_reg_mr return NULL.\n");
+			uloga("ibv_reg_mr return NULL.\n");
 			err = -ENOMEM;
 			goto err_out;
 		}
@@ -745,7 +745,7 @@ static int rpc_post_request(struct rpc_server *rpc_s, const struct node_id *peer
 	else if (rr->type == 1) {
 		rr->data_mr = ibv_reg_mr(peer->rpc_conn.pd, rr->data, rr->size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ);
 		if (rr->data_mr == NULL) {
-			printf("ibv_reg_mr return NULL.\n");
+			uloga("ibv_reg_mr return NULL.\n");
 			err = -ENOMEM;
 			goto err_out;
 		}
@@ -768,10 +768,10 @@ static int rpc_post_request(struct rpc_server *rpc_s, const struct node_id *peer
 	err = ibv_post_send(peer->rpc_conn.qp, &wr, &bad_wr);
 
   // if(rr->type == 0)
-  //   printf("posted request to peer %d: %ld\n",peer->ptlmap.id,wr.wr_id);
+  //   uloga("posted request to peer %d: %ld\n",peer->ptlmap.id,wr.wr_id);
 	if (err < 0) {
-		printf("Fail: ibv_post_send returned error in %s. (%d)\n", __func__, err);
-		printf("Node %d has %d send_event on the queue (max %d) to peer %d.\n", rpc_s->ptlmap.id, peer->req_posted, peer->rpc_conn.qp_attr.cap.max_send_wr, peer->ptlmap.id);
+		uloga("Fail: ibv_post_send returned error in %s. (%d)\n", __func__, err);
+		uloga("Node %d has %d send_event on the queue (max %d) to peer %d.\n", rpc_s->ptlmap.id, peer->req_posted, peer->rpc_conn.qp_attr.cap.max_send_wr, peer->ptlmap.id);
 		goto err_out;
 	}
 
@@ -787,7 +787,7 @@ static int rpc_post_request(struct rpc_server *rpc_s, const struct node_id *peer
 
 	return 0;
 
-  err_out: printf("'%s()': failed with %d.\n", __func__, err);
+  err_out: uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -797,11 +797,11 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
 	struct ibv_send_wr wr, *bad_wr = NULL;
 	struct ibv_sge sge;
   
-  // printf("data to be fetched is size(%d) from peer(%d).\n", rr->size, peer->ptlmap.id);
+  // uloga("data to be fetched is size(%d) from peer(%d).\n", rr->size, peer->ptlmap.id);
 	if (rr->type == 1) {
 		rr->data_mr = ibv_reg_mr(peer->rpc_conn.pd, rr->data, rr->size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
 		if (rr->data_mr == NULL) {
-			printf("ibv_reg_mr return NULL.\n");
+			uloga("ibv_reg_mr return NULL.\n");
 			err = -ENOMEM;
 			goto err_out;
 		}
@@ -823,7 +823,7 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
     
 		err = ibv_post_send(peer->rpc_conn.qp, &wr, &bad_wr);
 		if (err < 0) {
-			printf("Fail: ibv_post_send returned error in %s. (%d)\n", __func__, err);
+			uloga("Fail: ibv_post_send returned error in %s. (%d)\n", __func__, err);
 			goto err_out;
 		}
 	}
@@ -835,7 +835,7 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
   
 	return 0;
   
-  err_out: printf("'%s()': failed with %d.\n", __func__, err);
+  err_out: uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -847,7 +847,7 @@ static int peer_process_send_list(struct rpc_server* rpc_s, struct node_id* peer
 
 	//check peer->req_list
 	while (!list_empty(&peer->req_list) ) {
-  // printf("posted is %d.\n", peer->req_posted);
+  // uloga("posted is %d.\n", peer->req_posted);
 		if (rpc_s->com_type == 1 || peer->req_posted > 100) {
 			for(i = 0; i < 10; i++)	{ // performance here
 				err = rpc_process_event_with_timeout(rpc_s, 1);
@@ -886,7 +886,7 @@ static int peer_process_send_list(struct rpc_server* rpc_s, struct node_id* peer
   
 	return 0;
   
-  err_out: printf("'%s()': failed with %d.\n", __func__, err);
+  err_out: uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -965,7 +965,7 @@ int register_memory2(struct rpc_request *rr, struct node_id *peer)
 {
 	rr->rpc_mr = ibv_reg_mr(peer->rpc_conn.pd, rr->msg->msg_data, rr->msg->size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
 	if(rr->rpc_mr == NULL) {
-		printf("ibv_reg_mr return NULL.\n");
+		uloga("ibv_reg_mr return NULL.\n");
 		return -ENOMEM;
 	}
 
@@ -985,13 +985,13 @@ struct rpc_request *register_memory(struct node_id *peer)
 
 	rr->rpc_mr = ibv_reg_mr(peer->rpc_conn.pd, rr->msg->msg_data, rr->msg->size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
 	if(rr->rpc_mr == NULL) {
-		printf("ibv_reg_mr return NULL.\n");
+		uloga("ibv_reg_mr return NULL.\n");
 		return NULL;
 	}
 	rr->current_rpc_count++;
 
 
-//                printf("%d\n",rr->current_rpc_count);
+//                uloga("%d\n",rr->current_rpc_count);
 	return rr;
 
 
@@ -1010,11 +1010,11 @@ struct rpc_request *register_memory(struct node_id *peer)
                     rr->msg->size,
                     IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
                  if(rr->rpc_mr == NULL){
-                         printf("ibv_reg_mr return NULL.\n");
+                         uloga("ibv_reg_mr return NULL.\n");
                         return NULL;
                  }
                 rr->current_rpc_count++;
-                printf("I am %d\n",rr->current_rpc_count);
+                uloga("I am %d\n",rr->current_rpc_count);
                 return rr;
         }
 
@@ -1025,7 +1025,7 @@ struct rpc_request *register_memory(struct node_id *peer)
         }
 
         if(temp_rr->current_rpc_count==10){
-                printf("I am full\n");
+                uloga("I am full\n");
                 temp_rr->next = rr_comm_alloc(10);
                 rr = temp_rr->next;
                 rr->rpc_mr = ibv_reg_mr(
@@ -1034,7 +1034,7 @@ struct rpc_request *register_memory(struct node_id *peer)
                     rr->msg->size,
                     IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
                  if(rr->rpc_mr == NULL){
-                         printf("ibv_reg_mr return NULL.\n");
+                         uloga("ibv_reg_mr return NULL.\n");
                         return NULL;
                  }
                 rr->current_rpc_count++;
@@ -1043,7 +1043,7 @@ struct rpc_request *register_memory(struct node_id *peer)
         else{
                 rr = temp_rr;
                 rr->current_rpc_count++;
-                printf("I am %d\n",rr->current_rpc_count);
+                uloga("I am %d\n",rr->current_rpc_count);
 
                 return rr;
         }
@@ -1079,7 +1079,7 @@ int post_receives(struct rpc_request *rr, struct node_id *peer, int i)
 /*
   err = ibv_post_recv(peer->rpc_conn.qp, &wr, &bad_wr);
   if(err!=0){
-	printf("%d ibv_post_recv fails with %d in %s: %s\n", peer->ptlmap.id, err, __func__,strerror(errno));
+	uloga("%d ibv_post_recv fails with %d in %s: %s\n", peer->ptlmap.id, err, __func__,strerror(errno));
 	err = ibv_post_recv(peer->rpc_conn.qp, &wr, &bad_wr);
 	//return err;
   }
@@ -1107,7 +1107,7 @@ int rpc_barrier(struct rpc_server *rpc_s)	//Donesys_bar_send
 
 	rpc_s->bar_num = (rpc_s->bar_num + 1) & 0xFF;
 
-//printf("%s is start\n", __func__);
+//uloga("%s is start\n", __func__);
 
 	while(round < np - 1) {
 
@@ -1120,16 +1120,16 @@ int rpc_barrier(struct rpc_server *rpc_s)	//Donesys_bar_send
 		if(err < 0)
 			goto err_out;
 
-//printf("%s before while\n", __func__);
+//uloga("%s before while\n", __func__);
 		SYS_WAIT_COMPLETION(rpc_s->bar_tab[prev] == rpc_s->bar_num || rpc_s->bar_tab[prev] == ((rpc_s->bar_num + 1) & 0xFF))	//delete ";" here
-//printf("%s after while\n", __func__);
+//uloga("%s after while\n", __func__);
 	}
 
-//printf("%s is done\n", __func__);
+//uloga("%s is done\n", __func__);
 	return 0;
 
       err_out:
-	printf("(%s) failed (%d).\n", __func__, err);
+	uloga("(%s) failed (%d).\n", __func__, err);
 	return err;
 
 }
@@ -1181,7 +1181,7 @@ struct rpc_server* rpc_server_init(int option, char *ip, int port, int num_buff,
 		localip = ip_search();
     
 		if (ip_check(localip) == -1) {
-			printf("local IP address error!\n");
+			uloga("local IP address error!\n");
 			goto err_out;
 		}
 		rpc_s->ptlmap.address.sin_addr.s_addr = inet_addr(localip);
@@ -1194,28 +1194,28 @@ struct rpc_server* rpc_server_init(int option, char *ip, int port, int num_buff,
 	// bind id and open listening id for RPC operation.
 	rpc_s->rpc_ec = rdma_create_event_channel();
 	if (rpc_s->rpc_ec == NULL) {
-		printf("rdma_create_id %d in %s.\n", err, __func__);
+		uloga("rdma_create_id %d in %s.\n", err, __func__);
 		goto err_out;
 	}
   
 	err = rdma_create_id(rpc_s->rpc_ec, &rpc_s->listen_id, NULL, RDMA_PS_TCP);
 	if (err != 0) {
-		printf("rdma_create_id %d in %s.\n", err, __func__);
+		uloga("rdma_create_id %d in %s.\n", err, __func__);
 		goto err_free;
 	}
 	err = rdma_bind_addr(rpc_s->listen_id, (struct sockaddr*) &rpc_s->ptlmap.address);
 	if (err != 0) {
-		printf("rdma_bind_addr %d in %s.\n", err, __func__);
+		uloga("rdma_bind_addr %d in %s.\n", err, __func__);
 		goto err_free;
 	}
 	err = rdma_listen(rpc_s->listen_id, 65535);	// backlog=65535 is backlog of incoming connect event
 	if (err != 0) {
-		printf("rdma_listen %d in %s.\n", err, __func__);
+		uloga("rdma_listen %d in %s.\n", err, __func__);
 		goto err_free;
 	}
   
 	rpc_s->ptlmap.address.sin_port = rdma_get_src_port(rpc_s->listen_id);
-  // printf("RPC listening on port %d.\n", ntohs(rpc_s->ptlmap.address.sin_port));
+  // uloga("RPC listening on port %d.\n", ntohs(rpc_s->ptlmap.address.sin_port));
   
 	//TODO: sys part if needed
   
@@ -1241,7 +1241,7 @@ struct rpc_server* rpc_server_init(int option, char *ip, int port, int num_buff,
 	rdma_destroy_event_channel(rpc_s->rpc_ec);
 	free(rpc_s);
 
-  err_out: printf("'%s()': failed with %d.\n", __func__, err);
+  err_out: uloga("'%s()': failed with %d.\n", __func__, err);
 	return 0;
 }
 
@@ -1271,7 +1271,7 @@ int rpc_post_recv(struct rpc_server *rpc_s, struct node_id *peer)
 
 		//      list_add(&rr->req_entry, &rpc_s->rpc_list);
 
-		//      printf("%d\n",rr->current_rpc_count);
+		//      uloga("%d\n",rr->current_rpc_count);
 
 		err = post_receives(rr, peer, rr->current_rpc_count - 1);
 		if(err == 0)
@@ -1280,7 +1280,7 @@ int rpc_post_recv(struct rpc_server *rpc_s, struct node_id *peer)
 
 	return 0;
       err_out:
-	printf("%d %d '%s()': failed with %d.\n", rpc_s->ptlmap.id, peer->ptlmap.id, __func__, err);
+	uloga("%d %d '%s()': failed with %d.\n", rpc_s->ptlmap.id, peer->ptlmap.id, __func__, err);
 	return err;
 }
 
@@ -1303,7 +1303,7 @@ int sys_post_recv(struct rpc_server *rpc_s, struct node_id *peer)
 
 	sm->sys_mr = ibv_reg_mr(peer->sys_conn.pd, hs, rpc_s->num_buf * sizeof(struct hdr_sys), IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
 	if(sm->sys_mr == NULL) {
-		printf("ibv_reg_mr return NULL.\n");
+		uloga("ibv_reg_mr return NULL.\n");
 		err = -ENOMEM;
 		goto err_out;
 	}
@@ -1324,18 +1324,18 @@ int sys_post_recv(struct rpc_server *rpc_s, struct node_id *peer)
 
 		err = ibv_post_recv(peer->sys_conn.qp, &wr, &bad_wr);
 		if(err != 0) {
-			//      printf("ibv_post_recv fails with %d in %s.\n", err, __func__);
+			//      uloga("ibv_post_recv fails with %d in %s.\n", err, __func__);
 			//      goto err_out;
 		} else {
 			peer->num_sys_recv_buf++;
 		}
 	}
 
-	//printf("host %d peer %d num_sys_buffer %d\n",rpc_s->ptlmap.id,peer->ptlmap.id,peer->num_sys_recv_buf);
+	//uloga("host %d peer %d num_sys_buffer %d\n",rpc_s->ptlmap.id,peer->ptlmap.id,peer->num_sys_recv_buf);
 
 	return 0;
       err_out:
-	printf("'%s()': failed with %d.\n", __func__, err);
+	uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -1351,7 +1351,7 @@ static int rpc_server_finish(struct rpc_server *rpc_s)
 			while(peer->num_req) {
 				err = peer_process_send_list(rpc_s, peer);
 				if(err < 0) {
-					printf("'%s()': encountered an error %d, skipping.\n", __func__, err);
+					uloga("'%s()': encountered an error %d, skipping.\n", __func__, err);
 					sleep(10);
 				}
 			}
@@ -1373,11 +1373,11 @@ int rpc_server_free(struct rpc_server *rpc_s)
 	// Process any remaining events.
   // err = rpc_process_event_with_timeout(rpc_s, 100);
   // while (err == 0 || err == -EINVAL) {
-  //   printf("%d  process what?\n",rpc_s->ptlmap.id);
+  //   uloga("%d  process what?\n",rpc_s->ptlmap.id);
   //   err = rpc_process_event_with_timeout(rpc_s, 100);
   // }
   // if (err != -ETIME) {
-  // 	printf("'%s()': error at flushing the event queue %d!\n", __func__, err);
+  // 	uloga("'%s()': error at flushing the event queue %d!\n", __func__, err);
   // 	goto err_out;
   // }
   
@@ -1387,7 +1387,7 @@ int rpc_server_free(struct rpc_server *rpc_s)
 	list_for_each_entry_safe(rr, tmp, &rpc_s->rpc_list, struct rpc_request, req_entry) {
 		err = ibv_dereg_mr(rr->rpc_mr);
 		if (err != 0) {
-			printf("ibv_dereg_mr fail with err %d.\n", err);
+			uloga("ibv_dereg_mr fail with err %d.\n", err);
 			goto err_out;
 		}
 		list_del(&rr->req_entry);
@@ -1401,12 +1401,12 @@ int rpc_server_free(struct rpc_server *rpc_s)
 			continue;
 
 		if (rpc_s->ptlmap.id == 0 || rpc_s->ptlmap.id == 12) {
-      // printf("%d %d %d\n",rpc_s->ptlmap.id, rpc_s->peer_tab[i].ptlmap.id,rpc_s->peer_tab[i].rpc_conn.qp_attr.cap.max_send_wr, rpc_s->peer_tab[i].rpc_conn.qp_attr.cap.max_recv_wr, rpc_s->peer_tab[i].sys_conn.qp_attr.cap.max_send_wr, rpc_s->peer_tab[i].sys_conn.qp_attr.cap.max_recv_wr);
+      // uloga("%d %d %d\n",rpc_s->ptlmap.id, rpc_s->peer_tab[i].ptlmap.id,rpc_s->peer_tab[i].rpc_conn.qp_attr.cap.max_send_wr, rpc_s->peer_tab[i].rpc_conn.qp_attr.cap.max_recv_wr, rpc_s->peer_tab[i].sys_conn.qp_attr.cap.max_send_wr, rpc_s->peer_tab[i].sys_conn.qp_attr.cap.max_recv_wr);
 		}
 		if (rpc_s->peer_tab[i].rpc_conn.f_connected == 1) {
 			err = rdma_disconnect(rpc_s->peer_tab[i].rpc_conn.id);
 			if(err != 0)
-				printf("Peer(%d) RPC rdma_disconnect err (%d). Ignore.\n", rpc_s->peer_tab[i].ptlmap.id, err);
+				uloga("Peer(%d) RPC rdma_disconnect err (%d). Ignore.\n", rpc_s->peer_tab[i].ptlmap.id, err);
 			rdma_destroy_qp(rpc_s->peer_tab[i].rpc_conn.id);
 			rdma_destroy_id(rpc_s->peer_tab[i].rpc_conn.id);
 
@@ -1414,7 +1414,7 @@ int rpc_server_free(struct rpc_server *rpc_s)
 		if (rpc_s->peer_tab[i].sys_conn.f_connected == 1) {
 			err = rdma_disconnect(rpc_s->peer_tab[i].sys_conn.id);
 			if (err != 0)
-				printf("Peer(%d) SYS rdma_disconnect err (%d). Ignore.\n", rpc_s->peer_tab[i].ptlmap.id, err);
+				uloga("Peer(%d) SYS rdma_disconnect err (%d). Ignore.\n", rpc_s->peer_tab[i].ptlmap.id, err);
 			rdma_destroy_qp(rpc_s->peer_tab[i].sys_conn.id);
 			rdma_destroy_id(rpc_s->peer_tab[i].sys_conn.id);
 		}
@@ -1428,7 +1428,7 @@ int rpc_server_free(struct rpc_server *rpc_s)
 	free(rpc_s);
   
 	return 0;
-  err_out: printf("'%s()': failed with %d.\n", __func__, err);
+  err_out: uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -1578,7 +1578,7 @@ int rpc_connect(struct rpc_server* rpc_s_, struct node_id* peer_)
   		check = 1;
   	}
   	else {
-  	  printf("peer# %d (%s)  to peer# %d (%s).\n", rpc_s->ptlmap.id, inet_ntoa(rpc_s->ptlmap.address.sin_addr), peer->ptlmap.id, inet_ntoa(peer->ptlmap.address.sin_addr));
+  	  uloga("peer# %d (%s)  to peer# %d (%s).\n", rpc_s->ptlmap.id, inet_ntoa(rpc_s->ptlmap.address.sin_addr), peer->ptlmap.id, inet_ntoa(peer->ptlmap.address.sin_addr));
   	  LOG(ERROR) << "rpc_connect:: unknown event= " << 
   		rpc_print_connection_err(rpc_s_, peer_, event_copy);
   		return event_copy.status;
@@ -1588,7 +1588,7 @@ int rpc_connect(struct rpc_server* rpc_s_, struct node_id* peer_)
   }
 
 	return 0;
-  err_out: printf("'%s()': failed with %d.\n", __func__, err);
+  err_out: uloga("'%s()': failed with %d.\n", __func__, err);
   return err;
 }
 
@@ -1596,32 +1596,32 @@ void event_to_str(struct rdma_cm_event* event_)
 {
   switch(event_->event)
   if(event.event == RDMA_CM_EVENT_DISCONNECTED)
-    printf("Peer Disconnected ");
+    uloga("Peer Disconnected ");
   else if(event.event == RDMA_CM_EVENT_REJECTED)
-    printf("Connection Rejected ");
+    uloga("Connection Rejected ");
   else if(event.event == RDMA_CM_EVENT_ADDR_ERROR)
-    printf("Connection Address Error ");
+    uloga("Connection Address Error ");
   else if(event.event == RDMA_CM_EVENT_ROUTE_ERROR)
-    printf("Connection Route Error ");
+    uloga("Connection Route Error ");
 // %s .\n", inet_ntoa(peer->ptlmap.address.sin_addr));
   else if(event.event == RDMA_CM_EVENT_CONNECT_RESPONSE)
-    printf("Connection Connect Response ");
+    uloga("Connection Connect Response ");
   else if(event.event == RDMA_CM_EVENT_CONNECT_ERROR)
-    printf("Connection Connect Error ");
+    uloga("Connection Connect Error ");
   else if(event.event == RDMA_CM_EVENT_UNREACHABLE)
-    printf("Connection Unreachable ");
+    uloga("Connection Unreachable ");
   else if(event.event == RDMA_CM_EVENT_DEVICE_REMOVAL)
-    printf("Connection Device Removal ");
+    uloga("Connection Device Removal ");
   else if(event.event == RDMA_CM_EVENT_MULTICAST_JOIN)
-    printf("Connection Multicast Join ");
+    uloga("Connection Multicast Join ");
   else if(event.event == RDMA_CM_EVENT_MULTICAST_ERROR)
-    printf("Connection Multicast Error ");
+    uloga("Connection Multicast Error ");
   else if(event.event == RDMA_CM_EVENT_ADDR_CHANGE)
-    printf("Connection Addr Changed ");
+    uloga("Connection Addr Changed ");
   else if(event.event == RDMA_CM_EVENT_TIMEWAIT_EXIT)
-    printf("Connection Timewait Exit ");
+    uloga("Connection Timewait Exit ");
   else if(event.event == RDMA_CM_EVENT_CONNECT_REQUEST)
-    printf("Connection Timewait Exit ");
+    uloga("Connection Timewait Exit ");
   return;
 }
 
@@ -1643,23 +1643,23 @@ int sys_connect(struct rpc_server *rpc_s, struct node_id *peer)
 
 	err = getaddrinfo(ip, port, NULL, &addr);
 	if(err != 0) {
-		printf("getaddrinfo %d in %s.\n", err, __func__);
+		uloga("getaddrinfo %d in %s.\n", err, __func__);
 		goto err_out;
 	}
 	peer->sys_ec = rdma_create_event_channel();
 	if(peer->sys_ec == NULL) {
-		printf("rdma_create_event_channel return NULL in %s.\n", __func__);
+		uloga("rdma_create_event_channel return NULL in %s.\n", __func__);
 		err = -ENOMEM;
 		goto err_out;
 	}
 	err = rdma_create_id(peer->sys_ec, &(peer->sys_conn.id), NULL, RDMA_PS_TCP);
 	if(err != 0) {
-		printf("rdma_create_id %d in %s.\n", err, __func__);
+		uloga("rdma_create_id %d in %s.\n", err, __func__);
 		goto err_out;
 	}
 	err = rdma_resolve_addr(peer->sys_conn.id, NULL, addr->ai_addr, INFINIBAND_TIMEOUT);
 	if(err != 0) {
-		printf("rdma_resolve_addr %d in %s.\n", err, __func__);
+		uloga("rdma_resolve_addr %d in %s.\n", err, __func__);
 		goto err_out;
 	}
 	freeaddrinfo(addr);
@@ -1675,7 +1675,7 @@ int sys_connect(struct rpc_server *rpc_s, struct node_id *peer)
 
 			err = rdma_create_qp(event_copy.id, peer->sys_conn.pd, &peer->sys_conn.qp_attr);
 			if(err != 0) {
-				printf("Peer %d couldnot connect to peer %d. Current number of qp is  %d\n rdma_create_qp %d in %s %s.\n", rpc_s->ptlmap.id, peer->ptlmap.id, rpc_s->num_qp, err, __func__, strerror(errno));
+				uloga("Peer %d couldnot connect to peer %d. Current number of qp is  %d\n rdma_create_qp %d in %s %s.\n", rpc_s->ptlmap.id, peer->ptlmap.id, rpc_s->num_qp, err, __func__, strerror(errno));
 				goto err_out;
 			}
 			rpc_s->num_qp++;
@@ -1685,7 +1685,7 @@ int sys_connect(struct rpc_server *rpc_s, struct node_id *peer)
 			peer->sys_conn.qp = event_copy.id->qp;
 
 //                      for(i=0;i<SYS_NUM;i++){
-//printf("SYS_NUM is %d, i is %d\n", SYS_NUM, i);
+//uloga("SYS_NUM is %d, i is %d\n", SYS_NUM, i);
 			err = sys_post_recv(rpc_s, peer);
 			if(err != 0)
 				goto err_out;
@@ -1693,11 +1693,11 @@ int sys_connect(struct rpc_server *rpc_s, struct node_id *peer)
 
 			err = rdma_resolve_route(event_copy.id, INFINIBAND_TIMEOUT);
 			if(err != 0) {
-				printf("rdma_resolve_route %d in %s.\n", err, __func__);
+				uloga("rdma_resolve_route %d in %s.\n", err, __func__);
 				goto err_out;
 			}
 		} else if(event_copy.event == RDMA_CM_EVENT_ROUTE_RESOLVED) {
-			//printf("route resolved.\n");
+			//uloga("route resolved.\n");
 			memset(&cm_params, 0, sizeof(struct rdma_conn_param));
 
 			conpara.pm_cp = rpc_s->ptlmap;
@@ -1713,11 +1713,11 @@ int sys_connect(struct rpc_server *rpc_s, struct node_id *peer)
 
 			err = rdma_connect(event_copy.id, &cm_params);
 			if (err != 0) {
-				printf("rdma_connect %d in %s.\n", err, __func__);
+				uloga("rdma_connect %d in %s.\n", err, __func__);
 				goto err_out;
 			}
 		} else if(event_copy.event == RDMA_CM_EVENT_ESTABLISHED) {
-			//printf("Connection Established.\n");
+			//uloga("Connection Established.\n");
 			if(peer->ptlmap.id == 0)
 				rpc_s->ptlmap.id = *((int *) event_copy.param.conn.private_data);
 
@@ -1725,7 +1725,7 @@ int sys_connect(struct rpc_server *rpc_s, struct node_id *peer)
 			check = 1;
 		} else {
 			rpc_print_connection_err(rpc_s, peer, event_copy);
-			printf("event is %d with status %d.\n", event_copy.event, event_copy.status);
+			uloga("event is %d with status %d.\n", event_copy.event, event_copy.status);
 			err = event_copy.status;
 			goto err_out;
 		}
@@ -1736,7 +1736,7 @@ int sys_connect(struct rpc_server *rpc_s, struct node_id *peer)
 
 	return 0;
       err_out:
-	printf("'%s()': failed with %d.\n", __func__, err);
+	uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -1812,10 +1812,10 @@ static int trouble__process_event(struct rpc_server* rpc_s, int timeout)	//Done
 		return 0;
 
 	err = poll(my_pollfd, j, timeout);
-  // printf("%d %d %d\n",rpc_s->ptlmap.id,rpc_s->cur_num_peer,j);
+  // uloga("%d %d %d\n",rpc_s->ptlmap.id,rpc_s->cur_num_peer,j);
 
 	if (err < 0) {
-		printf("Poll Error.\n");
+		uloga("Poll Error.\n");
 		goto err_out;
 	} 
 	else if (err == 0)
@@ -1826,11 +1826,11 @@ static int trouble__process_event(struct rpc_server* rpc_s, int timeout)	//Done
 				peer = rpc_s->peer_tab + which_peer[i];
 				err = ibv_get_cq_event(peer->sys_conn.comp_channel, &ev_cq, &ev_ctx);
 				if (err == -1 && errno == EAGAIN) {
-          // printf("comp_events_completed is %d.\n", peer->sys_conn.cq->comp_events_completed);
+          // uloga("comp_events_completed is %d.\n", peer->sys_conn.cq->comp_events_completed);
 					break;
 				}
 				if (err == -1 && errno != EAGAIN) {
-					printf("Failed to get cq_event with (%s).\n", strerror(errno));
+					uloga("Failed to get cq_event with (%s).\n", strerror(errno));
 					err = errno;
 					goto err_out;
 				}
@@ -1838,14 +1838,14 @@ static int trouble__process_event(struct rpc_server* rpc_s, int timeout)	//Done
 				err = ibv_req_notify_cq(ev_cq, 0);
 				if (err != 0) {
 					fprintf(stderr, "Failed to ibv_req_notify_cq.\n");
-					printf("Failed to ibv_req_notify_cq.\n");
+					uloga("Failed to ibv_req_notify_cq.\n");
 					goto err_out;
 				}
 
 				do {
 					ret = ibv_poll_cq(ev_cq, 1, &wc);
 					if(ret < 0) {
-						printf("Failed to ibv_poll_cq.\n");
+						uloga("Failed to ibv_poll_cq.\n");
 						fprintf(stderr, "Failed to ibv_poll_cq.\n");
 						goto err_out;
 					}
@@ -1853,7 +1853,7 @@ static int trouble__process_event(struct rpc_server* rpc_s, int timeout)	//Done
 						continue;
 
 					if (wc.status != IBV_WC_SUCCESS) {
-						printf("Status (%d) is not IBV_WC_SUCCESS.\n", wc.status);
+						uloga("Status (%d) is not IBV_WC_SUCCESS.\n", wc.status);
 						err = wc.status;
 						goto err_out;
 					}
@@ -1880,7 +1880,7 @@ static int trouble__process_event(struct rpc_server* rpc_s, int timeout)	//Done
 
 						err = ibv_post_recv(peer->sys_conn.qp, &wr, &bad_wr);
 						if (err != 0)
-							printf("ibv_post_recv fails with %d in %s.\n", err, __func__);
+							uloga("ibv_post_recv fails with %d in %s.\n", err, __func__);
 					}
 					else if(wc.opcode == IBV_WC_SEND) {
 						sm = (struct sys_msg *) (uintptr_t) wc.wr_id;
@@ -1892,7 +1892,7 @@ static int trouble__process_event(struct rpc_server* rpc_s, int timeout)	//Done
 						free(sm);
 					}
 					else {
-						printf("Weird wc.opcode %d.\n", wc.opcode);	//debug
+						uloga("Weird wc.opcode %d.\n", wc.opcode);	//debug
 						err = wc.opcode;
 						goto err_out;
 					}
@@ -1907,18 +1907,18 @@ static int trouble__process_event(struct rpc_server* rpc_s, int timeout)	//Done
 				peer = rpc_s->peer_tab + which_peer[i];
 				err = ibv_get_cq_event(peer->rpc_conn.comp_channel, &ev_cq, &ev_ctx);
 				if(err == -1 && errno == EAGAIN) {
-          // printf("comp_events_completed is %d.\n", peer->rpc_conn.cq->comp_events_completed);     //debug
+          // uloga("comp_events_completed is %d.\n", peer->rpc_conn.cq->comp_events_completed);     //debug
 					break;
 				}
 				if (err == -1 && errno != EAGAIN) {
-					printf("Failed to get cq_event: %s\n", strerror(errno));
+					uloga("Failed to get cq_event: %s\n", strerror(errno));
 					err = errno;
 					goto err_out;
 				}
 				ibv_ack_cq_events(ev_cq, 1);
 				err = ibv_req_notify_cq(ev_cq, 0);
 				if (err != 0) {
-					printf("Failed to ibv_req_notify_cq.\n");
+					uloga("Failed to ibv_req_notify_cq.\n");
 					fprintf(stderr, "Failed to ibv_req_notify_cq.\n");
 					goto err_out;
 				}
@@ -1926,7 +1926,7 @@ static int trouble__process_event(struct rpc_server* rpc_s, int timeout)	//Done
 				do {
 					ret = ibv_poll_cq(ev_cq, 1, &wc);
 					if (ret < 0) {
-						printf("Failed to ibv_poll_cq.\n");
+						uloga("Failed to ibv_poll_cq.\n");
 						fprintf(stderr, "Failed to ibv_poll_cq.\n");
 						goto err_out;
 					}
@@ -1934,7 +1934,7 @@ static int trouble__process_event(struct rpc_server* rpc_s, int timeout)	//Done
 						continue;
 					
 					if (wc.status != IBV_WC_SUCCESS) {
-						printf("Status (%d) is not IBV_WC_SUCCESS.\n", wc.status);
+						uloga("Status (%d) is not IBV_WC_SUCCESS.\n", wc.status);
 						err = -wc.status;
 						goto err_out;
 					}
@@ -1969,7 +1969,7 @@ static int trouble__process_event(struct rpc_server* rpc_s, int timeout)	//Done
 							goto err_out;
 					}
 					else {
-						printf("Weird wc.opcode %d.\n", wc.opcode);	//debug
+						uloga("Weird wc.opcode %d.\n", wc.opcode);	//debug
 						err = wc.opcode;
 						goto err_out;
 					}
@@ -1988,7 +1988,7 @@ static int trouble__process_event(struct rpc_server* rpc_s, int timeout)	//Done
 
 	return 0;
 
-  err_out: printf("(%s): err (%d).\n", __func__, err);
+  err_out: uloga("(%s): err (%d).\n", __func__, err);
 	return err;
 }
 
@@ -2014,7 +2014,7 @@ int rpc_process_event(struct rpc_server *rpc_s)	//Done
 	return 0;
 
       err_out:
-	printf("(%s): err (%d).\n", __func__, err);
+	uloga("(%s): err (%d).\n", __func__, err);
 	return err;
 }
 
@@ -2029,7 +2029,7 @@ int rpc_process_event_with_timeout(struct rpc_server *rpc_s, int timeout)	//Done
 	return err;
 
       err_out:
-	printf("(%s): err (%d).\n", __func__, err);
+	uloga("(%s): err (%d).\n", __func__, err);
 	return err;
 }
 
@@ -2039,7 +2039,7 @@ int rpc_process_event_with_timeout(struct rpc_server *rpc_s, int timeout)	//Done
 int rpc_send(struct rpc_server* rpc_s, struct node_id* peer, struct msg_buf* msg)
 {
 	if (peer->rpc_conn.f_connected != 1) {
-    // printf("RPC channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
+    // uloga("RPC channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
 		rpc_connect(rpc_s, peer);
     // goto err_out;
 	}
@@ -2068,7 +2068,7 @@ int rpc_send(struct rpc_server* rpc_s, struct node_id* peer, struct msg_buf* msg
 	if (err == 0)
 		return 0;
 
-  err_out: printf("%d to %d '%s()': failed with %d.\n", rpc_s->ptlmap.id, peer->ptlmap.id, __func__, err);
+  err_out: uloga("%d to %d '%s()': failed with %d.\n", rpc_s->ptlmap.id, peer->ptlmap.id, __func__, err);
 	return err;
 }
 
@@ -2077,7 +2077,7 @@ inline static int __send_direct(struct rpc_server *rpc_s, struct node_id *peer, 
 {
 	if(peer->rpc_conn.f_connected != 1) {
 		rpc_connect(rpc_s, peer);
-		//printf("RPC channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
+		//uloga("RPC channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
 		//goto err_out;
 	}
 
@@ -2111,7 +2111,7 @@ inline static int __send_direct(struct rpc_server *rpc_s, struct node_id *peer, 
 	return 0;
 
       err_out:
-	printf("'%s()': failed with %d.\n", __func__, err);
+	uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -2123,7 +2123,7 @@ int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_b
 	if(err == 0)
 		return 0;
 
-	printf("'%s()': failed with %d.\n", __func__, err);
+	uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -2131,7 +2131,7 @@ inline static int __receive(struct rpc_server *rpc_s, struct node_id *peer, stru
 {
 	if(peer->rpc_conn.f_connected != 1) {
 		rpc_connect(rpc_s, peer);
-		//printf("RPC channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
+		//uloga("RPC channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
 		//goto err_out;
 	}
 
@@ -2162,7 +2162,7 @@ inline static int __receive(struct rpc_server *rpc_s, struct node_id *peer, stru
 		return 0;
 
       err_out:
-	printf("'%s()': failed with %d.\n", __func__, err);
+	uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -2174,7 +2174,7 @@ int rpc_receive(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *
 	if(err == 0)
 		return 0;
 
-	printf("'%s()': failed with %d.\n", __func__, err);
+	uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -2182,7 +2182,7 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 {
   int err = -ENOMEM;
 	if(peer->rpc_conn.f_connected != 1) {
-		printf("RPC channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
+		uloga("RPC channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
 		goto err_out;
 	}
 
@@ -2207,7 +2207,7 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 	if(err == 0)
 		return 0;
 
-  err_out: printf("'%s()': failed with %d.\n", __func__, err);
+  err_out: uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -2216,14 +2216,14 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 //Not be used in InfiniBand version. Just keep an empty func here.
 int rpc_send_directv(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)
 {
-	printf("%s.\n", __func__);
+	uloga("%s.\n", __func__);
 	return 0;
 }
 
 //Not be used in InfiniBand version. Just keep an empty func here.
 int rpc_receivev(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)
 {
-	printf("%s.\n", __func__);
+	uloga("%s.\n", __func__);
 	return 0;
 }
 
@@ -2257,7 +2257,7 @@ int rpc_read_config(struct sockaddr_in* address)
   char version[16];
   err = fscanf(f, "P2TNID=%s\nP2TPID=%d\n%s\n", tmp_ip, &tmp_port, version);
   if (strcmp(version, VERSION) != 0)
-    printf("Warning: DataSpaces sever(s) and client(s) have mis-matched version\n");
+    uloga("Warning: DataSpaces sever(s) and client(s) have mis-matched version\n");
   
 	address->sin_addr.s_addr = inet_addr(tmp_ip);
 	address->sin_port = htons(tmp_port);
@@ -2268,7 +2268,7 @@ int rpc_read_config(struct sockaddr_in* address)
   
 	err = -EIO;
   
-  err_out: printf("'%s()': failed with %d.\n", __func__, err);
+  err_out: uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -2291,7 +2291,7 @@ int rpc_write_config(struct rpc_server *rpc_s)
 
   err_out_close:
 	fclose(f);
-  err_out: printf("'%s()' failed with %d.", __func__, err);
+  err_out: uloga("'%s()' failed with %d.", __func__, err);
 	return -EIO;
 }
 
@@ -2308,40 +2308,40 @@ void rpc_mem_info_cache(struct rpc_server *rpc_s, struct node_id *peer, struct r
 
 void rpc_report_md_usage(struct rpc_server *rpc_s)
 {
-	//printf("'%s()': MD posted %d, MD released %d, MD in use %d.\n", __func__, rpc_s->num_md_posted, rpc_s->num_md_unlinked, rpc_s->num_md_unlinked - rpc_s->num_md_posted);
+	//uloga("'%s()': MD posted %d, MD released %d, MD in use %d.\n", __func__, rpc_s->num_md_posted, rpc_s->num_md_unlinked, rpc_s->num_md_unlinked - rpc_s->num_md_posted);
 }
 
 void rpc_print_connection_err(struct rpc_server *rpc_s, struct node_id *peer, struct rdma_cm_event event)
 {
 
 	if(event.event == RDMA_CM_EVENT_DISCONNECTED)
-		printf("Peer Disconnected ");
+		uloga("Peer Disconnected ");
 	else if(event.event == RDMA_CM_EVENT_REJECTED)
-		printf("Connection Rejected ");
+		uloga("Connection Rejected ");
 	else if(event.event == RDMA_CM_EVENT_ADDR_ERROR)
-		printf("Connection Address Error ");
+		uloga("Connection Address Error ");
 	else if(event.event == RDMA_CM_EVENT_ROUTE_ERROR)
-		printf("Connection Route Error ");
+		uloga("Connection Route Error ");
 // %s .\n", inet_ntoa(peer->ptlmap.address.sin_addr));
 	else if(event.event == RDMA_CM_EVENT_CONNECT_RESPONSE)
-		printf("Connection Connect Response ");
+		uloga("Connection Connect Response ");
 	else if(event.event == RDMA_CM_EVENT_CONNECT_ERROR)
-		printf("Connection Connect Error ");
+		uloga("Connection Connect Error ");
 	else if(event.event == RDMA_CM_EVENT_UNREACHABLE)
-		printf("Connection Unreachable ");
+		uloga("Connection Unreachable ");
 	else if(event.event == RDMA_CM_EVENT_DEVICE_REMOVAL)
-		printf("Connection Device Removal ");
+		uloga("Connection Device Removal ");
 	else if(event.event == RDMA_CM_EVENT_MULTICAST_JOIN)
-		printf("Connection Multicast Join ");
+		uloga("Connection Multicast Join ");
 	else if(event.event == RDMA_CM_EVENT_MULTICAST_ERROR)
-		printf("Connection Multicast Error ");
+		uloga("Connection Multicast Error ");
 	else if(event.event == RDMA_CM_EVENT_ADDR_CHANGE)
-		printf("Connection Addr Changed ");
+		uloga("Connection Addr Changed ");
 	else if(event.event == RDMA_CM_EVENT_TIMEWAIT_EXIT)
-		printf("Connection Timewait Exit ");
+		uloga("Connection Timewait Exit ");
 	else if(event.event == RDMA_CM_EVENT_CONNECT_REQUEST)
-		printf("Connection Timewait Exit ");
-	printf("peer# %d (%s)  to peer# %d (%s).\n", rpc_s->ptlmap.id, inet_ntoa(rpc_s->ptlmap.address.sin_addr), peer->ptlmap.id, inet_ntoa(peer->ptlmap.address.sin_addr));
+		uloga("Connection Timewait Exit ");
+	uloga("peer# %d (%s)  to peer# %d (%s).\n", rpc_s->ptlmap.id, inet_ntoa(rpc_s->ptlmap.address.sin_addr), peer->ptlmap.id, inet_ntoa(peer->ptlmap.address.sin_addr));
 	return;
 }
 

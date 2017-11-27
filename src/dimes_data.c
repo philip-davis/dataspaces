@@ -631,22 +631,22 @@ void dimes_buffer_free(uint64_t ptr)
 //For testing
 void print_free_blocks_list()
 {
-    printf("#####Free Blocks List####\n");
+    uloga("#####Free Blocks List####\n");
 
     struct dimes_buf_block * mb, *tmp;
     list_for_each_entry_safe(mb, tmp, &free_blocks_list, struct dimes_buf_block, mem_block_entry){
-        printf("free block: ptr=%p, size=%zu, status=%u\n",
+        uloga("free block: ptr=%p, size=%zu, status=%u\n",
             mb->block_ptr, mb->block_size, mb->block_status);
     }
 }
 
 void print_used_blocks_list()
 {
-    printf("#####Used Blocks List####\n");
+    uloga("#####Used Blocks List####\n");
 
     struct dimes_buf_block * mb, *tmp;
     list_for_each_entry_safe(mb, tmp, &used_blocks_list, struct dimes_buf_block, mem_block_entry){
-        printf("used block: ptr=%p, size=%zu, status=%u\n",
+        uloga("used block: ptr=%p, size=%zu, status=%u\n",
             mb->block_ptr, mb->block_size, mb->block_status);
     }
 }

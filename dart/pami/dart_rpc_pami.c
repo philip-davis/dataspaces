@@ -81,7 +81,7 @@ void rpc_report_md_usage(struct rpc_server *rpc_s)
 /* Completion callback functions */
 static void cb_done (void *ctxt, void * clientdata, pami_result_t err)
 {
- // printf("in cb_done\n");
+ // uloga("in cb_done\n");
   int * active = (int *) clientdata;
   (*active)--;
 }
@@ -269,7 +269,7 @@ static void rpc_cb_put_completion(void *ctxt, void *clientdata, pami_result_t er
 
 static void rpc_cb_get_completion(void *ctxt, void *clientdata, pami_result_t err)
 {
-	//printf("get into rpc_cb_get_completion\n");
+	//uloga("get into rpc_cb_get_completion\n");
 	struct client_data_rpc_get *ptr = (struct client_data_rpc_get *)clientdata;
 	
 	struct rpc_server *rpc_s = ptr->rpc_s;
@@ -304,7 +304,7 @@ static void rpc_cb_get_completion(void *ctxt, void *clientdata, pami_result_t er
 	//check received data
 	/*int i, count = 0;
 	int size = rr->size/sizeof(int);
-	printf("data_size = %d\n", size);
+	uloga("data_size = %d\n", size);
 	for(i = 0; i < size; i++){
 		if(*((int*)rr->data + i) != i)
 			count++;
@@ -316,7 +316,7 @@ static void rpc_cb_req_completion(pami_context_t context, void *cookie, pami_res
 {
 	int *active = (int *)cookie;
 	(*active)--;
-	printf("after msg send to dest\n");
+	uloga("after msg send to dest\n");
 }
 */
 
@@ -329,7 +329,7 @@ static void rpc_cb_recv_done(pami_context_t context, void *cookie, pami_result_t
 	struct rpc_server *rpc_s = ptr->rpc_s;
 	struct rpc_request *rr = ptr->rr;
 //	rpc_s->flag--;
-//	printf("check after recv: cmd = %d\n", ((struct rpc_cmd*)rr->data)->cmd);	
+//	uloga("check after recv: cmd = %d\n", ((struct rpc_cmd*)rr->data)->cmd);	
 
 	//list
 	list_add_tail(&rr->req_entry, &rpc_s->rpc_list);
@@ -344,21 +344,21 @@ static void rpc_cb_recv(pami_context_t context, void *cookie,
 			const void *pipe_addr, size_t data_size,
 			pami_endpoint_t origin, pami_recv_t *recv)
 {
-//	printf("get into rpc_cb_recv\n");
+//	uloga("get into rpc_cb_recv\n");
 /*	if(recv == NULL)
-		printf("recv is NULL\n");
+		uloga("recv is NULL\n");
 	if(pipe_addr == NULL)
-		printf("pipe_addr is NULL\n");
+		uloga("pipe_addr is NULL\n");
 */	//void ** h = (void **)header_addr;
 /*	size_t task;
 	size_t ctxoff;
 	int err;
 	err = PAMI_Endpoint_query(origin, &task, &ctxoff);
-	//printf("the msg was sent from Rank%d\n", task);
+	//uloga("the msg was sent from Rank%d\n", task);
 
 	int *active = (int*)cookie;
 	(*active)--;
-	printf("cookie=%d\n", *(int*)cookie);
+	uloga("cookie=%d\n", *(int*)cookie);
 */
 	struct rpc_server *rpc_s = (struct rpc_server*)cookie;
 	struct msg_buf *msg = msg_buf_alloc(rpc_s, NULL, 1);
@@ -386,7 +386,7 @@ static void rpc_cb_recv(pami_context_t context, void *cookie,
     	recv->offset      = 0;
     	recv->data_fn     = NULL; //cb_done; //msg_data_cb;//PAMI_DATA_COPY;
     	recv->data_cookie = NULL;
-    	//printf("task = %ld \n", (uint32_t)recv->cookie);
+    	//uloga("task = %ld \n", (uint32_t)recv->cookie);
 	return;
 
 err_out:
@@ -436,7 +436,7 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff,
 
 	err = PAMI_Client_create(clientname, &client, NULL, 0);
 	if(err != PAMI_SUCCESS)
-		printf("pami_client_create fails\n");
+		uloga("pami_client_create fails\n");
 	
 	pami_configuration_t config[3];
 	size_t num_contexts;
@@ -446,19 +446,19 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff,
   	config[2].name = PAMI_CLIENT_NUM_CONTEXTS;
 	err = PAMI_Client_query(client, config, 3);
 	if(err != PAMI_SUCCESS)
-		printf("pami_client_create success\n");
+		uloga("pami_client_create success\n");
 		
 	int world_size, world_rank;
 	world_size = config[0].value.intval;
 	world_rank = config[1].value.intval;
 	num_contexts = config[2].value.intval;
 
-//	printf("size=%d, rank=%d, num_contexts=%d\n", world_size, world_rank, num_contexts);
+//	uloga("size=%d, rank=%d, num_contexts=%d\n", world_size, world_rank, num_contexts);
 	
 	pami_context_t *contexts = (pami_context_t *) safemalloc( num_contexts * sizeof(pami_context_t) );
 	err = PAMI_Context_createv( client, NULL, 0, contexts, num_contexts );
 	if(err != PAMI_SUCCESS)
-		printf("fail-3\n");
+		uloga("fail-3\n");
 	
 	rpc_s->client = client;
 	rpc_s->ptlmap.rank_pami = world_rank;
@@ -481,10 +481,10 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff,
 	hints.recv_immediate			= PAMI_HINT_DISABLE;
 	err = PAMI_Dispatch_set(contexts[0], dispatch_id, dispatch_cb, dispatch_cookie, hints);
 	if(err != PAMI_SUCCESS)
-		printf("fail-1\n");
+		uloga("fail-1\n");
 //	err = PAMI_Dispatch_set(contexts[1], dispatch_id, dispatch_cb, &dispatch_cookie, dispatch_hint);
 //	if(err != PAMI_SUCCESS)
-//		printf("fail-2\n");
+//		uloga("fail-2\n");
 
 	rpc_add_service(rpc_get_finish, rpc_service_get_finish);
 	rpc_add_service(rpc_put_finish, rpc_service_put_finish);
@@ -513,7 +513,7 @@ static int rpc_prepare_buffers(struct rpc_server *rpc_s, const struct node_id *p
 
 	if (err != PAMI_SUCCESS)
 		uloga("%s(): PAMI_Memregion_create failed\n", __func__);
-	//printf("registered mem size = %zu\n", msg->size);
+	//uloga("registered mem size = %zu\n", msg->size);
 	
 	return 0;	
 	
@@ -521,12 +521,12 @@ static int rpc_prepare_buffers(struct rpc_server *rpc_s, const struct node_id *p
 
 static void rpc_decode(struct rpc_server* rpc_s, struct rpc_request *rr)
 {
-//	printf("get into rpc_decode\n");
+//	uloga("get into rpc_decode\n");
 	struct rpc_cmd *cmd;
 	int err, i;
 
 	cmd = (struct rpc_cmd*)rr->data;
-//	printf("cmd = %d\n", cmd->cmd);	
+//	uloga("cmd = %d\n", cmd->cmd);	
 
 	for(i = 0; i < num_service; i++){
 		if(cmd->cmd == rpc_commands[i].rpc_cmd){
@@ -565,7 +565,7 @@ struct msg_buf* msg_buf_alloc(struct rpc_server *rpc_s,
 static int rpc_post_request(struct rpc_server *rpc_s, struct node_id *peer,
 			struct rpc_request *rr, const int msg_has_data)
 {
-//	printf("get into rpc_post_request\n");
+//	uloga("get into rpc_post_request\n");
 	int err;
 
 	struct client_data_rpc_send *ptr_clientdata = (struct client_data_rpc_send*)calloc(1, sizeof(struct client_data_rpc_send));
@@ -577,13 +577,13 @@ static int rpc_post_request(struct rpc_server *rpc_s, struct node_id *peer,
 	int target = peer->ptlmap.rank_pami;	//rank
 	err = PAMI_Endpoint_create(rpc_s->client , (pami_task_t)target, 0, &target_ep);
 	if(err != PAMI_SUCCESS)
-		printf("fail-4\n");
+		uloga("fail-4\n");
 	
 	//check before send
 /*	struct rpc_cmd *rcmd;
 	rcmd = (struct rpc_cmd*)rr->data;
-	printf("check before send cmd=%d\n", rcmd->cmd);
-	printf("check before send msg_size=%d\n", rr->size);
+	uloga("check before send cmd=%d\n", rcmd->cmd);
+	uloga("check before send msg_size=%d\n", rr->size);
 */
 	pami_send_hint_t dart_null_send_hint;
 	memset(&dart_null_send_hint, 0, sizeof(dart_null_send_hint));
@@ -604,11 +604,11 @@ static int rpc_post_request(struct rpc_server *rpc_s, struct node_id *peer,
 	parameters.events.remote_fn 	= NULL;//rpc_cb_req_completion;	//TODO	
 	
 	
-//	printf("before PAMI_Send\n");		
+//	uloga("before PAMI_Send\n");		
 	err = PAMI_Send(rpc_s->contexts[0], &parameters);
 
 	if(err != PAMI_SUCCESS){
-		printf("rpc_post_request fails\n");
+		uloga("rpc_post_request fails\n");
 		return -1;
 	}
 
@@ -618,7 +618,7 @@ static int rpc_post_request(struct rpc_server *rpc_s, struct node_id *peer,
 
 static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer)
 {
-	//printf("get into peer_process_send_list\n");
+	//uloga("get into peer_process_send_list\n");
 	struct rpc_request *rr;
 	int err;
 	int has_data = 0;
@@ -644,7 +644,7 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 	rr->size = sizeof(*msg->msg_rpc);
 */
 	while(!list_empty(&peer->req_list)){
-		//printf("not empty\n");
+		//uloga("not empty\n");
 		rr = list_entry(peer->req_list.next, struct rpc_request, req_entry);
 
 		if(rr->msg->msg_data){
@@ -658,7 +658,7 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 		err = rpc_post_request(rpc_s, peer, rr, has_data);
 	
 		if(err < 0){
-			printf("peer_process_send_list fails\n");
+			uloga("peer_process_send_list fails\n");
 			return err;
 		}
 	}
@@ -667,7 +667,7 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 
 int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)
 {
-//	printf("get into rpc_send\n");
+//	uloga("get into rpc_send\n");
 	int err;
 
 	//struct msg_buf *msg;
@@ -689,7 +689,7 @@ int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg
 
 	err = peer_process_send_list(rpc_s, peer);
 	if(err < 0){
-		printf("rpc_send fails\n");
+		uloga("rpc_send fails\n");
 		return err;
 	}
 	return 0;
@@ -697,7 +697,7 @@ int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg
 
 int rpc_receive(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)
 {
-	//printf("get into rpc_receive\n");
+	//uloga("get into rpc_receive\n");
 	int err;
 	struct rpc_request *rr;
 	rr = calloc(1, sizeof(struct rpc_request));
@@ -710,7 +710,7 @@ int rpc_receive(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *
 
 	err = peer_process_send_list(rpc_s, peer);
 	if(err < 0){
-		printf("rpc_receive fails\n");
+		uloga("rpc_receive fails\n");
 		return err;
 	}
 	return 0;
@@ -732,7 +732,7 @@ int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_b
 	int target = peer->ptlmap.rank_pami;
 	err = PAMI_Endpoint_create(rpc_s->client, (pami_task_t)target, 0, &target_ep);
 	if(err != PAMI_SUCCESS)
-		printf("fails\n");
+		uloga("fails\n");
 
 	pami_memregion_t *local_memregion = (pami_memregion_t*)safemalloc(sizeof(pami_memregion_t));
 	size_t bytes_out;
@@ -741,10 +741,10 @@ int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_b
 //	gettimeofday(&t1, NULL);
 	err = PAMI_Memregion_create(rpc_s->contexts[0], rr->data, rr->size, &bytes_out, local_memregion);
 	if(err != PAMI_SUCCESS){
-		printf("memregion create failed\n");
+		uloga("memregion create failed\n");
 	}
 /*	gettimeofday(&t2, NULL);
-	printf("PAMI_Memregion_create time = %f seconds\n",
+	uloga("PAMI_Memregion_create time = %f seconds\n",
              (double) (t2.tv_usec - t1.tv_usec)/1000000 +
              (double) (t2.tv_sec - t1.tv_sec));
 */
@@ -758,7 +758,7 @@ int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_b
 	ptr_clientdata->local_memregion = local_memregion;
 	memcpy(ptr_clientdata->remote_memregion, peer->cached_remote_memregion, sizeof(pami_memregion_t));
 	//if(peer->cached_remote_memregion != remote_memregion)
-	//	printf("some error!!!!!!!!!!!!!!!!!!!\n");
+	//	uloga("some error!!!!!!!!!!!!!!!!!!!\n");
 	//memcpy(ptr_clientdata->remote_memregion, remote_memregion, sizeof(pami_memregion_t));
 	
 	pami_send_hint_t dart_rdma_send_hint;
@@ -778,10 +778,10 @@ int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_b
 	parameters.rdma.remote.offset 	= 0;
 	parameters.put.rdone_fn 	= NULL;	//TODO
 	
-	//printf("before PAMI_Rput\n");
+	//uloga("before PAMI_Rput\n");
 	err = PAMI_Rput(rpc_s->contexts[0], &parameters);
 	if(err != PAMI_SUCCESS)
-		printf("fail at pami_rput\n");
+		uloga("fail at pami_rput\n");
 
 	rpc_server_inc_reply(rpc_s);
 
@@ -790,7 +790,7 @@ int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_b
 
 int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)
 {
-	//printf("get into rpc_receive_direct\n");
+	//uloga("get into rpc_receive_direct\n");
 	struct rpc_request *rr;
 	int err;
 
@@ -803,13 +803,13 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 	int target = peer->ptlmap.rank_pami;	//rank
 	err = PAMI_Endpoint_create(rpc_s->client , (pami_task_t)target, 0, &target_ep);
 	if(err != PAMI_SUCCESS)
-		printf("fail-4\n");
+		uloga("fail-4\n");
 
 	pami_memregion_t *local_memregion = (pami_memregion_t*)safemalloc(sizeof(pami_memregion_t));
 	size_t bytes_out;
 	err = PAMI_Memregion_create(rpc_s->contexts[0], rr->data, rr->size, &bytes_out, local_memregion);
 	if(err != PAMI_SUCCESS){
-		printf("memregion create failed\n");
+		uloga("memregion create failed\n");
 	}
 
 	//Get remote data
@@ -839,10 +839,10 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 	parameters.rdma.remote.offset	= 0;
 	//parameters.put.rdone_fn		= cb_done;
 
-	//printf("before PAMI_Rget\n");
+	//uloga("before PAMI_Rget\n");
 	err = PAMI_Rget(rpc_s->contexts[0], &parameters);
 	if(err != PAMI_SUCCESS)
-		printf("fail at pami_rget\n");
+		uloga("fail at pami_rget\n");
 
 	rpc_server_inc_reply(rpc_s);
 
@@ -851,7 +851,7 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 
 int rpc_read_config(size_t *rank_pami, const char *fname)
 {
-	//printf("get into rpc_read_config\n");
+	//uloga("get into rpc_read_config\n");
         FILE *f;
         int err;
 
@@ -866,7 +866,7 @@ int rpc_read_config(size_t *rank_pami, const char *fname)
         err = fscanf(f, "PAMIRANK=%llu\n%s\n",rank_pami, version);
 
 	if(strcmp(version, VERSION) != 0)
-		printf("Warning: DataSpaces server(s) and client(s) have mis-matched version\n");
+		uloga("Warning: DataSpaces server(s) and client(s) have mis-matched version\n");
 
         fclose(f);
         if(err==2)
@@ -878,13 +878,13 @@ int rpc_read_config(size_t *rank_pami, const char *fname)
 
 int rpc_write_config(struct rpc_server *rpc_s, const char *fname)
 {
-	//printf("get int rpc_write_config\n");
+	//uloga("get int rpc_write_config\n");
         FILE *f;
         int err;
 
 	char tmp_name[20];
 	sprintf(tmp_name, "%s.tmp", fname);
-	//printf("%s\n", tmp_name);
+	//uloga("%s\n", tmp_name);
 	
         f = fopen(tmp_name, "wt");
         if (!f)
@@ -914,7 +914,7 @@ int rpc_process_event(struct rpc_server *rpc_s)
 	//err = PAMI_Context_trylock_advancev(&(rpc_s->contexts[0]), 1, 1000);	
 	err = PAMI_Context_advance(rpc_s->contexts[0], 1);
 	if(err != PAMI_SUCCESS)
-		printf("fail-5\n");
+		uloga("fail-5\n");
 
 	struct rpc_request *rr;
 	while(!list_empty(&rpc_s->rpc_list)){
@@ -931,7 +931,7 @@ int rpc_process_event(struct rpc_server *rpc_s)
 
 void rpc_server_free(struct rpc_server *rpc_s)
 {
-	//printf("rank%d num msg posted %d, num msg freed %d\n", rpc_s->ptlmap.rank_pami, rpc_s->num_rep_posted, rpc_s->num_rep_freed);
+	//uloga("rank%d num msg posted %d, num msg freed %d\n", rpc_s->ptlmap.rank_pami, rpc_s->num_rep_posted, rpc_s->num_rep_freed);
 
 	while(rpc_s->num_rep_posted != rpc_s->num_rep_freed)
 		rpc_process_event(rpc_s);
@@ -953,7 +953,7 @@ void rpc_server_free(struct rpc_server *rpc_s)
 
 	result = PAMI_Context_destroyv(rpc_s->contexts, rpc_s->num_contexts);
 	if(result != PAMI_SUCCESS){
-		printf("PAMI_Context_destroyv fails\n");
+		uloga("PAMI_Context_destroyv fails\n");
 	}
 	free(rpc_s->contexts);
 
@@ -961,7 +961,7 @@ void rpc_server_free(struct rpc_server *rpc_s)
 	
 	if(rpc_s)
 		free(rpc_s);
-	//printf("rank%d finished test. \n", rpc_s->ptlmap.rank_pami);
+	//uloga("rank%d finished test. \n", rpc_s->ptlmap.rank_pami);
 }
 
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd)

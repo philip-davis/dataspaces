@@ -45,7 +45,7 @@ static char *conf;
 
 static void usage(void)
 {
-        printf("Usage: server OPTIONS\n"
+        uloga("Usage: server OPTIONS\n"
                 "OPTIONS: \n"
                 "--server, -s    Number of server instance/staging nodes\n"
                 "--cnodes, -c    Number of compute nodes\n"
@@ -76,7 +76,7 @@ static int parse_args(int argc, char *argv[])
 			conf = (optarg) ? optarg : NULL;
 			break;
 		default:
-			printf("Unknown argument \n");
+			uloga("Unknown argument \n");
 		}
 	}
 

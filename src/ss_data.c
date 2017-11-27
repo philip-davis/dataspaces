@@ -559,10 +559,10 @@ static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
                      &i_tab, &num_intv);
 
         /*
-        printf("Global domain decomposes into: ");
+        uloga("Global domain decomposes into: ");
         for (i = 0; i < num_intv; i++)
-                printf("{%llu,%llu} ", i_tab[i].lb, i_tab[i].ub);
-        printf("\n");
+                uloga("{%llu,%llu} ", i_tab[i].lb, i_tab[i].ub);
+        uloga("\n");
         */
 
         for (i = 0, j = 0; i < dht->num_entries; i++) {
@@ -574,7 +574,7 @@ static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
                 if (!de->i_tab)
                         break;
 
-                // printf("Node rank %d interval cut: ", i);
+                // uloga("Node rank %d interval cut: ", i);
                 while (len > 0) {
                         if (intv_size(&i_tab[j]) > len) {
                                 intv.lb = i_tab[j].lb;
@@ -586,7 +586,7 @@ static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
                         }
                         len -= intv_size(&intv);
                         de->i_tab[de->num_intv++] = intv;
-                        // printf("{%llu,%llu} ", intv.lb, intv.ub);
+                        // uloga("{%llu,%llu} ", intv.lb, intv.ub);
                 }
 
                 de->i_virt.lb = de->i_tab[0].lb;
@@ -595,7 +595,7 @@ static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
                 if (!de->i_tab)
                         break;
 
-                //printf("\n");
+                //uloga("\n");
         }
 
         free(i_tab);
@@ -669,8 +669,8 @@ static int ssd_hash_v1(struct sspace *ss, const struct bbox *bb, struct dht_entr
 
         // bbox_to_intv(bb, ss->max_dim, ss->bpd, &i_tab, &n);
         bbox_to_intv2(bb, ss->max_dim, ss->bpd, &i_tab, &n);
-        //  printf("After bbox_to_intv2 num_intv = %d\n", n);
-        //  printf("ss->dht->num_entries = %d\n", ss->dht->num_entries);
+        //  uloga("After bbox_to_intv2 num_intv = %d\n", n);
+        //  uloga("ss->dht->num_entries = %d\n", ss->dht->num_entries);
 
         for (k = 0; k < ss->dht->num_entries; k++){
                 for (i = 0; i < n; i++) {
@@ -681,7 +681,7 @@ static int ssd_hash_v1(struct sspace *ss, const struct bbox *bb, struct dht_entr
                 }
         }
 
-        //  printf("num_nodes = %d\n", num_nodes);
+        //  uloga("num_nodes = %d\n", num_nodes);
 
         /* Cache the results for later use. */
         sh_add(bb, de_tab, num_nodes);
@@ -701,7 +701,7 @@ struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max
         get_bbox_max_dim(bb_domain, &max_dim, &dim);
         max_dim = next_pow_2_v2(max_dim);
         nbits_max_dim = compute_bits_v2(max_dim);
-        //printf("%s(): max_dim= %llu nbits_max_dim= %d\n",
+        //uloga("%s(): max_dim= %llu nbits_max_dim= %d\n",
         //    __func__, max_dim, nbits_max_dim);
 
         // decompose the global bbox       
@@ -711,7 +711,7 @@ struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max
         queue_init(&q1);
         queue_init(&q2);
 
-        //printf("%s(): num_nodes= %d num_divide_iteration= %d\n", __func__,
+        //uloga("%s(): num_nodes= %d num_divide_iteration= %d\n", __func__,
         //    num_nodes, num_divide_iteration);
 
         bb = malloc(sizeof(struct bbox));
@@ -726,7 +726,7 @@ struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max
                 src_q = &q2;
                 dst_q = &q1;
             } else {
-                printf("%s(): error, both q1 and q2 is (non)empty.\n", __func__);
+                uloga("%s(): error, both q1 and q2 is (non)empty.\n", __func__);
             }
             while (!queue_is_empty(src_q)) {
                 uint64_t max_dim_size;
@@ -772,7 +772,7 @@ struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max
             ssd->dht->ent_tab[i]->size_bb_tab = n;
             ssd->dht->ent_tab[i]->bb_tab = malloc(sizeof(struct bbox)*n);
         }
-        //printf("%s(): ssd->total_num_bbox= %d ssd->dht->num_entries= %d"
+        //uloga("%s(): ssd->total_num_bbox= %d ssd->dht->num_entries= %d"
         //    " max_num_bbox_per_dht_entry= %d\n",
         //    __func__, ssd->total_num_bbox, ssd->dht->num_entries, n);
 
@@ -788,13 +788,13 @@ struct sspace *ssd_alloc_v2(const struct bbox *bb_domain, int num_nodes, int max
 
 /*
         for (i = 0; i < ssd->dht->num_entries; i++) {
-            printf("dht entry %d size_bb_tab= %d num_bbox= %d\n", i,
+            uloga("dht entry %d size_bb_tab= %d num_bbox= %d\n", i,
                 ssd->dht->ent_tab[i]->size_bb_tab,
                 ssd->dht->ent_tab[i]->num_bbox);
             for (j = 0; j < ssd->dht->ent_tab[i]->num_bbox; j++) {
                 bbox_print(&ssd->dht->ent_tab[i]->bb_tab[j]);
             }        
-            printf("\n");
+            uloga("\n");
         }
 */
 
@@ -827,7 +827,7 @@ int ssd_hash_v2(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_t
                 if (bbox_does_intersect(bb, &ss->dht->ent_tab[i]->bb_tab[j])) {
                     //bbox_print(bb);
                     //bbox_print(&ss->dht->ent_tab[i]->bb_tab[j]);
-                    //printf(" i= %d rank= %d\n", i, ss->dht->ent_tab[i]->rank);
+                    //uloga(" i= %d rank= %d\n", i, ss->dht->ent_tab[i]->rank);
                     de_tab[num_nodes++] = ss->dht->ent_tab[i];
                     break;
                 }
@@ -1573,8 +1573,8 @@ int main(void)
 
         for (i = 0; i < matl->y_dim; i++) {
                 for (j = 0; j < matl->x_dim; j++)
-                        printf("%8.1f", matl->m[0][i][j]);
-                printf("\n");
+                        uloga("%8.1f", matl->m[0][i][j]);
+                uloga("\n");
         }
 
         return 0;

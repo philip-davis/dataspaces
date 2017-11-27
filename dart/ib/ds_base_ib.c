@@ -83,7 +83,7 @@ static int ds_register_cp_reject(struct rpc_server *rpc_s, struct hdr_register *
 
 	free(msg);
  err_out:
-       	printf("'%s()' failed with %d.\n", __func__, err);
+       	uloga("'%s()' failed with %d.\n", __func__, err);
         return err;
 }
 */
@@ -127,7 +127,7 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)//W
         hreg->num_sp--;
         if (hreg->num_sp) {
                 peer = ds_get_peer(ds, (ds->self->ptlmap.id+1)%ds->num_sp);
-//printf("%d send unreg to %d.\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id);
+//uloga("%d send unreg to %d.\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id);
                 msg = msg_buf_alloc(rpc_s, peer, 1);
                 if (!msg)
 			goto err_out;
@@ -142,10 +142,10 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)//W
                 }
         }
 
-//printf("%d get %d num_unreg with ds->stop %d.\n", ds->rpc_s->ptlmap.id, num_unreg, ds->f_stop);
+//uloga("%d get %d num_unreg with ds->stop %d.\n", ds->rpc_s->ptlmap.id, num_unreg, ds->f_stop);
 	return 0;
  err_out:
-       	printf("'%s()' failed with %d.\n", __func__, err);
+       	uloga("'%s()' failed with %d.\n", __func__, err);
         return err;
 }
 */
@@ -171,13 +171,13 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	static int num_unreg = 0;
 	if(ds->f_stop != 1) {
 		num_unreg = num_unreg + hreg->num_cp;
-//              printf("%d %d %d\n",num_unreg, hreg->num_cp, ds->num_cp);
+//              uloga("%d %d %d\n",num_unreg, hreg->num_cp, ds->num_cp);
 		if(num_unreg == ds->num_cp)
 			ds->f_stop = 1;
 
 		// All compute peers  have unregistered. I should send one RPC but not respond to any.
 
-//printf("Rank %d: num_unreg is %d from %d, ds->num_cp is %d,  has %d left.\n", ds->rpc_s->ptlmap.id, num_unreg, cmd->id , ds->num_cp,ds->num_charge);//debug
+//uloga("Rank %d: num_unreg is %d from %d, ds->num_cp is %d,  has %d left.\n", ds->rpc_s->ptlmap.id, num_unreg, cmd->id , ds->num_cp,ds->num_charge);//debug
 		//After  the first  compute peer  'unregister'  request, stop accepting new requests and terminate pending ones.
 		ds->f_nacc = 1;
 		if(cmd->id < ds->num_sp && ds->num_charge == 0) {
@@ -235,7 +235,7 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 					msg->msg_rpc->id = ds->self->ptlmap.id;
 					peer->f_unreg = 1;
 
-					//printf("%d passing %d to  %d that %d is unreg %ld\n",ds->self->ptlmap.id,msg->msg_rpc->cmd,peer->ptlmap.id,cmd->id,msg);
+					//uloga("%d passing %d to  %d that %d is unreg %ld\n",ds->self->ptlmap.id,msg->msg_rpc->cmd,peer->ptlmap.id,cmd->id,msg);
 					err = rpc_send(rpc_s, peer, msg);
 
 					ds->f_s_unreg = 1;
@@ -254,9 +254,9 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 			}
 		}
 	}
-//      printf("rank %d: %s ends.\n\n", ds->self->ptlmap.id, __func__);//debug
+//      uloga("rank %d: %s ends.\n\n", ds->self->ptlmap.id, __func__);//debug
 	return 0;
-      err_out:printf("(%s): failed. (%d)\n", __func__, err);
+      err_out:uloga("(%s): failed. (%d)\n", __func__, err);
 	return err;
 }
 
@@ -300,7 +300,7 @@ static int file_lock(int fd, int op)
 	err = fcntl(fd, F_SETLKW, &fl);
 	if(err == 0)
 		return 0;
-	printf("'%s()' failed\n", __func__);
+	uloga("'%s()' failed\n", __func__);
 	return err;
 }
 */
@@ -342,7 +342,7 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct hdr_register *hdr)
 	   First check if app has registered all its compute nodes already ! 
 	 */
 	if(app->app_cnt_peers == app->app_num_peers) {
-		printf("app cp is full.\n");
+		uloga("app cp is full.\n");
 
 		////return ds_register_cp_reject(rpc_s, hreg);
 		goto err_out;
@@ -367,7 +367,7 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct hdr_register *hdr)
 	   return 0;
 	   COMMENTED: */
 	return 0;
-      err_out:printf("'%s()' failed with %d.\n", __func__, err);
+      err_out:uloga("'%s()' failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -418,7 +418,7 @@ static int ds_disseminate(struct dart_server *ds)	//Done
 			cpeer = ds->peer_tab;
 			peer = ds_get_peer(ds, i);
 
-//printf("send to %d\n", peer->ptlmap.id);
+//uloga("send to %d\n", peer->ptlmap.id);
 			err = -ENOMEM;
 			msg = msg_buf_alloc(ds->rpc_s, peer, 1);
 			if(!msg)
@@ -452,7 +452,7 @@ static int ds_disseminate(struct dart_server *ds)	//Done
 	}
 	return 0;
       err_out_free:free(msg);
-      err_out:printf("'%s()' failed with %d.\n", __func__, err);
+      err_out:uloga("'%s()' failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -506,7 +506,7 @@ static int ds_disseminate_all(struct dart_server *ds)	//Done
 	}
 	return 0;
       err_out_free:free(msg);
-      err_out:printf("'%s()' failed with %d.\n", __func__, err);
+      err_out:uloga("'%s()' failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -525,13 +525,13 @@ static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 	pm = msg->msg_data;
 	pm = pm + 1;
 
-//printf("In '%s()'.\n", __func__);
+//uloga("In '%s()'.\n", __func__);
 	for(i = 0; i < ds->peer_size - 1; i++) {
 		peer->ptlmap = *pm;
 		if(peer->ptlmap.address.sin_addr.s_addr == ds->rpc_s->ptlmap.address.sin_addr.s_addr && peer->ptlmap.address.sin_port == ds->rpc_s->ptlmap.address.sin_port)
 			ds->self = peer;
 
-//printf("In '%s()'.\n", __func__);
+//uloga("In '%s()'.\n", __func__);
 		if(pm->appid != appid) {
 			appid = pm->appid;
 			app = app_alloc();
@@ -551,12 +551,12 @@ static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 		pm = pm + 1;
 	}
 
-//printf("In '%s()'.\n", __func__);
+//uloga("In '%s()'.\n", __func__);
 	ds->f_reg = 1;
 	free(msg->msg_data);
 	free(msg);
 	return 0;
-      err_out:printf("(%s): err (%d).\n", __func__, err);
+      err_out:uloga("(%s): err (%d).\n", __func__, err);
 	return err;
 }
 
@@ -584,15 +584,15 @@ static int dsrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Do
 	msg->mr = cmd->mr;
 
 
-//printf("In '%s()'.\n", __func__);
+//uloga("In '%s()'.\n", __func__);
 	err = rpc_receive_direct(rpc_s, peer, msg);
 	if(err < 0) {
 		free(msg);
 		goto err_out;
 	}
-//printf("In '%s()'.\n", __func__);
+//uloga("In '%s()'.\n", __func__);
 	return 0;
-      err_out:printf("'%s()' failed with %d.\n", __func__, err);
+      err_out:uloga("'%s()' failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -625,7 +625,7 @@ int ds_boot_master(struct dart_server *ds)	//Done
 		rdma_ack_cm_event(event);
 		if(event_copy.event == RDMA_CM_EVENT_CONNECT_REQUEST) {
 
-			//printf("received connection request.\n");//debug
+			//uloga("received connection request.\n");//debug
 			conpara = *(struct con_param *) event_copy.param.conn.private_data;
 			if(conpara.type == 0) {
 				peer = ds_get_peer(ds, conpara.pm_cp.id);
@@ -654,7 +654,7 @@ int ds_boot_master(struct dart_server *ds)	//Done
 			build_qp_attr(&conn->qp_attr, conn, ds->rpc_s);
 			err = rdma_create_qp(event_copy.id, conn->pd, &conn->qp_attr);
 			if(err != 0) {
-				printf("Peer %d couldnot connect to peer %d. Current number of qp is  %d\n rdma_create_qp %d in %s %s.\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id, ds->rpc_s->num_qp, err, __func__, strerror(errno));
+				uloga("Peer %d couldnot connect to peer %d. Current number of qp is  %d\n rdma_create_qp %d in %s %s.\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id, ds->rpc_s->num_qp, err, __func__, strerror(errno));
 				goto err_out;
 			}
 			ds->rpc_s->num_qp++;
@@ -672,7 +672,7 @@ int ds_boot_master(struct dart_server *ds)	//Done
 			qp_attr.cap.max_inline_data = 28;
 			err = ibv_modify_qp(conn->qp, &qp_attr, IBV_QP_CAP);
 			if(err !=0){
-				printf("ibv_modify_qp err %d in %s.\n", err, __func__);
+				uloga("ibv_modify_qp err %d in %s.\n", err, __func__);
 				goto err_out;
 			}
 */
@@ -695,7 +695,7 @@ int ds_boot_master(struct dart_server *ds)	//Done
 				conpara.num_cp = ds->num_sp + ds->num_cp;
 				conpara.type = hdr.id_min;
 
-				//printf("id min is %d.\n", conpara.type); 
+				//uloga("id min is %d.\n", conpara.type); 
 				cm_params.private_data = &conpara;
 				cm_params.private_data_len = sizeof(conpara);
 			}
@@ -708,7 +708,7 @@ int ds_boot_master(struct dart_server *ds)	//Done
 			cm_params.rnr_retry_count = 7;	//infinite retry
 			err = rdma_accept(event_copy.id, &cm_params);
 			if(err != 0) {
-				printf("rdma_accept %d in %s.\n", err, __func__);
+				uloga("rdma_accept %d in %s.\n", err, __func__);
 				goto err_out;
 			}
 			connect_count++;
@@ -716,13 +716,13 @@ int ds_boot_master(struct dart_server *ds)	//Done
 		}
 
 		else if(event_copy.event == RDMA_CM_EVENT_ESTABLISHED) {
-			//printf("Connection is established.\n");//DEBUG
+			//uloga("Connection is established.\n");//DEBUG
 			connected++;
 		}
 
 		else {
 			rpc_print_connection_err(ds->rpc_s, peer, event_copy);
-			printf("event is %d with status %d.\n", event_copy.event, event_copy.status);
+			uloga("event is %d with status %d.\n", event_copy.event, event_copy.status);
 			err = event_copy.status;
 			goto err_out;
 		}
@@ -731,17 +731,17 @@ int ds_boot_master(struct dart_server *ds)	//Done
 	}
 
 
-	//printf("prepare to check.\n");
+	//uloga("prepare to check.\n");
 //      if(connected != 2 * (ds->peer_size - 1) - ds->size_cp || connected != connect_count) {
 	if(connected != (ds->peer_size - 1) || connected != connect_count) {
 
-		printf("Connected number doesn't match needed.\n");
+		uloga("Connected number doesn't match needed.\n");
 		err = -1;
 		goto err_out;
 	}
 
 
-	printf("'%s()': all the peer are registered.%d %d\n", __func__, ds->peer_size, ds->size_cp);
+	uloga("'%s()': all the peer are registered.%d %d\n", __func__, ds->peer_size, ds->size_cp);
 	ds->rpc_s->cur_num_peer = ds->rpc_s->num_rpc_per_buff;	//diff    
 
 	err = ds_disseminate(ds);
@@ -755,7 +755,7 @@ int ds_boot_master(struct dart_server *ds)	//Done
 	ds->f_reg = 1;
 
 	return 0;
-      err_out:printf("'%s()': failed with %d.\n", __func__, err);
+      err_out:uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -789,7 +789,7 @@ static void *ds_listen(void *server)
 			build_qp_attr(&con->qp_attr, con, ds->rpc_s);
 			err = rdma_create_qp(event_copy.id, con->pd, &con->qp_attr);
 			if(err != 0) {
-				printf("rdma_create_qp %d in %s.\n", err, __func__);
+				uloga("rdma_create_qp %d in %s.\n", err, __func__);
 				goto err_out;
 			}
 			event_copy.id->context = con;
@@ -811,7 +811,7 @@ static void *ds_listen(void *server)
 			cm_params.rnr_retry_count = 7;	//infinite retry
 			err = rdma_accept(event_copy.id, &cm_params);
 			if(err != 0) {
-				printf("rdma_accept %d in %s.\n", err, __func__);
+				uloga("rdma_accept %d in %s.\n", err, __func__);
 				goto err_out;
 			}
 			con->f_connected = 1;
@@ -821,7 +821,7 @@ static void *ds_listen(void *server)
 		} else if(event_copy.event == RDMA_CM_EVENT_DISCONNECTED) {
 		} else {
 			rpc_print_connection_err(ds->rpc_s, peer, event_copy);
-			printf("event is %d with status %d.\n", event_copy.event, event_copy.status);
+			uloga("event is %d with status %d.\n", event_copy.event, event_copy.status);
 			err = event_copy.status;
 		}
 
@@ -829,7 +829,7 @@ static void *ds_listen(void *server)
 
 	pthread_exit(0);
 	return 0;
-      err_out:printf("'%s()': failed with %d.\n", __func__, err);
+      err_out:uloga("'%s()': failed with %d.\n", __func__, err);
 	pthread_exit(0);
 	return 0;
 }
@@ -864,7 +864,7 @@ int ds_boot_slave(struct dart_server *ds)	//Done
 		   around from a previous run */
 		ds->self = peer;
 		ds->self->ptlmap = peer->ptlmap;
-		printf("'%s()': WARNING! config file exists, but I am the master server\n", __func__);
+		uloga("'%s()': WARNING! config file exists, but I am the master server\n", __func__);
 		err = ds_boot_master(ds);
 		if(err < 0)
 			goto err_out;
@@ -873,7 +873,7 @@ int ds_boot_slave(struct dart_server *ds)	//Done
 	//Connect to master server, build rpc channel and sys channel;
 	err = rpc_connect(ds->rpc_s, peer);
 	if(err != 0) {
-		printf("rpc_connect err %d in %s.\n", err, __func__);
+		uloga("rpc_connect err %d in %s.\n", err, __func__);
 		goto err_out;
 	}
 
@@ -892,7 +892,7 @@ int ds_boot_slave(struct dart_server *ds)	//Done
 	ds->rpc_s->thread_alive = 1;
 	rc = pthread_create(&(ds->rpc_s->comm_thread), NULL, ds_listen, (void *) ds);
 	if(rc) {
-		printf("ERROR; return code from pthread_create() is %d\n", rc);
+		uloga("ERROR; return code from pthread_create() is %d\n", rc);
 		exit(-1);
 	}
 
@@ -915,7 +915,7 @@ int ds_boot_slave(struct dart_server *ds)	//Done
 				count++;
 			} while(count < 3 && err != 0);
 			if(err != 0) {
-				printf("rpc_connect err %d in %s.\n", err, __func__);
+				uloga("rpc_connect err %d in %s.\n", err, __func__);
 				goto err_out;
 			}
 		}
@@ -923,7 +923,7 @@ int ds_boot_slave(struct dart_server *ds)	//Done
 
 	return 0;
       err_out:
-	printf("'%s()': failed with %d.\n", __func__, err);
+	uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -1012,7 +1012,7 @@ err_fd:
 		remove(fil_lock);
 	}
 err_out:
-	printf("'%s()': failed with %d.\n", __func__, err);
+	uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -1040,7 +1040,7 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 		ds->comm = malloc(sizeof(*ds->comm));
 		err = MPI_Comm_dup(*(MPI_Comm *) comm, ds->comm);
 		if(err < 0) {
-			printf("MPI_Comm_dup failed\n");
+			uloga("MPI_Comm_dup failed\n");
 			goto err_out;
 		}
 	} else {
@@ -1088,10 +1088,10 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 	if(err != 0)
 		goto err_free_dsrv;
 	ds->num_charge = (ds->num_cp / ds->num_sp) + (ds->rpc_s->ptlmap.id < ds->num_cp % ds->num_sp);
-	printf("'%s()': init ok.\n", __func__);
+	uloga("'%s()': init ok.\n", __func__);
 	return ds;
       err_free_dsrv:free(ds);
-      err_out:printf("'%s()': failed with %d.\n", __func__, err);
+      err_out:uloga("'%s()': failed with %d.\n", __func__, err);
 	return NULL;
 }
 
@@ -1109,7 +1109,7 @@ void ds_free(struct dart_server *ds)
 
 	err = rpc_server_free(ds->rpc_s);
 	if(err != 0)
-		printf("rpc_server_free err in %s.\n", __func__);
+		uloga("rpc_server_free err in %s.\n", __func__);
 	list_for_each_entry_safe(app, t, &ds->app_list, struct app_info, app_entry) {
 		list_del(&app->app_entry);
 		free(app);

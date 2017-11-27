@@ -333,7 +333,7 @@ static int get_named_dom_aries(const char *pname, uint32_t *_cookie, uint32_t *_
           break;
         sscanf(buffer, "%s %*s %*d %x %x",
                &name, &cookie, &cookie2);
-        //printf("Buffer info: name (%s), cookie(%x), cookie2(%x).\n", name, cookie, cookie2);                                                
+        //uloga("Buffer info: name (%s), cookie(%x), cookie2(%x).\n", name, cookie, cookie2);                                                
         if(!strcasecmp(name, pname))
           {
             *_cookie = cookie;

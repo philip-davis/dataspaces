@@ -10,7 +10,7 @@ static int rpc_cb_recv_cn_register(struct rpc_server *rpc_s, struct msg_buf *msg
     for (i = 0; i < dc->peer_size; ++i) {
         struct node_id *peer = &dc->peer_tab[i];
         peer->ptlmap = p[i];
-        // printf("[%s]: Client %d received ptlid_map data of peer %d (%s:%d).\n", __func__, rpc_s->ptlmap.id,
+        // uloga("[%s]: Client %d received ptlid_map data of peer %d (%s:%d).\n", __func__, rpc_s->ptlmap.id,
         //     peer->ptlmap.id, inet_ntoa(peer->ptlmap.address.sin_addr), (int)ntohs(peer->ptlmap.address.sin_port));
     }
 
@@ -75,7 +75,7 @@ static int rpc_handler_cn_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd
     msg->cb = rpc_cb_recv_cn_register;
 
     if (rpc_receive_direct(rpc_s, peer, msg) < 0) {
-        printf("[%s]: recv ptlid_map data of all peers from server %d failed!\n", __func__, pl->id_sp);
+        uloga("[%s]: recv ptlid_map data of all peers from server %d failed!\n", __func__, pl->id_sp);
         goto err_out;
     }
     msg = NULL;
@@ -93,31 +93,31 @@ static void *dc_listen(void *client) {
     while (dc->rpc_s->thread_alive) {
         int sockfd_c = accept(dc->rpc_s->sockfd_s, NULL, NULL);
         if (sockfd_c < 0) {
-            printf("[%s]: accept new connection failed, skip!\n", __func__);
+            uloga("[%s]: accept new connection failed, skip!\n", __func__);
             continue;
         }
         struct connection_info info;
         if (rpc_recv_connection_info(sockfd_c, &info) < 0) {
-            printf("[%s]: recv connection info from newly connected peer failed, skip!\n", __func__);
+            uloga("[%s]: recv connection info from newly connected peer failed, skip!\n", __func__);
             close(sockfd_c);
             continue;
         }
         struct node_id *peer = NULL;
         if (info.cmp_type == DART_CLIENT) {
-            printf("[%s]: accept connection from a client, this should not happen, skip!\n", __func__);
+            uloga("[%s]: accept connection from a client, this should not happen, skip!\n", __func__);
             close(sockfd_c);
             continue;
         }
         if (!dc->f_reg) {
             peer = &dc->peer_tab[1];
             if (peer->f_connected) {
-                printf("[%s]: accept connection from a server, but another server has been accepted before, skip!\n",
+                uloga("[%s]: accept connection from a server, but another server has been accepted before, skip!\n",
                     __func__);
                 continue;
             }
             peer->ptlmap.id = info.id;
         } else {
-            printf("[%s]: accept connection from a server, but it's not in registration phase, skip!\n", __func__);
+            uloga("[%s]: accept connection from a server, but it's not in registration phase, skip!\n", __func__);
             close(sockfd_c);
             continue;
         }
@@ -140,7 +140,7 @@ static int dc_register_at_master(struct dart_client *dc, int appid) {
     struct node_id *peer_master = &dc->peer_tab[0];
     INIT_LIST_HEAD(&peer_master->req_list);
     if (rpc_read_config(&peer_master->ptlmap.address, filename_conf) < 0) {
-        printf("[%s]: read RPC config file failed!\n", __func__);
+        uloga("[%s]: read RPC config file failed!\n", __func__);
         goto err_out;
     }
 
@@ -153,7 +153,7 @@ static int dc_register_at_master(struct dart_client *dc, int appid) {
             MPI_Recv(&flag, 1, MPI_INT, proc_rank - 1, proc_rank - 1, *(MPI_Comm *)dc->comm, MPI_STATUS_IGNORE);
         }
         if (rpc_connect(dc->rpc_s, peer_master) < 0) {
-            printf("[%s]: connect to master server failed!\n", __func__);
+            uloga("[%s]: connect to master server failed!\n", __func__);
             goto err_out;
         }
         if (proc_rank + 1 != proc_size) {
@@ -161,7 +161,7 @@ static int dc_register_at_master(struct dart_client *dc, int appid) {
         }
     } else {
         if (rpc_connect(dc->rpc_s, peer_master) < 0) {
-            printf("[%s]: connect to master server failed!\n", __func__);
+            uloga("[%s]: connect to master server failed!\n", __func__);
             goto err_out;
         }
     }
@@ -170,13 +170,13 @@ static int dc_register_at_master(struct dart_client *dc, int appid) {
 
     msg = msg_buf_alloc(dc->rpc_s, peer_master, 1);
     if (msg == NULL) {
-        printf("[%s]: allocate message failed!\n", __func__);
+        uloga("[%s]: allocate message failed!\n", __func__);
         goto err_out;
     }
     msg->msg_rpc->cmd = cn_register;
     *(struct ptlid_map *)msg->msg_rpc->pad = dc->rpc_s->ptlmap;
     if (rpc_send(dc->rpc_s, peer_master, msg) < 0) {
-        printf("[%s]: send ptlid_map data to master server failed!\n", __func__);
+        uloga("[%s]: send ptlid_map data to master server failed!\n", __func__);
         msg = NULL;
         goto err_out;
     }
@@ -199,7 +199,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 
     struct dart_client *dc = (struct dart_client *)malloc(sizeof(struct dart_client));
     if (dc == NULL) {
-        printf("[%s]: allocate DART client failed!\n", __func__);
+        uloga("[%s]: allocate DART client failed!\n", __func__);
         goto err_out;
     }
 
@@ -218,20 +218,20 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
     dc->rpc_s = rpc_server_init(interface, dc->cp_in_job, dc, DART_CLIENT);
     dc->rpc_s->ptlmap.appid = appid;
     if (dc->rpc_s == NULL) {
-        printf("[%s]: initialize RPC server failed!\n", __func__);
+        uloga("[%s]: initialize RPC server failed!\n", __func__);
         goto err_out;
     }
 
     dc->rpc_s->thread_alive = 1;
     if (pthread_create(&dc->rpc_s->comm_thread, NULL, dc_listen, (void *)dc) != 0) {
-        printf("[%s]: create pthread failed!\n", __func__);
+        uloga("[%s]: create pthread failed!\n", __func__);
         goto err_out;
     }
 
     rpc_add_service(cn_register, rpc_handler_cn_register);
 
     if (dc_register_at_master(dc, appid) < 0) {
-        printf("[%s]: register DART client failed!\n", __func__);
+        uloga("[%s]: register DART client failed!\n", __func__);
         goto err_out;
     }
     return dc;
@@ -258,7 +258,7 @@ static int dc_unregister(struct dart_client *dc) {
 
     msg = msg_buf_alloc(dc->rpc_s, peer, 1);
     if (msg == NULL) {
-        printf("[%s]: allocate message failed!\n", __func__);
+        uloga("[%s]: allocate message failed!\n", __func__);
         goto err_out;
     }
     msg->msg_rpc->cmd = cn_unregister;
@@ -266,7 +266,7 @@ static int dc_unregister(struct dart_client *dc) {
     info->num_cp = 1;
 
     if (rpc_send(dc->rpc_s, peer, msg) < 0) {
-        printf("[%s]: send unregistration info to server %d failed!\n", __func__, peer->ptlmap.id);
+        uloga("[%s]: send unregistration info to server %d failed!\n", __func__, peer->ptlmap.id);
         msg = NULL;
         goto err_out;
     }
@@ -286,7 +286,7 @@ void dc_free(struct dart_client *dc) {
     pthread_cancel(dc->rpc_s->comm_thread);
 
     if (rpc_server_free(dc->rpc_s) < 0) {
-        printf("[%s]: free RPC server for peer %d (client) failed, skip!\n", __func__, dc->self->ptlmap.id);
+        uloga("[%s]: free RPC server for peer %d (client) failed, skip!\n", __func__, dc->self->ptlmap.id);
     }
 
     if(dc->peer_tab != NULL) {

@@ -1374,7 +1374,7 @@ static int dcgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
                 return 0;
         }
-	//printf("sizeof obj_descriptor is %d.\n", sizeof(struct obj_descriptor));//debug
+	//uloga("sizeof obj_descriptor is %d.\n", sizeof(struct obj_descriptor));//debug
         od_tab = malloc(sizeof(*od_tab) * oh->u.o.num_de);
         if (!od_tab)
                 goto err_out;
@@ -2207,7 +2207,7 @@ int dcg_unlock_on_write(const char *lock_name, void *comm)
 	}
 
 	//debug
-	//printf("rank %d: barrier done.\n", dcg->dc->self->ptlmap.id);
+	//uloga("rank %d: barrier done.\n", dcg->dc->self->ptlmap.id);
 	return 0;
  err_out:
 	ERROR_TRACE();
@@ -2268,7 +2268,7 @@ int dcg_code_send(const void *addr, /* int off, int size, */ struct obj_data *od
 	int size, off;
 
 	instructionCount(addr, &size, &off);
-	// printf("Size: %d, offset: %d;\n", size, off);
+	// uloga("Size: %d, offset: %d;\n", size, off);
 	//	my_size, my_off, size, off);
 
 	/* Do not allocate data for objects, e.g., 2nd param is 0. */

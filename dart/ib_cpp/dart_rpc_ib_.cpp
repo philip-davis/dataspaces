@@ -441,20 +441,20 @@ int rpc_write_config(struct rpc_server* rpc_s_)
 //Not be used in InfiniBand version. Just keep an empty func here.
 int rpc_send_directv(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)
 {
-  printf("%s.\n", __func__);
+  uloga("%s.\n", __func__);
   return 0;
 }
 
 // Not used in InfiniBand version. Just keep an empty func here.
 int rpc_receivev(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)
 {
-  printf("%s.\n", __func__);
+  uloga("%s.\n", __func__);
   return 0;
 }
 
 void rpc_report_md_usage(struct rpc_server *rpc_s)
 {
-  //printf("'%s()': MD posted %d, MD released %d, MD in use %d.\n", __func__, rpc_s->num_md_posted, rpc_s->num_md_unlinked, rpc_s->num_md_unlinked - rpc_s->num_md_posted);
+  //uloga("'%s()': MD posted %d, MD released %d, MD in use %d.\n", __func__, rpc_s->num_md_posted, rpc_s->num_md_unlinked, rpc_s->num_md_unlinked - rpc_s->num_md_posted);
 }
 
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd)
@@ -1156,7 +1156,7 @@ int sys_connect(struct rpc_server* rpc_s_, struct node_id* peer_)
 //       continue;
 //     err = rdma_destroy_id(peer->sys_conn.id);
 //     if(err < 0) {
-//       printf("Failed to rdma_destroy_id with err(%d).\n", err);
+//       uloga("Failed to rdma_destroy_id with err(%d).\n", err);
 //       goto err_out;
 //     }
 //     peer->sys_conn.f_connected = 0;
@@ -1164,7 +1164,7 @@ int sys_connect(struct rpc_server* rpc_s_, struct node_id* peer_)
 //   return 0;
 
 //       err_out:
-//   printf("(%s): err (%d).\n", __func__, err);
+//   uloga("(%s): err (%d).\n", __func__, err);
 //   return err;
 // }
 
@@ -1631,11 +1631,11 @@ int rpc_server_free(struct rpc_server* rpc_s_)
   // Process any remaining events.
   // err = rpc_process_event_with_timeout(rpc_s_, 100);
   // while (err == 0 || err == -EINVAL) {
-  //   printf("%d  process what?\n",rpc_s_->ptlmap.id);
+  //   uloga("%d  process what?\n",rpc_s_->ptlmap.id);
   //   err = rpc_process_event_with_timeout(rpc_s_, 100);
   // }
   // if (err != -ETIME) {
-  //   printf("'%s()': erro at flushing the event queue %d!\n", __func__, err);
+  //   uloga("'%s()': erro at flushing the event queue %d!\n", __func__, err);
   //   goto err_out;
   // }
   

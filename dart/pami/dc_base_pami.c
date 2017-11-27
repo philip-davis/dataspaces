@@ -9,27 +9,27 @@
 
 static int check_data(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-	printf("receive msg_data size = %llu\n", msg->size);
+	uloga("receive msg_data size = %llu\n", msg->size);
 	size_t i;
 	size_t count = 0;
 	//int len = 'Z' - 'A' + 1;
 	//size_t num_elem = msg->size/sizeof(char);
 	size_t num_elem = msg->size/sizeof(double);
-	printf("num_elem = %llu\n", num_elem);
+	uloga("num_elem = %llu\n", num_elem);
 
 	for(i = 0; i < num_elem; i++){
-		printf("---3---------\n");
-		printf("%f\n", *((double*)msg->msg_data + i));
+		uloga("---3---------\n");
+		uloga("%f\n", *((double*)msg->msg_data + i));
 		//if(*((char*)msg->msg_data + i) != 'A' + (i % len))
 		if(*((double*)msg->msg_data + i) != 1)//rpc_s->ptlmap.rank_pami/10)
 			count++;
 	}
-	printf("error=%d\n", count);
+	uloga("error=%d\n", count);
 }
 
 static int data_read_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-	//printf("get into data_read_completion\n");
+	//uloga("get into data_read_completion\n");
         struct dart_client *dc = dc_ref_from_rpc(rpc_s);
         dc->num_posted--;
         //dc->read_complete = 1;
@@ -54,7 +54,7 @@ int dc_read_test(struct dart_client *dc, size_t size)
         struct msg_buf  *msg;
         int err;
 
-	printf("send msg to rank%d, msg->size=%d\n", peer->ptlmap.rank_pami, size);
+	uloga("send msg to rank%d, msg->size=%d\n", peer->ptlmap.rank_pami, size);
         msg = msg_buf_alloc(dc->rpc_s, peer, 1);
         if(!msg)
                 goto err_out;
@@ -89,9 +89,9 @@ err_out:
 
 int dc_read_test_old(struct rpc_server *rpc_s, size_t size, int rank)
 {
-	//printf("size=%llu\n", size);
+	//uloga("size=%llu\n", size);
 	//size = size * 1024 * 1024;
-	//printf("size=%llu\n", size);
+	//uloga("size=%llu\n", size);
 	
 	int num_peers = 2;
 
@@ -120,7 +120,7 @@ int dc_read_test_old(struct rpc_server *rpc_s, size_t size, int rank)
 
 static int register_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-	//printf("get into register_completion\n");
+	//uloga("get into register_completion\n");
         struct dart_client *dc = dc_ref_from_rpc(rpc_s);
         struct node_id *peer;
         struct ptlid_map *pptlmap;
@@ -160,7 +160,7 @@ if(DEBUG_OPT){
  */
 static int dcrpc_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	//printf("get into dcrpc_register\n");
+	//uloga("get into dcrpc_register\n");
         struct dart_client *dc = dc_ref_from_rpc(rpc_s);
         struct hdr_register *hreg = (struct hdr_register *) cmd->pad;
         struct node_id *peer;
@@ -254,7 +254,7 @@ static int file_exist_nonempty(const char *path)
 
 static int dc_register_at_master(struct dart_client *dc, int appid)
 {
-	//printf("get into dc_register_at_master\n");
+	//uloga("get into dc_register_at_master\n");
         struct msg_buf *msg;
         struct hdr_register *hr;
         struct node_id peer;
@@ -311,7 +311,7 @@ static int dc_register_at_master(struct dart_client *dc, int appid)
 
 struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *comm)
 {
-	//printf("get into dc_alloc\n");
+	//uloga("get into dc_alloc\n");
         struct dart_client *dc;
         size_t size;
         int err;
@@ -352,7 +352,7 @@ int dc_process(struct dart_client *dc)
 
 static int dc_unregister(struct dart_client *dc)
 {
-	//printf("get into dc_unregister\n");
+	//uloga("get into dc_unregister\n");
 	struct msg_buf *msg;
 	struct hdr_register *hreg;
 	struct node_id *peer;

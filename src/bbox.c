@@ -118,11 +118,11 @@ int bbox_include(const struct bbox *b0, const struct bbox *b1)
     int i;
 
     /**FOR TEST**/
-    /**printf("b1 is [%d,%d]\n", b1->lb.c[0],b1->lb.c[1]);
-    printf("b1 is [%d,%d]\n", b1->ub.c[0],b1->ub.c[1]);
-    printf("b0 is [%d,%d]\n", b0->lb.c[0],b0->lb.c[1]);
-    printf("b0 is [%d,%d]\n\n", b0->ub.c[0],b0->ub.c[1]);**/
-    //printf("b0 is dims[%d], b1 is dims[%d]\n", b0->num_dims, b1->num_dims);
+    /**uloga("b1 is [%d,%d]\n", b1->lb.c[0],b1->lb.c[1]);
+    uloga("b1 is [%d,%d]\n", b1->ub.c[0],b1->ub.c[1]);
+    uloga("b0 is [%d,%d]\n", b0->lb.c[0],b0->lb.c[1]);
+    uloga("b0 is [%d,%d]\n\n", b0->ub.c[0],b0->ub.c[1]);**/
+    //uloga("b0 is dims[%d], b1 is dims[%d]\n", b0->num_dims, b1->num_dims);
 
     //if(b0->num_dims == b1->num_dims){
         for(i = 0; i < b0->num_dims; i++){
@@ -153,7 +153,7 @@ static int bbox_intersect_ondim(const struct bbox *b0, const struct bbox *b1, in
 int bbox_does_intersect(const struct bbox *b0, const struct bbox *b1)
 {
     int i;
-    //printf("b1 dims=%d, b2 dims=%d\n", b0->num_dims, b1->num_dims);
+    //uloga("b1 dims=%d, b2 dims=%d\n", b0->num_dims, b1->num_dims);
     //if(b0->num_dims == b1->num_dims){
         for(i = 0; i < b0->num_dims; i++){
             if(!bbox_intersect_ondim(b0, b1, i))
@@ -254,7 +254,7 @@ static void bbox_flat(struct bbox *bb, struct intv *itv, int bpd)
                 sfc_coord[j] = bb->ub.c[j];
             j++;
         }
-        //printf("coord is [%d,%d]\n\n", (int)sfc_coord[0],(int)sfc_coord[1]);
+        //uloga("coord is [%d,%d]\n\n", (int)sfc_coord[0],(int)sfc_coord[1]);
         index = hilbert_c2i(dims, bpd, sfc_coord);
         if (index < itv->lb)
             itv->lb = index;
@@ -332,14 +332,14 @@ void bbox_to_intv(const struct bbox *bb, uint64_t dim_virt, int bpd,
 
         bb_virt = (struct bbox *)queue_dequeue(&q_can);
         if(bbox_include(bb, bb_virt)){
-            //printf("include\n");
+            //uloga("include\n");
             i_tmp = malloc(sizeof(struct intv));
             bbox_flat(bb_virt, i_tmp, bpd);
             queue_enqueue(&q_good, i_tmp);
             free(bb_virt);
         }
         else if(bbox_does_intersect(bb, bb_virt)){
-            //printf("intersect\n");
+            //uloga("intersect\n");
             bbox_divide(bb_virt, b_tab);
             free(bb_virt);
 
@@ -348,13 +348,13 @@ void bbox_to_intv(const struct bbox *bb, uint64_t dim_virt, int bpd,
                 *bb_virt = b_tab[i];
                 queue_enqueue(&q_can, bb_virt);
 
-                //printf("b_tab+%d is [%d,%d]\n", i, bb_virt->lb.c[0],bb_virt->lb.c[1]);
-                //printf("b_tab+%d is [%d,%d]\n", i, bb_virt->ub.c[0],bb_virt->ub.c[1]);
-                //printf("bb_virt is dims[%d]\n", bb_virt->num_dims);
+                //uloga("b_tab+%d is [%d,%d]\n", i, bb_virt->lb.c[0],bb_virt->lb.c[1]);
+                //uloga("b_tab+%d is [%d,%d]\n", i, bb_virt->ub.c[0],bb_virt->ub.c[1]);
+                //uloga("bb_virt is dims[%d]\n", bb_virt->num_dims);
             }
         }
         else
-            //printf("finish\n");
+            //uloga("finish\n");
             free(bb_virt);
     }
     free(b_tab);
@@ -389,7 +389,7 @@ void bbox_to_intv2(const struct bbox *bb, uint64_t dim_virt, int bpd,
     uint64_t n, i;
     int i_num, i_size, i_resize = 0;
 
-//printf("dim_virt=%llu,bpd=%d,lb[%d,%d,%d,%d],ub[%d,%d,%d,%d]\n", dim_virt,bpd,bb->lb.c[0],bb->lb.c[1],bb->lb.c[2],bb->lb.c[3],
+//uloga("dim_virt=%llu,bpd=%d,lb[%d,%d,%d,%d],ub[%d,%d,%d,%d]\n", dim_virt,bpd,bb->lb.c[0],bb->lb.c[1],bb->lb.c[2],bb->lb.c[3],
 //					bb->ub.c[0],bb->ub.c[1],bb->ub.c[2],bb->ub.c[3]);
 
     n = dim_virt;
@@ -457,13 +457,13 @@ void bbox_to_intv2(const struct bbox *bb, uint64_t dim_virt, int bpd,
     }
 
     free(bb_tab);
-    // printf("I had to resize the interval array %d times.\n", i_resize);
+    // uloga("I had to resize the interval array %d times.\n", i_resize);
 
 
     qsort(i_tab, i_num, sizeof(*i_tab), &intv_compar);
     n = intv_compact(i_tab, i_num);
-    //printf("after compact, n = %llu, i_tab[300]=[%llu, %llu]", n, i_tab[300].lb, i_tab[300].ub);
-    // printf("Compact size is: %d.\n", n);
+    //uloga("after compact, n = %llu, i_tab[300]=[%llu, %llu]", n, i_tab[300].lb, i_tab[300].ub);
+    // uloga("Compact size is: %d.\n", n);
 
     /** Reduce the index array size to the used elements only. **/
     i_tab = realloc(i_tab, sizeof(*i_tab) * n);
@@ -482,7 +482,7 @@ void bbox_to_origin(struct bbox *bb, const struct bbox *bb_glb)
         int i;
 
         if (bb->num_dims != bb_glb->num_dims)
-                printf("'%s()': number of dimensions different, I set "
+                uloga("'%s()': number of dimensions different, I set "
                       "them here, please check.", __func__);
 
         bb->num_dims = bb_glb->num_dims;
@@ -514,13 +514,13 @@ void coord_print(struct coord *c, int num_dims)
 {
         switch (num_dims) {
         case 3:
-                printf("{%llu, %llu, %llu}", c->c[0], c->c[1], c->c[2]);
+                uloga("{%llu, %llu, %llu}", c->c[0], c->c[1], c->c[2]);
                 break;
         case 2:
-                printf("{%llu, %llu}", c->c[0], c->c[1]);
+                uloga("{%llu, %llu}", c->c[0], c->c[1]);
                 break;
         case 1:
-                printf("{%llu}", c->c[0]);
+                uloga("{%llu}", c->c[0]);
         }
 }
 
@@ -545,11 +545,11 @@ char * coord_sprint(const struct coord *c, int num_dims)
 
 void bbox_print(struct bbox *bb)
 {
-        printf("{lb = ");
+        uloga("{lb = ");
         coord_print(&bb->lb, bb->num_dims);
-        printf(", ub = ");
+        uloga(", ub = ");
         coord_print(&bb->ub, bb->num_dims);
-        printf("}");
+        uloga("}");
 }
 
 char * bbox_sprint(const struct bbox *bb)
