@@ -417,7 +417,7 @@ enum cmd_type {
 	ss_obj_put_ssd,
 	ss_obj_put_ceph,
 	ss_obj_promote,
-    ss_obj_demote
+    ss_obj_demote,
 };
 
 enum lock_type {

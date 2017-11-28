@@ -162,7 +162,7 @@ static int couple_write_nd(unsigned int ts, int num_vars, enum transport_type ty
 	}
 	tm_end = timer_read(&timer_);
 
-	sleep(3);
+	sleep(8);
 	common_unlock_on_write("mnd_lock", &gcomm_);
 	//common_unlock_on_write("mnd_lock", NULL);	//Test dspaces_barrier
 

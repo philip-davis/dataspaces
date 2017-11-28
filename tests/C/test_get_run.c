@@ -153,9 +153,10 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
 
 	for (i = 0; i < num_vars; i++) {
 		sprintf(var_name, "mnd_%d", i);
-		if(ts==3 || ts==4 || ts==5 || ts==6){
-			ts = 2;
-		}
+
+		//if(ts==3 || ts==4 || ts==5 || ts==6){
+		//	ts = 2;
+		//}
 		check_data(var_name, data_tab[i],dims_size*elem_size_/sizeof(double),
 			rank_, ts);
         if (data_tab[i]) {

@@ -333,7 +333,7 @@ static void matrix_copy_ceph(struct matrix *a, struct matrix *b, char* name, uin
         //B is ceph, A is to_obj
         char *A = a->pdata;
         //char *B = b->pdata;
-
+        int i;
         uint64_t a0, a1, a2, a3, a4, a5, a6, a7, a8, a9;
         uint64_t aloc=0, aloc1=0, aloc2=0, aloc3=0, aloc4=0, aloc5=0, aloc6=0, aloc7=0, aloc8=0, aloc9=0;
         uint64_t b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
@@ -461,7 +461,7 @@ dim1:                   numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
     if(a->num_dims == 9)    goto wait_comp;
     }
     wait_comp:
-        for (int i = 0; i < counter; ++i)
+        for (i = 0; i < counter; ++i)
         {
             rados_aio_wait_for_complete(comp[i]);
             rados_aio_release(comp[i]);
@@ -1159,7 +1159,8 @@ int ssd_copy_ceph(struct obj_data *to_obj, struct obj_data *from_obj, int id)
         char name[100];
             char lb_name[100];
             char *ap = lb_name;
-            for (int i = 0; i < (from_obj->obj_desc).bb.num_dims; ++i)
+            int i;
+            for (i = 0; i < (from_obj->obj_desc).bb.num_dims; ++i)
             {
                 ap+=sprintf(ap, "_%d_%d", (from_obj->obj_desc).bb.lb.c[i], (from_obj->obj_desc).bb.ub.c[i]);
             }
@@ -1529,7 +1530,7 @@ struct obj_data *obj_data_alloc_pmem(struct obj_descriptor *odsc)
         return NULL;
     memset(od, 0, sizeof(*od));
 
-    od->_data = od->data = pmem_alloc(obj_data_size(odsc));
+    od->_data = od->data = pmem_alloc(obj_data_size(odsc)+7);
     if (!od->_data) {
         free(od);
         return NULL;
@@ -1759,7 +1760,8 @@ void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id)
             char lb_name[100];
             char *ap = lb_name;
             //char ub_name[50];
-            for (int i = 0; i < (od->obj_desc).bb.num_dims; ++i)
+            int i;
+            for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
             {
                 ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
             }
@@ -1829,7 +1831,8 @@ void obj_data_copy_to_mem(struct obj_data *od, int id)
             char name[100];
             char lb_name[100];
             char *ap = lb_name;
-            for (int i = 0; i < (od->obj_desc).bb.num_dims; ++i)
+            int i;
+            for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
             {
                 ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
             }
@@ -1918,7 +1921,8 @@ void obj_data_move_to_mem(struct obj_data *od, int id)
             char name[100];
             char lb_name[100];
             char *ap = lb_name;
-            for (int i = 0; i < (od->obj_desc).bb.num_dims; ++i)
+            int i;
+            for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
             {
                 ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
             }

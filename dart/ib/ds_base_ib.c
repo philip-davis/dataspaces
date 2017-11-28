@@ -1069,7 +1069,7 @@ static int cs_disseminate_cp(struct dart_server *ds, struct node_id *peer)
     struct node_id *temp_peer;
     list_for_each_entry(temp_peer, &ds->rpc_s->peer_list, struct node_id, peer_entry) {
         if(temp_peer->ptlmap.id != 0 && temp_peer->ptlmap.appid != app->app_id) {
-                                       printf("Sendin %d peer %d:  %s %d size: %d\n",ds->rpc_s->ptlmap.id, temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port),ds->num_sp + ds->current_client_size - app->app_num_peers);
+                                       printf("Sending %d peer %d:  %s %d size: %d\n",ds->rpc_s->ptlmap.id, temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port),ds->num_sp + ds->current_client_size - app->app_num_peers);
             *pptlmap++ = temp_peer->ptlmap;
         }
     }

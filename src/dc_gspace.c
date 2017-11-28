@@ -222,6 +222,8 @@ static struct query_tran_entry * qte_alloc_promote(struct obj_data *od)
     INIT_LIST_HEAD(&qte->od_list);
     qte->q_id = qt_gen_qid();
     qte->q_obj = od->obj_desc;
+    qte->data_ref = NULL;
+    qte->f_alloc_data = 0;
     memcpy(&qte->gdim, &od->gdim, sizeof(struct global_dimension));
 
     qte->qh = qh_alloc(dcg->dc->num_sp);
@@ -1984,9 +1986,8 @@ static int dcg_obj_data_promote(struct query_tran_entry *qte){
         struct node_id *peer;
         struct hdr_obj_get *oh;
         struct obj_data *od;
-        int sync_op_id;
+        int sync_op_id = 1;
         int err;
-
         err = qt_alloc_obj_data(qte);
         if (err < 0)
                 goto err_out;
@@ -1996,30 +1997,18 @@ static int dcg_obj_data_promote(struct query_tran_entry *qte){
                     peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
 
                     err = -ENOMEM;
-                    sync_op_id = syncop_next();
                     msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
                     if (!msg) {
                             goto err_out;
                     }
 
-                    msg->msg_data = od->data;
-                    msg->size = 0;
-                    //might need to process this
                     msg->cb = obj_data_promote_completion;
-                    //msg->private = qte;
-
-                    msg->sync_op_id = syncop_ref(sync_op_id);
-
                     msg->msg_rpc->cmd = ss_obj_promote;
                     msg->msg_rpc->id = DCG_ID;
 
                     oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
                     oh->qid = qte->q_id;
                     oh->u.o.odsc = od->obj_desc;
-                    oh->u.o.odsc.version = qte->q_obj.version;
-                    memcpy(&oh->gdim, &qte->gdim,
-                        sizeof(struct global_dimension));
-
                     err = rpc_send(dcg->dc->rpc_s, peer, msg);
                     if (err < 0) {
                             free(msg);
@@ -2044,7 +2033,6 @@ static int dcg_obj_data_demote(struct query_tran_entry *qte){
         struct obj_data *od;
         int sync_op_id;
         int err;
-
         err = qt_alloc_obj_data(qte);
         if (err < 0)
                 goto err_out;
@@ -2060,29 +2048,18 @@ static int dcg_obj_data_demote(struct query_tran_entry *qte){
                         goto err_out;
                 }
 
-                msg->msg_data = od->data;
-                msg->size = 0;
-                //might need to process this
                 msg->cb = obj_data_promote_completion;
-                //msg->private = qte;
-
-                msg->sync_op_id = syncop_ref(sync_op_id);
-
                 msg->msg_rpc->cmd = ss_obj_demote;
                 msg->msg_rpc->id = DCG_ID;
 
                 oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
                 oh->qid = qte->q_id;
                 oh->u.o.odsc = od->obj_desc;
-                oh->u.o.odsc.version = qte->q_obj.version;
-                memcpy(&oh->gdim, &qte->gdim,
-                    sizeof(struct global_dimension));
-
                 err = rpc_send(dcg->dc->rpc_s, peer, msg);
                 if (err < 0) {
-                        free(msg);
-                        od->data = NULL;
-                        goto err_out;
+                    free(msg);
+                    od->data = NULL;
+                    goto err_out;
                 }
                 dcg_inc_pending();
         }
@@ -2104,7 +2081,7 @@ int dcg_obj_promote(struct obj_data *od)
         tm_st = timer_read(&tm_perf);
 #endif
 
-        qte = qte_alloc_promote(od);
+        qte = qte_alloc(od,0);
         if (!qte)
                 goto err_out;
 
@@ -2133,24 +2110,12 @@ int dcg_obj_promote(struct obj_data *od)
                 goto out_no_data;
         }
 
-#ifdef TIMING_PERF
-        tm_end = timer_read(&tm_perf);
-        uloga("TIMING_PERF locate_data ts %d peer %d time %lf %s\n",
-            od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
-        tm_st = tm_end;
-#endif
-
         err = dcg_obj_data_promote(qte);
         if (err < 0) {
              uloga("Received error in dcg_obj_data_promote\n");
             goto out_no_data;
                 
         }
-#ifdef TIMING_PERF
-        tm_end = timer_read(&tm_perf);
-        uloga("TIMING_PERF promote_data ts %d peer %d time %lf %s\n",
-            od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
-#endif 
  out_no_data:
             qt_unlk(qte);
  err_qt_free:
@@ -2209,8 +2174,6 @@ int dcg_obj_demote(struct obj_data *od)
 #endif
 
         err = dcg_obj_data_demote(qte);
-        if(err == 0)
-            uloga("Err is 0 \n");
         if (err < 0) {
              uloga("Received error in dcg_obj_data_demoten");
             goto out_no_data;
