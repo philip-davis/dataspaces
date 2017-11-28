@@ -858,37 +858,22 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 */
 char *ip_search(void)
 {
-	struct sockaddr_in address;
-	memset(&address, 0, sizeof(address));
+	int sfd;
+	struct ifreq ifr;
 
-	struct ifaddrs *addrs;
-	getifaddrs(&addrs);
-	struct ifaddrs *head = addrs;
-
-	int count =0;
-
-	for (; head != NULL; head = head->ifa_next) {
-        	if (head->ifa_name == NULL || strcmp(IB_INTERFACE, head->ifa_name) == 0){
-               		break;
-		}
-		count++;
-	}
-
-	int sfd, intr;
-	struct ifreq buf[16];
-	struct ifconf ifc;
 	sfd = socket(AF_INET, SOCK_DGRAM, 0);
-	if(sfd < 0)
+	if (sfd < 0)
 		return ERRORIP;
-	ifc.ifc_len = sizeof(buf);
-	ifc.ifc_buf = (caddr_t) buf;
-	if(ioctl(sfd, SIOCGIFCONF, (char *) &ifc))
+
+	ifr.ifr_addr.sa_family = AF_INET;
+	strncpy(ifr.ifr_name, IB_INTERFACE, IFNAMSIZ-1);
+
+	if (ioctl(sfd, SIOCGIFADDR, &ifr))
 		return ERRORIP;
-	intr = ifc.ifc_len / sizeof(struct ifreq);
-	while(intr-- > 0 && ioctl(sfd, SIOCGIFADDR, (char *) &buf[intr]));
 	close(sfd);
 
-	return inet_ntoa(((struct sockaddr_in *) (&buf[count-1].ifr_addr))->sin_addr);
+
+	return inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr);
 }
 
 // Check if the format of IP address is correct. (done)
