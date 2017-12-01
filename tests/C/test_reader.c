@@ -64,7 +64,7 @@ int main(int argc, char **argv)
     enum debug_type debug; //"-d" to enable debug option
 
 	if (parse_args(argc, argv, &type, &npapp, &dims, np, sp,
-    		&timestep, &appid, &elem_size, &debug, &num_vars) != 0) {  //add debug option
+    		&timestep, &appid, &debug, &elem_size, &num_vars) != 0) {  //add debug option
 		goto err_out;
 	}
 
