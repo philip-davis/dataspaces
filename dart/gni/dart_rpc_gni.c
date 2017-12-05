@@ -262,7 +262,8 @@ static int init_gni (struct rpc_server *rpc_s)
 
     //ROOT: BROADCAST CREDENTIAL TO ALL OTHER RANKS
     //OTHER RANKS: RECV CREDENTIAL
-    err = PMI_Bcast(&rpc_s->drc_credential_id, 1);
+    err = PMI_Bcast(&rpc_s->drc_credential_id, 
+                     sizeof(rpc_s->drc_credential_id));
     if(err != PMI_SUCCESS){
     	printf("Error PMI_Bcast of RDMA Credential Failed: (%s)", __func__);
     	drc_release(rpc_s->drc_credential_id,0);
@@ -1011,7 +1012,7 @@ static int rpc_post_request(struct rpc_server *rpc_s, struct node_id *peer, stru
 {
 	int err;
 	gni_return_t status = GNI_RC_SUCCESS;
-	gni_post_descriptor_t rdma_data_desc;
+	gni_post_descriptor_t *rdma_data_desc;
 	uint32_t local, remote;
 
 	local = rr->index;
@@ -1081,19 +1082,20 @@ RESEND:
 		        printf("Fail: GNI_MemRegister returned error. %d\n", status);
 			goto err_status;
 		}
-	
-		rdma_data_desc.type = GNI_POST_RDMA_PUT;
-		rdma_data_desc.cq_mode = GNI_CQMODE_GLOBAL_EVENT | GNI_CQMODE_REMOTE_EVENT;
-		rdma_data_desc.dlvr_mode = GNI_DLVMODE_PERFORMANCE;
-		rdma_data_desc.local_addr = (uint64_t) rr->msg->msg_data;
-		rdma_data_desc.local_mem_hndl = rr->mdh_data;
-		rdma_data_desc.remote_addr = peer->mdh_addr.address;
-		rdma_data_desc.remote_mem_hndl = peer->mdh_addr.mdh;
-		rdma_data_desc.length = rr->msg->size;
-		rdma_data_desc.rdma_mode = 0;
-		rdma_data_desc.src_cq_hndl = rpc_s->src_cq_hndl;
 
-		status = GNI_PostRdma(peer->ep_hndl, &rdma_data_desc);
+		rdma_data_desc = calloc(1, sizeof(*rdma_data_desc));
+		rdma_data_desc->type = GNI_POST_RDMA_PUT;
+		rdma_data_desc->cq_mode = GNI_CQMODE_GLOBAL_EVENT | GNI_CQMODE_REMOTE_EVENT;
+		rdma_data_desc->dlvr_mode = GNI_DLVMODE_PERFORMANCE;
+		rdma_data_desc->local_addr = (uint64_t) rr->msg->msg_data;
+		rdma_data_desc->local_mem_hndl = rr->mdh_data;
+		rdma_data_desc->remote_addr = peer->mdh_addr.address;
+		rdma_data_desc->remote_mem_hndl = peer->mdh_addr.mdh;
+		rdma_data_desc->length = rr->msg->size;
+		rdma_data_desc->rdma_mode = 0;
+		rdma_data_desc->src_cq_hndl = rpc_s->src_cq_hndl;
+ 
+		status = GNI_PostRdma(peer->ep_hndl, rdma_data_desc);
 		if (status != GNI_RC_SUCCESS)
 		{
 		  printf("Fail: GNI_PostRdma returned error. %d\n", status);
@@ -1117,7 +1119,7 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
 {
 	int err;
 	gni_return_t status;
-	gni_post_descriptor_t rdma_data_desc;
+	gni_post_descriptor_t *rdma_data_desc;
 	uint32_t local, remote;
 
 	local = rr->index;
@@ -1139,17 +1141,18 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
             goto err_status;
         }
 
-        rdma_data_desc.type = GNI_POST_RDMA_GET;
-        rdma_data_desc.cq_mode = GNI_CQMODE_GLOBAL_EVENT | GNI_CQMODE_REMOTE_EVENT; //?reconsider, need some tests.
-        rdma_data_desc.dlvr_mode = GNI_DLVMODE_PERFORMANCE;
-        rdma_data_desc.local_addr = (uint64_t) rr->msg->msg_data;
-        rdma_data_desc.local_mem_hndl = rr->mdh_data;
-        rdma_data_desc.remote_addr = peer->mdh_addr.address;
-        rdma_data_desc.remote_mem_hndl = peer->mdh_addr.mdh;
-        rdma_data_desc.length = rr->msg->size;//Must be a multiple of 4-bytes for GETs
-        rdma_data_desc.rdma_mode = 0;
-        rdma_data_desc.src_cq_hndl = rpc_s->src_cq_hndl;
-        status = GNI_PostRdma(peer->ep_hndl, &rdma_data_desc);
+        rdma_data_desc = calloc(1, sizeof(*rdma_data_desc));
+        rdma_data_desc->type = GNI_POST_RDMA_GET;
+        rdma_data_desc->cq_mode = GNI_CQMODE_GLOBAL_EVENT | GNI_CQMODE_REMOTE_EVENT; //?reconsider, need some tests.
+        rdma_data_desc->dlvr_mode = GNI_DLVMODE_PERFORMANCE;
+        rdma_data_desc->local_addr = (uint64_t) rr->msg->msg_data;
+        rdma_data_desc->local_mem_hndl = rr->mdh_data;
+        rdma_data_desc->remote_addr = peer->mdh_addr.address;
+        rdma_data_desc->remote_mem_hndl = peer->mdh_addr.mdh;
+        rdma_data_desc->length = rr->msg->size;//Must be a multiple of 4-bytes for GETs
+        rdma_data_desc->rdma_mode = 0;
+        rdma_data_desc->src_cq_hndl = rpc_s->src_cq_hndl;
+        status = GNI_PostRdma(peer->ep_hndl, rdma_data_desc);
         if (status != GNI_RC_SUCCESS)
         {
               if(status == 7)
@@ -1563,6 +1566,7 @@ inline static int __process_event (struct rpc_server *rpc_s, uint64_t timeout)
 	      printf("(%s): GNI_GetCompleted PROCESSING ERROR.\n", __func__);
 	      goto err_status;
 	    }
+		free(post_des);
 	}
 
       err = rpc_cb_req_completion(rpc_s, rr);
