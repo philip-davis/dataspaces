@@ -262,7 +262,8 @@ static int init_gni (struct rpc_server *rpc_s)
 
     //ROOT: BROADCAST CREDENTIAL TO ALL OTHER RANKS
     //OTHER RANKS: RECV CREDENTIAL
-    err = PMI_Bcast(&rpc_s->drc_credential_id, 1);
+    err = PMI_Bcast(&rpc_s->drc_credential_id, 
+                    sizeof(rpc_s->drc_credential_id));
     if(err != PMI_SUCCESS){
     	printf("Error PMI_Bcast of RDMA Credential Failed: (%s)", __func__);
     	drc_release(rpc_s->drc_credential_id,0);
