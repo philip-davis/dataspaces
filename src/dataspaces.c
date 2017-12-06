@@ -50,7 +50,7 @@
 #include "dimes_interface.h"
 #endif
 
-#ifdef HAVE_UGNI
+#if HAVE_UGNI
 #include <pmi.h>
 #include <rca_lib.h>
 #endif
