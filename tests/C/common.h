@@ -44,7 +44,7 @@
 
 enum transport_type {
 	USE_DSPACES = 0,
-	USE_DIMES = 1
+	USE_DIMES
 };
 
 // wrapper functions of DataSpaces/DIMES APIs

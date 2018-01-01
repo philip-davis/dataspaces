@@ -418,7 +418,7 @@ int dc_barrier(struct dart_client* dc_)
 	return 0;
 }
 
-struct dart_client* dc_alloc(int num_peers, int app_id, void* dart_ref_, void *comm_)
+struct dart_client* dc_alloc(int num_peers, int app_id, void* comm_, void* dart_ref_)
 {
   log(DEBUG, "started; num_peers= " << num_peers << ", app_id= " << app_id)
 	struct dart_client* dc_;

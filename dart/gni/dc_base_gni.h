@@ -32,7 +32,6 @@
 #define __DC_BASE_GNI_H__
 
 #include "dart_rpc_gni.h"
-#include <mpi.h>
 
 #define dc_barrier(dc)	rpc_barrier(dc->rpc_s)
 
@@ -59,7 +58,6 @@ struct dart_client {
         int			f_bar:1;
 
         void			*dart_ref;
-	MPI_Comm		*comm;
 
         int			num_posted;
 };
@@ -75,7 +73,7 @@ static inline struct dart_client *dc_ref_from_rpc(struct rpc_server *rpc_s)
 	return rpc_s->dart_ref;
 }
 
-struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *comm);
+struct dart_client* dc_alloc(int num_peers, int appid, void *dart_ref);
 void dc_free(struct dart_client *dc);
 int dc_process(struct dart_client *dc);
 int print_dc(struct dart_client *dc);

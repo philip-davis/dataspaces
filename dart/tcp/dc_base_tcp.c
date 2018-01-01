@@ -195,8 +195,7 @@ static int dc_register_at_master(struct dart_client *dc, int appid) {
     return -1;
 }
 
-struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *comm) {
-
+struct dart_client *dc_alloc(int num_peers, int appid, void *comm, void *dart_ref) {
     struct dart_client *dc = (struct dart_client *)malloc(sizeof(struct dart_client));
     if (dc == NULL) {
         printf("[%s]: allocate DART client failed!\n", __func__);
@@ -205,13 +204,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 
     memset(dc, 0, sizeof(*dc));
     dc->dart_ref = dart_ref;
-
-    if(comm) {
-        dc->comm = malloc(sizeof(*dc->comm));
-        MPI_Comm_dup(*(MPI_Comm *)comm, dc->comm);
-    } else {
-        dc->comm = NULL;
-    }
+    dc->comm = comm;
     dc->cp_in_job = num_peers;
 
     char *interface = getenv("DATASPACES_TCP_INTERFACE");
@@ -291,10 +284,6 @@ void dc_free(struct dart_client *dc) {
 
     if(dc->peer_tab != NULL) {
         free(dc->peer_tab);
-    }
-
-    if(dc->comm) {
-        free(dc->comm);
     }
 
     free(dc);

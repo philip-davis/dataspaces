@@ -46,7 +46,7 @@ static inline struct dart_client* dc_ref_from_rpc(struct rpc_server* rpc_s) {
 	return (struct dart_client*)rpc_s->dart_ref;
 }
 
-struct dart_client* dc_alloc(int num_peers, int appid, void *dart_ref, void *comm);
+struct dart_client* dc_alloc(int num_peers, int appid, void *comm, void *dart_ref);
 int dc_free(struct dart_client *dc);
 int dc_process(struct dart_client *dc);
 

@@ -44,7 +44,7 @@ struct dimes_server {
 	struct metadata_storage *meta_store;
 };
 
-struct dimes_server * dimes_server_alloc(int num_sp, int num_cp, char *, void *);
+struct dimes_server * dimes_server_alloc(int num_sp, int num_cp, char *);
 void dimes_server_free(struct dimes_server *dimes_s_l);
 
 int dimes_server_process(struct dimes_server *dimes_s_l);

@@ -1,0 +1,168 @@
+/* config.h.in.  Generated from configure.ac by autoheader.  */
+
+/* Maximum number of array dimension */
+#undef BBOX_MAX_NDIM
+
+/* Size of rdma memory that can be used for data writes/reads in DIMES */
+#undef DIMES_RDMA_BUFFER_SIZE
+
+/* Max number of concurrent rdma read operations that can be issued by DIMES
+   in the data fetching process */
+#undef DIMES_RDMA_MAX_NUM_CONCURRENT_READ
+
+/* uGNI-Aires is enabled */
+#undef DS_HAVE_ARIES
+
+/* DIMES is enabled */
+#undef DS_HAVE_DIMES
+
+/* Fixed Gemini cookie */
+#undef GNI_COOKIE
+
+/* Fixed Gemini ptag */
+#undef GNI_PTAG
+
+/* Define if you have Cray Portals. */
+#undef HAVE_CRAY_PORTALS
+
+/* Define if you have the DCMF. */
+#undef HAVE_DCMF
+
+/* Define to 1 if you have the <dcmf.h> header file. */
+#undef HAVE_DCMF_H
+
+/* Define to 1 if you have the <gni_pub.h> header file. */
+#undef HAVE_GNI_PUB_H
+
+/* Define to 1 if you have <infiniband/verbs.h>. */
+#undef HAVE_IBVERBS_H
+
+/* Define if you have the Infiniband. */
+#undef HAVE_INFINIBAND
+
+/* Define to 1 if you have the <inttypes.h> header file. */
+#undef HAVE_INTTYPES_H
+
+/* Define to 1 if you have the <memory.h> header file. */
+#undef HAVE_MEMORY_H
+
+/* Define to 1 if you have the <p3nal_utcp.h> header file. */
+#undef HAVE_P3NAL_UTCP_H
+
+/* Define to 1 if you have the <p3rt/p3rt.h> header file. */
+#undef HAVE_P3RT_P3RT_H
+
+/* Define if you have the PAMI. */
+#undef HAVE_PAMI
+
+/* Define to 1 if you have the <pami.h> header file. */
+#undef HAVE_PAMI_H
+
+/* Define to 1 if you have the <pmi.h> header file. */
+#undef HAVE_PMI_H
+
+/* Define if you have the Portals. */
+#undef HAVE_PORTALS
+
+/* Define to 1 if you have <portals3.h>. */
+#undef HAVE_PORTALS3_H
+
+/* Define to 1 if you have <portals/portals3.h>. */
+#undef HAVE_PORTALS_PORTALS3_H
+
+/* Define if you have POSIX threads libraries and header files. */
+#undef HAVE_PTHREAD
+
+/* Define to 1 if you have the `PtlACEntry' function. */
+#undef HAVE_PTLACENTRY
+
+/* Define to 1 if you have the `PtlErrorStr' function. */
+#undef HAVE_PTLERRORSTR
+
+/* Define to 1 if you have the `PtlEventKindStr' function. */
+#undef HAVE_PTLEVENTKINDSTR
+
+/* Define to 1 if you have the `PtlGetJid' function. */
+#undef HAVE_PTLGETJID
+
+/* Define to 1 if you have the `PtlNIFailStr' function. */
+#undef HAVE_PTLNIFAILSTR
+
+/* Define to 1 if the system has the type `ptl_eq_handler_t'. */
+#undef HAVE_PTL_EQ_HANDLER_T
+
+/* Define if you have PTL_NOACK_REQ. */
+#undef HAVE_PTL_NOACK_REQ
+
+/* Define if you have PTL_NO_ACK_REQ. */
+#undef HAVE_PTL_NO_ACK_REQ
+
+/* Define to 1 if the system has the type `ptl_time_t'. */
+#undef HAVE_PTL_TIME_T
+
+/* Define to 1 if you have the <stdint.h> header file. */
+#undef HAVE_STDINT_H
+
+/* Define to 1 if you have the <stdlib.h> header file. */
+#undef HAVE_STDLIB_H
+
+/* Define to 1 if you have the <strings.h> header file. */
+#undef HAVE_STRINGS_H
+
+/* Define to 1 if you have the <string.h> header file. */
+#undef HAVE_STRING_H
+
+/* Define to 1 if you have the <sys/socket.h> header file. */
+#undef HAVE_SYS_SOCKET_H
+
+/* Define to 1 if you have the <sys/stat.h> header file. */
+#undef HAVE_SYS_STAT_H
+
+/* Define to 1 if you have the <sys/types.h> header file. */
+#undef HAVE_SYS_TYPES_H
+
+/* Define if you have the TCP socket. */
+#undef HAVE_TCP_SOCKET
+
+/* Define if you have the Gemini. */
+#undef HAVE_UGNI
+
+/* Define to 1 if you have the <unistd.h> header file. */
+#undef HAVE_UNISTD_H
+
+/* IB Interface option */
+#undef IB_INTERFACE
+
+/* Max message queue size for infiniband DataSpaces server */
+#undef INFINIBAND_MSG_QUEUE_SIZE
+
+/* Timeout for RDMA function in IB */
+#undef INFINIBAND_TIMEOUT
+
+/* Name of package */
+#undef PACKAGE
+
+/* Define to the address where bug reports for this package should be sent. */
+#undef PACKAGE_BUGREPORT
+
+/* Define to the full name of this package. */
+#undef PACKAGE_NAME
+
+/* Define to the full name and version of this package. */
+#undef PACKAGE_STRING
+
+/* Define to the one symbol short name of this package. */
+#undef PACKAGE_TARNAME
+
+/* Define to the version of this package. */
+#undef PACKAGE_VERSION
+
+/* Define to the necessary symbol if this constant uses a non-standard name on
+   your system. */
+#undef PTHREAD_CREATE_JOINABLE
+
+/* Define to 1 if you have the ANSI C header files. */
+#undef STDC_HEADERS
+
+/* Version number of package */
+#undef VERSION

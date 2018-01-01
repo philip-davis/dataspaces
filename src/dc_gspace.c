@@ -125,6 +125,26 @@ struct dcg_lock {
 	char			name[LOCK_NAME_SIZE];
 };
 
+/*timer*/
+/* Function to get and return the current (wall clock) time. */
+double timer_timestamp_1(void)
+{
+        double ret;
+
+#ifdef XT3
+        ret = dclock();
+#else
+        struct timeval tv;
+
+        gettimeofday( &tv, 0 );
+        ret = (double) tv.tv_usec + tv.tv_sec * 1.e6;
+#endif
+        return ret;
+}
+
+
+
+
 /* 
    Some operations  may require synchronizing API;  use this structure
    as a temporary hack to implement synchronization. 
@@ -1195,6 +1215,48 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
 }
 
 /*
+Prefetch a data object from the distributed storage. We call this
+routine when we have all object descriptors for all parts.
+*/
+
+static int dcg_obj_data_hint(struct query_tran_entry *qte)
+{
+	struct msg_buf *msg;
+	struct node_id *peer;
+	struct hdr_obj_get *oh;
+	struct obj_data *od;
+	int err;
+
+	list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
+		peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
+
+		err = -ENOMEM;
+		msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+		if (!msg) {
+			goto err_out;
+		}
+
+		msg->msg_rpc->cmd = ss_obj_hint;
+		msg->msg_rpc->id = DCG_ID;
+
+		oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
+		oh->qid = qte->q_id;
+		oh->u.o.odsc = od->obj_desc;
+		oh->u.o.odsc.version = qte->q_obj.version;
+		memcpy(&oh->gdim, &qte->gdim,
+			sizeof(struct global_dimension));
+
+		err = rpc_send(dcg->dc->rpc_s, peer, msg);
+	}
+	if (err == 0)
+		return qte->q_id;
+
+	qt_remove(&dcg->qt, qte);
+	err_out:
+		ERROR_TRACE();
+}
+
+/*
   Initiate a custom filter retrieve operation.
   TODO: add a parameter for cusom functions ... 
 */
@@ -1514,6 +1576,7 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
 
         dcg_l->num_pending = 0;
         qt_init(&dcg_l->qt);
+
         // rpc_add_service(ss_obj_get_dht_peers, dcgrpc_obj_get_dht_peers);
         rpc_add_service(ss_obj_get_desc, dcgrpc_obj_get_desc);
         rpc_add_service(ss_obj_cq_notify, dcgrpc_obj_cq_update);
@@ -1525,8 +1588,16 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
 #endif
         /* Added for ccgrid demo. */
         rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);	
-	
-        dcg_l->dc = dc_alloc(num_nodes, appid, dcg_l, comm);
+
+#ifdef HAVE_INFINIBAND
+        dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
+#elif HAVE_PAMI
+        dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
+#elif HAVE_TCP_SOCKET
+        dcg_l->dc = dc_alloc(num_nodes, appid, comm, dcg_l);
+#else 
+        dcg_l->dc = dc_alloc(num_nodes, appid, dcg_l);
+#endif
         if (!dcg_l->dc) {
                 free(dcg_l);
                 goto err_out;
@@ -1541,6 +1612,7 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
         timer_init(&tm_perf, 1);
         timer_start(&tm_perf);
 #endif
+
         dcg = dcg_l;
         return dcg_l;
  err_out:
@@ -1559,12 +1631,12 @@ void dcg_free(struct dcg_space *dcg)
         uloga("'%s()': num pending = %d.\n", __func__, dcg->num_pending);
 #endif
 
-	while (dcg->num_pending) {
+	while (dcg->num_pending)
 	      dc_process(dcg->dc);
-	}
 
     dc_free(dcg->dc);
     qc_free(&dcg->qc);
+
 	lock_free();
 
     free_gdim_list(&dcg->gdim_list);
@@ -1607,6 +1679,9 @@ int dcg_obj_put(struct obj_data *od)
         hdr = msg->msg_rpc->pad;
         hdr->odsc = od->obj_desc;
         memcpy(&hdr->gdim, &od->gdim, sizeof(struct global_dimension));
+
+        uloga("%s(Yubo): before rpc_send timestamp: %f\n", __func__, timer_timestamp_1());
+
 
         err = rpc_send(dcg->dc->rpc_s, peer, msg);
         if (err < 0) {
@@ -1725,6 +1800,68 @@ int dcg_obj_sync(int sync_op_id)
  err_out:
         uloga("'%s()': failed with %d.\n", __func__, err);
         return err;
+}
+
+/*
+*/
+int dcg_obj_hint(struct obj_data *od)
+{
+	struct query_tran_entry *qte;
+	const struct query_cache_entry *qce;
+	int err = -ENOMEM;
+#ifdef TIMING_PERF
+	double tm_st, tm_end;
+	tm_st = timer_read(&tm_perf);
+#endif
+
+	qte = qte_alloc(od, 1);
+	if (!qte)
+		goto err_out;
+
+	qt_add(&dcg->qt, qte);
+
+	versions_reset();
+
+	// TODO:  I have  intentionately  disabled the  cache here.  I
+	// should reconsider.
+	// qce = qc_find(&dcg->qc, &od->obj_desc);
+	qce = 0;
+	if (qce) {
+		err = qte_set_odsc_from_cache(qte, qce);
+		if (err < 0) {
+			free(qte);
+			goto err_out;
+		}
+	}
+	else {
+		err = get_dht_peers(qte);
+		if (err < 0)
+			goto err_qt_free;
+		DC_WAIT_COMPLETION(qte->f_peer_received == 1);
+
+		err = get_obj_descriptors(qte);
+		if (err < 0) {
+			goto err_qt_free;
+		}
+		DC_WAIT_COMPLETION(qte->f_odsc_recv == 1);
+	}
+
+
+#ifdef TIMING_PERF
+	tm_end = timer_read(&tm_perf);
+	uloga("TIMING_PERF locate_data ts %d peer %d time %lf %s\n",
+		od->obj_desc.version, dcg_get_rank(dcg), tm_end - tm_st, log_header);
+	tm_st = tm_end;
+#endif
+
+	err = dcg_obj_data_hint(qte);
+	return err;
+
+err_qt_free:
+	qt_remove(&dcg->qt, qte);
+	free(qte);
+err_out:
+	ERROR_TRACE();
 }
 
 /*

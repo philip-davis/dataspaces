@@ -149,10 +149,12 @@ static int couple_write_nd(unsigned int ts, int num_vars, enum transport_type ty
 
 	for(i = 0; i < num_vars; i++){
 		sprintf(var_name, "mnd_%d", i);
+		uloga("%s(Yubo): before common_put timestamp:%f\n", __func__, timer_timestamp());
 		common_put(var_name, ts, elem_size, dims, lb, ub,
 			data_tab[i], type);
 		if(type == USE_DSPACES){
 			common_put_sync(type);
+			
 		}
 	}
 	tm_end = timer_read(&timer_);

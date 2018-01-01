@@ -396,7 +396,7 @@ static int data_transfer_completion(struct rpc_server *rpc_s, struct msg_buf *ms
   Public API starts here.
 */
 
-struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *comm)
+struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref)
 {
         struct dart_client *dc;
 	//        size_t size;

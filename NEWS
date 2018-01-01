@@ -1,16 +1,3 @@
-1.6.4 Released August 2017
-    - Reduced dependency on file locks when MPI is available for TCP and IB communicators
-    - dspaces_init now honors passed communicator for uGNI, IB, and TCP.
-
-1.6.3 Released July 2017
-    - Fixed build system bug that affected some Infiniband systems.
-
-1.6.2 Released June 2017
-    - Added support for Cray Dynamic RDMA registration (necessary for Cori: use --enable-drc with configure)
-    - Improved support for IBM XL compiler.
-	- Improved automated build detections.
-    - Fixed minor bugs.
-
 1.6.1 Released June 2016
 	- Added network support: Aries for Cray XC30
 	- Updated configuration files to support automake-1.12 version and above

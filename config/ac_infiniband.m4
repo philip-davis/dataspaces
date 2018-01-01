@@ -72,18 +72,13 @@ if test x"$ac_with_infiniband" = xyes; then
 
 
         if test x"$ac_infiniband_hdr_ok" = xno; then
-                AC_CHECK_HEADER(rdma/rdma_verbs.h,
+                AC_CHECK_HEADER(infiniband/verbs.h,
                          [AC_DEFINE(HAVE_IBVERBS_H, 1,
-                                [Define to 1 if you have <rdma/rdma_verbs.h>.])
+                                [Define to 1 if you have <infiniband/verbs.h>.])
                          ac_infiniband_hdr_ok=yes;
                          INFINIBAND_CFLAGS="$INFINIBAND_CFLAGS $EXTRA_CFLAGS";
                          INFINIBAND_CPPFLAGS="$INFINIBAND_CPPFLAGS $EXTRA_CFLAGS"],
                          [ac_infiniband_hdr_ok=no])
-		AC_CHECK_HEADER(rdma/rdma_cma.h,
-			[AC_DEFINE(HAVE_IBCM_H, 1,
-				[Define to 1 if you have <rdma/rdma_cma.h>.])
-			ac_infiniband_hdr_ok=yes;],
-                        [ac_infiniband_hdr_ok=no])
         fi
 
         if test x"$ac_infiniband_hdr_ok" = xno; then

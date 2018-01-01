@@ -767,7 +767,7 @@ static int ds_boot(struct dart_server *ds)
    Allocate and initialize dart server; the server initializes rpc
    server. 
 */
-struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
+struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref)
 {
         struct dart_server *ds = 0;
         struct node_id *peer;

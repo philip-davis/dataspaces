@@ -32,8 +32,6 @@
 #ifndef __DS_BASE_GNI_H__
 #define __DS_BASE_GNI_H__
 
-#include <mpi.h>
-
 #include "dart_rpc_gni.h"
 
 #define ds_barrier(ds)  rpc_barrier(ds->rpc_s)
@@ -80,12 +78,9 @@ struct dart_server {
 
 	/* Reference to the front end module used. */
 	void			*dart_ref;
-
-	/* MPI Communicator (can be null) */
-	MPI_Comm		*comm;
 };
 
-struct dart_server* ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm);
+struct dart_server* ds_alloc(int num_sp, int num_cp, void *dart_ref);
 void ds_free(struct dart_server *ds);
 int ds_process(struct dart_server *ds);
 
