@@ -55,7 +55,7 @@
 //#define PMEM_SIZE 1*1024*1024*1024L
 
 /* using /ssd1/sd904/ ssd file path for this example */
-#define PMEM_PATH "/ssd/users/ps917/"
+#define PMEM_PATH "/home/subedip/"
 //#define PMEM_PATH "/home1/sd904/"
 //#define PMEM_PATH ""
 

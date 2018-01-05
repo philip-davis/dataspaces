@@ -75,7 +75,7 @@ struct gdim_list_entry {
 };
 
 enum storage_level { in_memory, in_ssd, in_memory_ssd, in_memory_ceph, in_ceph };/* storage level Duan*/
-
+enum storage_opera { normal, prefetching, caching };/* storage operation */
 struct obj_data {
         struct list_head        obj_entry;
 
@@ -95,13 +95,18 @@ struct obj_data {
         unsigned int            f_free:1;
 
 		enum storage_level       sl; //Duan
+        enum storage_opera       so;
 
 		void                    *s_data;		/* data pointer in ssd Duan*/
+
+        //int obj_ml_id;
 };
 
 struct ss_storage {
         int                     num_obj;
         int                     size_hash;
+        uint64_t    mem_used;
+        uint64_t    mem_size;
         /* List of data objects. */
         struct list_head        obj_hash[1];
 };
@@ -261,6 +266,7 @@ struct obj_data* ls_lookup(struct ss_storage *, char *);
 void ls_remove(struct ss_storage *, struct obj_data *);
 void ls_try_remove_free(struct ss_storage *, struct obj_data *);
 struct obj_data * ls_find(struct ss_storage *, const struct obj_descriptor *);
+int ls_find_list(struct ss_storage *, const struct obj_descriptor *, const struct obj_data *[]);
 struct obj_data * ls_find_no_version(struct ss_storage *, struct obj_descriptor *);
 
 struct obj_data *obj_data_alloc(struct obj_descriptor *);

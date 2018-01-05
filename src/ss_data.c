@@ -1360,6 +1360,39 @@ struct obj_data *ls_find(struct ss_storage *ls, const struct obj_descriptor *ods
         return NULL;
 }
 
+int ls_find_list(struct ss_storage *ls, const struct obj_descriptor *odsc, const struct obj_data *od_tab[])
+{
+        struct obj_data *od;
+        struct list_head *list;
+        int index;
+        int num_odsc =0;
+        //odsc->version = 10;
+        //searches upto 20 versionss
+        /*
+        for (int i = 0; i < 20; ++i)
+        {
+            index = i % ls->size_hash;
+            list = &ls->obj_hash[index];
+
+            list_for_each_entry(od, list, struct obj_data, obj_entry) {
+                    if (obj_desc_by_name_intersect(odsc, &od->obj_desc))
+                        od_tab[num_odsc++] = od;
+            }
+        }
+        */
+        
+        //searches only the current version
+        index = odsc->version % ls->size_hash;
+        list = &ls->obj_hash[index];
+
+        list_for_each_entry(od, list, struct obj_data, obj_entry) {
+                if (obj_desc_by_name_intersect(odsc, &od->obj_desc))
+                    od_tab[num_odsc++] = od;
+        }
+        
+
+        return num_odsc;
+}
 /*
   Search for an object in the local storage that is mapped to the same
   bin, and that has the same  name and object descriptor, but may have
@@ -1884,6 +1917,7 @@ void obj_data_move_to_mem(struct obj_data *od, int id)
 {
     if(od->sl == in_ssd){
         if (od->s_data) {
+
             od->_data = od->data = malloc(obj_data_size(&od->obj_desc) + 7);
             if (!od->_data) {
                 free(od);
@@ -1893,15 +1927,16 @@ void obj_data_move_to_mem(struct obj_data *od, int id)
             memcpy(od->_data, od->s_data, obj_data_size(&od->obj_desc) + 7); //void *memcpy(void *dest, const void *src, size_t n);
             //uloga("'%s()': explicit data copy to mem on descriptor %s.\n",
             //    __func__, od->obj_desc.name);
+
         }
         else{
             uloga("%s(): ERROR od->s_data %p is is NULL! \n", __func__, od->s_data);
         }
         od->sl = in_memory_ssd;
         obj_data_free_in_ssd(od);
-    }
-
-    if(od->sl == in_ceph){
+        uloga("Moved to memory \n");
+    } else{ 
+        if(od->sl == in_ceph){
         struct obj_descriptor *odsc = &od->obj_desc;
         //perform aio read
         od->_data = od->data = malloc(obj_data_size(odsc)+7);
@@ -1961,9 +1996,10 @@ void obj_data_move_to_mem(struct obj_data *od, int id)
         }
 
     //free the ioctx
-    rados_ioctx_destroy(io);
-    od->sl = in_memory;
+        rados_ioctx_destroy(io);
+        od->sl = in_memory;
 
+        }
     }
 }
 

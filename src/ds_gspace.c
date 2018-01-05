@@ -43,6 +43,8 @@
 #include "dart.h"
 #include "ds_gspace.h"
 #include "ss_data.h"
+#include "fann.h"
+#include "CppWrapper.h"
 #ifdef DS_HAVE_ACTIVESPACE
 #include "rexec.h"
 #endif
@@ -50,6 +52,7 @@
 #include<time.h>//Duan
 
 #include "timer.h"
+
 static struct timer tm_perf;
 
 #define DSG_ID                  dsg->ds->self->ptlmap.id
@@ -117,6 +120,33 @@ struct dsg_lock {
 };
 
 static struct ds_gspace *dsg;
+/* Machine Learning Declarations*/
+struct fann **ann;
+struct fann_train_data **data;
+extern pthread_mutex_t ml_mutex;
+extern pthread_cond_t ml_cond;
+
+pthread_mutex_t pmutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t  pcond = PTHREAD_COND_INITIALIZER;
+
+pthread_mutex_t odscmutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t  odsccond = PTHREAD_COND_INITIALIZER;
+
+int odsc_cond_index = 0; 
+int odsc_cond_num = 0;
+int cond_index = 0; 
+int cond_num = 0;
+
+extern int *init_retrain;
+extern int *data_counter;
+extern int *retrain;
+extern int var_int;
+int counter;
+int last_request = 0;
+
+static enum storage_type st = column_major; 
+
+
 
 /* Server configuration parameters */
 static struct {
@@ -1264,7 +1294,7 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 
 	ls_add_obj(dsg->ls, od);
     if(od->sl == in_memory){
-        uloga("Object sl shows in_memory \n");
+    //    uloga("Object sl shows in_memory \n");
     }
   // double tm_start, tm_ending;
   //  tm_start = timer_read(&tm_perf);
@@ -1287,6 +1317,605 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 }
 
 
+/*Definition of data structures for markov chain and Machine Learning*/
+int chain_length = 0;
+int n_gram = 5;
+typedef struct m_node {
+    char var_name[50];
+    struct m_node * next;
+}m_node;
+
+m_node * curr_head;
+m_node * org_head;
+WrapperMap *t = NULL;
+int var_counter = 0;
+OnlyMap *vm = NULL;
+PredictMap *predictrecord = NULL;
+OnlyMap *mispred =NULL;
+
+int var_chain_length[100] = {0};
+m_node *var_curr_head[100] = {NULL};
+m_node *var_org_head[100]= {NULL};
+WrapperMap *varmap[100] = {NULL};
+
+
+static void request_type_predict(int var_id, char *request_name, char *predicted_word){
+        char rstr[50] = "0000";
+    //start of the code for markov chain predictor freq table
+    if(var_chain_length[var_id] ==0){
+            //this is the first time get or put is called in this server
+            //perform initialization
+        var_curr_head[var_id]= (m_node*) malloc (sizeof(m_node));
+        varmap[var_id] = map_new(5);
+        strcpy(var_curr_head[var_id]->var_name, request_name);
+        var_curr_head[var_id]->next = NULL;
+        var_org_head[var_id] = var_curr_head[var_id];
+        var_chain_length[var_id]++;
+
+    } else{
+            //not the first access, all declarations are done already
+        m_node * temp;
+        temp = (m_node*) malloc (sizeof(m_node));
+        strcpy(temp->var_name, request_name);
+        temp->next = NULL;
+        var_curr_head[var_id]->next = temp;
+        var_curr_head[var_id] = var_curr_head[var_id]->next;
+        var_chain_length[var_id]++;
+
+        if(var_chain_length[var_id]> 30){
+                //delete the irrevelant node
+            m_node * tmp_del;
+            tmp_del = var_org_head[var_id];
+            var_org_head[var_id] = var_org_head[var_id]->next;
+            free(tmp_del);
+            var_chain_length[var_id]--;
+
+        }else{
+            m_node * traverser;
+            m_node * inner_head;
+            inner_head = var_org_head[var_id];
+            int cntr = 0;
+            while(inner_head->next != NULL){
+                traverser = inner_head;
+                cntr++;
+                char local_string[250];
+                memset(local_string, '\0', sizeof(local_string));
+                strcpy(local_string, traverser->var_name);
+                while(traverser->next->next !=NULL){
+                    strcat(local_string, traverser->next->var_name);
+                    traverser = traverser->next;
+                }
+                map_insert(varmap[var_id], local_string, request_name);
+
+                strcat(local_string, request_name);
+                //get the value of the predicted data
+                if(strcmp(rstr, "0000")==0){
+                    strcpy(rstr, map_get_value(t, local_string));
+                }
+                inner_head = inner_head->next;
+
+            }
+
+        }
+        if(strcmp(rstr, "0000")==0){
+            strcpy(rstr, map_get_value(varmap[var_id], request_name));
+
+        }
+
+
+    }
+    strcpy(predicted_word, rstr);
+
+}
+
+static void insert_n_predict_data(char * variable_name, char *predicted_word){
+
+    char rstr[50] = "0000";
+    //insert the variable name into map to create ml_data structure per variable
+    if (var_counter==0){
+        var_counter++;
+        vm = map_only(5);
+        mispred = map_only(5);
+        predictrecord = predict_only(5);
+        arr_insert(vm, variable_name, var_counter);
+        
+    }else{
+        if(arr_insert(vm, variable_name, var_counter++)!=0)
+            var_counter--;
+    }
+
+    //start of the code for markov chain predictor freq table
+    if(chain_length ==0){
+            //this is the first time get or put is called in this server
+            //perform initialization
+        curr_head = (m_node*) malloc (sizeof(m_node));
+        t = map_new(5);
+        strcpy(curr_head ->var_name, variable_name);
+        curr_head ->next = NULL;
+        org_head = curr_head;
+        chain_length++;
+
+
+
+    } else{
+            //not the first access, all declarations are done already
+        m_node * temp;
+        temp = (m_node*) malloc (sizeof(m_node));
+        strcpy(temp->var_name, variable_name);
+        temp->next = NULL;
+        curr_head->next = temp;
+        curr_head = curr_head->next;
+        chain_length++;
+
+        if(chain_length > n_gram){
+                //delete the irrevelant node
+            m_node * tmp_del;
+            tmp_del = org_head;
+            org_head = org_head->next;
+            free(tmp_del);
+            chain_length--;
+
+        }else{
+            m_node * traverser;
+            m_node * inner_head;
+            inner_head = org_head;
+            int cntr = 0;
+            while(inner_head->next != NULL){
+                traverser = inner_head;
+                cntr++;
+                char local_string[250];
+                memset(local_string, '\0', sizeof(local_string));
+                strcpy(local_string, traverser->var_name);
+                while(traverser->next->next !=NULL){
+                    strcat(local_string, traverser->next->var_name);
+                    traverser = traverser->next;
+                }
+                map_insert(t, local_string, variable_name);
+
+                strcat(local_string, variable_name);
+                //get the value of the predicted data
+                if(strcmp(rstr, "0000")==0){
+                    strcpy(rstr, map_get_value(t, local_string));
+                }
+                inner_head = inner_head->next;
+
+            }
+
+        }
+        if(strcmp(rstr, "0000")==0){
+            strcpy(rstr, map_get_value(t, variable_name));
+
+        }
+
+
+    }
+    strcpy(predicted_word, rstr);
+}
+
+
+
+/*
+get next node index in the circle array list.
+*/
+static int get_next(int current, int array_size){
+    current++;
+    if (current >= array_size){
+        current = 0;
+    }
+    return current;
+}
+
+/*
+get previous node index in the circle array list.
+*/
+int get_prev(int current, int array_size){
+    current--;
+    if (current < 0){
+        current = array_size - 1;
+    }
+    return current;
+}
+
+/*
+insert a node into the tail of prefetch circle array list.
+*/
+int prefetch_insert_tail(struct obj_data * pod, int array_size){
+    if (pod_list.length <= 0){
+        pod_list.length = 1;
+    }
+    else if (pod_list.length >= array_size){
+        //obj_data_free_in_mem(pod_list.pref_od[pod_list.head]);
+        pod_list.pref_od[pod_list.head]->so = normal;
+        //dsg->ls->mem_used -= obj_data_size(&pod_list.pref_od[pod_list.head]->obj_desc);
+
+        pod_list.head = get_next(pod_list.head, array_size);
+        pod_list.tail = get_next(pod_list.tail, array_size);
+    }
+    else{
+        pod_list.length = pod_list.length + 1;
+        pod_list.tail = get_next(pod_list.tail, array_size);
+    }
+    pod->so = prefetching;
+    pod_list.pref_od[pod_list.tail] = pod;
+
+    cond_index = pod_list.tail;
+    return pod_list.tail;
+}
+
+int prefetch_odesc_insert_tail(struct obj_descriptor * pod, int array_size){
+    if (podesc_list.length <= 0){
+        podesc_list.length = 1;
+    }
+    else if (podesc_list.length >= array_size){
+
+        podesc_list.head = get_next(podesc_list.head, array_size);
+        podesc_list.tail = get_next(podesc_list.tail, array_size);
+    }
+    else{
+        podesc_list.length = pod_list.length + 1;
+        podesc_list.tail = get_next(pod_list.tail, array_size);
+    }
+    podesc_list.pref_od[podesc_list.tail] = pod;
+
+    cond_index = podesc_list.tail;
+    return podesc_list.tail;
+}
+//thread to move data between layers
+void *prefetch_thread(void*attr){
+    int j = 0;
+    int local_cond_index = 0;
+//#ifdef DEBUG
+    char *str;
+    asprintf(&str, "init prefetch_thread: cond_num %d cond_index %d  ",
+        cond_num, cond_index);
+    uloga("'%s()': %s\n", __func__, str);
+    free(str);
+//#endif
+    while (j == 0)
+    {
+        pthread_mutex_lock(&pmutex);        
+        if (cond_num == 0){/*sleep */
+#ifdef DEBUG
+            char *str;
+            asprintf(&str, "wait prefetch_thread: cond_num %d cond_index %d  ",
+                cond_num, cond_index);
+            uloga("'%s()': %s\n", __func__, str);
+            free(str);
+#endif
+            pthread_cond_wait(&pcond, &pmutex); //wait
+#ifdef DEBUG
+            asprintf(&str, "wake prefetch_thread: cond_num %d cond_index %d  ",
+                cond_num, cond_index);
+            uloga("'%s()': %s\n", __func__, str);
+            free(str);
+#endif
+        }else{ /*cond_num > 0 */
+            local_cond_index = cond_index;
+            do{
+                uloga("Prefetch started \n");
+                obj_data_move_to_mem(pod_list.pref_od[local_cond_index], DSG_ID);
+
+                //pod_list.pref_od[local_cond_index]->sl = in_memory_ssd;
+                pod_list.pref_od[local_cond_index]->so = prefetching;
+                dsg->ls->mem_used += obj_data_size(&pod_list.pref_od[local_cond_index]->obj_desc);
+#ifdef DEBUG
+                char *str;
+                asprintf(&str, "runable prefetch_thread: cond_num %d local_cond_index %d  ",
+                    cond_num, local_cond_index);
+                uloga("'%s()': %s\n", __func__, str);
+                free(str);
+#endif
+                local_cond_index = get_prev(local_cond_index, MAX_PREFETCH);
+            } while (pod_list.pref_od[local_cond_index] !=NULL && pod_list.pref_od[local_cond_index]->so == prefetching && (pod_list.pref_od[local_cond_index]->sl == in_ssd || pod_list.pref_od[local_cond_index]->sl == in_ceph));
+
+            cond_num = 0;
+        }
+        //sleep(1);
+        pthread_mutex_unlock(&pmutex);
+    }
+    return NULL;
+}
+
+/*
+*  Demote data
+*
+int cache_replacement(int added_mem_size){
+    int index = 0, version = 0;
+    struct obj_data *od, *t;
+    struct list_head *list;
+    
+#ifdef DEBUG
+    {
+    char *str;
+    asprintf(&str, "ls->mem_size %llu ls->mem_used %llu  added_mem_size %d",
+        ls->mem_size, ls->mem_used, added_mem_size);
+    uloga("'%s()': %s\n", __func__, str);
+    free(str);
+    }
+#endif
+
+    if (ls->mem_size >= ls->mem_used + added_mem_size){
+        return 0;
+    }
+    while (ls->mem_size < ls->mem_used + added_mem_size && index < ls->size_hash){
+        version = index % ls->size_hash;
+        list = &ls->obj_hash[index];
+        list_for_each_entry_safe(od, t, list, struct obj_data, obj_entry) {
+
+#ifdef DEBUG
+            {
+                char *str;
+                asprintf(&str, "list_for_each_entry_safe: od->sl == %d od->so == %d od->data == %p od->_data == %p od->s_data == %p",
+                    od->sl, od->so, od->data, od->_data, od->s_data);
+                str = str_append(str, bbox_sprint(&od->obj_desc.bb));
+                uloga("'%s()': %s\n", __func__, str);
+                free(str);
+            }
+#endif
+
+            if (od->s_data != NULL && (od->data != NULL || od->_data != NULL) && od->so == caching){
+            //if (od->sl == in_memory_ssd && (od->data != NULL || od->data != NULL) && od->so != prefetching){
+
+#ifdef DEBUG
+                {
+                    char *str;
+                    asprintf(&str, "od->s_data != NULL && (od->data != NULL || od->data != NULL) && od->so != prefetching: od->sl == %d od->so == %d od->data == %p od->_data == %p od->s_data == %p",
+                        od->sl, od->so, od->data, od->_data, od->s_data);
+                    str = str_append(str, bbox_sprint(&od->obj_desc.bb));
+                    uloga("'%s()': %s\n", __func__, str);
+                    free(str);
+                }
+#endif
+
+                //unload data in memory
+                obj_data_free_in_mem(od);
+                od->so = normal;
+                ls->mem_used -= obj_data_size(&od->obj_desc);           
+
+                if (ls->mem_size > ls->mem_used + added_mem_size){ break; }
+
+            }
+            if (od->s_data == NULL && (od->data != NULL || od->_data != NULL) && od->so == caching){
+        //if (od->sl == in_memory && (od->data != NULL || od->data != NULL) && od->so != prefetching){
+
+#ifdef DEBUG    
+            {
+                char *str;
+                asprintf(&str, "(od->s_data == NULL && (od->data != NULL || od->data != NULL) && od->so != prefetching: od->sl == %d od->so == %d od->data == %p od->_data == %p od->s_data == %p",
+                    od->sl, od->so, od->data, od->_data, od->s_data);
+                str = str_append(str, bbox_sprint(&od->obj_desc.bb));
+                uloga("'%s()': %s\n", __func__, str);
+                free(str);
+            }
+#endif
+
+                //copy data to ssd and unload data in memory
+                obj_data_copy_to_ssd(od);
+                obj_data_free_in_mem(od);
+
+                od->so = normal;
+                ls->mem_used -= obj_data_size(&od->obj_desc);           
+
+                if (ls->mem_size > ls->mem_used + added_mem_size){ break; }
+            }
+
+        }
+        index++;
+    }
+
+    if (ls->mem_size < ls->mem_used + added_mem_size){
+        uloga("%s(): ERROR not enough caching space ls->mem_size %d < ls->mem_used + added_mem_size! \n", __func__, ls->mem_size, ls->mem_used, added_mem_size);
+        return 0;
+    }
+    return 1;
+}
+*/
+
+
+static int local_obj_get_desc(const char * var_name, uint64_t *lb, uint64_t *ub, int ver)
+{
+        struct sspace* local_ssd = dsg->ssd;
+        const struct obj_data *podsc[local_ssd->ent_self->odsc_num];
+        int ndim = 3;
+        struct obj_descriptor odsc = {
+            .version = ver, .owner = -1, 
+            .st = st,
+            .bb = {.num_dims = ndim,}
+        };
+        memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*3);
+        memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*3);
+
+        memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
+        memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
+        
+
+
+        strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
+        odsc.name[sizeof(odsc.name)-1] = '\0';
+        //uloga("Var: %s, LB:%d_%d_%d, UB:%d_%d_%d \n", odsc.name, odsc.bb.lb.c[0], odsc.bb.lb.c[1], odsc.bb.lb.c[2], odsc.bb.ub.c[0], odsc.bb.ub.c[1], odsc.bb.ub.c[2]);
+        int num_odsc = 0;
+        num_odsc = ls_find_list(dsg->ls, &odsc, podsc);
+        uloga("%d objects found \n", num_odsc);
+        if (num_odsc == 0) {
+                uloga("Objects not found in current server \n");
+
+                return 0;
+        }else{
+
+            //promote the object descriptors in podsc
+            pthread_mutex_lock(&pmutex); //lock
+            for (int i = 0; i < num_odsc; ++i)
+            {
+                struct obj_data *from_obj = podsc[i];
+                
+                if (from_obj->sl == in_ssd || from_obj->sl == in_ceph){
+                    cond_num = 1;
+                    prefetch_insert_tail(from_obj, MAX_PREFETCH);
+                }
+            }
+            pthread_cond_signal(&pcond);
+            pthread_mutex_unlock(&pmutex);
+        }
+        return 0;
+
+}
+
+static void predict_prefetch(struct obj_descriptor *odsc)
+{
+
+            /******** Prefetch variable Frequency table **********/
+        char * predicted_var = (char*)malloc(sizeof(char)*50);
+        
+        insert_n_predict_data(odsc->name, predicted_var);
+
+        /*************Machine Learning Prediction for put predicts get*******/
+        int var_id;
+        var_id = arr_value(vm, odsc->name)-1;
+        //uloga("After insert_n_predict_data \n");
+        int inp00 = odsc->bb.lb.c[0];
+        int inp01 = odsc->bb.lb.c[1];
+        int inp02 = odsc->bb.lb.c[2];
+        int inp10 = odsc->bb.ub.c[0];
+        int inp11 = odsc->bb.ub.c[1];
+        int inp12 = odsc->bb.ub.c[2];
+        //int inp2 = odsc->version;
+        pthread_mutex_lock(&ml_mutex); //lock
+
+        if(last_request==1){
+            data[var_id]->num_data = data[var_id]->num_data-1;
+            data_counter[var_id] = data_counter[var_id]-1;
+        }
+        last_request = 0;
+
+        data[var_id]->input[data[var_id]->num_data][0] = inp00;
+        data[var_id]->input[data[var_id]->num_data][1] = inp01;
+        data[var_id]->input[data[var_id]->num_data][2] = inp02;
+        data[var_id]->input[data[var_id]->num_data][3] = inp10;
+        data[var_id]->input[data[var_id]->num_data][4] = inp11;
+        data[var_id]->input[data[var_id]->num_data][5] = inp12;
+        //data[var_id]->input[data[var_id]->num_data][6] = inp2;
+
+        //data[var_id]->input[data[var_id]->num_data][7] = inp2;
+
+        data[var_id]->num_data = data[var_id]->num_data+1;
+        data_counter[var_id] = data_counter[var_id]+1;
+        pthread_mutex_unlock(&ml_mutex); //lock
+
+        //uloga("Before insert_n_predict_data \n");
+        /******************ML training ends**********/
+
+        /*
+        if(strcmp(predicted_var, "0000")==0){
+            uloga("'%s()': server %d start writing %s, no prediction. Do not prefetch\n", 
+            __func__, DSG_ID, odsc->name);
+        } else{
+            struct obj_data* ret_val = ls_lookup(dsg->ls, predicted_var);
+            struct obj_descriptor *pred_odsc = &(ret_val->obj_desc);
+            uloga("'%s()': server %d start writing %s, lb %lld, ub %lld, Prefetch %s, lb %lld, ub %lld \n", 
+            __func__, DSG_ID, odsc->name, odsc->bb.lb.c[0], odsc->bb.ub.c[0], pred_odsc->name, pred_odsc->bb.lb.c[0], pred_odsc->bb.ub.c[0]);
+            prefetch_flag = 1;
+        }
+        
+         ******** Prefetch variable Frequency table  End **********/
+        /********************Machine Learning prediction Starts*************/
+    if(strcmp(predicted_var, "0000")!=0){
+        uint64_t lb[3] = {0}, ub[3] = {0};
+        int pred_var = arr_value(vm, predicted_var)-1;
+
+
+
+        //now predict the request type for this variable
+        char pred_req[10] ="PP_";
+        char ret_req[10] = "00";
+        int rq_typ = 0;
+        request_type_predict(pred_var, pred_req, ret_req);
+        if(strcmp(ret_req, "PP_")==0){
+            uloga("Predicted Put request for var %s \n", predicted_var);
+        }
+        if(strcmp(ret_req, "GG_")==0){
+            uloga("Predicted Get request for var %s \n", predicted_var);
+            rq_typ = 1;
+        }
+
+
+
+
+        if(init_retrain[pred_var]==1 && data_counter[pred_var]!=0){
+            //initial training is performed and the last request was put request
+            //get request resets the data_counter to 0
+            pthread_mutex_lock(&ml_mutex);
+            fann_type *predict;
+            fann_type input[6];
+            input[0] = data[pred_var]->input[data[pred_var]->num_data-1][0];
+            input[1] = data[pred_var]->input[data[pred_var]->num_data-1][1];
+            input[2] = data[pred_var]->input[data[pred_var]->num_data-1][2];
+            input[3] = data[pred_var]->input[data[pred_var]->num_data-1][3];
+            input[4] = data[pred_var]->input[data[pred_var]->num_data-1][4];
+            input[5] = data[pred_var]->input[data[pred_var]->num_data-1][5];
+            //input[6] = data[pred_var]->input[data[pred_var]->num_data-1][6];
+
+            //input[7] = data[pred_var]->input[data[pred_var]->num_data-1][7];
+
+
+            fann_scale_input(ann[pred_var], input);
+            predict = fann_run(ann[pred_var], input);
+            fann_descale_output(ann[pred_var], predict);
+            uloga("'%s()': Server %d Predicted %s variable. Prefetch lb  and ub are {%d,%d,%d} and {%d,%d,%d}\n",
+                __func__, DSG_ID, predicted_var, (int)predict[0],
+                (int)predict[1], (int)predict[2], (int)predict[3], (int)predict[4], (int)predict[5]);
+            for (int i = 0; i < 3; ++i)
+            {
+                lb[i] = (int)predict[i];
+                ub[i] = (int)predict[i+3];
+            }
+            char *str;
+            //asprintf(&str, "%d_%d_%d_%d_%d_%d", (int)predict[0],
+            //    (int)predict[1], (int)predict[2], (int)predict[3], (int)predict[4], (int)predict[5]);
+            asprintf(&str, "%d_%d_%d_%d_%d_%d", (int)predict[0],
+                (int)predict[1], (int)predict[2], (int)predict[3], (int)predict[4], (int)predict[5]);
+
+            predict_insert(predictrecord, predicted_var, str);
+            free(str);
+            pthread_mutex_unlock(&ml_mutex); //lock
+            
+            //get objects and prefetch
+            local_obj_get_desc(predicted_var, lb, ub, (odsc->version)-1);
+        }
+        
+    }
+    /********************Machine Learning prediction Ends********************/
+
+}
+
+void *push_thread(void*attr){
+    int j = 0;
+    int local_cond_index = 0;
+
+    while (j == 0)
+    {
+        pthread_mutex_lock(&odscmutex);        
+        if (odsc_cond_num == 0){/*sleep */
+            pthread_cond_wait(&odsccond, &odscmutex); //wai
+
+        }else{ /*cond_num > 0 */
+            local_cond_index = odsc_cond_index;
+            do{
+                uloga("Predict and prefetch if necessary\n");
+
+                predict_prefetch(podesc_list.pref_od[local_cond_index]);
+
+                //pod_list.pref_od[local_cond_index]->sl = in_memory_ssd;
+                //pod_list.pref_od[local_cond_index]->so = prefetching;
+                local_cond_index = get_prev(local_cond_index, MAX_PREFETCH);
+            } while (podesc_list.pref_od[local_cond_index] !=NULL);
+
+            odsc_cond_num = 0;
+        }
+        //sleep(1);
+        pthread_mutex_unlock(&odscmutex);
+    }
+    return NULL;
+}
 /*
 */
 static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
@@ -1297,7 +1926,45 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         struct node_id *peer;
         struct msg_buf *msg;
         int err;
-		//----->Duan
+        int prefetch_flag = 0;
+        odsc->owner = DSG_ID;
+
+        //insert and predict the next request
+
+        //insert the odsc in new thread for predicting
+        //the new thread does predicting and inserts in prefetch queue
+        //another thread does prefetching
+
+        if(odsc->version >1){
+            pthread_mutex_lock(&odscmutex);
+            odsc_cond_num = 1;
+            prefetch_odesc_insert_tail(odsc, MAX_PREFETCH);
+            pthread_cond_signal(&odsccond);
+            //predict_prefetch(odsc);
+            pthread_mutex_unlock(&odscmutex);
+        }
+        
+
+
+        err = -ENOMEM;
+        peer = ds_get_peer(dsg->ds, cmd->id);
+        od = obj_data_alloc(odsc);
+        if (!od)
+                goto err_out;
+
+        od->obj_desc.owner = DSG_ID;
+        memcpy(&od->gdim, &hdr->gdim, sizeof(struct global_dimension));
+
+        msg = msg_buf_alloc(rpc_s, peer, 0);
+        if (!msg)
+                goto err_free_data;
+
+        msg->msg_data = od->data;
+        msg->size = obj_data_size(&od->obj_desc);
+        msg->private = od;
+        msg->cb = obj_put_completion;
+        
+
 #ifdef DEBUG
 		{
 			char *str;
@@ -1347,6 +2014,9 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	   locks in the client code. */
 
         err = obj_put_update_dht(dsg, od);
+
+        
+
         if (err == 0)
 	        return 0;
  err_free_msg:
@@ -1367,6 +2037,16 @@ static int dsgrpc_obj_put_ssd(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         struct msg_buf *msg;
         int err;
         
+
+        if(odsc->version >1){
+            pthread_mutex_lock(&odscmutex);
+            odsc_cond_num = 1;
+            prefetch_odesc_insert_tail(odsc, MAX_PREFETCH);
+            pthread_cond_signal(&odsccond);
+            //predict_prefetch(odsc);
+            pthread_mutex_unlock(&odscmutex);
+        }
+
 #ifdef DEBUG
         {
             char *str;
@@ -1416,6 +2096,7 @@ static int dsgrpc_obj_put_ssd(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
        locks in the client code. */
 
         err = obj_put_update_dht(dsg, od);
+        //predict_prefetch(odsc);
         if (err == 0)
             return 0;
  err_free_msg:
@@ -1435,6 +2116,16 @@ static int dsgrpc_obj_put_ceph(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         struct node_id *peer;
         struct msg_buf *msg;
         int err;
+
+        if(odsc->version >1){
+            pthread_mutex_lock(&odscmutex);
+            odsc_cond_num = 1;
+            prefetch_odesc_insert_tail(odsc, MAX_PREFETCH);
+            pthread_cond_signal(&odsccond);
+            //predict_prefetch(odsc);
+            pthread_mutex_unlock(&odscmutex);
+        }
+
 #ifdef DEBUG
         {
             char *str;
@@ -1484,6 +2175,7 @@ static int dsgrpc_obj_put_ceph(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
        locks in the client code. */
 
         err = obj_put_update_dht(dsg, od);
+        predict_prefetch(odsc);
         if (err == 0)
             return 0;
  err_free_msg:
@@ -1924,6 +2616,8 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         return err;
 }
 
+
+
 static int obj_cq_local_register(struct hdr_obj_get *oh)
 {
         struct cont_query *cq;
@@ -2029,6 +2723,8 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
         peer = ds_get_peer(dsg->ds, cmd->id);
 
+
+
 #ifdef DEBUG
  {
 	 char *str;
@@ -2051,6 +2747,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             free(str);
             goto err_out;
         }
+        /*
         if(from_obj->sl == in_memory){
             uloga("Object in memory %s, ver = %d\n", (from_obj->obj_desc).name, (from_obj->obj_desc).version);
         }
@@ -2066,6 +2763,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         if(from_obj->sl == in_memory_ceph){
             uloga("Object in memory_ceph %s, ver = %d\n", (from_obj->obj_desc).name, (from_obj->obj_desc).version);
         }
+        */
         //double tm_start, tm_ending, tm_starting, tm_ends;
        // tm_start = timer_read(&tm_perf);	
         /*
@@ -2073,6 +2771,204 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             obj_data_copy_to_mem(from_obj, DSG_ID);
        }	
        */
+        if(&oh->u.o.odsc.version > 1){
+            /******** Prefetch variable Frequency table **********/
+            char * predicted_var = (char*)malloc(sizeof(char)*50);
+            char * insert_var = (char*)malloc(sizeof(char)*50);
+            insert_n_predict_data(oh->u.o.odsc.name, predicted_var);
+
+                            /********************Machine Learning prediction Starts*************/
+            if(strcmp(predicted_var, "0000")!=0){
+                uint64_t lb[3] = {0}, ub[3] = {0};
+                int pred_var = arr_value(vm, predicted_var)-1;
+
+
+
+                //now predict the request type for this variable
+                char pred_req[10] ="GG_";
+                char ret_req[10] = "00";
+                int rq_typ = 0;
+                request_type_predict(pred_var, pred_req, ret_req);
+                if(strcmp(ret_req, "PP_")==0){
+                    uloga("Predicted Put request from Get for var %s \n", predicted_var);
+                }
+                if(strcmp(ret_req, "GG_")==0){
+                    uloga("Predicted Get request from Get request for var %s\n", predicted_var);
+                    rq_typ = 1;
+                }
+
+
+
+
+                if(init_retrain[pred_var]==1 && data_counter[pred_var]!=0 && rq_typ==1){
+                    //initial training is performed and the last request was put request
+                    //get request resets the data_counter to 0
+                    pthread_mutex_lock(&ml_mutex);
+                    fann_type *predict;
+                    fann_type input[6];
+                    input[0] = data[pred_var]->input[data[pred_var]->num_data-1][0];
+                    input[1] = data[pred_var]->input[data[pred_var]->num_data-1][1];
+                    input[2] = data[pred_var]->input[data[pred_var]->num_data-1][2];
+                    input[3] = data[pred_var]->input[data[pred_var]->num_data-1][3];
+                    input[4] = data[pred_var]->input[data[pred_var]->num_data-1][4];
+                    input[5] = data[pred_var]->input[data[pred_var]->num_data-1][5];
+                    //input[6] = data[pred_var]->input[data[pred_var]->num_data-1][6];
+
+                    //input[7] = data[pred_var]->input[data[pred_var]->num_data-1][7];
+
+
+                    fann_scale_input(ann[pred_var], input);
+                    predict = fann_run(ann[pred_var], input);
+                    fann_descale_output(ann[pred_var], predict);
+                    uloga("'%s()': Server %d Predicted %s variable. Prefetch lb  and ub are {%d,%d,%d} and {%d,%d,%d}\n",
+                        __func__, DSG_ID, predicted_var, (int)predict[0],
+                        (int)predict[1], (int)predict[2], (int)predict[3], (int)predict[4], (int)predict[5]);
+                    for (int i = 0; i < 3; ++i)
+                    {
+                        lb[i] = (int)predict[i];
+                        ub[i] = (int)predict[i+3];
+                    }
+                    char *str;
+                    //asprintf(&str, "%d_%d_%d_%d_%d_%d", (int)predict[0],
+                    //    (int)predict[1], (int)predict[2], (int)predict[3], (int)predict[4], (int)predict[5]);
+                    asprintf(&str, "%d_%d_%d_%d_%d_%d", (int)predict[0],
+                        (int)predict[1], (int)predict[2], (int)predict[3], (int)predict[4], (int)predict[5]);
+
+                    predict_insert(predictrecord, predicted_var, str);
+                    free(str);
+                    pthread_mutex_unlock(&ml_mutex); //lock
+                    
+                    //get objects and prefetch
+                    local_obj_get_desc(predicted_var, lb, ub, (oh->u.o.odsc.version)-1);
+                }
+                
+            }
+            /********************Machine Learning prediction Ends********************/
+
+
+            //insert data for the machine learning
+            /*************Machine Learning Prediction for output data in predicts get******/
+            int var_id;
+            var_id = arr_value(vm, oh->u.o.odsc.name)-1;
+            pthread_mutex_lock(&ml_mutex); //lock
+
+            for (int i = data_counter[var_id]; i > 0; i--)
+            {
+                data[var_id]->output[data[var_id]->num_data-i][0] = oh->u.o.odsc.bb.lb.c[0];
+                data[var_id]->output[data[var_id]->num_data-i][1] = oh->u.o.odsc.bb.lb.c[1];
+                data[var_id]->output[data[var_id]->num_data-i][2] = oh->u.o.odsc.bb.lb.c[2];
+                data[var_id]->output[data[var_id]->num_data-i][3] = oh->u.o.odsc.bb.ub.c[0];
+                data[var_id]->output[data[var_id]->num_data-i][4] = oh->u.o.odsc.bb.ub.c[1];
+                data[var_id]->output[data[var_id]->num_data-i][5] = oh->u.o.odsc.bb.ub.c[2];
+                //data[var_id]->output[data[var_id]->num_data-i][6] = oh->u.o.odsc.version;
+
+                //data[var_id]->output[data[var_id]->num_data-i][7] = oh->u.o.odsc.version;
+            }
+            data_counter[var_id] = 0;
+
+
+
+            //check for data training
+            if(init_retrain[var_id]==0 && data[var_id]->num_data>4){
+                char * str;
+                asprintf(&str, "Wake up the thread for initial training of variable %s \n", oh->u.o.odsc.name);
+                uloga("'%s()': %s\n", __func__, str);
+                free(str);
+                init_retrain[var_id] = 1;
+                retrain[var_id] = 1;
+                pthread_cond_signal(&ml_cond);
+            }else{
+                //check if for this variable the prediction has been done
+                if(init_retrain[var_id]==1){
+                    char *actual_lb_ub;
+                    asprintf(&actual_lb_ub, "%d_%d_%d_%d_%d_%d", oh->u.o.odsc.bb.lb.c[0], oh->u.o.odsc.bb.lb.c[1], oh->u.o.odsc.bb.lb.c[2],
+                        oh->u.o.odsc.bb.ub.c[0], oh->u.o.odsc.bb.ub.c[1], oh->u.o.odsc.bb.ub.c[2]);
+                    char * predicted_lb_ub = (char*)malloc(sizeof(char)*100);
+                    predicted_lb_ub = predict_value(predictrecord, oh->u.o.odsc.name);
+                    uloga("Server %d, Actual: %s, Predicted: %s \n", DSG_ID ,actual_lb_ub, predicted_lb_ub);
+                    if(strcmp(actual_lb_ub, predicted_lb_ub)!=0){
+                        //curr_miss_freq = arr_value(mispred, oh->u.o.odsc.name);
+                        //int mis_fr = curr_miss_freq+1;
+                        arr_update(mispred, oh->u.o.odsc.name, 1);
+                    //    uloga("Curr_miss_freq for var %s is %d \n", oh->u.o.odsc.name, arr_value(mispred, oh->u.o.odsc.name));
+                    }
+                    free(actual_lb_ub);
+                    if(arr_value(mispred, oh->u.o.odsc.name) >3){
+                        retrain[var_id] = 1;
+                        arr_delete(mispred);
+                        mispred = map_only(5);
+                        pthread_cond_signal(&ml_cond);
+                        char * str;
+                        asprintf(&str, "Woke up the thread for re-training of variable %s \n", oh->u.o.odsc.name);
+                        uloga("'%s()': %s\n", __func__, str);
+                        free(str);
+                    }
+                }
+            }
+
+            //now add the current get request as input if not necessary delete in put request
+            int inp00 = oh->u.o.odsc.bb.lb.c[0];
+            int inp01 = oh->u.o.odsc.bb.lb.c[1];
+            int inp02 = oh->u.o.odsc.bb.lb.c[2];
+            int inp10 = oh->u.o.odsc.bb.ub.c[0];
+            int inp11 = oh->u.o.odsc.bb.ub.c[1];
+            int inp12 = oh->u.o.odsc.bb.ub.c[2];
+            data[var_id]->input[data[var_id]->num_data][0] = inp00;
+            data[var_id]->input[data[var_id]->num_data][1] = inp01;
+            data[var_id]->input[data[var_id]->num_data][2] = inp02;
+            data[var_id]->input[data[var_id]->num_data][3] = inp10;
+            data[var_id]->input[data[var_id]->num_data][4] = inp11;
+            data[var_id]->input[data[var_id]->num_data][5] = inp12;
+
+            data[var_id]->num_data = data[var_id]->num_data+1;
+            data_counter[var_id] = data_counter[var_id]+1;
+
+            last_request = 1;
+
+
+            pthread_mutex_unlock(&ml_mutex); //unlock
+
+        }
+        
+        //ML training ends
+        /*
+        if(strcmp(predicted_var, "0000")==0){
+            uloga("'%s()': server %d start reading %s, no prediction. Do not prefetch\n", __func__, DSG_ID, oh->u.o.odsc.name);
+        } else{
+            struct obj_data* ret_val = ls_lookup(dsg->ls, predicted_var);
+            uloga("'%s()': server %d start reading %s, Prefetch %s \n", 
+            __func__, DSG_ID, oh->u.o.odsc.name, &ret_val->obj_desc.name);
+            //prefetch_flag = 1;
+        }
+        /************* Prefetch Fequency Table End **********/
+    /********************Machine Learning prediction Starts*************
+    if(prefetch_flag == 1){
+        pthread_mutex_lock(&ml_mutex);
+        int pred_var = arr_value(vm, predicted_var);
+        free(predicted_var);
+        if(pred_var <1){
+            uloga("'%s()': server %d Map returned 0 should never happen.\n",
+        __func__, DSG_ID);
+        }
+        pred_var--;
+        
+        if(init_retrain[pred_var]==1 && data_counter[pred_var]!=0){
+            //initial training is performed and the last request was put request
+            //get request resets the data_counter to 0
+            fann_type *predict;
+            fann_type input[2];
+            input[0] = data[pred_var]->input[data[pred_var]->num_data-1][0];
+
+            input[1] = data[pred_var]->input[data[pred_var]->num_data-1][1];
+            predict = fann_run(ann[pred_var], input);
+            uloga("'%s()': Predicted lb  and ub is  %f and %f\n", __func__, predict[0], predict[1]);
+        }
+        pthread_mutex_unlock(&ml_mutex); //lock
+    }
+
+
+    /********************Machine Learning prediction Ends********************/
+
 		if(from_obj->sl == in_ssd){
             obj_data_copy_to_mem(from_obj, DSG_ID);
        }
@@ -2518,6 +3414,8 @@ int dsg_process(struct ds_gspace *dsg)
 
 int dsg_complete(struct ds_gspace *dsg)
 {
+        //free up the data structure for n-gram
+        
         return ds_stop(dsg->ds);
 }
 

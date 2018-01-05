@@ -267,6 +267,7 @@ int common_dspaces_get(const char *var_name,
         od->gdim.sizes.c[2]);
 */
 #endif
+//    uloga("Before dcg_obj_get \n");
     err = dcg_obj_get(od);
     obj_data_free(od);
     if (err < 0 && err != -EAGAIN) 
