@@ -30,7 +30,7 @@
 *  Tong Jin (2011) TASSL Rutgers University
 *  tjin@cac.rutgers.edu
 *  Pradeep Subedi (2017) RDI2 Rutgers University
-*  pradeep.subedi@rutgers
+*  pradeep.subedi@rutgers.edu
 *
 */
 
@@ -77,7 +77,9 @@ struct req_pending {
 enum lock_service {
         lock_unknown = 0,
         lock_generic,
-        lock_custom
+        lock_custom,
+        lock_v3,
+        _lock_type_count
 };
 
 enum lock_state {
@@ -93,9 +95,9 @@ enum lock_action {
 };
 
 struct dsg_lock {
-        struct list_head	lk_entry;
+        struct list_head    lk_entry;
 
-        char			lk_name[LOCK_NAME_SIZE];
+        char            lk_name[LOCK_NAME_SIZE];
 
         int                     rd_notify_cnt; 
         int                     wr_notify_cnt;
@@ -141,6 +143,7 @@ extern int *init_retrain;
 extern int *data_counter;
 extern int *retrain;
 extern int var_int;
+extern int inps;
 int counter;
 int last_request = 0;
 
@@ -154,7 +157,7 @@ static struct {
         struct coord dims;
         int max_versions;
         int max_readers;
-        int lock_type;		/* 1 - generic, 2 - custom */
+        int lock_type;      /* 1 - generic, 2 - custom */
         int hash_version;   /* 1 - ssd_hash_version_v1, 2 - ssd_hash_version_v2 */
 } ds_conf;
 
@@ -372,208 +375,208 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
 #ifdef DS_HAVE_ACTIVESPACE
 static int bin_code_local_bind(void *pbuf, int offset)
 {
-	PLT_TAB;
-	unsigned char *pptr = pbuf;
-	unsigned int *pui, i = 0;
+    PLT_TAB;
+    unsigned char *pptr = pbuf;
+    unsigned int *pui, i = 0;
 
-	/*
-	400410:       55                      push   %rbp
-	400411:       48 89 e5                mov    %rsp,%rbp
-	400414:       48 81 ec 80 00 00 00    sub    $0x80,%rsp
-	40041b:       48 89 7d b8             mov    %rdi,0xffffffffffffffb8(%rbp)
-	*/
+    /*
+    400410:       55                      push   %rbp
+    400411:       48 89 e5                mov    %rsp,%rbp
+    400414:       48 81 ec 80 00 00 00    sub    $0x80,%rsp
+    40041b:       48 89 7d b8             mov    %rdi,0xffffffffffffffb8(%rbp)
+    */
 
-	/*
-	40041f:       48 c7 45 c0 c0 1f 41    movq   $0x411fc0,0xffffffffffffffc0(%rbp)
-	400426:       00
-	400427:       48 c7 45 c8 70 fc 40    movq   $0x40fc70,0xffffffffffffffc8(%rbp)
-	40042e:       00
-	40042f:       48 c7 45 d0 f0 3f 41    movq   $0x413ff0,0xffffffffffffffd0(%rbp)
-	400436:       00
-	400437:       48 c7 45 d8 c0 75 40    movq   $0x4075c0,0xffffffffffffffd8(%rbp)
-	40043e:       00
-	*/
+    /*
+    40041f:       48 c7 45 c0 c0 1f 41    movq   $0x411fc0,0xffffffffffffffc0(%rbp)
+    400426:       00
+    400427:       48 c7 45 c8 70 fc 40    movq   $0x40fc70,0xffffffffffffffc8(%rbp)
+    40042e:       00
+    40042f:       48 c7 45 d0 f0 3f 41    movq   $0x413ff0,0xffffffffffffffd0(%rbp)
+    400436:       00
+    400437:       48 c7 45 d8 c0 75 40    movq   $0x4075c0,0xffffffffffffffd8(%rbp)
+    40043e:       00
+    */
 
-	// pptr = pptr + 0x11; // 0xf;
-	pptr = pptr + offset;
+    // pptr = pptr + 0x11; // 0xf;
+    pptr = pptr + offset;
 
-	for (i = 0; i < sizeof(plt)/sizeof(plt[0]); i++) {
-		if (((pptr[2] >> 4) & 0xf) > 7) {
-			pui = (unsigned int *) (pptr + 7);
-			pptr = pptr + 11;
-		}
-		else {
-			pui = (unsigned int *) (pptr + 4);
-			pptr = pptr + 8;
-		}
+    for (i = 0; i < sizeof(plt)/sizeof(plt[0]); i++) {
+        if (((pptr[2] >> 4) & 0xf) > 7) {
+            pui = (unsigned int *) (pptr + 7);
+            pptr = pptr + 11;
+        }
+        else {
+            pui = (unsigned int *) (pptr + 4);
+            pptr = pptr + 8;
+        }
 
-		*pui = (unsigned int) ((unsigned long) plt[i] & 0xFFFFFFFFUL);
-		// pptr = pptr + 0x8;
-	}
+        *pui = (unsigned int) ((unsigned long) plt[i] & 0xFFFFFFFFUL);
+        // pptr = pptr + 0x8;
+    }
 
-	return 0;
+    return 0;
 }
 
 static int 
 bin_code_local_exec(
-	bin_code_fn_t ptr_fn, 
-	struct obj_data *od, 
-	struct obj_descriptor *req_desc, 
-	struct rexec_args *rargs)
+    bin_code_fn_t ptr_fn, 
+    struct obj_data *od, 
+    struct obj_descriptor *req_desc, 
+    struct rexec_args *rargs)
 {
-	struct bbox bb;
-	int err;
+    struct bbox bb;
+    int err;
 
-	rargs->ptr_data_in = od->data;
-	// NOTE:  I  can account  for  different data  representations
-	// here, knowing that the code to execute is written in C ! (row major)
-	rargs->ni = bbox_dist(&od->obj_desc.bb, bb_y);
-	rargs->nj = bbox_dist(&od->obj_desc.bb, bb_x);
-	rargs->nk = bbox_dist(&od->obj_desc.bb, bb_z);
+    rargs->ptr_data_in = od->data;
+    // NOTE:  I  can account  for  different data  representations
+    // here, knowing that the code to execute is written in C ! (row major)
+    rargs->ni = bbox_dist(&od->obj_desc.bb, bb_y);
+    rargs->nj = bbox_dist(&od->obj_desc.bb, bb_x);
+    rargs->nk = bbox_dist(&od->obj_desc.bb, bb_z);
 
-	bbox_intersect(&od->obj_desc.bb, &req_desc->bb, &bb);
-	bbox_to_origin(&bb, &od->obj_desc.bb);
+    bbox_intersect(&od->obj_desc.bb, &req_desc->bb, &bb);
+    bbox_to_origin(&bb, &od->obj_desc.bb);
 
-	rargs->im = bb.lb.c[bb_y];
-	rargs->jm = bb.lb.c[bb_x];
-	rargs->km = bb.lb.c[bb_z];
+    rargs->im = bb.lb.c[bb_y];
+    rargs->jm = bb.lb.c[bb_x];
+    rargs->km = bb.lb.c[bb_z];
 
-	rargs->iM = bb.ub.c[bb_y];
-	rargs->jM = bb.ub.c[bb_x];
-	rargs->kM = bb.ub.c[bb_z];
+    rargs->iM = bb.ub.c[bb_y];
+    rargs->jM = bb.ub.c[bb_x];
+    rargs->kM = bb.ub.c[bb_z];
 
-	err = ptr_fn(rargs);
+    err = ptr_fn(rargs);
 #ifdef DEBUG
-	uloga("'%s()': execution succedeed, rc = %d.\n", __func__, err);
+    uloga("'%s()': execution succedeed, rc = %d.\n", __func__, err);
 #endif
-	return err;
+    return err;
 }
 
 static int bin_code_return_result(struct rexec_args *rargs, struct node_id *peer, int qid)
 {
-	struct msg_buf *msg;
-	struct hdr_bin_result *hr;
-	int err = -ENOMEM;
+    struct msg_buf *msg;
+    struct hdr_bin_result *hr;
+    int err = -ENOMEM;
 
-	msg = msg_buf_alloc(dsg->ds->rpc_s, peer, 1);
-	if (!msg)
-		goto err_out;
+    msg = msg_buf_alloc(dsg->ds->rpc_s, peer, 1);
+    if (!msg)
+        goto err_out;
 
-	msg->msg_rpc->cmd = ss_code_reply;
-	msg->msg_rpc->id = DSG_ID;
+    msg->msg_rpc->cmd = ss_code_reply;
+    msg->msg_rpc->id = DSG_ID;
 
-	hr = (typeof(hr)) msg->msg_rpc->pad;
-	hr->qid = qid;
-	// TODO: consider the case in which rargs->size > hr->pad
-	memcpy(hr->pad, rargs->ptr_data_out, rargs->size_res);
+    hr = (typeof(hr)) msg->msg_rpc->pad;
+    hr->qid = qid;
+    // TODO: consider the case in which rargs->size > hr->pad
+    memcpy(hr->pad, rargs->ptr_data_out, rargs->size_res);
 
-	free(rargs->ptr_data_out);
+    free(rargs->ptr_data_out);
 
-	err = rpc_send(dsg->ds->rpc_s, peer, msg);
-	if (err == 0)
-		return 0;
+    err = rpc_send(dsg->ds->rpc_s, peer, msg);
+    if (err == 0)
+        return 0;
 
-	free(msg);
+    free(msg);
  err_out:
-	ERROR_TRACE();
+    ERROR_TRACE();
 }
 
-#define ALIGN_ADDR_AT_BYTES(addr, bytes)			\
-do {								\
-        unsigned long _a = (unsigned long) (addr);		\
-        _a = (_a + bytes-1) & ~(bytes-1);			\
-        (addr) = (void *) _a;					\
+#define ALIGN_ADDR_AT_BYTES(addr, bytes)            \
+do {                                \
+        unsigned long _a = (unsigned long) (addr);      \
+        _a = (_a + bytes-1) & ~(bytes-1);           \
+        (addr) = (void *) _a;                   \
 } while (0)
 
 static int bin_code_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-	struct hdr_bin_code *hc = (typeof(hc)) msg->msg_rpc->pad;
-	struct rexec_args rargs;
-	struct node_id *peer;
-	int err;
+    struct hdr_bin_code *hc = (typeof(hc)) msg->msg_rpc->pad;
+    struct rexec_args rargs;
+    struct node_id *peer;
+    int err;
 
-	/* Looks like a stack overflow ... to me, let's see. */
-	static int r_enter = 0;
-	static int r_exit = 0;
+    /* Looks like a stack overflow ... to me, let's see. */
+    static int r_enter = 0;
+    static int r_exit = 0;
 
-	// void *ptr_res;
+    // void *ptr_res;
 
-	r_enter++;
+    r_enter++;
 #ifdef DEBUG
-	uloga("'%s()': got the code, should execute it.\n", __func__);
+    uloga("'%s()': got the code, should execute it.\n", __func__);
 #endif
-	bin_code_local_bind(msg->msg_data, hc->offset);
+    bin_code_local_bind(msg->msg_data, hc->offset);
 
-	/* NOTE: On Cray the heap is already marked as executable !
-	err = mprotect(msg->msg_data, 1024, PROT_EXEC | PROT_READ | PROT_WRITE);
-	if (err < 0) {
-		ulog_err("'%s()': failed.\n", __func__);
-	}
-	*/
+    /* NOTE: On Cray the heap is already marked as executable !
+    err = mprotect(msg->msg_data, 1024, PROT_EXEC | PROT_READ | PROT_WRITE);
+    if (err < 0) {
+        ulog_err("'%s()': failed.\n", __func__);
+    }
+    */
 
-	struct obj_data *from_obj;
+    struct obj_data *from_obj;
 
     from_obj = ls_find(dsg->ls, &hc->odsc);
-	// TODO: what if you can not find it ?!
+    // TODO: what if you can not find it ?!
 
-	memset(&rargs, 0, sizeof(rargs));
+    memset(&rargs, 0, sizeof(rargs));
 
-	err = bin_code_local_exec((bin_code_fn_t) msg->msg_data, 
-			from_obj, &hc->odsc, &rargs);
+    err = bin_code_local_exec((bin_code_fn_t) msg->msg_data, 
+            from_obj, &hc->odsc, &rargs);
 
-	peer = ds_get_peer(dsg->ds, msg->peer->ptlmap.id);
-	// TODO:  write the error  path here  ... msg->peer  is const;
-	// work around the warning!!!
-	err = bin_code_return_result(&rargs, peer, hc->qid);
+    peer = ds_get_peer(dsg->ds, msg->peer->ptlmap.id);
+    // TODO:  write the error  path here  ... msg->peer  is const;
+    // work around the warning!!!
+    err = bin_code_return_result(&rargs, peer, hc->qid);
 
 
 
-	/*
-	err = mprotect(msg->msg_data, 1024, PROT_READ | PROT_WRITE);
-	if (err < 0) {
-		uloga("'%s()': failed mprotect().\n", __func__);
-	}
-	*/
+    /*
+    err = mprotect(msg->msg_data, 1024, PROT_READ | PROT_WRITE);
+    if (err < 0) {
+        uloga("'%s()': failed mprotect().\n", __func__);
+    }
+    */
 
-	free(msg->private);
-	free(msg);
+    free(msg->private);
+    free(msg);
 
-	r_exit++;
+    r_exit++;
 
-	return 0;
+    return 0;
 }
 
 static int dsgrpc_bin_code_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
-	struct hdr_bin_code *hc = (struct hdr_bin_code *) cmd->pad;
-	struct msg_buf *msg;
-	int err = -ENOMEM;
+    struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
+    struct hdr_bin_code *hc = (struct hdr_bin_code *) cmd->pad;
+    struct msg_buf *msg;
+    int err = -ENOMEM;
 
-	msg = msg_buf_alloc(rpc_s, peer, 1);
-	if (!msg)
-		goto err_out;
+    msg = msg_buf_alloc(rpc_s, peer, 1);
+    if (!msg)
+        goto err_out;
 
-	/* Copy  the  command request;  this  is  only  needed in  the
-	   completion routine. */
-	memcpy(msg->msg_rpc, cmd, sizeof(*cmd));
+    /* Copy  the  command request;  this  is  only  needed in  the
+       completion routine. */
+    memcpy(msg->msg_rpc, cmd, sizeof(*cmd));
 
-	msg->private = 
-	msg->msg_data = malloc(4096 + hc->size);
-	ALIGN_ADDR_AT_BYTES(msg->msg_data, 4096);
-	msg->size = hc->size;
-	msg->cb = bin_code_put_completion;
+    msg->private = 
+    msg->msg_data = malloc(4096 + hc->size);
+    ALIGN_ADDR_AT_BYTES(msg->msg_data, 4096);
+    msg->size = hc->size;
+    msg->cb = bin_code_put_completion;
 
-	rpc_mem_info_cache(peer, msg, cmd); 
-	err = rpc_receive_direct(rpc_s, peer, msg);
-	rpc_mem_info_reset(peer, msg, cmd);
-	if(err == 0)
-		return 0;
+    rpc_mem_info_cache(peer, msg, cmd); 
+    err = rpc_receive_direct(rpc_s, peer, msg);
+    rpc_mem_info_reset(peer, msg, cmd);
+    if(err == 0)
+        return 0;
 
-	free(msg->private);
-	free(msg);
+    free(msg->private);
+    free(msg);
  err_out:
-	ERROR_TRACE();
+    ERROR_TRACE();
 }
 #endif // end of #ifdef DS_HAVE_ACTIVESPACE
 
@@ -607,6 +610,24 @@ void sem_init(struct dsg_lock *dl, int max_readers)
         dl->wr_epoch = 0;
 }
 
+/*
+  Lock v3 service.
+*/
+void lock_init_v3(struct dsg_lock *dl, int max_readers)
+{
+
+        dl->rd_lock_state = 
+        dl->wr_lock_state = unlocked;
+
+        dl->rd_cnt =
+        dl->wr_cnt = 0;
+
+        dl->wr_epoch = 0;
+
+        uloga("Initializing lock type 3\n");
+
+}
+
 static int dsg_lock_put_on_wait(struct dsg_lock *dl, struct rpc_cmd *cmd)
 {
         struct req_pending *rr;
@@ -638,7 +659,7 @@ static int dsg_lock_grant(struct node_id *peer, struct lockhdr *lhr)
         msg->msg_rpc->id = DSG_ID;
 
         lh = (struct lockhdr *) msg->msg_rpc->pad;
-	strcpy(lh->name, lhr->name);
+    strcpy(lh->name, lhr->name);
         lh->type = lk_grant;
         lh->rc = 0;
         lh->id = lhr->id;
@@ -664,7 +685,7 @@ lock_process_request(struct dsg_lock *dl, struct lockhdr *lh, int may_grant)
                         dl->rd_cnt++;
                         f_lock = la_grant;
                 }
-		else	f_lock = la_wait;
+        else    f_lock = la_wait;
                 break;
 
         case lk_read_release:
@@ -681,7 +702,7 @@ lock_process_request(struct dsg_lock *dl, struct lockhdr *lh, int may_grant)
                         dl->wr_cnt++;
                         f_lock = la_grant;
                 }
-		else	f_lock = la_wait;
+        else    f_lock = la_wait;
                 break;
 
         case lk_write_release:
@@ -827,6 +848,87 @@ static int sem_process_wait_list(struct dsg_lock *dl)
         ERROR_TRACE();
 }
 
+static enum lock_action 
+lock_process_request_v3(struct dsg_lock *dl, struct lockhdr *lh, int may_grant)
+{
+        enum lock_action f_lock = la_none;
+
+        switch (lh->type) {
+        case lk_read_get:
+                if (dl->wr_lock_state == unlocked && dl->wr_epoch > 0 && may_grant) {
+                        dl->rd_lock_state = locked;
+                        dl->rd_cnt++;
+                        f_lock = la_grant;
+                }
+        else    f_lock = la_wait;
+                break;
+
+        case lk_read_release:
+                dl->rd_cnt--;
+                if (dl->rd_cnt == 0) {
+                        dl->rd_lock_state = unlocked;
+                        f_lock = la_notify;
+                }
+                break;
+
+        case lk_write_get:
+                if (dl->rd_lock_state == unlocked && dl->wr_cnt == 0) { 
+                        dl->wr_lock_state = locked;
+                        dl->wr_cnt++;
+                        f_lock = la_grant;
+                }
+        else    f_lock = la_wait;
+                break;
+
+        case lk_write_release:
+                dl->wr_cnt--;
+                if (dl->wr_cnt == 0) {
+                        dl->wr_lock_state = unlocked;
+                        dl->wr_epoch++;
+                        f_lock = la_notify;
+                }
+        }
+
+        return f_lock;
+}
+
+static int lock_process_wait_list_v3(struct dsg_lock *dl)
+{
+        struct req_pending *rr; // , *tmp;
+        struct lockhdr *lh;
+        struct node_id *peer;
+        int err;
+
+        while (! list_empty(&dl->wait_list)) {
+                rr = list_entry(dl->wait_list.next, 
+                                struct req_pending, req_entry);
+
+                lh = (struct lockhdr *) rr->cmd.pad;
+                switch (lock_process_request_v3(dl, lh, 1)) {
+                case la_none:
+                        /* Nothing to do. Yeah ... this should not happen! */
+                case la_wait:
+                        return 0;
+
+                case la_grant:
+                        peer = ds_get_peer(dsg->ds, rr->cmd.id);
+                        err = dsg_lock_grant(peer, lh);
+                        if (err < 0)
+                                goto err_out;
+                        break;
+
+                case la_notify:
+                        break;
+                }
+
+                list_del(&rr->req_entry);
+                free(rr);
+        }
+
+        return 0;
+ err_out:
+        ERROR_TRACE();
+}
 
 static int 
 lock_service(struct dsg_lock *dl, struct rpc_server *rpc, struct rpc_cmd *cmd)
@@ -838,7 +940,7 @@ lock_service(struct dsg_lock *dl, struct rpc_server *rpc, struct rpc_cmd *cmd)
         switch (lock_process_request(dl, lh, list_empty(&dl->wait_list))) {
 
         case la_none:
-		break;
+        break;
 
         case la_wait:
                 err = dsg_lock_put_on_wait(dl, cmd);
@@ -891,20 +993,52 @@ sem_service(struct dsg_lock *dl, struct rpc_server *rpc, struct rpc_cmd *cmd)
         ERROR_TRACE();
 }
 
-static struct dsg_lock * dsg_lock_alloc(const char *lock_name,
-	enum lock_service lock_type, int max_readers)
+static int 
+lock_service_v3(struct dsg_lock *dl, struct rpc_server *rpc, struct rpc_cmd *cmd)
 {
-	struct dsg_lock *dl;
+        struct lockhdr *lh = (struct lockhdr *) cmd->pad;
+        struct node_id *peer;
+        int err = 0;
 
-	dl = malloc(sizeof(*dl));
-	if (!dl) {
-		errno = ENOMEM;
-		return dl;
-	}
-	memset(dl, 0, sizeof(*dl));
+        switch (lock_process_request_v3(dl, lh, list_empty(&dl->wait_list))) {
 
-	strncpy(dl->lk_name, lock_name, sizeof(dl->lk_name));
-	INIT_LIST_HEAD(&dl->wait_list);
+        case la_none:
+        break;
+
+        case la_wait:
+                err = dsg_lock_put_on_wait(dl, cmd);
+                break;
+
+        case la_notify:
+                err = lock_process_wait_list_v3(dl);
+                break;
+
+        case la_grant:
+                peer = ds_get_peer(dsg->ds, cmd->id);
+                err = dsg_lock_grant(peer, lh);
+                break;
+        }
+
+        if (err == 0)
+                return 0;
+// err_out:
+        ERROR_TRACE();
+}
+
+static struct dsg_lock * dsg_lock_alloc(const char *lock_name,
+    enum lock_service lock_type, int max_readers)
+{
+    struct dsg_lock *dl;
+
+    dl = malloc(sizeof(*dl));
+    if (!dl) {
+        errno = ENOMEM;
+        return dl;
+    }
+    memset(dl, 0, sizeof(*dl));
+
+    strncpy(dl->lk_name, lock_name, sizeof(dl->lk_name));
+    INIT_LIST_HEAD(&dl->wait_list);
 
         switch (lock_type) {
         case lock_generic:
@@ -913,8 +1047,8 @@ static struct dsg_lock * dsg_lock_alloc(const char *lock_name,
                 dl->process_wait_list = &lock_process_wait_list;
                 dl->service = &lock_service;
 #ifdef DEBUG
-		uloga("'%s()': generic lock %s created.\n", 
-			__func__, lock_name);
+        uloga("'%s()': generic lock %s created.\n", 
+            __func__, lock_name);
 #endif
                 break;
 
@@ -924,33 +1058,38 @@ static struct dsg_lock * dsg_lock_alloc(const char *lock_name,
                 dl->process_wait_list = &sem_process_wait_list;
                 dl->service = &sem_service;
 #ifdef DEBUG
-		uloga("'%s()': custom lock %s created.\n", 
-			__func__, lock_name);
+        uloga("'%s()': custom lock %s created.\n", 
+            __func__, lock_name);
 #endif
                 break;
-
-	default:
-		// TODO: ERROR here, this should not happen. 
-		break;
+        case lock_v3:
+                dl->init = &lock_init_v3;
+                dl->process_request = &lock_process_request_v3;
+                dl->process_wait_list = &lock_process_wait_list_v3;
+                dl->service = &lock_service_v3;
+                break;
+    default:
+        // TODO: ERROR here, this should not happen. 
+        break;
         }
 
         dl->init(dl, max_readers);
 
-	list_add(&dl->lk_entry, &dsg->locks_list);
+    list_add(&dl->lk_entry, &dsg->locks_list);
 
-	return dl;
+    return dl;
 }
 
 static struct dsg_lock *dsg_lock_find_by_name(const char *lock_name)
 {
-	struct dsg_lock *dl;
+    struct dsg_lock *dl;
 
-	list_for_each_entry(dl, &dsg->locks_list, struct dsg_lock, lk_entry) {
-		if (strcmp(dl->lk_name, lock_name) == 0)
-			return dl;
-	}
+    list_for_each_entry(dl, &dsg->locks_list, struct dsg_lock, lk_entry) {
+        if (strcmp(dl->lk_name, lock_name) == 0)
+            return dl;
+    }
 
-	return 0;
+    return 0;
 }
 
 /*
@@ -958,32 +1097,32 @@ static struct dsg_lock *dsg_lock_find_by_name(const char *lock_name)
 */
 static int dsgrpc_lock_service(struct rpc_server *rpc, struct rpc_cmd *cmd)
 {
-	struct lockhdr *lh = (struct lockhdr *) cmd->pad;
-	struct dsg_lock *dl;
+    struct lockhdr *lh = (struct lockhdr *) cmd->pad;
+    struct dsg_lock *dl;
         int err = -ENOMEM;
 
-	// uloga("'%s()': lock %s.\n", __func__, lh->name);
-	dl = dsg_lock_find_by_name(lh->name);
+    // uloga("'%s()': lock %s.\n", __func__, lh->name);
+    dl = dsg_lock_find_by_name(lh->name);
 
-	if (!dl) {
-		dl = dsg_lock_alloc(lh->name, 
-			(ds_conf.lock_type == 1) ? lock_generic : lock_custom, 
-			ds_conf.max_readers);
-		/*
-		struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
+    if (!dl) {
+        dl = dsg_lock_alloc(lh->name, 
+            ds_conf.lock_type, 
+            ds_conf.max_readers);
+        /*
+        struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
 
-		uloga("'%s()': lock '%s' created on server %d at request "
-			"from compute peer %d.\n", 
-			__func__, lh->name, DSG_ID, peer->ptlmap.id);
-		*/
+        uloga("'%s()': lock '%s' created on server %d at request "
+            "from compute peer %d.\n", 
+            __func__, lh->name, DSG_ID, peer->ptlmap.id);
+        */
 
-		if (!dl)
-			goto err_out;
-	}
+        if (!dl)
+            goto err_out;
+    }
 
-	err = dl->service(dl, rpc, cmd);
-	if (err == 0)
-		return 0;
+    err = dl->service(dl, rpc, cmd);
+    if (err == 0)
+        return 0;
 
  err_out:
         ERROR_TRACE();
@@ -1000,24 +1139,24 @@ static int dsgrpc_remove_service(struct rpc_server *rpc, struct rpc_cmd *cmd)
 //        uloga("'%s()': Remove %s version %d.\n", __func__, lh->name, lh->lock_num  );
 
 
-	if (!dsg->ls) return 0;
+    if (!dsg->ls) return 0;
 
-	struct obj_data *od, *t;
-	struct list_head *list;
-	int i;
+    struct obj_data *od, *t;
+    struct list_head *list;
+    int i;
 
-	for (i = 0; i < dsg->ls->size_hash; i++) {
-        	list = &(dsg->ls)->obj_hash[i];
-	        list_for_each_entry_safe(od, t, list, struct obj_data, obj_entry ) {
-			if (od->obj_desc.version == lh->lock_num && !strcmp(od->obj_desc.name,lh->name) ) {
-				ls_remove(dsg->ls, od);
-				obj_data_free(od);
-			}
-		}
-	}
+    for (i = 0; i < dsg->ls->size_hash; i++) {
+            list = &(dsg->ls)->obj_hash[i];
+            list_for_each_entry_safe(od, t, list, struct obj_data, obj_entry ) {
+            if (od->obj_desc.version == lh->lock_num && !strcmp(od->obj_desc.name,lh->name) ) {
+                ls_remove(dsg->ls, od);
+                obj_data_free(od);
+            }
+        }
+    }
 
         
-	return 0;
+    return 0;
 
  err_out:
         ERROR_TRACE();
@@ -1138,17 +1277,17 @@ static int cq_check_match(struct obj_descriptor *odsc)
 
 static char * obj_desc_sprint(const struct obj_descriptor *odsc)
 {
-	char *str;
-	int nb;
+    char *str;
+    int nb;
 
         nb = asprintf(&str, "obj_descriptor = {\n"
                 "\t.name = %s,\n"
                 "\t.owner = %d,\n"
                 "\t.version = %d\n"
                 "\t.bb = ", odsc->name, odsc->owner, odsc->version);
-	str = str_append_const(str_append(str, bbox_sprint(&odsc->bb)), "}\n");
+    str = str_append_const(str_append(str, bbox_sprint(&odsc->bb)), "}\n");
 
-	return str;
+    return str;
 }
 
 /*
@@ -1164,14 +1303,14 @@ static int dsgrpc_obj_update(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 #ifdef DEBUG
  {
-	 char *str;
+     char *str;
 
-	 asprintf(&str, "S%2d: update obj_desc '%s' ver %d from S%2d for  ",
+     asprintf(&str, "S%2d: update obj_desc '%s' ver %d from S%2d for  ",
                 DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version, cmd->id);
-	 str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
+     str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
 
-	 uloga("'%s()': %s\n", __func__, str);
-	 free(str);
+     uloga("'%s()': %s\n", __func__, str);
+     free(str);
  }
 #endif
         oh->u.o.odsc.owner = cmd->id;
@@ -1196,103 +1335,103 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 {
     struct obj_descriptor *odsc = &od->obj_desc;
     struct sspace* ssd = lookup_sspace(dsg, odsc->name, &od->gdim);
-	struct dht_entry *dht_tab[ssd->dht->num_entries];
-	/* TODO: create a separate header structure for object
-	   updates; for now just abuse the hdr_obj_get. */
-	struct hdr_obj_get *oh;
-	struct msg_buf *msg;
-	struct node_id *peer;
-	int num_de, i, min_rank, err;
+    struct dht_entry *dht_tab[ssd->dht->num_entries];
+    /* TODO: create a separate header structure for object
+       updates; for now just abuse the hdr_obj_get. */
+    struct hdr_obj_get *oh;
+    struct msg_buf *msg;
+    struct node_id *peer;
+    int num_de, i, min_rank, err;
 
-	/* Compute object distribution to nodes in the space. */
-	num_de = ssd_hash(ssd, &odsc->bb, dht_tab);
-	if (num_de == 0) {
-		uloga("'%s()': this should not happen, num_de == 0 ?!\n",
-			__func__);
-	}
+    /* Compute object distribution to nodes in the space. */
+    num_de = ssd_hash(ssd, &odsc->bb, dht_tab);
+    if (num_de == 0) {
+        uloga("'%s()': this should not happen, num_de == 0 ?!\n",
+            __func__);
+    }
 
-	min_rank = dht_tab[0]->rank;
-	/* Update object descriptors on the corresponding nodes. */
-	for (i = 0; i < num_de; i++) {
-		peer = ds_get_peer(dsg->ds, dht_tab[i]->rank);
-		if (peer == dsg->ds->self) {
-			// TODO: check if owner is set properly here.
-			/*
-			uloga("Obj desc version %d, for myself ... owner is %d\n",
-				od->obj_desc.version, od->obj_desc.owner);
-			*/
+    min_rank = dht_tab[0]->rank;
+    /* Update object descriptors on the corresponding nodes. */
+    for (i = 0; i < num_de; i++) {
+        peer = ds_get_peer(dsg->ds, dht_tab[i]->rank);
+        if (peer == dsg->ds->self) {
+            // TODO: check if owner is set properly here.
+            /*
+            uloga("Obj desc version %d, for myself ... owner is %d\n",
+                od->obj_desc.version, od->obj_desc.owner);
+            */
 #ifdef DEBUG
-			char *str;
+            char *str;
 
-			asprintf(&str, "S%2d: got obj_desc '%s' ver %d for ", 
-				 DSG_ID, odsc->name, odsc->version);
-			str = str_append(str, bbox_sprint(&odsc->bb));
+            asprintf(&str, "S%2d: got obj_desc '%s' ver %d for ", 
+                 DSG_ID, odsc->name, odsc->version);
+            str = str_append(str, bbox_sprint(&odsc->bb));
 
-			uloga("'%s()': %s\n", __func__, str);
-			free(str);
+            uloga("'%s()': %s\n", __func__, str);
+            free(str);
 #endif
-			dht_add_entry(ssd->ent_self, odsc);
-			if (peer->ptlmap.id == min_rank) {
-				err = cq_check_match(odsc);
-				if (err < 0)
-					goto err_out;
-			}
-			continue;
-		}
+            dht_add_entry(ssd->ent_self, odsc);
+            if (peer->ptlmap.id == min_rank) {
+                err = cq_check_match(odsc);
+                if (err < 0)
+                    goto err_out;
+            }
+            continue;
+        }
 #ifdef DEBUG
-		{
-			char *str;
+        {
+            char *str;
 
-			asprintf(&str, "S%2d: fwd obj_desc '%s' to S%2d ver %d for ",
-				 DSG_ID, odsc->name, peer->ptlmap.id, odsc->version);
-			str = str_append(str, bbox_sprint(&odsc->bb));
+            asprintf(&str, "S%2d: fwd obj_desc '%s' to S%2d ver %d for ",
+                 DSG_ID, odsc->name, peer->ptlmap.id, odsc->version);
+            str = str_append(str, bbox_sprint(&odsc->bb));
 
-			uloga("'%s()': %s\n", __func__, str);
-			free(str);
-		}
+            uloga("'%s()': %s\n", __func__, str);
+            free(str);
+        }
 #endif
-		err = -ENOMEM;
-		msg = msg_buf_alloc(dsg->ds->rpc_s, peer, 1);
-		if (!msg)
-			goto err_out;
+        err = -ENOMEM;
+        msg = msg_buf_alloc(dsg->ds->rpc_s, peer, 1);
+        if (!msg)
+            goto err_out;
 
-		msg->msg_rpc->cmd = ss_obj_update;
-		msg->msg_rpc->id = DSG_ID;
+        msg->msg_rpc->cmd = ss_obj_update;
+        msg->msg_rpc->id = DSG_ID;
 
-		oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
-		oh->u.o.odsc = *odsc;
-		oh->rank = min_rank;
+        oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
+        oh->u.o.odsc = *odsc;
+        oh->rank = min_rank;
         memcpy(&oh->gdim, &od->gdim, sizeof(struct global_dimension));
 
-		err = rpc_send(dsg->ds->rpc_s, peer, msg);
-		if (err < 0) {
-			free(msg);
-			goto err_out;
-		}
-	}
+        err = rpc_send(dsg->ds->rpc_s, peer, msg);
+        if (err < 0) {
+            free(msg);
+            goto err_out;
+        }
+    }
 
-	return 0;
+    return 0;
  err_out:
-	ERROR_TRACE();
+    ERROR_TRACE();
 }
 
 /*
 */
 static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-	struct obj_data *od = msg->private;
-	
+    struct obj_data *od = msg->private;
+    
 #ifdef DEBUG
-	{
-		char *str;
-		asprintf(&str, "S%2d: dsg->ls->mem_used=%llu, obj_data_size(&od->obj_desc)=%d",
-			DSG_ID, dsg->ls->mem_used, obj_data_size(&od->obj_desc));
-		uloga("'%s()': %s\n", __func__, str);
-		free(str);
-	}
+    {
+        char *str;
+        asprintf(&str, "S%2d: dsg->ls->mem_used=%llu, obj_data_size(&od->obj_desc)=%d",
+            DSG_ID, dsg->ls->mem_used, obj_data_size(&od->obj_desc));
+        uloga("'%s()': %s\n", __func__, str);
+        free(str);
+    }
 #endif
 
-	ls_add_obj(dsg->ls, od);
+    ls_add_obj(dsg->ls, od);
     if(od->sl == in_memory){
     //    uloga("Object sl shows in_memory \n");
     }
@@ -1302,7 +1441,7 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
         obj_data_copy_to_ssd_direct(od);
         obj_data_free_pointer(od);
     }
-	if(od->sl == in_memory_ceph){
+    if(od->sl == in_memory_ceph){
         obj_data_copy_to_ceph(od, cluster, DSG_ID);
         //obj_data_free_pointer(od);
     }
@@ -1345,6 +1484,7 @@ static void request_type_predict(int var_id, char *request_name, char *predicted
     if(var_chain_length[var_id] ==0){
             //this is the first time get or put is called in this server
             //perform initialization
+        uloga("First access to variable %d", var_id);
         var_curr_head[var_id]= (m_node*) malloc (sizeof(m_node));
         varmap[var_id] = map_new(5);
         strcpy(var_curr_head[var_id]->var_name, request_name);
@@ -1524,10 +1664,7 @@ int prefetch_insert_tail(struct obj_data * pod, int array_size){
         pod_list.length = 1;
     }
     else if (pod_list.length >= array_size){
-        //obj_data_free_in_mem(pod_list.pref_od[pod_list.head]);
         pod_list.pref_od[pod_list.head]->so = normal;
-        //dsg->ls->mem_used -= obj_data_size(&pod_list.pref_od[pod_list.head]->obj_desc);
-
         pod_list.head = get_next(pod_list.head, array_size);
         pod_list.tail = get_next(pod_list.tail, array_size);
     }
@@ -1564,13 +1701,13 @@ int prefetch_odesc_insert_tail(struct obj_descriptor * pod, int array_size){
 void *prefetch_thread(void*attr){
     int j = 0;
     int local_cond_index = 0;
-//#ifdef DEBUG
+#ifdef DEBUG
     char *str;
     asprintf(&str, "init prefetch_thread: cond_num %d cond_index %d  ",
         cond_num, cond_index);
     uloga("'%s()': %s\n", __func__, str);
     free(str);
-//#endif
+#endif
     while (j == 0)
     {
         pthread_mutex_lock(&pmutex);        
@@ -1716,14 +1853,14 @@ static int local_obj_get_desc(const char * var_name, uint64_t *lb, uint64_t *ub,
 {
         struct sspace* local_ssd = dsg->ssd;
         const struct obj_data *podsc[local_ssd->ent_self->odsc_num];
-        int ndim = 3;
+        int ndim = ds_conf.ndim;
         struct obj_descriptor odsc = {
             .version = ver, .owner = -1, 
             .st = st,
             .bb = {.num_dims = ndim,}
         };
-        memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*3);
-        memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*3);
+        memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*ndim);
+        memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*ndim);
 
         memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
         memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
@@ -1772,12 +1909,14 @@ static void predict_prefetch(struct obj_descriptor *odsc)
         int var_id;
         var_id = arr_value(vm, odsc->name)-1;
         //uloga("After insert_n_predict_data \n");
+        /*
         int inp00 = odsc->bb.lb.c[0];
         int inp01 = odsc->bb.lb.c[1];
         int inp02 = odsc->bb.lb.c[2];
         int inp10 = odsc->bb.ub.c[0];
         int inp11 = odsc->bb.ub.c[1];
         int inp12 = odsc->bb.ub.c[2];
+        */
         //int inp2 = odsc->version;
         pthread_mutex_lock(&ml_mutex); //lock
 
@@ -1787,12 +1926,20 @@ static void predict_prefetch(struct obj_descriptor *odsc)
         }
         last_request = 0;
 
+        int ndim = ds_conf.ndim;
+        while(ndim>0){
+            data[var_id]->input[data[var_id]->num_data][ndim-1] = odsc->bb.lb.c[ndim-1];
+            data[var_id]->input[data[var_id]->num_data][(ndim*2)-1] = odsc->bb.ub.c[ndim-1];
+            ndim--;
+        }
+        /*
         data[var_id]->input[data[var_id]->num_data][0] = inp00;
         data[var_id]->input[data[var_id]->num_data][1] = inp01;
         data[var_id]->input[data[var_id]->num_data][2] = inp02;
         data[var_id]->input[data[var_id]->num_data][3] = inp10;
         data[var_id]->input[data[var_id]->num_data][4] = inp11;
         data[var_id]->input[data[var_id]->num_data][5] = inp12;
+        */
         //data[var_id]->input[data[var_id]->num_data][6] = inp2;
 
         //data[var_id]->input[data[var_id]->num_data][7] = inp2;
@@ -1800,26 +1947,10 @@ static void predict_prefetch(struct obj_descriptor *odsc)
         data[var_id]->num_data = data[var_id]->num_data+1;
         data_counter[var_id] = data_counter[var_id]+1;
         pthread_mutex_unlock(&ml_mutex); //lock
-
-        //uloga("Before insert_n_predict_data \n");
-        /******************ML training ends**********/
-
-        /*
-        if(strcmp(predicted_var, "0000")==0){
-            uloga("'%s()': server %d start writing %s, no prediction. Do not prefetch\n", 
-            __func__, DSG_ID, odsc->name);
-        } else{
-            struct obj_data* ret_val = ls_lookup(dsg->ls, predicted_var);
-            struct obj_descriptor *pred_odsc = &(ret_val->obj_desc);
-            uloga("'%s()': server %d start writing %s, lb %lld, ub %lld, Prefetch %s, lb %lld, ub %lld \n", 
-            __func__, DSG_ID, odsc->name, odsc->bb.lb.c[0], odsc->bb.ub.c[0], pred_odsc->name, pred_odsc->bb.lb.c[0], pred_odsc->bb.ub.c[0]);
-            prefetch_flag = 1;
-        }
-        
-         ******** Prefetch variable Frequency table  End **********/
         /********************Machine Learning prediction Starts*************/
     if(strcmp(predicted_var, "0000")!=0){
-        uint64_t lb[3] = {0}, ub[3] = {0};
+
+        //uint64_t lb[3] = {0}, ub[3] = {0};
         int pred_var = arr_value(vm, predicted_var)-1;
 
 
@@ -1830,28 +1961,41 @@ static void predict_prefetch(struct obj_descriptor *odsc)
         int rq_typ = 0;
         request_type_predict(pred_var, pred_req, ret_req);
         if(strcmp(ret_req, "PP_")==0){
-            uloga("Predicted Put request for var %s \n", predicted_var);
+            uloga("Predicted Put request for var %s from Put\n", predicted_var);
         }
         if(strcmp(ret_req, "GG_")==0){
-            uloga("Predicted Get request for var %s \n", predicted_var);
+            uloga("Predicted Get request for var from %s Put\n", predicted_var);
             rq_typ = 1;
         }
 
 
-
+        
+        uint64_t *lb= (uint64_t*)malloc(sizeof(uint64_t)*ndim);
+        uint64_t *ub = (uint64_t*)malloc(sizeof(uint64_t)*ndim);
+        memset(lb, 0, sizeof(uint64_t)*ndim);
+        memset(ub, 0, sizeof(uint64_t)*ndim);
 
         if(init_retrain[pred_var]==1 && data_counter[pred_var]!=0){
             //initial training is performed and the last request was put request
             //get request resets the data_counter to 0
             pthread_mutex_lock(&ml_mutex);
             fann_type *predict;
-            fann_type input[6];
+            fann_type input[ndim*2];
+            ndim = ds_conf.ndim;
+            while(ndim>0){
+
+                input[ndim-1] = data[pred_var]->input[data[pred_var]->num_data-1][ndim-1];
+                input[(ndim*2)-1] = data[pred_var]->input[data[pred_var]->num_data-1][(ndim*2)-1];
+                ndim--;
+            }
+            /*
             input[0] = data[pred_var]->input[data[pred_var]->num_data-1][0];
             input[1] = data[pred_var]->input[data[pred_var]->num_data-1][1];
             input[2] = data[pred_var]->input[data[pred_var]->num_data-1][2];
             input[3] = data[pred_var]->input[data[pred_var]->num_data-1][3];
             input[4] = data[pred_var]->input[data[pred_var]->num_data-1][4];
             input[5] = data[pred_var]->input[data[pred_var]->num_data-1][5];
+            */
             //input[6] = data[pred_var]->input[data[pred_var]->num_data-1][6];
 
             //input[7] = data[pred_var]->input[data[pred_var]->num_data-1][7];
@@ -1860,26 +2004,35 @@ static void predict_prefetch(struct obj_descriptor *odsc)
             fann_scale_input(ann[pred_var], input);
             predict = fann_run(ann[pred_var], input);
             fann_descale_output(ann[pred_var], predict);
-            uloga("'%s()': Server %d Predicted %s variable. Prefetch lb  and ub are {%d,%d,%d} and {%d,%d,%d}\n",
-                __func__, DSG_ID, predicted_var, (int)predict[0],
-                (int)predict[1], (int)predict[2], (int)predict[3], (int)predict[4], (int)predict[5]);
-            for (int i = 0; i < 3; ++i)
+            char local_str[100];
+            memset(local_str, '\0', sizeof(local_str));
+            //uloga("'%s()': Server %d Predicted %s variable from Put. Prefetch lb  and ub are {%d,%d,%d} and {%d,%d,%d}\n",
+            //    __func__, DSG_ID, predicted_var, (int)predict[0],
+             //   (int)predict[1], (int)predict[2], (int)predict[3], (int)predict[4], (int)predict[5]);
+            ndim = ds_conf.ndim;
+            char *str, *prstr;
+            for (int i = 0; i < ndim; ++i)
             {
                 lb[i] = (int)predict[i];
-                ub[i] = (int)predict[i+3];
+                asprintf(&str, "%d_", (int)predict[i]);
+                strcat(local_str, str);
+                ub[i] = (int)predict[i+ndim];
+                asprintf(&prstr, "%d_", (int)predict[i+ndim]);
+                strcat(local_str, prstr);
             }
-            char *str;
+            free(str);
+            free(prstr);
+            //char *str;
             //asprintf(&str, "%d_%d_%d_%d_%d_%d", (int)predict[0],
             //    (int)predict[1], (int)predict[2], (int)predict[3], (int)predict[4], (int)predict[5]);
-            asprintf(&str, "%d_%d_%d_%d_%d_%d", (int)predict[0],
-                (int)predict[1], (int)predict[2], (int)predict[3], (int)predict[4], (int)predict[5]);
-
-            predict_insert(predictrecord, predicted_var, str);
-            free(str);
+            //uloga("Local str %s for variable %s\n", local_str, predicted_var);
+            predict_insert(predictrecord, predicted_var, local_str);
+            //uloga("Inserted into predict record \n");
+            //free(str);
             pthread_mutex_unlock(&ml_mutex); //lock
             
             //get objects and prefetch
-            local_obj_get_desc(predicted_var, lb, ub, (odsc->version)-1);
+            local_obj_get_desc(predicted_var, lb, ub, (odsc->version));
         }
         
     }
@@ -1890,7 +2043,6 @@ static void predict_prefetch(struct obj_descriptor *odsc)
 void *push_thread(void*attr){
     int j = 0;
     int local_cond_index = 0;
-
     while (j == 0)
     {
         pthread_mutex_lock(&odscmutex);        
@@ -1900,12 +2052,8 @@ void *push_thread(void*attr){
         }else{ /*cond_num > 0 */
             local_cond_index = odsc_cond_index;
             do{
-                uloga("Predict and prefetch if necessary\n");
 
                 predict_prefetch(podesc_list.pref_od[local_cond_index]);
-
-                //pod_list.pref_od[local_cond_index]->sl = in_memory_ssd;
-                //pod_list.pref_od[local_cond_index]->so = prefetching;
                 local_cond_index = get_prev(local_cond_index, MAX_PREFETCH);
             } while (podesc_list.pref_od[local_cond_index] !=NULL);
 
@@ -1935,7 +2083,7 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         //the new thread does predicting and inserts in prefetch queue
         //another thread does prefetching
 
-        if(odsc->version >1){
+        if(odsc->version >= 0){
             pthread_mutex_lock(&odscmutex);
             odsc_cond_num = 1;
             prefetch_odesc_insert_tail(odsc, MAX_PREFETCH);
@@ -1966,18 +2114,18 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         
 
 #ifdef DEBUG
-		{
-			char *str;
+        {
+            char *str;
 
-			asprintf(&str, "S%2d: request for dsgrpc_obj_put '%s' ver %d from C%2d for  ",
-				DSG_ID, odsc->name, odsc->version, cmd->id);
-			str = str_append(str, bbox_sprint(&odsc->bb));
+            asprintf(&str, "S%2d: request for dsgrpc_obj_put '%s' ver %d from C%2d for  ",
+                DSG_ID, odsc->name, odsc->version, cmd->id);
+            str = str_append(str, bbox_sprint(&odsc->bb));
 
-			uloga("'%s()': %s\n", __func__, str);
-			free(str);
-		}
+            uloga("'%s()': %s\n", __func__, str);
+            free(str);
+        }
 #endif
-		//<-----Duan
+        //<-----Duan
         odsc->owner = DSG_ID;
 
         err = -ENOMEM;
@@ -2010,15 +2158,15 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         if (err < 0)
                 goto err_free_msg;
 
-	/* NOTE: This  early update, has  to be protected  by external
-	   locks in the client code. */
+    /* NOTE: This  early update, has  to be protected  by external
+       locks in the client code. */
 
         err = obj_put_update_dht(dsg, od);
 
         
 
         if (err == 0)
-	        return 0;
+            return 0;
  err_free_msg:
         free(msg);
  err_free_data:
@@ -2253,7 +2401,7 @@ static int obj_query_reply_num_de(struct node_id *peer, int num_de)
 static int obj_query_forward_obj_info(struct dht_entry *de_tab[], int num_de, 
                                       struct hdr_obj_get *oh)
 {
-	//        struct dht_entry *de;
+    //        struct dht_entry *de;
         struct msg_buf *msg;
         struct node_id *peer;
         int i, err, to_self = 0;
@@ -2410,8 +2558,8 @@ static int dsgrpc_obj_query(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
         struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
         struct dht_entry *de_tab[dsg->ssd->dht->num_entries];
-	//        struct obj_descriptor odsc1;
-	//        struct obj_descriptor const *odsc;
+    //        struct obj_descriptor odsc1;
+    //        struct obj_descriptor const *odsc;
         struct node_id *peer;
         int num_de, err = -ENOMEM;
 
@@ -2522,8 +2670,8 @@ static int obj_desc_not_found(struct node_id *peer, int qid, int num_vers, int *
         oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
         oh->rc = -ENOENT;
         oh->qid = qid;
-	oh->u.v.num_vers = num_vers;
-	memcpy(oh->u.v.versions, versions, num_vers * sizeof(int));
+    oh->u.v.num_vers = num_vers;
+    memcpy(oh->u.v.versions, versions, num_vers * sizeof(int));
 
         err = rpc_send(dsg->ds->rpc_s, peer, msg);
         if (err == 0)
@@ -2558,15 +2706,15 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         num_odsc = dht_find_entry_all(ssd->ent_self, &oh->u.o.odsc, podsc);
         if (!num_odsc) {
 #ifdef DEBUG
-		char *str = 0;
+        char *str = 0;
 
         asprintf(&str, "S%2d: obj_desc not found for ", DSG_ID); 
-		str = str_append(str, obj_desc_sprint(&oh->u.o.odsc));
+        str = str_append(str, obj_desc_sprint(&oh->u.o.odsc));
 
-		uloga("'%s()': %s\n", __func__, str);
-		free(str);
+        uloga("'%s()': %s\n", __func__, str);
+        free(str);
 #endif
-		i = dht_find_versions(ssd->ent_self, &oh->u.o.odsc, obj_versions);
+        i = dht_find_versions(ssd->ent_self, &oh->u.o.odsc, obj_versions);
                 err = obj_desc_not_found(peer, oh->qid, i, obj_versions);
                 if (err < 0)
                         goto err_out;
@@ -2727,14 +2875,14 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 #ifdef DEBUG
  {
-	 char *str;
-	 
-	 asprintf(&str, "S%2d: request for obj_desc '%s' ver %d from C%2d for  ",
-		  DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version, cmd->id);
-	 str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
+     char *str;
+     
+     asprintf(&str, "S%2d: request for obj_desc '%s' ver %d from C%2d for  ",
+          DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version, cmd->id);
+     str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
 
- 	 uloga("'%s()': %s\n", __func__, str);
-	 free(str);
+     uloga("'%s()': %s\n", __func__, str);
+     free(str);
  }
 #endif
 
@@ -2754,7 +2902,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         if(from_obj->sl == in_ssd){
             uloga("Object in SSD %s, ver = %d\n",(from_obj->obj_desc).name, (from_obj->obj_desc).version);
         }
-	   if(from_obj->sl == in_ceph){
+       if(from_obj->sl == in_ceph){
             uloga("Object in Ceph %s, ver = %d\n" ,(from_obj->obj_desc).name, (from_obj->obj_desc).version);
         }
         if(from_obj->sl == in_memory_ssd){
@@ -2765,11 +2913,11 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         }
         */
         //double tm_start, tm_ending, tm_starting, tm_ends;
-       // tm_start = timer_read(&tm_perf);	
+       // tm_start = timer_read(&tm_perf);  
         /*
        if(from_obj->sl == in_ssd || from_obj->sl == in_ceph){
             obj_data_copy_to_mem(from_obj, DSG_ID);
-       }	
+       }    
        */
         if(&oh->u.o.odsc.version > 1){
             /******** Prefetch variable Frequency table **********/
@@ -2778,8 +2926,12 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             insert_n_predict_data(oh->u.o.odsc.name, predicted_var);
 
                             /********************Machine Learning prediction Starts*************/
+            int ndim = ds_conf.ndim;
             if(strcmp(predicted_var, "0000")!=0){
-                uint64_t lb[3] = {0}, ub[3] = {0};
+                uint64_t *lb= (uint64_t*)malloc(sizeof(uint64_t)*ndim);
+                uint64_t *ub = (uint64_t*)malloc(sizeof(uint64_t)*ndim);
+                memset(lb, 0, sizeof(uint64_t)*ndim);
+                memset(ub, 0, sizeof(uint64_t)*ndim);
                 int pred_var = arr_value(vm, predicted_var)-1;
 
 
@@ -2805,13 +2957,20 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
                     //get request resets the data_counter to 0
                     pthread_mutex_lock(&ml_mutex);
                     fann_type *predict;
-                    fann_type input[6];
+                    fann_type input[ndim*2];
+                    while(ndim>0){
+                        input[ndim-1] = data[pred_var]->input[data[pred_var]->num_data-1][ndim-1];
+                        input[(ndim*2)-1] = data[pred_var]->input[data[pred_var]->num_data-1][(ndim*2)-1];
+                        ndim--;
+                    }
+                    /*
                     input[0] = data[pred_var]->input[data[pred_var]->num_data-1][0];
                     input[1] = data[pred_var]->input[data[pred_var]->num_data-1][1];
                     input[2] = data[pred_var]->input[data[pred_var]->num_data-1][2];
                     input[3] = data[pred_var]->input[data[pred_var]->num_data-1][3];
                     input[4] = data[pred_var]->input[data[pred_var]->num_data-1][4];
                     input[5] = data[pred_var]->input[data[pred_var]->num_data-1][5];
+                    */
                     //input[6] = data[pred_var]->input[data[pred_var]->num_data-1][6];
 
                     //input[7] = data[pred_var]->input[data[pred_var]->num_data-1][7];
@@ -2820,26 +2979,36 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
                     fann_scale_input(ann[pred_var], input);
                     predict = fann_run(ann[pred_var], input);
                     fann_descale_output(ann[pred_var], predict);
-                    uloga("'%s()': Server %d Predicted %s variable. Prefetch lb  and ub are {%d,%d,%d} and {%d,%d,%d}\n",
-                        __func__, DSG_ID, predicted_var, (int)predict[0],
-                        (int)predict[1], (int)predict[2], (int)predict[3], (int)predict[4], (int)predict[5]);
-                    for (int i = 0; i < 3; ++i)
+                    //uloga("'%s()': Server %d Predicted %s variable. Prefetch lb  and ub are {%d,%d,%d} and {%d,%d,%d}\n",
+                    //    __func__, DSG_ID, predicted_var, (int)predict[0],
+                    //    (int)predict[1], (int)predict[2], (int)predict[3], (int)predict[4], (int)predict[5]);
+                    ndim = ds_conf.ndim;
+                    char local_str[100];
+                    memset(local_str, '\0', sizeof(local_str));
+                    char *str, *prstr;
+                    for (int i = 0; i < ndim; ++i)
                     {
                         lb[i] = (int)predict[i];
-                        ub[i] = (int)predict[i+3];
+                        asprintf(&str, "%d_", lb[i]);
+                        strcat(local_str, str);
+                        ub[i] = (int)predict[i+ndim];
+                        asprintf(&prstr, "%d_", ub[i]);
+                        strcat(local_str, prstr);
                     }
-                    char *str;
+                    
                     //asprintf(&str, "%d_%d_%d_%d_%d_%d", (int)predict[0],
                     //    (int)predict[1], (int)predict[2], (int)predict[3], (int)predict[4], (int)predict[5]);
-                    asprintf(&str, "%d_%d_%d_%d_%d_%d", (int)predict[0],
-                        (int)predict[1], (int)predict[2], (int)predict[3], (int)predict[4], (int)predict[5]);
 
-                    predict_insert(predictrecord, predicted_var, str);
+                    //asprintf(&str, "%d_%d_%d_%d_%d_%d", (int)predict[0],
+                    //    (int)predict[1], (int)predict[2], (int)predict[3], (int)predict[4], (int)pred`ict[5]);
+
+                    predict_insert(predictrecord, predicted_var, local_str);
                     free(str);
+                    free(prstr);
                     pthread_mutex_unlock(&ml_mutex); //lock
                     
                     //get objects and prefetch
-                    local_obj_get_desc(predicted_var, lb, ub, (oh->u.o.odsc.version)-1);
+                    local_obj_get_desc(predicted_var, lb, ub, (oh->u.o.odsc.version));
                 }
                 
             }
@@ -2854,12 +3023,20 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
             for (int i = data_counter[var_id]; i > 0; i--)
             {
+                ndim = ds_conf.ndim;
+                while(ndim>0){
+                    data[var_id]->output[data[var_id]->num_data-i][ndim-1] = oh->u.o.odsc.bb.lb.c[ndim-1];
+                    data[var_id]->output[data[var_id]->num_data-i][(ndim*2)-1] = oh->u.o.odsc.bb.ub.c[ndim-1];
+                    ndim--;
+                }
+                /*
                 data[var_id]->output[data[var_id]->num_data-i][0] = oh->u.o.odsc.bb.lb.c[0];
                 data[var_id]->output[data[var_id]->num_data-i][1] = oh->u.o.odsc.bb.lb.c[1];
                 data[var_id]->output[data[var_id]->num_data-i][2] = oh->u.o.odsc.bb.lb.c[2];
                 data[var_id]->output[data[var_id]->num_data-i][3] = oh->u.o.odsc.bb.ub.c[0];
                 data[var_id]->output[data[var_id]->num_data-i][4] = oh->u.o.odsc.bb.ub.c[1];
                 data[var_id]->output[data[var_id]->num_data-i][5] = oh->u.o.odsc.bb.ub.c[2];
+                */
                 //data[var_id]->output[data[var_id]->num_data-i][6] = oh->u.o.odsc.version;
 
                 //data[var_id]->output[data[var_id]->num_data-i][7] = oh->u.o.odsc.version;
@@ -2880,19 +3057,34 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             }else{
                 //check if for this variable the prediction has been done
                 if(init_retrain[var_id]==1){
-                    char *actual_lb_ub;
-                    asprintf(&actual_lb_ub, "%d_%d_%d_%d_%d_%d", oh->u.o.odsc.bb.lb.c[0], oh->u.o.odsc.bb.lb.c[1], oh->u.o.odsc.bb.lb.c[2],
-                        oh->u.o.odsc.bb.ub.c[0], oh->u.o.odsc.bb.ub.c[1], oh->u.o.odsc.bb.ub.c[2]);
+                    char actual_lb_ub[100];
+                    memset(actual_lb_ub, '\0', sizeof(actual_lb_ub));
+                    actual_lb_ub[0]='\0';
+                    char *str, *prstr;
+                    for (int j = 0; j < ds_conf.ndim; ++j)
+                    {
+                        asprintf(&str, "%d_", (int)oh->u.o.odsc.bb.lb.c[j]);
+                        strcat(actual_lb_ub, str);
+                        asprintf(&prstr, "%d_", (int)oh->u.o.odsc.bb.ub.c[j]);
+                        strcat(actual_lb_ub, prstr);
+                    }
+                    free(str);
+                    free(prstr);
+                    //asprintf(&actual_lb_ub, "%d_%d_%d_%d_%d_%d", oh->u.o.odsc.bb.lb.c[0], oh->u.o.odsc.bb.lb.c[1], oh->u.o.odsc.bb.lb.c[2],
+                    //    oh->u.o.odsc.bb.ub.c[0], oh->u.o.odsc.bb.ub.c[1], oh->u.o.odsc.bb.ub.c[2]);
+
                     char * predicted_lb_ub = (char*)malloc(sizeof(char)*100);
+
                     predicted_lb_ub = predict_value(predictrecord, oh->u.o.odsc.name);
-                    uloga("Server %d, Actual: %s, Predicted: %s \n", DSG_ID ,actual_lb_ub, predicted_lb_ub);
-                    if(strcmp(actual_lb_ub, predicted_lb_ub)!=0){
+
+                    uloga("Server %d, Actual Get: %s, Predicted Get: %s \n", DSG_ID ,actual_lb_ub, predicted_lb_ub);
+
+                    if(strcmp(predicted_lb_ub, "0000")!=0 && strcmp(actual_lb_ub, predicted_lb_ub)!=0){
                         //curr_miss_freq = arr_value(mispred, oh->u.o.odsc.name);
                         //int mis_fr = curr_miss_freq+1;
                         arr_update(mispred, oh->u.o.odsc.name, 1);
                     //    uloga("Curr_miss_freq for var %s is %d \n", oh->u.o.odsc.name, arr_value(mispred, oh->u.o.odsc.name));
                     }
-                    free(actual_lb_ub);
                     if(arr_value(mispred, oh->u.o.odsc.name) >3){
                         retrain[var_id] = 1;
                         arr_delete(mispred);
@@ -2907,6 +3099,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             }
 
             //now add the current get request as input if not necessary delete in put request
+            /*
             int inp00 = oh->u.o.odsc.bb.lb.c[0];
             int inp01 = oh->u.o.odsc.bb.lb.c[1];
             int inp02 = oh->u.o.odsc.bb.lb.c[2];
@@ -2919,6 +3112,13 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             data[var_id]->input[data[var_id]->num_data][3] = inp10;
             data[var_id]->input[data[var_id]->num_data][4] = inp11;
             data[var_id]->input[data[var_id]->num_data][5] = inp12;
+            */
+            ndim = ds_conf.ndim;
+            while(ndim>0){
+                data[var_id]->input[data[var_id]->num_data][ndim-1] = oh->u.o.odsc.bb.lb.c[ndim-1];
+                data[var_id]->input[data[var_id]->num_data][(ndim*2)-1] = oh->u.o.odsc.bb.ub.c[ndim-1];
+                ndim--;
+            }
 
             data[var_id]->num_data = data[var_id]->num_data+1;
             data_counter[var_id] = data_counter[var_id]+1;
@@ -2969,7 +3169,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
     /********************Machine Learning prediction Ends********************/
 
-		if(from_obj->sl == in_ssd){
+        if(from_obj->sl == in_ssd){
             obj_data_copy_to_mem(from_obj, DSG_ID);
        }
       //  tm_ending = timer_read(&tm_perf);
@@ -3010,7 +3210,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         if(from_obj->sl == in_memory_ceph){
             obj_data_free_in_mem(from_obj);
         }*/
-		
+        
       //  tm_ends = timer_read(&tm_perf);
      //   uloga("SSD Overhead: %lf , Data Size: %d\n", tm_ending-tm_start+tm_ends-tm_starting, obj_data_size(&from_obj->obj_desc));
         msg = msg_buf_alloc(rpc_s, peer, 0);
@@ -3143,16 +3343,16 @@ static int dsgrpc_obj_filter(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
         struct msg_buf *msg;
         struct obj_data *from;
-	double *dval;
+    double *dval;
         int err = -ENOENT;
 
         // BUG: when using version numbers here.
         from = ls_find(dsg->ls, &hf->odsc);
         if (!from) {
-		char *str;
+        char *str;
                 str = obj_desc_sprint(&hf->odsc);
-		uloga("'%s()': %s\n", __func__, str);
-		free(str);
+        uloga("'%s()': %s\n", __func__, str);
+        free(str);
 
                 goto err_out;
         }
@@ -3173,9 +3373,9 @@ static int dsgrpc_obj_filter(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         msg->size = sizeof(*dval);
         msg->cb = default_completion_with_data_callback;
 
-	rpc_mem_info_cache(peer, msg, cmd);
+    rpc_mem_info_cache(peer, msg, cmd);
         err = rpc_send_direct(rpc_s, peer, msg);
-	rpc_mem_info_reset(peer, msg, cmd);
+    rpc_mem_info_reset(peer, msg, cmd);
         if (err < 0)
                 goto err_out;
 
@@ -3189,33 +3389,33 @@ static int dsgrpc_obj_filter(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 */
 static int dsgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
-	struct hdr_ss_info *hsi;
-	struct msg_buf *msg;
-	int err = -ENOMEM;
+    struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
+    struct hdr_ss_info *hsi;
+    struct msg_buf *msg;
+    int err = -ENOMEM;
 
-	msg = msg_buf_alloc(rpc_s, peer, 1);
-	if (!msg)
-		goto err_out;
+    msg = msg_buf_alloc(rpc_s, peer, 1);
+    if (!msg)
+        goto err_out;
 
-	msg->msg_rpc->cmd = ss_info;
-	msg->msg_rpc->id = DSG_ID;
+    msg->msg_rpc->cmd = ss_info;
+    msg->msg_rpc->id = DSG_ID;
 
-	hsi = (struct hdr_ss_info *) msg->msg_rpc->pad;
-	hsi->num_dims = ds_conf.ndim;
+    hsi = (struct hdr_ss_info *) msg->msg_rpc->pad;
+    hsi->num_dims = ds_conf.ndim;
     int i; 
     for(i = 0; i < hsi->num_dims; i++){
         hsi->dims.c[i] = ds_conf.dims.c[i]; 
     }
-	hsi->num_space_srv = dsg->ds->size_sp;
+    hsi->num_space_srv = dsg->ds->size_sp;
     hsi->hash_version = ds_conf.hash_version;
     hsi->max_versions = ds_conf.max_versions;
 
-	err = rpc_send(rpc_s, peer, msg);
-	if (err == 0)
-		return 0;
+    err = rpc_send(rpc_s, peer, msg);
+    if (err == 0)
+        return 0;
  err_out:
-	ERROR_TRACE();
+    ERROR_TRACE();
 }
 
 void ceph_init(){
@@ -3300,7 +3500,7 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
         if (ds_conf.ndim > BBOX_MAX_NDIM) {
             uloga("%s(): ERROR maximum number of array dimension is %d but ndim is %d"
                 " in file '%s'\n", __func__, BBOX_MAX_NDIM, ds_conf.ndim, conf_name);
-            err = -ENOMEM;
+            err = -EINVAL;
             goto err_out;
         }
 
@@ -3309,13 +3509,22 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
             (ds_conf.hash_version >= _ssd_hash_version_count)) {
             uloga("%s(): ERROR unknown hash version %d in file '%s'\n",
                 __func__, ds_conf.hash_version, conf_name);
-            err = -ENOMEM;
+            err = -EINVAL;
             goto err_out;
         }
+
+       if((ds_conf.lock_type < lock_generic) ||
+            (ds_conf.lock_type >= _lock_type_count)) {
+            uloga("%s(): ERROR unknown lock type %d in file '%s'\n",
+                __func__, ds_conf.lock_type, conf_name);
+            err = -EINVAL;
+            goto err_out;
+        } 
 
         struct bbox domain;
         memset(&domain, 0, sizeof(struct bbox));
         domain.num_dims = ds_conf.ndim;
+        inps = ds_conf.ndim;
         int i;
         for(i = 0; i < domain.num_dims; i++){
             domain.lb.c[i] = 0;
@@ -3375,21 +3584,21 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name)
 /* Helper routine for external calls, e.g., rexec.  */
 struct dht_entry *dsg_dht_get_self_entry(void)
 {
-	return dsg->ssd->ent_self;
+    return dsg->ssd->ent_self;
 }
 
 /* Helper routine for external calls, e.g., rexec. */
 void dsg_dht_print_descriptors(const struct obj_descriptor *odsc_tab[], int n)
 {
-	char *str = 0;
-	int i;
+    char *str = 0;
+    int i;
 
-	for (i = 0; i < n; i++) {
-		str = str_append(str, obj_desc_sprint(odsc_tab[i]));
-	}
+    for (i = 0; i < n; i++) {
+        str = str_append(str, obj_desc_sprint(odsc_tab[i]));
+    }
 
-	uloga("'%s()': %d descriptors - %s.\n", __func__, n, str);
-	free(str);
+    uloga("'%s()': %d descriptors - %s.\n", __func__, n, str);
+    free(str);
 }
 
 void dsg_free(struct ds_gspace *dsg)
@@ -3398,24 +3607,26 @@ void dsg_free(struct ds_gspace *dsg)
         free_sspace(dsg);
         ls_free(dsg->ls);
         free(dsg);
+        arr_delete(vm);
+        map_delete(t);
 }
 
 
 int dsg_process(struct ds_gspace *dsg)
 {
-	int err;
-	//err = rpc_process_event(dsg->ds->rpc_s);
+    int err;
+    //err = rpc_process_event(dsg->ds->rpc_s);
     err = ds_process(dsg->ds);
-	if (err < 0)
-		rpc_report_md_usage(dsg->ds->rpc_s);
+    if (err < 0)
+        rpc_report_md_usage(dsg->ds->rpc_s);
 
-	return err;
+    return err;
 }
 
 int dsg_complete(struct ds_gspace *dsg)
 {
         //free up the data structure for n-gram
-        
+
         return ds_stop(dsg->ds);
 }
 

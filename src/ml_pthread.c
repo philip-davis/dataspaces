@@ -39,6 +39,7 @@
 
 //unsigned int num_data = 30;
 int num_variables = 1; //number of variables in dataspaces
+int inps = 0;
 
 struct fann **ann;
 struct fann_train_data **data;
@@ -50,10 +51,10 @@ int *retrain;
 int complete = 0;
 
 void *machine_learning(void *attr){
-	const unsigned int num_input = 6;
-	const unsigned int num_output = 6;
+	const unsigned int num_input = inps*2;
+	const unsigned int num_output = inps*2;
 	const unsigned int num_layers = 3;
-	const unsigned int num_neurons_hidden = 24;
+	const unsigned int num_neurons_hidden = inps*3;
 	const float desired_error = (const float) 0.001;
 	const unsigned int max_epochs = 1000;
 	const unsigned int epochs_between_reports = 100;
@@ -105,6 +106,17 @@ void *machine_learning(void *attr){
 		for (int i = 0; i < num_variables; ++i)
 		{
 			if(init_retrain[i]==1 && retrain[i]==1){
+
+				for (int j = 0; j < data[i]->num_data; ++j)
+				{
+					for (int k = 0; k < inps*2; ++k)
+					{
+						printf("Inp %f \t", data[i]->input[j][k]);
+						printf("Oup %f \t", data[i]->output[j][k]);
+					}
+					printf("\n");
+				}
+				data[i]->num_data--;
 				fann_set_scaling_params(ann[i], data[i], -1, 1, -1, 1);
 				fann_scale_input(ann[i], data[i]);
 				fann_scale_output(ann[i], data[i]);
@@ -114,6 +126,7 @@ void *machine_learning(void *attr){
 				fann_train_on_data(ann[i], data[i], max_epochs, epochs_between_reports, desired_error);
 				fann_descale_input(ann[i], data[i]);
 				fann_descale_output(ann[i], data[i]);
+				data[i]->num_data++;
 				retrain[i] = 0;
 				//data[i]->num_data = data[i]->num_data+1;
 			}
