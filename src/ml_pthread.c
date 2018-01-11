@@ -54,7 +54,7 @@ void *machine_learning(void *attr){
 	const unsigned int num_input = inps*2;
 	const unsigned int num_output = inps*2;
 	const unsigned int num_layers = 3;
-	const unsigned int num_neurons_hidden = inps*3;
+	const unsigned int num_neurons_hidden = inps*2;
 	const float desired_error = (const float) 0.001;
 	const unsigned int max_epochs = 1000;
 	const unsigned int epochs_between_reports = 100;
@@ -71,7 +71,8 @@ void *machine_learning(void *attr){
 	data_counter = (int *)malloc(sizeof(int)*num_variables);
 	for (int i = 0; i < num_variables; ++i)
 	{
-		ann[i] = fann_create_standard(num_layers, num_input,num_neurons_hidden, num_output);
+		//ann[i] = fann_create_standard(num_layers, num_input,num_neurons_hidden, num_output);
+		ann[i] = fann_create_shortcut(num_layers, num_input,num_neurons_hidden, num_output);
 		//fann_set_activation_function_output(ann[i], FANN_SIGMOID_SYMMETRIC);
 		//fann_set_activation_function_hidden(ann[i], FANN_SIGMOID_SYMMETRIC);
 		//fann_set_activation_function_hidden(ann[i], FANN_SIGMOID_SYMMETRIC);
@@ -83,7 +84,7 @@ void *machine_learning(void *attr){
 		//fann_set_train_error_function(ann[i], FANN_ERRORFUNC_LINEAR);
 		//fann_set_bit_fail_limit(ann[i], (fann_type)0.9);
 		//fann_set_train_stop_function(ann[i], FANN_STOPFUNC_BIT);
-		data[i] = fann_create_train(100, num_input, num_output);
+		data[i] = fann_create_train(3000, num_input, num_output);
 		init_retrain[i] = 0;
 		retrain[i] = 0;
 		data_counter[i] = 0;
@@ -106,7 +107,7 @@ void *machine_learning(void *attr){
 		for (int i = 0; i < num_variables; ++i)
 		{
 			if(init_retrain[i]==1 && retrain[i]==1){
-
+				/*
 				for (int j = 0; j < data[i]->num_data; ++j)
 				{
 					for (int k = 0; k < inps*2; ++k)
@@ -116,6 +117,7 @@ void *machine_learning(void *attr){
 					}
 					printf("\n");
 				}
+				*/
 				data[i]->num_data--;
 				fann_set_scaling_params(ann[i], data[i], -1, 1, -1, 1);
 				fann_scale_input(ann[i], data[i]);

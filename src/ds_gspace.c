@@ -2873,7 +2873,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 
 
-#ifdef DEBUG
+//#ifdef DEBUG
  {
      char *str;
      
@@ -2884,7 +2884,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
      uloga("'%s()': %s\n", __func__, str);
      free(str);
  }
-#endif
+//#endif
 
         // CRITICAL: use version here !!!
         from_obj = ls_find(dsg->ls, &oh->u.o.odsc);
@@ -2919,7 +2919,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             obj_data_copy_to_mem(from_obj, DSG_ID);
        }    
        */
-        if(&oh->u.o.odsc.version > 1){
+        if(&oh->u.o.odsc.version >=0){
             /******** Prefetch variable Frequency table **********/
             char * predicted_var = (char*)malloc(sizeof(char)*50);
             char * insert_var = (char*)malloc(sizeof(char)*50);
