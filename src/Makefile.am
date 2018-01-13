@@ -14,21 +14,21 @@ libdscommon_a_SOURCES = bbox.c \
 
 libdspaces_a_SOURCES =  dataspaces.c \
 			common_dataspaces.c \
-			ml_pthread.c \
 			ds_gspace.c \
 			dc_gspace.c \
 			dimes_data.c \
 			dimes_server.c \
-			dimes_client.c 
+			dimes_client.c \
+			#ml_pthread.c 
 
 libdspacesf_a_SOURCES = dataspaces_fortran.c \
 			common_dataspaces.c \
-			ml_pthread.c \
 			ds_gspace.c \
 			dc_gspace.c \
 			dimes_data.c \
 			dimes_server.c \
-			dimes_client.c 
+			dimes_client.c \
+			#ml_pthread.c 
 
 include_HEADERS = ../include/dataspaces.h \
 		  ../include/dimes_interface.h

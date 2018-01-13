@@ -116,12 +116,13 @@ int main(int argc, char **argv)
 	char req[10];
 	last_access = (node*)malloc(sizeof(node));
 	list_head = (node*)malloc(sizeof(node));
+	int i, j;
 	fin = fopen(argv[1], "r");
 	if (!fin){
 		printf("File args not found\n");
 		return -1;
 	}
-	for (int i = 0; i < atoi(argv[2]); ++i)
+	for (i = 0; i < atoi(argv[2]); ++i)
 	{
 		while (fgets(buff, sizeof(buff), fin) != NULL) {
 			sscanf(buff, "%d\t%s\t%s\t%d\t%d", &ts, &req, &var_name, &req_offset, &data_size);

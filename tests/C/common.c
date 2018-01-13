@@ -40,8 +40,8 @@
 #include "mpi.h"
 #include "mem_persist.h" //duan
 #define DSG_ID                  dsg->ds->self->ptlmap.id	//Duan
-extern pthread_mutex_t ml_mutex;
-extern pthread_cond_t ml_cond;
+//extern pthread_mutex_t ml_mutex;
+//extern pthread_cond_t ml_cond;
 extern pthread_mutex_t pmutex;//init prefetching pthread function lock
 extern pthread_cond_t  pcond;//init prefetching pthread function cond
 extern pthread_mutex_t odscmutex;//init prefetching pthread function lock
@@ -266,14 +266,14 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
                // ceph_init();
 
                 /* Machine Lerarnig Thread */
-                pthread_t ml_thread;
-                pthread_create(&ml_thread, NULL, machine_learning, (void*)NULL);
+                //pthread_t ml_thread;
+                //pthread_create(&ml_thread, NULL, machine_learning, (void*)NULL);
 
                 pthread_t t_pref;//prefetch thread
                pthread_create(&t_pref, NULL, prefetch_thread, (void*)NULL); //Create thread
 
-               pthread_t tpush_pref;//prefetch thread
-               pthread_create(&tpush_pref, NULL, push_thread, (void*)NULL); //Create thread
+               //pthread_t tpush_pref;//prefetch thread
+               //pthread_create(&tpush_pref, NULL, push_thread, (void*)NULL); //Create thread
 
 
                 while (!dsg_complete(dsg)){
@@ -282,25 +282,25 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
                                 break;
                 }
 
-                pthread_mutex_lock(&ml_mutex);
-                complete = 1;
-                pthread_mutex_unlock(&ml_mutex);
+                //pthread_mutex_lock(&ml_mutex);
+                //complete = 1;
+                //pthread_mutex_unlock(&ml_mutex);
 
-                pthread_cond_signal(&ml_cond);
-                pthread_cancel(ml_thread);
-                pthread_join(ml_thread, NULL);//wait machine_learning thread
-                pthread_mutex_destroy(&ml_mutex);//destroy mutex lock
-                pthread_cond_destroy(&ml_cond);//destroy condition
+                //pthread_cond_signal(&ml_cond);
+                //pthread_cancel(ml_thread);
+                //pthread_join(ml_thread, NULL);//wait machine_learning thread
+                //pthread_mutex_destroy(&ml_mutex);//destroy mutex lock
+                //pthread_cond_destroy(&ml_cond);//destroy condition
 
                 pthread_cancel(t_pref);//kill t_pref thread
                 pthread_join(t_pref, NULL);//wait t_pref thread end
                 pthread_mutex_destroy(&pmutex);//destroy mutex lock
                 pthread_cond_destroy(&pcond);//destroy condition
 
-                pthread_cancel(tpush_pref);//kill t_pref thread
-                pthread_join(tpush_pref, NULL);//wait t_pref thread end
-                pthread_mutex_destroy(&odscmutex);//destroy mutex lock
-                pthread_cond_destroy(&odsccond);//destroy condition
+                //pthread_cancel(tpush_pref);//kill t_pref thread
+                //pthread_join(tpush_pref, NULL);//wait t_pref thread end
+                //pthread_mutex_destroy(&odscmutex);//destroy mutex lock
+                //pthread_cond_destroy(&odsccond);//destroy condition
 
 #ifdef DEBUG//duan
 				{

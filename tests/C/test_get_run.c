@@ -132,13 +132,11 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
 
 	for(i = 0; i < num_vars; i++){
 		sprintf(var_name, "mnd_%d", i);
-
-		if(ts>1) ts--;
-
-		common_get(var_name, ts, elem_size, dims, lb, ub,
+		//if(ts > 1) ts = (short)ts-1;
+		common_get(var_name, ts-1, elem_size, dims, lb, ub,
 			data_tab[i], type);
 		
-		ts++;
+		//ts++;
 	}
 	tm_end = timer_read(&timer_);
 	common_unlock_on_read("mnd_lock", &gcomm_);
@@ -162,8 +160,8 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
 		//if(ts==3 || ts==4 || ts==5 || ts==6){
 		//	ts = 2;
 		//}
-	//	check_data(var_name, data_tab[i],dims_size*elem_size_/sizeof(double),
-	//		rank_, ts);
+		check_data(var_name, data_tab[i],dims_size*elem_size_/sizeof(double),
+			rank_, ts-1);
         if (data_tab[i]) {
             free(data_tab[i]);
         }

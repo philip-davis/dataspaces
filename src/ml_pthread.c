@@ -34,7 +34,7 @@
 #include<stdlib.h>
 #include<time.h>
 #include "debug.h"
-#include "fann.h"
+#include "/home/shared/scratch/ps917/include/fann.h"
 #include "ml_pthread.h"
 
 //unsigned int num_data = 30;
@@ -56,7 +56,7 @@ void *machine_learning(void *attr){
 	const unsigned int num_layers = 3;
 	const unsigned int num_neurons_hidden = inps*2;
 	const float desired_error = (const float) 0.001;
-	const unsigned int max_epochs = 1000;
+	const unsigned int max_epochs = 10000;
 	const unsigned int epochs_between_reports = 100;
 	
 	unsigned int max_neurons = 10;
@@ -69,10 +69,11 @@ void *machine_learning(void *attr){
 	init_retrain = (int *)malloc(sizeof(int)*num_variables);
 	retrain = (int *)malloc(sizeof(int)*num_variables);
 	data_counter = (int *)malloc(sizeof(int)*num_variables);
-	for (int i = 0; i < num_variables; ++i)
+	int i,j,k;
+	for (i = 0; i < num_variables; ++i)
 	{
-		//ann[i] = fann_create_standard(num_layers, num_input,num_neurons_hidden, num_output);
-		ann[i] = fann_create_shortcut(num_layers, num_input,num_neurons_hidden, num_output);
+		ann[i] = fann_create_standard(num_layers, num_input, num_neurons_hidden, num_output);
+		//ann[i] = fann_create_shortcut(num_layers, num_input,num_neurons_hidden, num_output);
 		//fann_set_activation_function_output(ann[i], FANN_SIGMOID_SYMMETRIC);
 		//fann_set_activation_function_hidden(ann[i], FANN_SIGMOID_SYMMETRIC);
 		//fann_set_activation_function_hidden(ann[i], FANN_SIGMOID_SYMMETRIC);
@@ -95,7 +96,7 @@ void *machine_learning(void *attr){
 	int var = 0;
 	while(var == 0){
 		if(complete==1){
-			for (int i = 0; i < num_variables; ++i)
+			for (i = 0; i < num_variables; ++i)
 			{
 				fann_destroy(ann[i]);
 			}
@@ -104,20 +105,22 @@ void *machine_learning(void *attr){
 		}
 		
 		pthread_mutex_lock(&ml_mutex);
-		for (int i = 0; i < num_variables; ++i)
+		for (i = 0; i < num_variables; ++i)
 		{
 			if(init_retrain[i]==1 && retrain[i]==1){
-				/*
-				for (int j = 0; j < data[i]->num_data; ++j)
+				
+				for (j = 0; j < data[i]->num_data; ++j)
 				{
-					for (int k = 0; k < inps*2; ++k)
+					for (k = 0; k < inps*2; ++k)
 					{
 						printf("Inp %f \t", data[i]->input[j][k]);
 						printf("Oup %f \t", data[i]->output[j][k]);
 					}
+					printf("Peer %f \t", data[i]->input[j][inps*2]);
+					printf("Peer %f \t", data[i]->input[j][inps*2+1]);
 					printf("\n");
 				}
-				*/
+				
 				data[i]->num_data--;
 				fann_set_scaling_params(ann[i], data[i], -1, 1, -1, 1);
 				fann_scale_input(ann[i], data[i]);

@@ -1226,7 +1226,7 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                 }
                 // TODO: uncomment next line ?!
                 // qte->num_req++;
-                uloga("Found object descriptor in obj_get \n");
+                //uloga("Found object descriptor in obj_get \n");
         }
 
         return 0;

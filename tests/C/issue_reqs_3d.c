@@ -102,9 +102,9 @@ static int generate_nd(double *mnd, unsigned int ts, int dims, uint64_t *lbs, ui
 {
     //double value = 1.0*(rank_) + 0.0001*ts;
 	double value = ts;
-    int i;
+    int i,j;
 	uint64_t mnd_size = 1;
-	for(int j = 0; j < dims; j++){
+	for(j = 0; j < dims; j++){
             mnd_size *= (int)ubs[j]-(int)lbs[j]+1;
     }
 	mnd_size = mnd_size * elem_size/ sizeof(double);
@@ -118,6 +118,7 @@ int main(int argc, char **argv)
 	FILE *fin;
 	node* list_head;
 	node* last_access;
+	int i,j;
 	char lock[10];
 	char buff[2048];
 	char var_name[10];
@@ -133,7 +134,7 @@ int main(int argc, char **argv)
 		printf("File args not found\n");
 		return -1;
 	}
-	for (int i = 0; i < atoi(argv[2]); ++i)
+	for (i = 0; i < atoi(argv[2]); ++i)
 	{
 		while (fgets(buff, sizeof(buff), fin) != NULL) {
 			//printf("Start new line\n");
@@ -148,7 +149,7 @@ int main(int argc, char **argv)
 			//temp->req_size = data_size;
 			strcpy(temp->var_name_,var_name);
 			//printf("Finish before line\n");
-			for (int j = 0; j < 3; ++j)
+			for (j = 0; j < 3; ++j)
 			{
 				temp->lbs[j]=(uint64_t)lbr[j];
 				temp->ubs[j]=(uint64_t)ubr[j];

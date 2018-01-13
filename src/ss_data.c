@@ -1924,6 +1924,7 @@ void obj_data_move_to_mem(struct obj_data *od, int id)
                 uloga("%s(): ERROR malloc od->_data %p is is NULL! \n", __func__, od->_data);
             }
             ALIGN_ADDR_QUAD_BYTES(od->data);
+            sleep(3); //latency for data access in SSD
             memcpy(od->_data, od->s_data, obj_data_size(&od->obj_desc) + 7); //void *memcpy(void *dest, const void *src, size_t n);
             //uloga("'%s()': explicit data copy to mem on descriptor %s.\n",
             //    __func__, od->obj_desc.name);
@@ -1934,7 +1935,7 @@ void obj_data_move_to_mem(struct obj_data *od, int id)
         }
         od->sl = in_memory_ssd;
         obj_data_free_in_ssd(od);
-        uloga("Moved to memory \n");
+        //uloga("Moved to memory \n");
     } else{ 
         if(od->sl == in_ceph){
         struct obj_descriptor *odsc = &od->obj_desc;

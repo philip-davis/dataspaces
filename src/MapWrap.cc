@@ -1,4 +1,6 @@
 #include "MapWrap.hh"
+#include <stdio.h>
+#include<string.h>
 using namespace std;
 
 template <typename A, typename B>
@@ -19,17 +21,19 @@ MapWrap::MapWrap(int i){
 
 void MapWrap::mp_insert(const char *pred, const char *succ){
 
-	const string c_pred(pred);
-	const string c_succ(succ);
+	string c_pred(pred);
+	string c_succ(succ);
+	
 	map<string, int> inner_map = cMap[c_pred];
 	inner_map[c_succ]++;
 	cMap[c_pred] = inner_map;
 	
-/*
+	/*
 	map<string, map <string, int> >::iterator it;
 	it=cMap.find(c_pred);
 	if(it != cMap.end()){
 		//pred item already exists
+		printf("Map Key Found %s\n", pred);
 		map<string, int> inner_map;
 		inner_map = it->second;
 		map<string, int>::iterator iit;
@@ -48,6 +52,7 @@ void MapWrap::mp_insert(const char *pred, const char *succ){
 
 		}
 		it->second = inner_map;
+		//uloga("Map Inserted  key %s, inner_map %s val %d \n", c_pred, c_succ, 1);
 		//cMap.erase(it);
 		//cMap.insert(pair<string, map<string, int> >(c_pred, inner_map));
 
@@ -56,8 +61,9 @@ void MapWrap::mp_insert(const char *pred, const char *succ){
 		map<string, int> inner_map;
 		inner_map.insert(pair<string, int>(c_succ, 1));
 		cMap.insert(pair<string, map<string, int> >(c_pred, inner_map));
-
-	}*/
+		printf("Map Inserted  key %s, inner_map %s val %d \n", c_pred.c_str(), c_succ.c_str(), 1);
+	}
+	*/
 
 }
 
@@ -65,16 +71,16 @@ const char* MapWrap::get_value(const char *pred){
 	string c_pred(pred);
 	map<string, map<string, int> >::iterator it;
 	it=cMap.find(c_pred);
-	const char* rstr;
+	char* rstr;
+	rstr = (char*) malloc (sizeof(char)*50);
 	if(it!=cMap.end()){
 		map<string, int> inner_map;
 		inner_map = it->second;
 		multimap<int, string> reverse_map = flip_map(inner_map);
 		multimap<int, string>::const_reverse_iterator rit = reverse_map.rbegin();
 		string return_str = rit->second;
-		rstr = return_str.c_str();
+		strcpy(rstr, return_str.c_str());
 	}else{
-		rstr = (char*) malloc (sizeof(char)*4);
 		rstr = "0000";
 	}
 	return rstr;
