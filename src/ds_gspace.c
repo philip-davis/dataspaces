@@ -1784,7 +1784,7 @@ void *prefetch_thread(void*attr){
     #endif
         while (j == 0)
         {
-            pthread_mutex_lock(&pmutex);        
+    pthread_mutex_lock(&pmutex);        
     if (cond_num == 0){/*sleep */
     #ifdef DEBUG
             char *str;
@@ -1804,8 +1804,9 @@ void *prefetch_thread(void*attr){
         local_cond_index = cond_index;
         do{
             //uloga("Prefetch started \n");
+            pthread_mutex_lock(&odscmutex);
             obj_data_move_to_mem(pod_list.pref_od[local_cond_index], DSG_ID);
-
+            pthread_mutex_unlock(&odscmutex);
             //pod_list.pref_od[local_cond_index]->sl = in_memory_ssd;
             pod_list.pref_od[local_cond_index]->so = prefetching;
             dsg->ls->mem_used += obj_data_size(&pod_list.pref_od[local_cond_index]->obj_desc);
@@ -2939,20 +2940,6 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         free(str);
     }
 #endif
-
-// CRITICAL: use version here !!!
-    from_obj = ls_find(dsg->ls, &oh->u.o.odsc);
-    if (!from_obj) {
-        char *str;
-        str = obj_desc_sprint(&oh->u.o.odsc);
-        uloga("'%s()': %s\n", __func__, str);
-        free(str);
-        goto err_out;
-    }
-
-    //if no-prefetching is wanted comment out from here to 
-        /*
-
         char * predicted_var = (char*)malloc(sizeof(char)*50);
         char * insert_var = (char*)malloc(sizeof(char)*50);
         insert_n_predict_data(oh->u.o.odsc.name, predicted_var);
@@ -3003,8 +2990,21 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             int same_obj = 0;
             local_obj_get_desc(oh->u.o.odsc.name, lb, ub, pred_version);
         }
-        */
+        
         //heres
+
+// CRITICAL: use version here !!!
+    pthread_mutex_lock(&odscmutex);
+    from_obj = ls_find(dsg->ls, &oh->u.o.odsc);
+    if (!from_obj) {
+        char *str;
+        str = obj_desc_sprint(&oh->u.o.odsc);
+        uloga("'%s()': %s\n", __func__, str);
+        free(str);
+        goto err_out;
+    }
+    pthread_mutex_unlock(&odscmutex);
+    //if no-prefetching is wanted comment out from here to 
     //disable machine learning
         /*
     if(oh->u.o.odsc.version >= 100){

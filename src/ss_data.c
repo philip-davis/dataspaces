@@ -48,7 +48,7 @@
 #endif
 
 //#define SSD_DIR_PATH "/lustre/atlas/scratch/subedip1/csc143/"
-#define SSD_DIR_PATH "/home/subedip/"
+#define SSD_DIR_PATH "/ssd/users/ps917/"
 // TODO: I should  import the header file with  the definition for the
 // iovec_t data type.
 
@@ -2126,18 +2126,18 @@ void obj_data_copy_to_mem(struct obj_data *od, int id)
             strcpy(new_name, SSD_DIR_PATH);
             strcat(new_name, name);
             FILE *f=fopen(new_name, "rb");
-            if(!f){
-                uloga("File could not be found \n");
-                exit(1);
+            if(f){
+                if(od->_data){
+                    fread(od->_data, obj_data_size(&od->obj_desc) + 7, 1, f);
+                }else{
+                    fread(od->_data, obj_data_size(&od->obj_desc), 1, f);
+                }
+                od->sl = in_memory_ssd;
+                fclose(f);
+            }else{
+                uloga("File %s not found\n", new_name);
             }
-           // uloga("Reading %s \n", name);
-        if(od->_data){
-            fread(od->_data, obj_data_size(&od->obj_desc) + 7, 1, f);
-        }else{
-            fread(od->_data, obj_data_size(&od->obj_desc), 1, f);
-        }
-    od->sl = in_memory_ssd;
-    fclose(f);
+           // uloga("Reading %s \n", name)
 
     } 
 }
@@ -2263,8 +2263,9 @@ void obj_data_move_to_mem(struct obj_data *od, int id)
         }else{
             fread(od->_data, obj_data_size(&od->obj_desc), 1, f);
         }
-    od->sl = in_memory;
+        od->sl = in_memory;
         fclose(f);
+        uloga("Going to remove file %s as its moved to memory", new_name);
         remove(new_name);
 
     } 
