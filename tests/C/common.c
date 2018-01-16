@@ -261,7 +261,7 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
 					free(str);
 				}
 #endif
-				pmem_init(dsg_id_str);//ssd storage initiate Duan						
+				//pmem_init(dsg_id_str);//ssd storage initiate Duan						
                 /*  Starting Ceph Cluster */
                // ceph_init();
 

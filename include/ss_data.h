@@ -36,9 +36,9 @@
 
 #include "bbox.h"
 #include "list.h"
-#include <rados/librados.h>
+//#include <rados/librados.h>
 
-rados_t cluster;
+//rados_t cluster;
 typedef struct {
 	void			*iov_base;
 	size_t			iov_len;
@@ -306,5 +306,5 @@ void obj_data_copy_to_ssd(struct obj_data *od);//Duan
 void obj_data_copy_to_mem(struct obj_data *od, int id);
 void obj_data_move_to_mem(struct obj_data *od, int id);
 void obj_data_copy_to_ssd_direct(struct obj_data *od);
-void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id);
+//void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id);
 #endif /* __SS_DATA_H_ */

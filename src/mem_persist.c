@@ -56,7 +56,8 @@
 
 /* using /ssd1/sd904/ ssd file path for this example */
 //#define PMEM_PATH "/ssd/users/ps917/"
-#define PMEM_PATH "/home/subedip/"
+//#define PMEM_PATH "/home/subedip/"
+#define PMEM_PATH "/lustre/atlas/scratch/subedip1/"
 //#define PMEM_PATH ""
 
 struct PMemEntry{

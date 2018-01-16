@@ -1438,12 +1438,13 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 // double tm_start, tm_ending;
 //  tm_start = timer_read(&tm_perf);
     if(od->sl == in_memory_ssd){
-        obj_data_copy_to_ssd_direct(od);
-        obj_data_free_pointer(od);
+        //obj_data_copy_to_ssd_direct(od);
+        //obj_data_free_pointer(od);
+        obj_data_write_to_ssd(od, DSG_ID);
+        obj_data_free_in_mem(od);
     }
     if(od->sl == in_memory_ceph){
-        obj_data_copy_to_ceph(od, cluster, DSG_ID);
-//obj_data_free_pointer(od);
+        //obj_data_copy_to_ceph(od, cluster, DSG_ID);
     }
     free(msg);
 
@@ -2261,8 +2262,8 @@ pthread_mutex_unlock(&odscmutex);
 
     err = -ENOMEM;
     peer = ds_get_peer(dsg->ds, cmd->id);
-//od = obj_data_alloc(odsc);
-    od = obj_data_alloc_pmem(odsc);
+    od = obj_data_alloc(odsc);
+    //od = obj_data_alloc_pmem(odsc);
     od->sl = in_memory_ssd;
     if (!od)
         goto err_out;
@@ -2949,6 +2950,9 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         goto err_out;
     }
 
+    //if no-prefetching is wanted comment out from here to 
+        /*
+
         char * predicted_var = (char*)malloc(sizeof(char)*50);
         char * insert_var = (char*)malloc(sizeof(char)*50);
         insert_n_predict_data(oh->u.o.odsc.name, predicted_var);
@@ -2999,6 +3003,8 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             int same_obj = 0;
             local_obj_get_desc(oh->u.o.odsc.name, lb, ub, pred_version);
         }
+        */
+        //heres
     //disable machine learning
         /*
     if(oh->u.o.odsc.version >= 100){
@@ -3193,10 +3199,6 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
     /********************Machine Learning prediction Ends********************/
 
-    if(from_obj->sl == in_ssd){
-        sleep(3); //latency for SSD
-        obj_data_copy_to_mem(from_obj, DSG_ID);
-    }
     //  tm_ending = timer_read(&tm_perf);
     //  uloga("SSD Read Time: %lf , Data Size: %d\n", tm_ending-tm_start, obj_data_size(&from_obj->obj_desc));
 
@@ -3222,14 +3224,19 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         goto err_out;
     if(from_obj->sl == in_ceph){
         ssd_copy_ceph(od, from_obj, DSG_ID);
-    }else{
+    }else if(from_obj->sl == in_ssd){
+        //sleep(3); //latency for SSD
+        obj_data_copy_to_mem(from_obj, DSG_ID);
+        (fast_v)? ssd_copyv(od, from_obj) : ssd_copy(od, from_obj);
+    }
+    else{
         (fast_v)? ssd_copyv(od, from_obj) : ssd_copy(od, from_obj);
     }
 
     od->obj_ref = from_obj;
     //  tm_starting = timer_read(&tm_perf);
     if(from_obj->sl == in_memory_ssd){
-        obj_data_free_pointer(from_obj);
+        obj_data_free_in_mem(from_obj);
     }
     /*
     if(from_obj->sl == in_memory_ceph){
@@ -3348,7 +3355,7 @@ static int dsgrpc_obj_demote(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
      //uloga("Before data movement demote\n");
             obj_data_copy_to_mem(from_obj, DSG_ID);
     //uloga("Before copy to ceph\n");
-            obj_data_copy_to_ceph(from_obj, cluster, DSG_ID);
+           // obj_data_copy_to_ceph(from_obj, cluster, DSG_ID);
     //uloga("After copy to ceph\n");
         }
 
@@ -3443,13 +3450,13 @@ static int dsgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
     ERROR_TRACE();
 }
 
-void ceph_init(){
-/* Declare the cluster handle and required arguments. */
+//void ceph_init(){
+/* Declare the cluster handle and required arguments. 
     char cluster_name[] = "ceph";
     char user_name[] = "client.admin";
     uint64_t flags;
 
-/* Initialize the cluster handle with the "ceph" cluster name and the "client.admin" user */
+ /*Initialize the cluster handle with the "ceph" cluster name and the "client.admin" user 
     int err;
     err = rados_create2(&cluster, cluster_name, user_name, flags);
 
@@ -3461,7 +3468,7 @@ void ceph_init(){
     }
 
 
-/* Read a Ceph configuration file to configure the cluster handle. */
+/* Read a Ceph configuration file to configure the cluster handle. 
     err = rados_conf_read_file(cluster, "/etc/ceph/ceph.conf");
     if (err < 0) {
         uloga("%s: cannot read config file: %s\n", __func__, strerror(-err));
@@ -3470,7 +3477,7 @@ void ceph_init(){
         uloga("\nRead the config file.\n");
     }
 
-/* Connect to the cluster */
+/* Connect to the cluster 
     err = rados_connect(cluster);
     if (err < 0) {
         uloga("%s: cannot connect to cluster: %s\n", __func__, strerror(-err));
