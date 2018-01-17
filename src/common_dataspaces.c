@@ -332,6 +332,7 @@ int common_dspaces_put(const char *var_name,
 #endif
 }
 
+#ifdef DS_HAVE_DSPACES_LOCATION_AWARE_WRITE
 #define MAX_NUM_PEER_PER_NODE 64
 int common_dspaces_put_location_aware(const char *var_name, 
         unsigned int ver, int size,
@@ -407,6 +408,7 @@ int common_dspaces_put_location_aware(const char *var_name,
 
         return 0;
 }
+#endif
 
 int common_dspaces_remove(const char *var_name, unsigned int ver)
 {
