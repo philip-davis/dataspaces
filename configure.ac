@@ -1,4 +1,4 @@
-AC_INIT([dataspaces],[1.6.2])
+AC_INIT([dataspaces],[1.6.5])
 AC_CONFIG_AUX_DIR(config)
 
 dnl AM_INIT_AUTOMAKE([-Wall -Wno-extra-portability -Werror subdir-objects foreign])
@@ -27,17 +27,28 @@ AC_TCP_SOCKET
 
 AC_CONFIGURE_OPTIONS
 
+ACX_PTHREAD
+
+save_LIBS=$LIBS
+LIBS=""
+AC_CHECK_LIB([m], [cos])
+if test -n $LIBS; then
+    MATH_LIBS=$LIBS
+fi
+LIBS=$save_LIBS
 
 dnl Generate flags for dataspaces lib creation which depends on the particular network transport layer. DSPACESLIB_* is used for compiling the lib, and linking testing codes.
-DSPACESLIB_CFLAGS=
-DSPACESLIB_CPPFLAGS=
-DSPACESLIB_LDFLAGS=
-DSPACESLIB_LDADD=
+DSPACESLIB_CFLAGS="${PTHREAD_CFLAGS}"
+DSPACESLIB_CPPFLAGS="${PTHREAD_CFLAGS}"
+DSPACESLIB_LDFLAGS="${PTHREAD_CFLAGS}"
+DSPACESLIB_LDADD="${PTHREAD_LIBS} ${MATH_LIBS}"
 dnl These flags will be present in the output of dspaces_config
-DSPACES_EXT_CFLAGS=
-DSPACES_EXT_CPPFLAGS=
-DSPACES_EXT_LDFLAGS=
-DSPACES_EXT_LDADD=
+DSPACES_EXT_CFLAGS="${PTHREAD_CFLAGS}"
+DSPACES_EXT_CPPFLAGS="${PTHREAD_CFLAGS}"
+DSPACES_EXT_LDFLAGS="${PTHREAD_CFLAGS}"
+DSPACES_EXT_LDADD="${PTHREAD_LIBS} ${MATH_LIBS}"
+dnl configure input arguments
+CONFIG_ARG="$ac_configure_args"
 
 dnl Check if DART_TCP is enabled
 AC_ARG_ENABLE(dart_tcp,
@@ -191,6 +202,7 @@ AC_SUBST(DSPACES_EXT_CFLAGS)
 AC_SUBST(DSPACES_EXT_CPPFLAGS)
 AC_SUBST(DSPACES_EXT_LDFLAGS)
 AC_SUBST(DSPACES_EXT_LDADD)
+AC_SUBST(CONFIG_ARG)
 
 AC_CONFIG_HEADERS(config.h)
 AC_CONFIG_FILES([

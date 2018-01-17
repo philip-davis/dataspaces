@@ -32,6 +32,8 @@
 #ifndef __DS_BASE_GNI_H__
 #define __DS_BASE_GNI_H__
 
+#include <mpi.h>
+
 #include "dart_rpc_gni.h"
 #include <mpi.h>
 
@@ -80,7 +82,7 @@ struct dart_server {
 
 	/* Reference to the front end module used. */
 	void			*dart_ref;
-
+    
     /* MPI Communicator (can be null) */
     MPI_Comm        *comm;
 

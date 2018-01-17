@@ -2132,7 +2132,7 @@ void dsg_free(struct ds_gspace *dsg)
 int dsg_process(struct ds_gspace *dsg)
 {
 	int err;
-	//err = rpc_process_event(dsg->ds->rpc_s);
+    
     err = ds_process(dsg->ds);
 	if (err < 0)
 		rpc_report_md_usage(dsg->ds->rpc_s);

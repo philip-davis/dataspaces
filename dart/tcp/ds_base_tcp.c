@@ -574,41 +574,66 @@ int ds_boot_slave(struct dart_server *ds) {
     return -1;
 }
 
-static int ds_boot(struct dart_server *ds) {
+static int ds_boot(struct dart_server *ds)
+{
+
+	const char *filename_lock = "srv.lck";
+	const char *filename_conf = "conf";
+	int fd;
+	int is_master = 0;
+	int rank;
+	struct stat stat_buf;
+	int ret;
+
     ds->rpc_s->thread_alive = 1;
     if (pthread_create(&ds->rpc_s->comm_thread, NULL, ds_listen, (void *)ds) != 0) {
         printf("[%s]: create pthread failed!\n", __func__);
         goto err_out;
     }
 
-    const char *filename_lock = "srv.lck";
-    const char *filename_conf = "conf";
-    int fd = open(filename_lock, O_WRONLY | O_CREAT, 0644);
-    if (fd < 0) {
-        printf("[%s]: open file %s failed!\n", __func__, filename_lock);
-        goto err_out;
-    }
-    /* The unique process which locked the file becomes the master */
-    file_lock(fd, 1);
+    if(ds->comm) {
+    	MPI_Comm_rank(*ds->comm, &rank);
+    	if(rank == 0) {
+    		is_master = 1;
+    	}
+    } else {
+    	uloga("No MPI Comm\n");
+    	fd = open(filename_lock, O_WRONLY | O_CREAT, 0644);
+    	if (fd < 0) {
+    		printf("[%s]: open file %s failed!\n", __func__, filename_lock);
+    		goto err_out;
+    	}
+    	/* The unique process which locked the file becomes the master */
+    	file_lock(fd, 1);
 
-    struct stat stat_buf;
-    int ret = stat(filename_conf, &stat_buf);
-    if (ret < 0 && errno != ENOENT) {
-        goto err_out;
+    	ret = stat(filename_conf, &stat_buf);
+    	if (ret < 0 && errno != ENOENT) {
+    		goto err_out;
+    	} else if(stat_buf.st_size == 0) {
+    		is_master = 1;
+    	}
     }
 
-    if (ret < 0 || stat_buf.st_size == 0) {
+    if (is_master) {
         if (rpc_write_config(ds->rpc_s, filename_conf) < 0) {
             printf("[%s]: write RPC config file failed!\n", __func__);
             goto err_out;
         }
-        file_lock(fd, 0);
+        if(!ds->comm) {
+        	file_lock(fd, 0);
+        } else {
+        	MPI_Barrier(*ds->comm);
+        }
         if (ds_boot_master(ds) < 0) {
             printf("[%s]: boot master server failed!\n", __func__);
             goto err_out;
         }
     } else {
-        file_lock(fd, 0);
+    	if(!ds->comm) {
+    		file_lock(fd, 0);
+    	} else {
+    		MPI_Barrier(*ds->comm);
+    	}
         if (rpc_read_config(&ds->peer_tab[0].ptlmap.address, filename_conf) < 0) {
             printf("[%s]: read RPC config file failed!\n", __func__);
             goto err_out;
@@ -618,21 +643,22 @@ static int ds_boot(struct dart_server *ds) {
             goto err_out;
         }
     }
-    close(fd);
-    /* TODO: should only be called by master after the registration phase */
-    remove(filename_lock);
+    if(is_master && !ds->comm) {
+    	close(fd);
+    	remove(filename_lock);
+    }
 
     return 0;
 
-    err_out:
-    if (fd >= 0) {
+err_out:
+    if (fd >= 0 && !ds->comm) {
         file_lock(fd, 0);
         close(fd);
     }
     return -1;
 }
 
-struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref) {
+struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm) {
     size_t size = sizeof(struct dart_server) + sizeof(struct node_id) * (size_t)(num_sp + num_cp);
     struct dart_server *ds = (struct dart_server *)malloc(size);
     if (ds == NULL) {
@@ -650,6 +676,13 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref) {
     ds->size_sp = num_sp;
     ds->dart_ref = dart_ref;
     INIT_LIST_HEAD(&ds->app_list);
+
+    if(comm) {
+        ds->comm = malloc(sizeof(*ds->comm));
+        MPI_Comm_dup(*(MPI_Comm *)comm, ds->comm);
+    } else {
+        ds->comm = NULL;    
+    }
 
     char *interface = getenv("DATASPACES_TCP_INTERFACE");
     ds->rpc_s = rpc_server_init(interface, ds->size_sp, ds, DART_SERVER);
@@ -705,6 +738,10 @@ void ds_free(struct dart_server* ds) {
     list_for_each_entry_safe(app, t, &ds->app_list, struct app_info, app_entry) {
         list_del(&app->app_entry);
         free(app);
+    }
+
+    if(ds->comm) {
+        free(ds->comm);
     }
 
     free(ds);

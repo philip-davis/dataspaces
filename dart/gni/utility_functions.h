@@ -78,19 +78,19 @@ allgather(void *in, void *out, int len, void *comm)
     char           *tmp_buf;
 
     if (!already_called) {
-    if(comm) {
-        rc = MPI_Comm_size(*((MPI_Comm *)comm), &job_size);
+        if(comm) {
+            rc = MPI_Comm_size(*((MPI_Comm *)comm), &job_size);
             assert(rc == MPI_SUCCESS);
 
             rc = MPI_Comm_rank(*((MPI_Comm *)comm), &my_rank);
             assert(rc == MPI_SUCCESS);
 
-        ivec_ptr = (int *) malloc(sizeof(int) * job_size);
+            ivec_ptr = (int *) malloc(sizeof(int) * job_size);
             assert(ivec_ptr != NULL);
-        rc = MPI_Allgather(&my_rank, 1, MPI_INT, ivec_ptr, 1, MPI_INT, *((MPI_Comm *)comm));
-        assert(rc == MPI_SUCCESS);
+            rc = MPI_Allgather(&my_rank, 1, MPI_INT, ivec_ptr, 1, MPI_INT, *((MPI_Comm *)comm));
+            assert(rc == MPI_SUCCESS);
 
-    } else {
+        } else {
             rc = PMI_Get_size(&job_size);
             assert(rc == PMI_SUCCESS);
 
@@ -102,7 +102,7 @@ allgather(void *in, void *out, int len, void *comm)
 
             rc = PMI_Allgather(&my_rank, ivec_ptr, sizeof(int));
             assert(rc == PMI_SUCCESS);
-    }
+        }
         already_called = 1;
     }
 

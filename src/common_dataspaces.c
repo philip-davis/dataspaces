@@ -123,14 +123,13 @@ int common_dspaces_init(int num_peers, int appid, void *comm, const char *parame
         p = p->next;
     }*/
 
-
 	dcg = dcg_alloc(num_peers, appid, comm);
 	if (!dcg) {
         uloga("%s(): failed to initialize.\n", __func__);
 		return err;
 	}
 
-	err = dcg_ss_info(dcg, &num_dims); 
+	err = dcg_ss_info(dcg, &num_dims);
 	if (err < 0) {
 		uloga("%s(): failed to obtain space info.\n", __func__);
 		return err;
@@ -612,7 +611,6 @@ void common_dspaces_finalize(void)
 #ifdef DS_HAVE_DIMES
     dimes_client_free();
 #endif
-    
     dcg_free(dcg);
     dcg = 0;
 }

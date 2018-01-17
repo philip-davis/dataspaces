@@ -2,20 +2,27 @@
 
 DSPACES_INC="-I%incdir% @DSPACES_EXT_CPPFLAGS@ @DSPACES_EXT_CFLAGS@"
 DSPACES_LIB="-L%libdir% -ldspaces -ldscommon -ldart @DSPACES_EXT_LDFLAGS@ @DSPACES_EXT_LDADD@ @LDFLAGS@ @LIBS@"
+DSPACES_VER="@PACKAGE_VERSION@"
+DSPACES_ARG="@PACKAGE_STRING@ 
+             @CONFIG_ARG@"
 
 OPTIND=1
 
 PRINT_CFLAGS=no
 PRINT_LDFLAGS=no
+PRINT_VERSION=no
+PRINT_ARGUMENTS=no
 
 function usage() {
-    echo "`basename $0` [-c | -l]
+    echo "`basename $0` [-c | -l | -v | -V]
 Arguments
     -c Compiler flags
-    -l Linker flags"
+    -l Linker flags
+    -v Version flags
+    -v Configure options"
 }
 
-while getopts "h?cl" opt; do
+while getopts "h?clvV" opt; do
     case "$opt" in
     h|\?)
         usage
@@ -27,6 +34,12 @@ while getopts "h?cl" opt; do
     l)
         PRINT_LDFLAGS=yes
         ;;
+    v)
+	PRINT_VERSION=yes
+	;;
+    V)
+        PRINT_ARGUMENTS=yes
+        ;;    
     esac
 done
 
@@ -38,3 +51,9 @@ if [ "$PRINT_LDFLAGS" == "yes" ]; then
     echo $DSPACES_LIB
 fi
 
+if [ "$PRINT_VERSION" == "yes" ]; then
+    echo $DSPACES_VER
+fi
+if [ "$PRINT_ARGUMENTS" == "yes" ]; then
+    echo $DSPACES_ARG
+fi
