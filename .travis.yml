@@ -1,0 +1,12 @@
+language: c
+compiler:
+    - gcc
+    - clang
+os:
+    - osx
+    - precise
+    - trusty
+script:
+    - autoreconf -ivf
+    - ./configure
+    - make
