@@ -7,6 +7,6 @@ os:
     - precise
     - trusty
 script:
-    - autoreconf -ivf
+    - ./autogen.sh
     - ./configure
     - make
