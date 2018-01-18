@@ -3,10 +3,10 @@ compiler:
     - gcc
     - clang
 os:
-    - osx
     - precise
-    - trusty
+before_install:
+    - sudo apt-get install mpich
 script:
     - ./autogen.sh
-    - ./configure
+    - ./configure CC=mpicc FC=mpif90
     - make
