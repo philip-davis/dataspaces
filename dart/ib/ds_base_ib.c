@@ -1868,8 +1868,6 @@ static int ds_boot(struct dart_server *ds)	//Done
 			goto err_flock;
 	}
 
-
-	ds->rpc_s->cur_num_peer = ds->rpc_s->num_rpc_per_buff;
 	if(is_master && !ds->comm) {
 		close(fd);
 		remove(fil_lock);
