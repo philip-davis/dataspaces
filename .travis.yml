@@ -1,0 +1,12 @@
+language: c
+compiler:
+    - gcc
+    - clang
+os:
+    - precise
+before_install:
+    - sudo apt-get install mpich
+script:
+    - ./autogen.sh
+    - ./configure CC=mpicc FC=mpif90
+    - make
