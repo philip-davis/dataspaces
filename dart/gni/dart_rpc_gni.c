@@ -237,9 +237,9 @@ static int init_gni (struct rpc_server *rpc_s)
     if(rank_id_pmi == 0){
     	if(rpc_s->cmp_type==DART_SERVER){
     		//ACQUIRE
-    		err = drc_acquire(&rpc_s->drc_credential_id,0);
+    		err = drc_acquire(&rpc_s->drc_credential_id, DRC_FLAGS_FLEX_CREDENTIAL);
     		if(err != DRC_SUCCESS){
-				printf("SERVER: Error Dynamic RDMA Credentials Acquire Failed (%s)", __func__);
+				uloga("SERVER: Error Dynamic RDMA Credentials Acquire Failed (%s)", __func__);
     			goto err_out;
     		}
     		//WRITE TO FILE
