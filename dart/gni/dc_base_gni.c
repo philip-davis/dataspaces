@@ -384,7 +384,7 @@ static int dc_master_init(struct dart_client *dc) //working
 			goto err_free;
 		}
 
-		status = GNI_EpBind(dc->peer_tab[i].ep_hndl, dc->peer_tab[i].ptlmap.nid, dc->peer_tab[i].ptlmap.id);
+		status = GNI_EpBind(dc->peer_tab[i].ep_hndl, dc->peer_tab[i].ptlmap.nid, dc->peer_tab[i].ptlmap.pid);
 		if (status != GNI_RC_SUCCESS)
 		{
 			uloga("Fail: GNI_EpBind returned error. %d.\n", status);
@@ -397,7 +397,7 @@ static int dc_master_init(struct dart_client *dc) //working
 			uloga("Rank %d: Fail GNI_EpCreate SYS returned error. %d.\n", dc->rpc_s->ptlmap.id, status);
 			goto err_out;
 		}
-		status = GNI_EpBind(peer->sys_ep_hndl, peer->ptlmap.nid, peer->ptlmap.id);
+		status = GNI_EpBind(peer->sys_ep_hndl, peer->ptlmap.nid, peer->ptlmap.pid);
 		if (status != GNI_RC_SUCCESS)
 		{
 			uloga("Rank %d: Fail GNI_EpBind SYS returned error. %d.\n", dc->rpc_s->ptlmap.id, status);
@@ -718,7 +718,7 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 			goto err_free;
 		}
 
-		status = GNI_EpBind(dc->peer_tab[i].ep_hndl, dc->peer_tab[i].ptlmap.nid, dc->peer_tab[i].ptlmap.id);
+		status = GNI_EpBind(dc->peer_tab[i].ep_hndl, dc->peer_tab[i].ptlmap.nid, dc->peer_tab[i].ptlmap.pid);
 		if (status != GNI_RC_SUCCESS)
 		{
 			uloga("Fail: GNI_EpBind returned error. %d.\n", status);
@@ -731,7 +731,7 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 			uloga("Rank %d: Fail GNI_EpCreate SYS returned error. %d.\n", dc->rpc_s->ptlmap.id, status);
 			goto err_out;
 		}
-		status = GNI_EpBind(peer->sys_ep_hndl, peer->ptlmap.nid, peer->ptlmap.id);
+		status = GNI_EpBind(peer->sys_ep_hndl, peer->ptlmap.nid, peer->ptlmap.pid);
 		if (status != GNI_RC_SUCCESS)
 		{
 			uloga("Rank %d: Fail GNI_EpBind SYS returned error. %d.\n", dc->rpc_s->ptlmap.id, status);
