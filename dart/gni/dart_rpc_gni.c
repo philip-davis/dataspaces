@@ -331,7 +331,9 @@ static int init_gni (struct rpc_server *rpc_s)
 #endif //condition: ifdef GNI_PTAG
     }
 
-	status = GNI_CdmCreate(rank_id_pmi, ptag, cookie, modes, &rpc_s->cdm_handle);
+    rpc_s->ptlmap.pid = getpid();
+
+	status = GNI_CdmCreate(rpc_s->ptlmap.pid, ptag, cookie, modes, &rpc_s->cdm_handle);
 	if (status != GNI_RC_SUCCESS) 
 	{
 		uloga("Fail: GNI_CdmCreate returned error. Used ptag=%d cookie=%x status=%d.\n", 
@@ -348,8 +350,6 @@ static int init_gni (struct rpc_server *rpc_s)
 		err = status;
         goto err_out;
 	}
-
-	rpc_s->ptlmap.pid = getpid();
 	
 	return 0;
 

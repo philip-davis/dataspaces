@@ -343,7 +343,7 @@ static int ds_master_init(struct dart_server *ds)//testing
 	k = 0;
 	while(count != ds->size_cp){
 		connectfd[k] = accept(ds->rpc_s->address.sockfd, NULL, NULL);
-		if(0 > connectfd[k]){
+		if(0 > connectfd[k]) {
 			perror("error accept failed");
 			continue;
 		}
@@ -492,7 +492,7 @@ static int ds_master_init(struct dart_server *ds)//testing
 			goto err_free;
 		}
 
-		status = GNI_EpBind(ds->peer_tab[i].ep_hndl, ds->peer_tab[i].ptlmap.nid, ds->peer_tab[i].ptlmap.id);
+		status = GNI_EpBind(ds->peer_tab[i].ep_hndl, ds->peer_tab[i].ptlmap.nid, ds->peer_tab[i].ptlmap.pid);
 		if (status != GNI_RC_SUCCESS)
 		{
 			uloga("Fail: GNI_EpBind returned error. %d.\n", status);
@@ -505,7 +505,7 @@ static int ds_master_init(struct dart_server *ds)//testing
 			uloga("Rank %d: Fail GNI_EpCreate SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
 			goto err_out;
 		}
-		status = GNI_EpBind(peer->sys_ep_hndl, peer->ptlmap.nid, peer->ptlmap.id);
+		status = GNI_EpBind(peer->sys_ep_hndl, peer->ptlmap.nid, peer->ptlmap.pid);
 		if (status != GNI_RC_SUCCESS)
 		{
 			uloga("Rank %d: Fail GNI_EpBind SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
@@ -829,7 +829,7 @@ static int ds_boot_slave(struct dart_server *ds)
 			goto err_free;
 		}
 
-		status = GNI_EpBind(ds->peer_tab[i].ep_hndl, ds->peer_tab[i].ptlmap.nid, ds->peer_tab[i].ptlmap.id);
+		status = GNI_EpBind(ds->peer_tab[i].ep_hndl, ds->peer_tab[i].ptlmap.nid, ds->peer_tab[i].ptlmap.pid);
 		if (status != GNI_RC_SUCCESS)
 		{
 			uloga("Fail: GNI_EpBind returned error. %d.\n", status);
@@ -842,7 +842,7 @@ static int ds_boot_slave(struct dart_server *ds)
 			uloga("Rank %d: Fail GNI_EpCreate SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
 			goto err_out;
 		}
-		status = GNI_EpBind(peer->sys_ep_hndl, peer->ptlmap.nid, peer->ptlmap.id);
+		status = GNI_EpBind(peer->sys_ep_hndl, peer->ptlmap.nid, peer->ptlmap.pid);
 		if (status != GNI_RC_SUCCESS)
 		{
 			uloga("Rank %d: Fail GNI_EpBind SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
