@@ -128,6 +128,15 @@ else
         AM_CONDITIONAL(BUILD_DIMES, false)
 fi
 
+AC_ARG_ENABLE(dart2,
+	[AS_HELP_STRING([--enable-dart2],
+		[Enable DART2. This is necessary for DSaaS TCP])])
+	
+if test "x$enable_dart2" == "xyes"; then
+	AC_DEFINE(USE_DART2, 1, [DART2 is enabled])
+	echo "Using DART2!"
+fi
+
 dnl Check if DataSpaces location-aware write is enabled
 AC_ARG_ENABLE(dataspaces_location_aware_write,
     [AS_HELP_STRING([--enable-dataspaces-location-aware-write],

@@ -41,6 +41,10 @@
 #include "dc_gspace.h"
 #include "ss_data.h"
 
+#if USE_DART2
+#include "d2_gspace.h"
+#endif /* USE_DART2 */
+
 #define DC_WAIT_COMPLETION(x)                                   \
         do {                                                    \
                 err = dc_process(dcg->dc);                      \
@@ -198,7 +202,7 @@ static struct query_tran_entry * qte_alloc(struct obj_data *od, int alloc_data)
 	qte->f_alloc_data = !!(alloc_data);
     memcpy(&qte->gdim, &od->gdim, sizeof(struct global_dimension));
 
-	qte->qh = qh_alloc(dcg->dc->num_sp);
+	qte->qh = qh_alloc(dcg->num_sp);
 	if (!qte->qh) {
 		free(qte);
 		errno = ENOMEM;
@@ -1531,6 +1535,12 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
                 free(dcg_l);
                 goto err_out;
         }
+
+#if USE_DART2
+        //Need API call to grab app size of server.
+#else
+        dcg_l->num_sp = dcg_l->dc->num_sp;
+#endif /* USE_DART2 */
 
         INIT_LIST_HEAD(&dcg_l->locks_list);
         init_gdim_list(&dcg_l->gdim_list);    

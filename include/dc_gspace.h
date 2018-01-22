@@ -57,6 +57,8 @@ struct ss_info {
 struct dcg_space {
         struct dart_client      *dc;
 
+        size_t num_sp;
+
         /* Query cache list. */
         struct query_cache      qc;
         struct query_tran       qt;

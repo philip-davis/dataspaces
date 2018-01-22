@@ -62,6 +62,8 @@ struct ds_gspace {
 
         /* List of allocated locks. */
         struct list_head        locks_list;
+
+        int num_sp;
 };
 
 struct ds_gspace *dsg_alloc(int, int, char *, void *);

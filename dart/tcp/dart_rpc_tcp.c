@@ -14,6 +14,7 @@ static uint64_t socket_best_write_size = 16384;
 /* Best size of bytes to be read in a single socket read call */
 static uint64_t socket_best_read_size = 87380;
 
+
 static uint64_t str_to_uint64(const char *s) {
     uint64_t res = 0;
     while (*s != '\0') {

@@ -9,6 +9,8 @@ extern "C" {
 
 #include<mpi.h>
 
+typedef int (*completion_callback)(struct rpc_server *, struct msg_buf *);
+
 struct dart_client{
         struct rpc_server       *rpc_s;
 

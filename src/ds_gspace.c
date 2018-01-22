@@ -46,6 +46,10 @@
 #endif
 #include "util.h"
 
+#if USE_DART2
+#include "d2_gspace.h"
+#endif /* USE_DART2 */
+
 #define DSG_ID                  dsg->ds->self->ptlmap.id
 
 struct cont_query {
@@ -1923,6 +1927,10 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 */
 static int dsgrpc_obj_filter(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
+#if USE_DART2
+	uloga("'%s': not compatible with DART2.\n", __func__);
+	return -ENOSYS;
+#else
         struct hdr_obj_filter *hf = (struct hdr_obj_filter *) cmd->pad;
         struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
         struct msg_buf *msg;
@@ -1966,6 +1974,7 @@ static int dsgrpc_obj_filter(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         return 0;
  err_out:
         ERROR_TRACE();
+#endif /* USE_DART2 */
 }
 
 /*
@@ -2056,6 +2065,8 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name, void *comm)
         dsg = dsg_l = malloc(sizeof(*dsg_l));
         if (!dsg_l)
                 goto err_out;
+
+        dsg_l->num_sp = num_sp;
 
         rpc_add_service(ss_obj_get_dht_peers, dsgrpc_obj_send_dht_peers);
         rpc_add_service(ss_obj_get_desc, dsgrpc_obj_get_desc);
@@ -2187,5 +2198,10 @@ int dsghlp_get_rank(struct ds_gspace *dsg)
 */
 int dsghlp_all_sp_joined(struct ds_gspace *dsg)
 {
-        return (dsg->ds->num_sp == dsg->ds->size_sp);
+#if USE_DART2
+	uloga("'%s()': not compatible with DART2.\n", __func__);
+	return -ENOSYS;
+#else
+	return (dsg->ds->num_sp == dsg->ds->size_sp);
+#endif /* USE_DART2 */
 }

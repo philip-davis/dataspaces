@@ -3,6 +3,71 @@
 
 #include "config.h"
 
+#if HAVE_MPI
+#include<mpi.h>
+#endif /* HAVE_MPI */
+
+#if USE_DART2
+
+#include "dart_rpc.h"
+
+//TODO: move to ds_gspace
+enum lock_type {
+    lk_read_get,
+    lk_read_release,
+    lk_write_get,
+    lk_write_release,
+    lk_grant
+};
+
+#define LOCK_NAME_SIZE 64
+/* Header for the locking service. */
+struct lockhdr {
+	int type;
+	int rc;
+	int id;
+	int lock_num;
+	char name[LOCK_NAME_SIZE];	/* lock name */
+} __attribute__ ((__packed__));
+
+#define dart_server dart_agent
+#define dart_client dart_agent
+
+struct dart_agent {
+    struct rpc_server *rpc_s;
+
+    int peer_size;
+
+    struct node_id *self;
+
+    int f_reg;
+    int f_stop;
+
+    int f_nacc;
+    void *dart_ref;
+
+    //backwards-compatible for dart client
+    //backwards-compatible for dart server
+    int size_sp;
+
+#if HAVE_MPI
+    MPI_Comm *comm;
+#endif /* HAVE_MPI */
+
+};
+
+
+//Backwards-compatible dart client interface
+struct dart_agent *dc_alloc(int num_peers, int appid, void *dart_ref, void *comm);
+void dc_free(struct dart_agent *da);
+int dc_process(struct dart_agent *dc);
+
+//Backwards-compatible dart server interface
+struct dart_agent *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm);
+void ds_free(struct dart_agent* ds);
+int ds_process(struct dart_agent* ds);
+
+#else
 #if HAVE_UGNI
 
 #include "gni/dart_rpc_gni.h"
@@ -42,6 +107,8 @@
 #include "tcp/dart_rpc_tcp.h"
 #include "tcp/dc_base_tcp.h"
 #include "tcp/ds_base_tcp.h"
+
+#endif
 
 #endif
 
