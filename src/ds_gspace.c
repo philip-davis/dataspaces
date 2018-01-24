@@ -1455,7 +1455,7 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
         }
 
         msg->msg_data = peer_id_tab;
-        msg->size = sizeof(int) * (peer_num+1);
+        msg->size = sizeof(int) * (dsg->ds->size_sp + 1);
         msg->cb = obj_send_dht_peers_completion;
 
         rpc_mem_info_cache(peer, msg, cmd);
