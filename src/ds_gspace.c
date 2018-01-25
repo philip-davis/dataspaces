@@ -2185,5 +2185,5 @@ int dsghlp_get_rank(struct ds_gspace *dsg)
 */
 int dsghlp_all_sp_joined(struct ds_gspace *dsg)
 {
-        return (dsg->ds->num_sp == dsg->ds->size_sp);
+	return (dsg->ds->num_sp == dsg->ds->size_sp);
 }

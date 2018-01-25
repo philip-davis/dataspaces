@@ -355,8 +355,12 @@ static int ds_master_init(struct dart_server *ds)//testing
 		while(1){
 			err = recv(connectfd[k], tmp_size+&info_size, sizeof(int)-tmp_size, 0);
 			if (-1 == err) {
-				perror("error receive failed");
-				goto err_out;
+				if(errno == EINTR) {
+					continue;
+				} else {
+					perror("error receive failed\n");
+					goto err_out;
+				}
 			}
 			else if (0 == err) {
 				uloga("%s(): recv return 0?\n",__func__);
@@ -373,8 +377,12 @@ static int ds_master_init(struct dart_server *ds)//testing
 		while(1){
 			err = recv(connectfd[k], tmp_size+recv_buffer, info_size-tmp_size, 0);
 			if (-1 == err) {
-				perror("error receive failed");
-				goto err_out;
+				if(errno == EINTR) {
+					continue;
+				} else {
+					perror("error receive failed\n");
+					goto err_out;
+				}
 			}
 			else if (0 == err) {
 				uloga("%s(): recv return 0?\n",__func__);
@@ -565,8 +573,12 @@ static int ds_master_init(struct dart_server *ds)//testing
 		while(1){
 			err = recv(connectfd[k], tmp_size+&info_size, sizeof(int)-tmp_size, 0);
 			if (-1 == err) {
-				perror("error receive failed\n");
-				goto err_out;
+				if(errno == EINTR) {
+					continue;
+				} else {
+					perror("error receive failed\n");
+					goto err_out;
+				}
 			}
 			else if (0 == err) {
 				uloga("%s(): recv return 0?\n",__func__);
@@ -583,8 +595,12 @@ static int ds_master_init(struct dart_server *ds)//testing
 		while(1){
 			err = recv(connectfd[k], tmp_size+recv_buffer, info_size-tmp_size, 0);
 			if (-1 == err) {
-				perror("error receive failed\n");
-				goto err_out;
+				if(errno == EINTR) {
+					continue;
+				} else {
+					perror("error receive failed\n");
+					goto err_out;
+				}
 			}
 			else if (0 == err) {
 				uloga("%s(): recv return 0?\n",__func__);
