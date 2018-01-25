@@ -1316,7 +1316,7 @@ int rpc_read_socket(struct sockaddr_in *address)
 {
         char *ip;
 	char *port;
-        FILE *f;
+        FILE *f = NULL;
         int err;
 	char ipstore[16];
 	char *tmp_ip;
@@ -1335,10 +1335,12 @@ int rpc_read_socket(struct sockaddr_in *address)
                 return 0;
         }
 
-        f = fopen("conf", "rt");
-        if (!f) {
-		err = -ENOENT;
-		goto err_out;
+        while(!f) {
+        	f = fopen("conf", "rt");
+        	if (!f && errno != EINTR) {
+        		err = -ENOENT;
+        		goto err_out;
+        	}
         }
 
         char version[16];
@@ -1363,12 +1365,15 @@ int rpc_read_socket(struct sockaddr_in *address)
 
 int rpc_write_socket(struct rpc_server *rpc_s)
 {
-        FILE *f;
+        FILE *f = NULL;
         int err;
 
-        f = fopen("conf", "wt");
-        if (!f)
+        while(!f) {
+        	f = fopen("conf", "wt");
+        	if (!f && errno != EINTR) {
                 goto err_out;
+        	}
+        }
 
         err = fprintf(f, "P2TNID=%s\nP2TPID=%d\n%s\n", inet_ntoa(rpc_s->address.address.sin_addr), ntohs(rpc_s->address.address.sin_port), VERSION);
 
@@ -1388,7 +1393,7 @@ int rpc_write_socket(struct rpc_server *rpc_s)
 int rpc_read_config(struct ptlid_map *ptlmap)
 {
         char *nid, *pid;
-        FILE *f;
+        FILE *f = NULL;
         int err;
 
         nid = getenv("P2TNID");
@@ -1401,10 +1406,12 @@ int rpc_read_config(struct ptlid_map *ptlmap)
                 return 0;
         }
 
-        f = fopen("conf", "rt");
-        if (!f) {
-		err = -ENOENT;
-		goto err_out;
+        while(!f) {
+        	f = fopen("conf", "rt");
+        	if (!f && errno != EINTR) {
+        		err = -ENOENT;
+        		goto err_out;
+        	}
         }
 
         err = fscanf(f, "P2TNID=%u\nP2TPID=%hu\n", 
@@ -1447,12 +1454,15 @@ int rpc_write_config(struct rpc_server *rpc_s)
 #ifdef DS_HAVE_DRC
 int rpc_write_drc(uint32_t rdma_credential)
 {
-	FILE *f;
+	FILE *f = NULL;
 	int err;
 
-	f = fopen("cred", "wt");
-	if (!f)
+	while(!f) {
+		f = fopen("cred", "wt");
+		if (!f && errno != EINTR) {
 			goto err_out;
+		}
+	}
 
 	err = fprintf(f, "RDMACRED=%u\n", rdma_credential);
 
@@ -1470,15 +1480,16 @@ int rpc_write_drc(uint32_t rdma_credential)
 }
 
 int rpc_read_drc(uint32_t *rdma_credential){
-        FILE *f;
+        FILE *f = NULL;
         int err;
         uint32_t temp_cred;
 
-        f = fopen("cred", "rt");
-
-        if (!f) {
-			err = -ENOENT;
-			goto err_out;
+        while(!f) {
+        	f = fopen("cred", "rt");
+        	if (!f) {
+				err = -ENOENT;
+				goto err_out;
+        	}
         }
 
         err = fscanf(f, "RDMACRED=%" SCNu32 "\n", &temp_cred);

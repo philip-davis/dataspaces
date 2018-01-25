@@ -266,8 +266,12 @@ static int dc_master_init(struct dart_client *dc) //working
 	while(1){
 		err = send(connectfd, tmp_size+&info_size, sizeof(int)-tmp_size, 0);
 		if (-1 == err) {
-			perror("error send failed\n");
-			goto err_out;
+			if(errno == EINTR) {
+				continue;
+			} else {
+				perror("error receive failed\n");
+				goto err_out;
+			}
 		}
 
 		tmp_size += err;
@@ -280,8 +284,12 @@ static int dc_master_init(struct dart_client *dc) //working
 	while(1){
 		err = send(connectfd, tmp_size+send_buffer, info_size-tmp_size, 0);
 		if (-1 == err) {
-			perror("error send failed\n");
-			goto err_out;
+			if(errno == EINTR) {
+				continue;
+			} else {
+				perror("error receive failed\n");
+				goto err_out;
+			}
 		}
 
 		tmp_size += err;
@@ -297,8 +305,12 @@ static int dc_master_init(struct dart_client *dc) //working
 	while(1){
 		err = recv(connectfd, tmp_size+&info_size, sizeof(int)-tmp_size, 0);
 		if (-1 == err) {
-			perror("error receive failed\n");
-			goto err_out;
+			if(errno == EINTR) {
+				continue;
+			} else {
+				perror("error receive failed\n");
+				goto err_out;
+			}
 		}
 		else if (0 == err) {
 			uloga("%s(): recv return 0?\n",__func__);
@@ -315,8 +327,12 @@ static int dc_master_init(struct dart_client *dc) //working
 	while(1){
 		err = recv(connectfd, tmp_size+recv_buffer, info_size-tmp_size, 0);
 		if (-1 == err) {
-			perror("error receive failed");
-			goto err_out;
+			if(errno == EINTR) {
+				continue;
+			} else {
+				perror("error receive failed\n");
+				goto err_out;
+			}
 		}
 		else if (0 == err) {
 			uloga("%s(): recv return 0?\n",__func__);
@@ -447,8 +463,12 @@ static int dc_master_init(struct dart_client *dc) //working
 	while(1){
 		err = send(connectfd, tmp_size+&info_size, sizeof(int)-tmp_size, 0);
 		if (-1 == err) {
-			perror("error send attr size failed");
-			goto err_out;
+			if(errno == EINTR) {
+				continue;
+			} else {
+				perror("error receive failed\n");
+				goto err_out;
+			}
 		}
 
 		tmp_size += err;
@@ -461,8 +481,12 @@ static int dc_master_init(struct dart_client *dc) //working
 	while(1){
 		err = send(connectfd, tmp_size+send_buffer, info_size-tmp_size, 0);
 		if (-1 == err) {
-			perror("error send attr failed");
-			goto err_out;
+			if(errno == EINTR) {
+				continue;
+			} else {
+				perror("error receive failed\n");
+				goto err_out;
+			}
 		}
 
 		tmp_size += err;
@@ -478,8 +502,12 @@ static int dc_master_init(struct dart_client *dc) //working
 	while(1){
 		err = recv(connectfd, tmp_size+&info_size, sizeof(int)-tmp_size, 0);
 		if (-1 == err) {
-			perror("error receive failed\n");
-			goto err_out;
+			if(errno == EINTR) {
+				continue;
+			} else {
+				perror("error receive failed\n");
+				goto err_out;
+			}
 		}
 		else if (0 == err) {
 			uloga("%s(): recv return 0?\n",__func__);
@@ -496,8 +524,12 @@ static int dc_master_init(struct dart_client *dc) //working
 	while(1){
 		err = recv(connectfd, tmp_size+recv_buffer, info_size-tmp_size, 0);
 		if (-1 == err) {
-			perror("error receive failed\n");
-			goto err_out;
+			if(errno == EINTR) {
+				continue;
+			} else {
+				perror("error receive failed\n");
+				goto err_out;
+			}
 		}
 		else if (0 == err) {
 			uloga("%s(): recv return 0?\n",__func__);
