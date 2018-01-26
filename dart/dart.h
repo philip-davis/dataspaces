@@ -20,6 +20,18 @@ enum lock_type {
     lk_grant
 };
 
+//TODO: move to d2_gspace
+/*
+  Header  structure  used  to  send  timing messages.  Note:  size  of
+  time_tab[] should fit into the pad field of a 'struct rpc_cmd'.
+*/
+struct hdr_timing {
+        /* Timer offsets into the table to be determined by the
+           applications. */
+        int             time_num;
+        double          time_tab[20];
+};
+
 #define LOCK_NAME_SIZE 64
 /* Header for the locking service. */
 struct lockhdr {
@@ -46,10 +58,6 @@ struct dart_agent {
     int f_nacc;
     void *dart_ref;
 
-    //backwards-compatible for dart client
-    //backwards-compatible for dart server
-    int size_sp;
-
 #if HAVE_MPI
     MPI_Comm *comm;
 #endif /* HAVE_MPI */
@@ -58,16 +66,23 @@ struct dart_agent {
 
 
 //Backwards-compatible dart client interface
+int dc_barrier(struct dart_client *dc);
 struct dart_agent *dc_alloc(int num_peers, int appid, void *dart_ref, void *comm);
 void dc_free(struct dart_agent *da);
 int dc_process(struct dart_agent *dc);
 
 //Backwards-compatible dart server interface
+int ds_barrier(struct dart_server *ds);
 struct dart_agent *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm);
 void ds_free(struct dart_agent* ds);
 int ds_process(struct dart_agent* ds);
 
-#else
+//====//
+int da_barrier(struct dart_agent *da);
+//====//
+
+
+#else /* USE_DART2 */
 #if HAVE_UGNI
 
 #include "gni/dart_rpc_gni.h"

@@ -40,6 +40,10 @@
 struct ds_gspace {
         struct dart_server      *ds;
 
+        int myid;
+        int myrank;
+        size_t num_sp;
+
         /* Shared space data structure. */
         struct sspace           *ssd;
         /* Local in-memory storage. */
@@ -63,7 +67,6 @@ struct ds_gspace {
         /* List of allocated locks. */
         struct list_head        locks_list;
 
-        int num_sp;
 };
 
 struct ds_gspace *dsg_alloc(int, int, char *, void *);

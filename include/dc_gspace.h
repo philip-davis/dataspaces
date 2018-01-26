@@ -57,7 +57,10 @@ struct ss_info {
 struct dcg_space {
         struct dart_client      *dc;
 
+        int myid;
+        int myrank;
         size_t num_sp;
+        size_t num_app_peers;
 
         /* Query cache list. */
         struct query_cache      qc;

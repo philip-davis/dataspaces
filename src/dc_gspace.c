@@ -52,7 +52,7 @@
                         goto err_out;                           \
         } while (!(x))
 
-#define DCG_ID          dcg->dc->self->ptlmap.id
+#define DCG_ID          dcg->myid
 
 #ifdef TIMING_PERF
 #include "timer.h"
@@ -178,7 +178,11 @@ static struct query_dht *qh_alloc(int qh_num)
         memset(qh, 0, sizeof(*qh));
 
         qh->qh_peerid_tab = (int *) (qh + 1);
+#if USE_DART2
+        // Change how alignment is handled.
+#else
         ALIGN_ADDR_QUAD_BYTES(qh->qh_peerid_tab);
+#endif /* USE_DART2 */
         qh->qh_size = qh_num + 1;
 
         return qh;
@@ -675,7 +679,7 @@ static inline struct node_id * dcg_which_peer(void)
         int peer_id;
         struct node_id *peer;
 
-        peer_id = dcg->dc->self->ptlmap.id % dcg->dc->num_sp;
+        peer_id = dcg->myid % dcg->num_sp;
         peer = dc_get_peer(dcg->dc, peer_id);
 
         return peer;
@@ -1537,9 +1541,15 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
         }
 
 #if USE_DART2
-        //Need API call to grab app size of server.
+        //TODO: Need API call to grab my global id. (does this make sense? Probably need more here.)
+        //TODO: Need API call to grab my rank in app
+        //TODO: Need API call to grab app size of server.
+        //TODO: Need API call to grab member app size (trivial with MPI)
 #else
+        dcg_l->myid = dcg_l->dc->self->ptlmap.id;
+        dcg_l->myrank = dcg_l->myid - dcg_l->dc->cp_min_rank;
         dcg_l->num_sp = dcg_l->dc->num_sp;
+        dcg_l->num_app_peers = dcg_l->dc->cp_in_job;
 #endif /* USE_DART2 */
 
         INIT_LIST_HEAD(&dcg_l->locks_list);
@@ -1592,7 +1602,7 @@ int dcg_obj_put(struct obj_data *od)
         int err = -ENOMEM;
 
         if (flag_set_mpi_rank) {
-            int peer_id = mpi_rank % dcg->dc->num_sp;
+            int peer_id = dcg->myid % dcg->num_sp;
             peer = dc_get_peer(dcg->dc, peer_id);
         } else {
             peer = dcg_which_peer();
@@ -1641,7 +1651,7 @@ int dcg_obj_put_to_server(struct obj_data *od, int server_id)
         int sync_op_id;
         int err = -ENOMEM;
 
-        if (server_id < 0 || server_id >= dcg->dc->num_sp) {
+        if (server_id < 0 || server_id >= dcg->num_sp) {
             uloga("%s: ERROR invalid server_id= %d\n", __func__, server_id);
             goto err_out;
         }
@@ -1996,23 +2006,22 @@ int dcghlp_get_id(struct dcg_space *dcg)
 
 int dcg_get_rank(struct dcg_space *dcg)
 {
-        // return dcg->dc->self->id - dcg->dc->cp_min_rank;
-        return DCG_ID - dcg->dc->cp_min_rank;
+        return dcg->myrank;
 }
 
 int dcg_get_num_peers(struct dcg_space *dcg)
 {
-        return dcg->dc->cp_in_job;
+        return dcg->num_app_peers;
 }
 
 int dcg_get_num_servers(struct dcg_space *dcg)
 {  
-   return dcg->dc->num_sp;
+   return dcg->num_sp;
 }
 
 int dcg_get_num_space_peers(struct dcg_space *dcg)
 {
-	return dcg->dc->num_sp;
+	return dcg->num_sp;
 }
 
 /* 
@@ -2023,13 +2032,17 @@ int dcg_get_num_space_peers(struct dcg_space *dcg)
 */
 int dcg_time_log(double time_tab[], int n)
 {
+#if USE_DART2
+	uloga("'%s': not compatible with DART2\n", __func__);
+	return -ENOSYS;
+#else
         struct node_id *peer;
         struct msg_buf *msg;
         struct hdr_timing *ht;
         int i, err;
 
         // if (dcg->dc->self->id == dcg->dc->cp_min_rank) {
-        if (DCG_ID == dcg->dc->cp_min_rank) {
+        if (dcg->myrank == 0) {
                 time_log(DCG_ID, time_tab, n);
                 return 0;
         }
@@ -2053,13 +2066,14 @@ int dcg_time_log(double time_tab[], int n)
                 return 0;
  err_out:
         ERROR_TRACE();
+#endif /* USE_DART2 */
 }
 
 int dcg_remove(const char *var_name, unsigned int ver)
 {
 	int err = -ENOMEM;
 	int i;
-	for(i=0; i <dcg->dc->num_sp;i++){
+	for(i=0; i < dcg->num_sp;i++){
 	        struct node_id *peer;
 	        struct msg_buf *msg;
 	        //using struct lockhdr to transport var_name and version to server side
@@ -2104,15 +2118,7 @@ int dcg_lock_on_read(const char *lock_name, void *comm)
 	if (!lock) 
 		goto err_out;
 
-	if (comm == NULL) {
-		myid = DCG_ID;
-		app_minid = dcg->dc->cp_min_rank;
-	} else {
-		MPI_Comm_rank(*(MPI_Comm *)comm, &myid);
-		app_minid = 0;
-	}
-
-	if (myid == app_minid) {
+	if (dcg->myrank == 0) {
 		/* I am the master peer for this app job. */
 		err = dcg_lock_request(lock, lk_read_get);
 		if (err < 0)
@@ -2162,15 +2168,7 @@ int dcg_unlock_on_read(const char *lock_name, void *comm)
 			goto err_out;
 	}
 
-	if (comm == NULL) {
-		myid = DCG_ID;
-		app_minid = dcg->dc->cp_min_rank;
-	} else {
-		MPI_Comm_rank(*(MPI_Comm *)comm, &myid);
-		app_minid = 0;
-	}
-
-	if (myid == app_minid) {
+	if (dcg->myrank == 0) {
 		err = dcg_lock_request(lock, lk_read_release);
 		if (err < 0)
 			goto err_out;
@@ -2191,15 +2189,8 @@ int dcg_lock_on_write(const char *lock_name, void *comm)
 	if (!lock)
 		goto err_out;
 
-	if (comm == NULL) {
-		myid = DCG_ID;
-		app_minid = dcg->dc->cp_min_rank;
-	} else {
-		MPI_Comm_rank(*(MPI_Comm *)comm, &myid);
-		app_minid = 0;
-	}
 
-	if (myid == app_minid) {
+	if (dcg->myrank == 0) {
 		/* I am the master peer for this app job. */
 		err = dcg_lock_request(lock, lk_write_get);
 		if (err < 0)
@@ -2248,15 +2239,7 @@ int dcg_unlock_on_write(const char *lock_name, void *comm)
 			goto err_out;
 	}
 
-	if (comm == NULL) {
-		myid = DCG_ID;
-		app_minid = dcg->dc->cp_min_rank;
-	} else {
-		MPI_Comm_rank(*(MPI_Comm *)comm, &myid);
-		app_minid = 0;
-	}
-
-	if (myid == app_minid) {
+	if (dcg->myrank == 0) {
 		err = dcg_lock_request(lock, lk_write_release);
 		if (err < 0)
 			goto err_out;
@@ -2387,14 +2370,18 @@ int dcg_rexe_voidfunc_exec(const void *addr)
 */
 int dcg_collect_timing(double time, double *sum_ptr)
 {
+#if USE_DART2
+	uloga("'%s': not compatible with DART2.\n", __func__);
+	return -ENOSYS;
+#else
 	struct node_id *peer;
 	struct msg_buf *msg;
 	struct hdr_timing *ht;
 	int i, err;
 	
-	if (dcg->dc->cp_min_rank == DCG_ID) {
+	if (dcg->myrank == 0) {
 		DC_WAIT_COMPLETION(
-			demo_num_timing_recv == dcg->dc->cp_in_job-1);
+			demo_num_timing_recv == dcg->num_app_peers - 1);
 
 		demo_sum_timing += time;
 
@@ -2426,6 +2413,7 @@ int dcg_collect_timing(double time, double *sum_ptr)
 		return 0;
 err_out:
 	ERROR_TRACE();
+#endif /* USE_DART2 */
 }
 
 int dcg_get_num_space_srv(struct dcg_space *dcg)

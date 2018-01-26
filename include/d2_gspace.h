@@ -17,6 +17,7 @@ enum dspace_rpc_type {
 	ss_code_put,
 	cp_lock,
 	cp_remove,
+	cn_register,
 	cn_timing,
 	CN_TIMING_AVG
 };

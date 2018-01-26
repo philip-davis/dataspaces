@@ -237,7 +237,7 @@ static inline struct ds_gspace * dsg_ref_from_rpc(struct rpc_server *rpc_s)
 static int init_sspace(struct bbox *default_domain, struct ds_gspace *dsg_l)
 {
     int err = -ENOMEM;
-    dsg_l->ssd = ssd_alloc(default_domain, dsg_l->ds->size_sp,
+    dsg_l->ssd = ssd_alloc(default_domain, dsg_l->num_sp,
                             ds_conf.max_versions, ds_conf.hash_version);
     if (!dsg_l->ssd)
         goto err_out;
@@ -311,7 +311,7 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
 
     ssd_entry = malloc(sizeof(struct sspace_list_entry));
     memcpy(&ssd_entry->gdim, &gdim, sizeof(struct global_dimension));
-    ssd_entry->ssd = ssd_alloc(&domain, dsg_l->ds->size_sp, 
+    ssd_entry->ssd = ssd_alloc(&domain, dsg_l->num_sp,
                             ds_conf.max_versions, ds_conf.hash_version);     
     if (!ssd_entry->ssd) {
         uloga("%s(): ssd_alloc failed\n", __func__);
@@ -1459,7 +1459,7 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
         }
 
         msg->msg_data = peer_id_tab;
-        msg->size = sizeof(int) * (dsg->ds->size_sp + 1);
+        msg->size = sizeof(int) * (dsg->num_sp + 1);
         msg->cb = obj_send_dht_peers_completion;
 
         rpc_mem_info_cache(peer, msg, cmd);
@@ -2000,7 +2000,7 @@ static int dsgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
     for(i = 0; i < hsi->num_dims; i++){
         hsi->dims.c[i] = ds_conf.dims.c[i]; 
     }
-	hsi->num_space_srv = dsg->ds->size_sp;
+	hsi->num_space_srv = dsg->num_sp;
     hsi->hash_version = ds_conf.hash_version;
     hsi->max_versions = ds_conf.max_versions;
 
@@ -2090,6 +2090,13 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name, void *comm)
         dsg_l->ds = ds_alloc(num_sp, num_cp, dsg_l, comm);
         if (!dsg_l->ds)
                 goto err_free;
+
+#if USE_DART2
+        //TODO: Need API call to grab my global id. (does this make sense? Probably need more here.)
+        //TODO: Need API call to grab my rank in app
+#else
+        dsg_l->myrank = dsg_l->myid = dsg_l->ds->self->ptlmap.id;
+#endif /* USE_DART2 */
 
         err = init_sspace(&domain, dsg_l);
         if (err < 0) {

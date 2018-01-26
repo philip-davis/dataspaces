@@ -1313,7 +1313,11 @@ struct obj_data *obj_data_alloc(struct obj_descriptor *odsc)
 		free(od);
 		return NULL;
 	}
+#if USE_DART2
+	//TODO: change how alignment is handled.
+#else
 	ALIGN_ADDR_QUAD_BYTES(od->data);
+#endif /* USE_DART2 */
 	od->obj_desc = *odsc;
 
     return od;
@@ -1336,7 +1340,11 @@ struct obj_data *obj_data_allocv(struct obj_descriptor *odsc)
 		free(od);
 		return NULL;
 	}
+#if USE_DART2
+	//TODO: change how alignment is handled.
+#else
 	ALIGN_ADDR_QUAD_BYTES(od->data);
+#endif /* USE_DART2 */
 	od->obj_desc = *odsc;
 
 	return od;
