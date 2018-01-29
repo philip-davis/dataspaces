@@ -686,7 +686,7 @@ print_results(void)
          * Abort the application's other ranks.
          */
 
-        suloga(abort_string, "%s called abort", command_name);
+        sprintf(abort_string, "%s called abort", command_name);
         PMI_Abort(-1, abort_string);
         exit_status = "Aborted      ";
         rc = -2;
