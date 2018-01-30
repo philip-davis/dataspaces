@@ -43,6 +43,10 @@
 #include "timer.h"
 #endif
 
+//#define SSD_DIR_PATH "/lustre/atlas/scratch/subedip1/csc143/"
+//#define SSD_DIR_PATH "/ssd/users/ps917/"
+//#define SSD_DIR_PATH "/xfs/scratch/subedip1/"
+#define SSD_DIR_PATH "/home/subedip/"
 // TODO: I should  import the header file with  the definition for the
 // iovec_t data type.
 
@@ -52,13 +56,13 @@
 */
 struct matrix_view {
         uint64_t   lb[BBOX_MAX_NDIM];
-        uint64_t   ub[BBOX_MAX_NDIM];	
+        uint64_t   ub[BBOX_MAX_NDIM];   
 };
 
 /* Generic matrix representation. */
 struct matrix {
         uint64_t   dist[BBOX_MAX_NDIM];
-        int 			        num_dims;
+        int                     num_dims;
         size_t                  size_elem;
         enum storage_type       mat_storage;
         struct matrix_view      mat_view;
@@ -181,7 +185,7 @@ static void matrix_init(struct matrix *mat, enum storage_type st,
 {
     int i;
     int ndims = bb_glb->num_dims;
-	
+    
     memset(mat, 0, sizeof(struct matrix));
 
     for(i = 0; i < ndims; i++){
@@ -196,7 +200,28 @@ static void matrix_init(struct matrix *mat, enum storage_type st,
     mat->size_elem = se;
 }
 
-static void matrix_copy(struct matrix *a, struct matrix *b)
+static void matrix_init_ceph(struct matrix *mat, enum storage_type st,
+                        struct bbox *bb_glb, struct bbox *bb_loc, 
+                        void *pdata, size_t se)
+{
+    int i;
+    int ndims = bb_glb->num_dims;
+    
+    memset(mat, 0, sizeof(struct matrix));
+
+    for(i = 0; i < ndims; i++){
+        mat->dist[i] = bbox_dist(bb_glb, i);
+        mat->mat_view.lb[i] = bb_loc->lb.c[i] - bb_glb->lb.c[i];
+        mat->mat_view.ub[i] = bb_loc->ub.c[i] - bb_glb->lb.c[i];
+    }
+
+    mat->num_dims = ndims;
+    mat->mat_storage = st;
+    //mat->pdata = pdata; //need to change pointer to ceph
+    mat->size_elem = se;
+}
+
+static void matrix_copy(struct matrix *a, struct matrix *b) //need to pass name for copy from ceph
 {
         char *A = a->pdata;
         char *B = b->pdata;
@@ -302,6 +327,127 @@ dim1:               numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
     }
 }
 
+static void matrix_copy_ssd(struct matrix *a, struct matrix *b, char* old_name, uint64_t num_elems) //need to pass name for copy from ceph
+{
+        
+        //B is ceph, A is to_obj
+        char *A = a->pdata;
+        //char *B = b->pdata;
+        int i;
+        uint64_t a0, a1, a2, a3, a4, a5, a6, a7, a8, a9;
+        uint64_t aloc=0, aloc1=0, aloc2=0, aloc3=0, aloc4=0, aloc5=0, aloc6=0, aloc7=0, aloc8=0, aloc9=0;
+        uint64_t b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
+        uint64_t bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
+        int numelem;
+        char *new_name = (char *)malloc(sizeof(char)*1000);
+        memset(new_name, '\0', sizeof(new_name));
+        strcpy(new_name, SSD_DIR_PATH);
+        strcat(new_name, old_name);
+        FILE *f = fopen(new_name, "rb");
+    switch(a->num_dims){
+        case(1):    
+            goto dim1;
+            break;
+        case(2):
+            goto dim2;
+            break;
+        case(3):
+            goto dim3;
+            break;
+        case(4):
+            goto dim4;
+            break;
+        case(5):
+            goto dim5;
+            break;
+        case(6):
+            goto dim6;
+            break;
+        case(7):
+            goto dim7;
+            break;
+        case(8):
+            goto dim8;
+            break;
+        case(9):
+            goto dim9;
+            break;
+        case(10):
+            goto dim10;
+            break;
+        default:
+            break;
+    }
+    
+dim10:        for(a9 = a->mat_view.lb[9], b9 = b->mat_view.lb[9];   //TODO-Q
+            a9 <= a->mat_view.ub[9]; a9++, b9++){
+            aloc9 = a9 * a->dist[8];
+            bloc9 = a9 * b->dist[8];
+dim9:        for(a8 = a->mat_view.lb[8], b8 = b->mat_view.lb[8];    //TODO-Q
+            a8 <= a->mat_view.ub[8]; a8++, b8++){
+            aloc8 = (aloc9 + a8) * a->dist[7];
+            bloc8 = (bloc9 + b8) * b->dist[7];
+dim8:        for(a7 = a->mat_view.lb[7], b7 = b->mat_view.lb[7];    //TODO-Q
+            a7 <= a->mat_view.ub[7]; a7++, b7++){
+            aloc7 = (aloc8 + a7) * a->dist[6];
+            bloc7 = (bloc8 + b7) * b->dist[6];
+dim7:        for(a6 = a->mat_view.lb[6], b6 = b->mat_view.lb[6];    //TODO-Q
+            a6 <= a->mat_view.ub[6]; a6++, b6++){
+            aloc6 = (aloc7 + a6) * a->dist[5];
+            bloc6 = (bloc7 + b6) * b->dist[5];
+dim6:        for(a5 = a->mat_view.lb[5], b5 = b->mat_view.lb[5];    //TODO-Q
+            a5 <= a->mat_view.ub[5]; a5++, b5++){
+            aloc5 = (aloc6 + a5) * a->dist[4];
+            bloc5 = (bloc6 + b5) * b->dist[4];
+dim5:        for(a4 = a->mat_view.lb[4], b4 = b->mat_view.lb[4];
+            a4 <= a->mat_view.ub[4]; a4++, b4++){
+            aloc4 = (aloc5 + a4) * a->dist[3];
+            bloc4 = (bloc5 + b4) * b->dist[3];
+dim4:        for(a3 = a->mat_view.lb[3], b3 = b->mat_view.lb[3];
+            a3 <= a->mat_view.ub[3]; a3++, b3++){
+            aloc3 = (aloc4 + a3) * a->dist[2];
+            bloc3 = (bloc4 + b3) * b->dist[2];
+dim3:            for(a2 = a->mat_view.lb[2], b2 = b->mat_view.lb[2];
+                a2 <= a->mat_view.ub[2]; a2++, b2++){
+                aloc2 = (aloc3 + a2) * a->dist[1];
+                bloc2 = (bloc3 + b2) * b->dist[1];
+dim2:                for(a1 = a->mat_view.lb[1], b1 = b->mat_view.lb[1];
+                    a1 <= a->mat_view.ub[1]; a1++, b1++){
+                    aloc1 = (aloc2 + a1) * a->dist[0];
+                    bloc1 = (bloc2 + b1) * b->dist[0];
+dim1:                   numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
+                        aloc = aloc1 + a->mat_view.lb[0];
+                        bloc = bloc1 + b->mat_view.lb[0];
+                        //change this function for copy from ceph
+                        //uloga("Size of element %d, bloc:%d, start offset: %d, length: %d \n", a->size_elem, bloc, bloc*(a->size_elem), a->size_elem * numelem);
+                        fseek(f, bloc*(a->size_elem), SEEK_SET);
+                        fread(&A[aloc*a->size_elem], (a->size_elem) * numelem, 1, f);
+                        //err = rados_aio_read(io, name, comp[counter], &A[aloc*a->size_elem], (a->size_elem) * numelem, bloc*(a->size_elem));
+                        
+
+            if(a->num_dims == 1)    goto wait_comp;
+                }
+        if(a->num_dims == 2)    goto wait_comp;
+            }
+        if(a->num_dims == 3)    goto wait_comp;
+        }
+    if(a->num_dims == 4)    goto wait_comp;
+    }
+    if(a->num_dims == 5)    goto wait_comp;
+    }
+    if(a->num_dims == 6)    goto wait_comp;
+    }
+    if(a->num_dims == 7)    goto wait_comp;
+    }
+    if(a->num_dims == 8)    goto wait_comp;
+    }
+    if(a->num_dims == 9)    goto wait_comp;
+    }
+    wait_comp:
+        fclose(f);
+        return;
+        
+}
 /* a = destination, b = source. Destination uses iovec_t format. */
 static void matrix_copyv(struct matrix *a, struct matrix *b)
 {
@@ -313,45 +459,45 @@ static void matrix_copyv(struct matrix *a, struct matrix *b)
 
         if (a->mat_storage == column_major && b->mat_storage == column_major) {
 
-		// matrix_elem_generic_t (*A)[a->dimz][a->dimx][a->dimy] = a->pdata;
+        // matrix_elem_generic_t (*A)[a->dimz][a->dimx][a->dimy] = a->pdata;
                 matrix_elem_generic_t (*B)[b->dimz][b->dimx][b->dimy] = b->pdata;
-		iovec_t *A = a->pdata;
+        iovec_t *A = a->pdata;
 
                 // Column major data representation (Fortran style) 
                 n = a->mat_view.ub[bb_y] - a->mat_view.lb[bb_y] + 1;
-		// ak = a->mat_view.lb[bb_y];
+        // ak = a->mat_view.lb[bb_y];
                 bk = b->mat_view.lb[bb_y];
                 for (ai = a->mat_view.lb[bb_z], bi = b->mat_view.lb[bb_z]; 
                      ai <= a->mat_view.ub[bb_z]; ai++, bi++) {
                         for (aj = a->mat_view.lb[bb_x], bj = b->mat_view.lb[bb_x]; 
                              aj <= a->mat_view.ub[bb_x]; aj++, bj++) {
-				A->iov_base = &(*B)[bi][bj][bk];
-				A->iov_len = a->size_elem * n;
-				A++;
-			}
+                A->iov_base = &(*B)[bi][bj][bk];
+                A->iov_len = a->size_elem * n;
+                A++;
+            }
                 }
         }
         else if (a->mat_storage == row_major && b->mat_storage == row_major) {
 
                 // matrix_elem_generic_t (*A)[a->dimz][a->dimy][a->dimx] = a->pdata;
                 matrix_elem_generic_t (*B)[b->dimz][b->dimy][b->dimx] = b->pdata;
-		iovec_t *A = a->pdata;
+        iovec_t *A = a->pdata;
 
                 n = a->mat_view.ub[bb_x] - a->mat_view.lb[bb_x] + 1;
-		// ak = a->mat_view.lb[bb_x];
+        // ak = a->mat_view.lb[bb_x];
                 bk = b->mat_view.lb[bb_x];
                 for (ai = a->mat_view.lb[bb_z], bi = b->mat_view.lb[bb_z];
                      ai <= a->mat_view.ub[bb_z]; ai++, bi++) {
                         for (aj = a->mat_view.lb[bb_y], bj = b->mat_view.lb[bb_y];
                              aj <= a->mat_view.ub[bb_y]; aj++, bj++) {
-				A->iov_base = &(*B)[bi][bj][bk];
-				A->iov_len = a->size_elem * n;
-				A++;
-			}
+                A->iov_base = &(*B)[bi][bj][bk];
+                A->iov_len = a->size_elem * n;
+                A++;
+            }
                 }
         }
 */
-	/*
+    /*
         else if (a->mat_storage == column_major && b->mat_storage == row_major) {
 
                 matrix_elem_generic_t (*A)[a->dimz][a->dimx][a->dimy] = a->pdata;
@@ -388,7 +534,7 @@ static void matrix_copyv(struct matrix *a, struct matrix *b)
                         }
                 }
         }
-	*/
+    */
 }
 
 static void get_bbox_max_dim(const struct bbox *bb, uint64_t *out_max_dim,
@@ -423,84 +569,84 @@ static void get_bbox_max_dim_size(const struct bbox *bb, uint64_t *out_max_dim_s
 
 static struct dht_entry * dht_entry_alloc(struct sspace *ssd, int size_hash)
 {
-	struct dht_entry *de;
-	int i;
+    struct dht_entry *de;
+    int i;
 
-	de = malloc(sizeof(*de) + sizeof(struct obj_desc_list)*(size_hash-1));
-	if (!de) {
-		errno = ENOMEM;
-		return de;
-	}
-	memset(de, 0, sizeof(*de));
+    de = malloc(sizeof(*de) + sizeof(struct obj_desc_list)*(size_hash-1));
+    if (!de) {
+        errno = ENOMEM;
+        return de;
+    }
+    memset(de, 0, sizeof(*de));
 
-	de->ss = ssd;
-	de->odsc_size = size_hash;
+    de->ss = ssd;
+    de->odsc_size = size_hash;
 
-	for (i = 0; i < size_hash; i++)
-		INIT_LIST_HEAD(&de->odsc_hash[i]);
+    for (i = 0; i < size_hash; i++)
+        INIT_LIST_HEAD(&de->odsc_hash[i]);
 
     de->num_bbox = 0;
     de->size_bb_tab = 0;
     de->bb_tab = NULL;
-	return de;
+    return de;
 }
 
 static void dht_entry_free(struct dht_entry *de)
 {
-	struct obj_desc_list *l, *t;
-	int i;
+    struct obj_desc_list *l, *t;
+    int i;
 
-	//TODO: free the *intv and other resources.
-	free(de->i_tab);
-	for (i = 0; i < de->odsc_size; i++) {
-		list_for_each_entry_safe(l, t, &de->odsc_hash[i], struct obj_desc_list, odsc_entry) 
-			free(l);
-	}
+    //TODO: free the *intv and other resources.
+    free(de->i_tab);
+    for (i = 0; i < de->odsc_size; i++) {
+        list_for_each_entry_safe(l, t, &de->odsc_hash[i], struct obj_desc_list, odsc_entry) 
+            free(l);
+    }
 
-	free(de);
+    free(de);
 }
 
 static struct dht * 
 dht_alloc(struct sspace *ssd, const struct bbox *bb_domain, int num_nodes, int size_hash)
 {
-	struct dht *dht;
-	int i;
+    struct dht *dht;
+    int i;
 
-	dht = malloc(sizeof(*dht) + sizeof(struct dht_entry)*(num_nodes-1));
-	if (!dht) {
-		errno = ENOMEM;
-		return dht;
-	}
-	memset(dht, 0, sizeof(*dht));
+    dht = malloc(sizeof(*dht) + sizeof(struct dht_entry)*(num_nodes-1));
+    if (!dht) {
+        errno = ENOMEM;
+        return dht;
+    }
+    memset(dht, 0, sizeof(*dht));
 
     dht->bb_glb_domain = *bb_domain;
     dht->num_entries = num_nodes;
 
-	for (i = 0; i < num_nodes; i++) {
-		dht->ent_tab[i] = dht_entry_alloc(ssd, size_hash);
-		if (!dht->ent_tab[i])
-			break;
-	}
+    for (i = 0; i < num_nodes; i++) {
+        dht->ent_tab[i] = dht_entry_alloc(ssd, size_hash);
+        if (!dht->ent_tab[i])
+            break;
+    }
 
-	if (i != num_nodes) {
-		errno = ENOMEM;
-		while (--i > 0)
-			free(dht->ent_tab[i]);
-		free(dht);
-		dht = 0;
-	}
+    if (i != num_nodes) {
+        errno = ENOMEM;
+        while (--i > 0)
+            free(dht->ent_tab[i]);
+        free(dht);
+        dht = 0;
+    }
 
-	return dht;
+    return dht;
 }
 
 static void dht_free(struct dht *dht)
 {
-	int i;
+    int i;
 
-	for (i = 0; i < dht->num_entries; i++)
-		free(dht->ent_tab[i]);
+    for (i = 0; i < dht->num_entries; i++)
+        free(dht->ent_tab[i]);
 
-	free(dht);
+    free(dht);
 }
 
 static void dht_free_v2(struct dht *dht)
@@ -969,24 +1115,54 @@ int ssd_copy(struct obj_data *to_obj, struct obj_data *from_obj)
         return 0;
 }
 
+int ssd_copy_ssd(struct obj_data *to_obj, struct obj_data *from_obj, int id)
+{
+        struct matrix to_mat, from_mat;
+        struct bbox bbcom;
+
+        bbox_intersect(&to_obj->obj_desc.bb, &from_obj->obj_desc.bb, &bbcom);
+
+        matrix_init_ceph(&from_mat, from_obj->obj_desc.st,
+                    &from_obj->obj_desc.bb, &bbcom, 
+                    from_obj->data, from_obj->obj_desc.size);
+        //uloga("from_obj->obj_desc.size : %d \n", from_obj->obj_desc.size);
+
+        matrix_init(&to_mat, to_obj->obj_desc.st, 
+                    &to_obj->obj_desc.bb, &bbcom,
+                    to_obj->data, to_obj->obj_desc.size);
+        char ceph_name[100];
+        char name[100];
+            char lb_name[100];
+            char *ap = lb_name;
+            int i;
+            for (i = 0; i < (from_obj->obj_desc).bb.num_dims; ++i)
+            {
+                ap+=sprintf(ap, "_%d_%d", (from_obj->obj_desc).bb.lb.c[i], (from_obj->obj_desc).bb.ub.c[i]);
+            }
+        sprintf(ceph_name, "%2d_%s_%d%s",id, &from_obj->obj_desc.name, (from_obj->obj_desc).version, lb_name);
+        //uloga("Reading %s\n", ceph_name);
+        uint64_t num_elems = bbox_volume(&to_obj->obj_desc.bb);
+        matrix_copy_ssd(&to_mat, &from_mat, ceph_name, num_elems);
+        return 0;
+}
 int ssd_copyv(struct obj_data *obj_dest, struct obj_data *obj_src)
 {
-	struct matrix mat_dest, mat_src;
-	struct bbox bbcom;
+    struct matrix mat_dest, mat_src;
+    struct bbox bbcom;
 
-	bbox_intersect(&obj_dest->obj_desc.bb, &obj_src->obj_desc.bb, &bbcom);
+    bbox_intersect(&obj_dest->obj_desc.bb, &obj_src->obj_desc.bb, &bbcom);
 
-	matrix_init(&mat_dest, obj_dest->obj_desc.st,
-			&obj_dest->obj_desc.bb, &bbcom,
-			obj_dest->data, obj_dest->obj_desc.size);
+    matrix_init(&mat_dest, obj_dest->obj_desc.st,
+            &obj_dest->obj_desc.bb, &bbcom,
+            obj_dest->data, obj_dest->obj_desc.size);
 
-	matrix_init(&mat_src, obj_src->obj_desc.st,
-			&obj_src->obj_desc.bb, &bbcom,
-			obj_src->data, obj_src->obj_desc.size);
+    matrix_init(&mat_src, obj_src->obj_desc.st,
+            &obj_src->obj_desc.bb, &bbcom,
+            obj_src->data, obj_src->obj_desc.size);
 
-	matrix_copyv(&mat_dest, &mat_src);
+    matrix_copyv(&mat_dest, &mat_src);
 
-	return 0;
+    return 0;
 }
 
 /*
@@ -1158,6 +1334,39 @@ struct obj_data *ls_find(struct ss_storage *ls, const struct obj_descriptor *ods
         return NULL;
 }
 
+int ls_find_list(struct ss_storage *ls, const struct obj_descriptor *odsc, const struct obj_data *od_tab[])
+{
+        struct obj_data *od;
+        struct list_head *list;
+        int index;
+        int num_odsc =0;
+        //odsc->version = 10;
+        //searches upto 20 versionss
+        /*
+        for (int i = 0; i < 20; ++i)
+        {
+            index = i % ls->size_hash;
+            list = &ls->obj_hash[index];
+
+            list_for_each_entry(od, list, struct obj_data, obj_entry) {
+                    if (obj_desc_by_name_intersect(odsc, &od->obj_desc))
+                        od_tab[num_odsc++] = od;
+            }
+        }
+        */
+        
+        //searches only the current version
+        index = odsc->version % ls->size_hash;
+        list = &ls->obj_hash[index];
+
+        list_for_each_entry(od, list, struct obj_data, obj_entry) {
+                if (obj_desc_by_name_intersect(odsc, &od->obj_desc))
+                    od_tab[num_odsc++] = od;
+        }
+        
+
+        return num_odsc;
+}
 /*
   Search for an object in the local storage that is mapped to the same
   bin, and that has the same  name and object descriptor, but may have
@@ -1188,48 +1397,48 @@ ls_find_no_version(struct ss_storage *ls, struct obj_descriptor *odsc)
 static struct obj_desc_list * 
 dht_find_match(const struct dht_entry *de, const struct obj_descriptor *odsc)
 {
-	struct obj_desc_list *odscl;
+    struct obj_desc_list *odscl;
         int n;
 
-	// TODO: delete this (just an assertion for proper behaviour).
-	if (odsc->version == (unsigned int) -1) {
-		uloga("'%s()': version on object descriptor is not set!!!\n", 
-			__func__);
-		return 0;
-	}
+    // TODO: delete this (just an assertion for proper behaviour).
+    if (odsc->version == (unsigned int) -1) {
+        uloga("'%s()': version on object descriptor is not set!!!\n", 
+            __func__);
+        return 0;
+    }
 
-	n = odsc->version % de->odsc_size;
-	list_for_each_entry(odscl, &de->odsc_hash[n], struct obj_desc_list, odsc_entry) {
-		if(obj_desc_by_name_intersect(odsc, &odscl->odsc))
-			return odscl;
-	}
+    n = odsc->version % de->odsc_size;
+    list_for_each_entry(odscl, &de->odsc_hash[n], struct obj_desc_list, odsc_entry) {
+        if(obj_desc_by_name_intersect(odsc, &odscl->odsc))
+            return odscl;
+    }
 
-	return 0;
+    return 0;
 }
 
 #define array_resize(a, n) a = realloc(a, sizeof(*a) * (n))
 
 int dht_add_entry(struct dht_entry *de, const struct obj_descriptor *odsc)
 {
-	struct obj_desc_list *odscl;
+    struct obj_desc_list *odscl;
         int n, err = -ENOMEM;
 
         odscl = dht_find_match(de, odsc);
         if (odscl) {
                 /* There  is allready  a descriptor  with  a different
-		   version in the DHT, so I will overwrite it. */
+           version in the DHT, so I will overwrite it. */
                 memcpy(&odscl->odsc, odsc, sizeof(*odsc));
                 return 0;
         }
 
-	n = odsc->version % de->odsc_size;
-	odscl = malloc(sizeof(*odscl));
-	if (!odscl)
-		return err;
-	memcpy(&odscl->odsc, odsc, sizeof(*odsc));
+    n = odsc->version % de->odsc_size;
+    odscl = malloc(sizeof(*odscl));
+    if (!odscl)
+        return err;
+    memcpy(&odscl->odsc, odsc, sizeof(*odsc));
 
-	list_add(&odscl->odsc_entry, &de->odsc_hash[n]);
-	de->odsc_num++;
+    list_add(&odscl->odsc_entry, &de->odsc_hash[n]);
+    de->odsc_num++;
 
         return 0;
 }
@@ -1242,14 +1451,14 @@ const struct obj_descriptor *
 dht_find_entry(struct dht_entry *de, const struct obj_descriptor *odsc) 
 // __attribute__((__unused__))
 {
-	/*
+    /*
         int i;
 
         for (i = 0; i < de->size_objs; i++) {
                 if (obj_desc_equals_intersect(&de->od_tab[i], odsc))
                         return &de->od_tab[i];
         }
-	*/
+    */
         return NULL;
 }
 
@@ -1262,13 +1471,13 @@ int dht_find_entry_all(struct dht_entry *de, struct obj_descriptor *q_odsc,
                 const struct obj_descriptor *odsc_tab[])
 {
         int n, num_odsc = 0;
-	struct obj_desc_list *odscl;
+    struct obj_desc_list *odscl;
 
-	n = q_odsc->version % de->odsc_size;
-	list_for_each_entry(odscl, &de->odsc_hash[n], struct obj_desc_list, odsc_entry) {
-		if (obj_desc_equals_intersect(&odscl->odsc, q_odsc))
-			odsc_tab[num_odsc++] = &odscl->odsc;
-	}
+    n = q_odsc->version % de->odsc_size;
+    list_for_each_entry(odscl, &de->odsc_hash[n], struct obj_desc_list, odsc_entry) {
+        if (obj_desc_equals_intersect(&odscl->odsc, q_odsc))
+            odsc_tab[num_odsc++] = &odscl->odsc;
+    }
 
         return num_odsc;
 }
@@ -1278,18 +1487,18 @@ int dht_find_entry_all(struct dht_entry *de, struct obj_descriptor *q_odsc,
 */
 int dht_find_versions(struct dht_entry *de, struct obj_descriptor *q_odsc, int odsc_vers[])
 {
-	struct obj_desc_list *odscl;
-	int i, n = 0;
+    struct obj_desc_list *odscl;
+    int i, n = 0;
 
-	for (i = 0; i < de->odsc_size; i++) {
-		list_for_each_entry(odscl, &de->odsc_hash[i], struct obj_desc_list, odsc_entry)
-			if (obj_desc_by_name_intersect(&odscl->odsc, q_odsc)) {
-				odsc_vers[n++] = odscl->odsc.version;
-				break;	/* Break the list_for_each_entry loop. */
-			}
-	}
+    for (i = 0; i < de->odsc_size; i++) {
+        list_for_each_entry(odscl, &de->odsc_hash[i], struct obj_desc_list, odsc_entry)
+            if (obj_desc_by_name_intersect(&odscl->odsc, q_odsc)) {
+                odsc_vers[n++] = odscl->odsc.version;
+                break;  /* Break the list_for_each_entry loop. */
+            }
+    }
 
-	return n;
+    return n;
 }
 
 #define ALIGN_ADDR_QUAD_BYTES(a)                                \
@@ -1303,18 +1512,18 @@ struct obj_data *obj_data_alloc(struct obj_descriptor *odsc)
 {
     struct obj_data *od = 0;
 
-	od = malloc(sizeof(*od));
-	if (!od)
-		return NULL;
-	memset(od, 0, sizeof(*od));
+    od = malloc(sizeof(*od));
+    if (!od)
+        return NULL;
+    memset(od, 0, sizeof(*od));
 
-	od->_data = od->data = malloc(obj_data_size(odsc) + 7);
-	if (!od->_data) {
-		free(od);
-		return NULL;
-	}
-	ALIGN_ADDR_QUAD_BYTES(od->data);
-	od->obj_desc = *odsc;
+    od->_data = od->data = malloc(obj_data_size(odsc) + 7);
+    if (!od->_data) {
+        free(od);
+        return NULL;
+    }
+    ALIGN_ADDR_QUAD_BYTES(od->data);
+    od->obj_desc = *odsc;
 
     return od;
 }
@@ -1324,22 +1533,22 @@ struct obj_data *obj_data_alloc(struct obj_descriptor *odsc)
 */
 struct obj_data *obj_data_allocv(struct obj_descriptor *odsc)
 {
-	struct obj_data *od;
+    struct obj_data *od;
 
-	od = malloc(sizeof(*od));
-	if (!od)
-		return NULL;
-	memset(od, 0, sizeof(*od));
+    od = malloc(sizeof(*od));
+    if (!od)
+        return NULL;
+    memset(od, 0, sizeof(*od));
 
-	od->_data = od->data = malloc(obj_data_sizev(odsc) + 7);
-	if (!od->_data) {
-		free(od);
-		return NULL;
-	}
-	ALIGN_ADDR_QUAD_BYTES(od->data);
-	od->obj_desc = *odsc;
+    od->_data = od->data = malloc(obj_data_sizev(odsc) + 7);
+    if (!od->_data) {
+        free(od);
+        return NULL;
+    }
+    ALIGN_ADDR_QUAD_BYTES(od->data);
+    od->obj_desc = *odsc;
 
-	return od;
+    return od;
 }
 
 /* 
@@ -1375,20 +1584,163 @@ struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *odsc, const voi
 
 void obj_data_free_with_data(struct obj_data *od)
 {
-	if (od->_data) {
-		uloga("'%s()': explicit data free on descriptor %s.\n", 
-			__func__, od->obj_desc.name);
-		free(od->_data);
-	}
-	else    free(od->data);
-        free(od);
+    if(od->sl == in_memory || od->sl == in_memory_ssd){
+        if (od->_data) {
+            //uloga("'%s()': explicit data free on descriptor %s.\n", __func__, od->obj_desc.name);
+            free(od->_data);
+        }
+        else if (od->_data){
+            free(od->data); 
+        }
+        else{
+            uloga("'%s()': ERROR double data free on descriptor %s.\n",
+                __func__, od->obj_desc.name);
+        }
+    }
+}
+
+
+void obj_data_free_in_mem(struct obj_data *od)
+{
+    if (od->_data) {
+        //uloga("'%s()': explicit data free on descriptor %s.\n", __func__, od->obj_desc.name);
+        free(od->_data);    
+    }
+    else if (od->data){
+        free(od->data); 
+    }
+    else{
+        uloga("'%s()': ERROR double data free on descriptor %s.\n",
+            __func__, od->obj_desc.name);
+    }
+    od->data = NULL;
+    od->_data = NULL;
+    if (od->sl == in_memory_ssd){ 
+        od->sl = in_ssd;
+    }
+    if (od->sl == in_memory_ceph){ 
+        od->sl = in_ceph;
+    }
+}
+void obj_data_free_in_ssd(struct obj_data *od)
+{
+    if (od->sl == in_memory_ssd){
+        od->sl = in_memory;
+        //uloga("Object descriptor changed to in_memory \n");
+    }
+}
+void obj_data_write_to_ssd(struct obj_data *od, int id){
+    char name[100];
+    char lb_name[100];
+    char *ap = lb_name;
+    //char ub_name[50];
+    int i;
+    for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
+    {
+        ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+    }
+    sprintf(name, "%2d_%s_%d%s",id, &od->obj_desc.name, (od->obj_desc).version, lb_name);
+    char *new_name = (char *)malloc(sizeof(char)*1000);
+    memset(new_name, '\0', sizeof(new_name));
+    strcpy(new_name, SSD_DIR_PATH);
+    strcat(new_name, name);
+    //uloga("Creating file %s \n", new_name);
+    FILE *f=fopen(new_name, "wb");
+    if(!f){
+        uloga("File could not be created in SSD\n");
+        exit(1);
+    }
+    if(od->_data){
+            fwrite(od->_data, obj_data_size(&od->obj_desc) + 7, 1, f);
+        }else{
+            fwrite(od->data, obj_data_size(&od->obj_desc), 1, f);
+        }
+        fclose(f);
+}
+void obj_data_copy_to_mem(struct obj_data *od, int id)
+{
+    if(od->sl == in_ssd){
+        struct obj_descriptor *odsc = &od->obj_desc;
+        //perform aio read
+        od->_data = od->data = malloc(obj_data_size(odsc)+7);
+            char name[100];
+            char lb_name[100];
+            char *ap = lb_name;
+            int i;
+            for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
+            {
+                ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+            }
+            sprintf(name, "%2d_%s_%d%s",id, &od->obj_desc.name, (od->obj_desc).version, lb_name);
+            char *new_name = (char *)malloc(sizeof(char)*1000);
+            memset(new_name, '\0', sizeof(new_name));
+            strcpy(new_name, SSD_DIR_PATH);
+            strcat(new_name, name);
+            FILE *f=fopen(new_name, "rb");
+            if(f){
+                if(od->_data){
+                    fread(od->_data, obj_data_size(&od->obj_desc) + 7, 1, f);
+                }else{
+                    fread(od->_data, obj_data_size(&od->obj_desc), 1, f);
+                }
+                od->sl = in_memory_ssd;
+                uloga("Copied %s to memory \n", name);
+                fclose(f);
+            }else{
+                uloga("File %s not found\n", new_name);
+            }
+           // uloga("Reading %s \n", name)
+
+    } 
+}
+/*copy object data from ssd to mem */
+void obj_data_move_to_mem(struct obj_data *od, int id)
+{   
+    if(od->sl == in_ssd){
+        struct obj_descriptor *odsc = &od->obj_desc;
+        //perform aio read
+        od->_data = od->data = malloc(obj_data_size(odsc)+7);
+            char name[100];
+            char lb_name[100];
+            char *ap = lb_name;
+            int i;
+            for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
+            {
+                ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+            }
+            sprintf(name, "%2d_%s_%d%s",id, &od->obj_desc.name, (od->obj_desc).version, lb_name);
+            char *new_name = (char *)malloc(sizeof(char)*1000);
+            memset(new_name, '\0', sizeof(new_name));
+            strcpy(new_name, SSD_DIR_PATH);
+            strcat(new_name, name);
+            FILE *f=fopen(new_name, "rb");
+            if(f){
+                if(od->_data){
+                    fread(od->_data, obj_data_size(&od->obj_desc) + 7, 1, f);
+                }else{
+                    fread(od->_data, obj_data_size(&od->obj_desc), 1, f);
+                }
+                od->sl = in_memory;
+                uloga("Moved %s to memory \n", name);
+                fclose(f);
+               // uloga("Going to remove file %s as its moved to memory", new_name);
+                remove(new_name);
+            }else{
+                uloga("File could not be found \n");
+            }
+                
+           // uloga("Reading %s \n", name);
+        
+
+    } 
 }
 
 void obj_data_free(struct obj_data *od)
 {
-	if (od->_data)
-		free(od->_data);
-	free(od);
+    if ((od->sl == in_memory || od->sl == in_memory_ssd) && od->_data){
+        free(od->_data);
+    }
+    free(od);
 }
 
 uint64_t obj_data_size(struct obj_descriptor *obj_desc)
@@ -1398,21 +1750,21 @@ uint64_t obj_data_size(struct obj_descriptor *obj_desc)
 
 uint64_t obj_data_sizev(struct obj_descriptor *odsc)
 {
-	uint64_t size = 1; // sizeof(iovec_t);
+    uint64_t size = 1; // sizeof(iovec_t);
 
-	if (odsc->bb.num_dims == 2) {
-		if (odsc->st == row_major)
-			size = size * bbox_dist(&odsc->bb, bb_y);
-		else	size = size * bbox_dist(&odsc->bb, bb_x);
-	}
-	else if (odsc->bb.num_dims == 3) {
-		size = size * bbox_dist(&odsc->bb, bb_z);
-		if (odsc->st == row_major)
-			size = size * bbox_dist(&odsc->bb, bb_y);
-		else	size = size * bbox_dist(&odsc->bb, bb_x);
-	}
+    if (odsc->bb.num_dims == 2) {
+        if (odsc->st == row_major)
+            size = size * bbox_dist(&odsc->bb, bb_y);
+        else    size = size * bbox_dist(&odsc->bb, bb_x);
+    }
+    else if (odsc->bb.num_dims == 3) {
+        size = size * bbox_dist(&odsc->bb, bb_z);
+        if (odsc->st == row_major)
+            size = size * bbox_dist(&odsc->bb, bb_y);
+        else    size = size * bbox_dist(&odsc->bb, bb_x);
+    }
 
-	return size;
+    return size;
 }
 
 int obj_desc_equals_no_owner(const struct obj_descriptor *odsc1,

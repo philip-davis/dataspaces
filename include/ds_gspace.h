@@ -37,6 +37,8 @@
 #include "dart.h"
 #include "ss_data.h"
 
+#define MAX_PREFETCH 48
+
 struct ds_gspace {
         struct dart_server      *ds;
 
@@ -75,4 +77,25 @@ int dsghlp_all_sp_joined(struct ds_gspace *);
 
 int dsg_barrier(struct ds_gspace *);
 
+struct obj_data_list{
+        int tail;
+        int head;
+        int length;
+        struct obj_data *pref_od[MAX_PREFETCH];
+};
+struct obj_data_list pod_list;
+
+struct objdesc_list{
+        int tail;
+        int head;
+        int length;
+        struct obj_descriptor *pref_od[MAX_PREFETCH];
+};
+struct objdesc_list podesc_list;
+
+void *prefetch_thread(void*);
+void *push_thread(void*);
+int cache_replacement(int mem_size);
+int prefetch_insert_tail(struct obj_data * pod, int array_size);
+int prefetch_odesc_insert_tail(struct obj_descriptor * pod, int array_size);
 #endif /* __DS_GSPACE_H_ */

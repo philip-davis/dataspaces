@@ -65,7 +65,7 @@ static int demo_num_timing_recv;
 /* Record the sum of timing */ 
 static double demo_sum_timing; 
 
-typedef unsigned char		_u8;
+typedef unsigned char       _u8;
 
 struct query_cache_entry {
         struct list_head        q_entry;
@@ -106,7 +106,7 @@ struct query_tran_entry {
         struct global_dimension gdim;
         /* Allocate/setup data for the objects in the 'od_list' that
            are retrieved from the space */
-        unsigned int		f_alloc_data:1,
+        unsigned int        f_alloc_data:1,
                     f_peer_received:1,
                     f_odsc_recv:1,
                     f_complete:1,
@@ -117,12 +117,12 @@ struct query_tran_entry {
   Lock ... service.
 */
 struct dcg_lock {
-	struct list_head	lock_entry;
+    struct list_head    lock_entry;
 
         int                     req;
         int                     ack;
         int                     lock_num;
-	char			name[LOCK_NAME_SIZE];
+    char            name[LOCK_NAME_SIZE];
 };
 
 /* 
@@ -182,30 +182,30 @@ static struct query_dht *qh_alloc(int qh_num)
 
 static struct query_tran_entry * qte_alloc(struct obj_data *od, int alloc_data)
 {
-	struct query_tran_entry *qte;
+    struct query_tran_entry *qte;
 
-	qte = malloc(sizeof(*qte));
-	if (!qte) {
-		errno = ENOMEM;
-		return NULL;
-	}
-	memset(qte, 0, sizeof(*qte));
+    qte = malloc(sizeof(*qte));
+    if (!qte) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    memset(qte, 0, sizeof(*qte));
 
-	INIT_LIST_HEAD(&qte->od_list);
-	qte->q_id = qt_gen_qid();
-	qte->q_obj = od->obj_desc;
-	qte->data_ref = od->data;
-	qte->f_alloc_data = !!(alloc_data);
+    INIT_LIST_HEAD(&qte->od_list);
+    qte->q_id = qt_gen_qid();
+    qte->q_obj = od->obj_desc;
+    qte->data_ref = od->data;
+    qte->f_alloc_data = !!(alloc_data);
     memcpy(&qte->gdim, &od->gdim, sizeof(struct global_dimension));
 
-	qte->qh = qh_alloc(dcg->dc->num_sp);
-	if (!qte->qh) {
-		free(qte);
-		errno = ENOMEM;
-		return NULL;
-	}
+    qte->qh = qh_alloc(dcg->dc->num_sp);
+    if (!qte->qh) {
+        free(qte);
+        errno = ENOMEM;
+        return NULL;
+    }
 
-	return qte;
+    return qte;
 }
 
 static void qte_free(struct query_tran_entry *qte)
@@ -274,12 +274,12 @@ static void qt_free_obj_data(struct query_tran_entry *qte, int unlink)
         struct obj_data *od, *t;
 
         list_for_each_entry_safe(od, t, &qte->od_list, struct obj_data, obj_entry) {
-		/* TODO: free the object data withought iov. */
+        /* TODO: free the object data withought iov. */
                 if (od->data)
                         free(od->data);
 
                 if (unlink)
-			qt_remove_obj(qte, od);
+            qt_remove_obj(qte, od);
         }
 }
 
@@ -349,31 +349,31 @@ static int qt_add_obj(struct query_tran_entry *qte, struct obj_descriptor *odsc)
 
 static int qt_add_objv(struct query_tran_entry *qte, struct obj_descriptor *odsc)
 {
-	struct obj_data qod, *od;
-	int err = -ENOMEM;
+    struct obj_data qod, *od;
+    int err = -ENOMEM;
 
-	if (qte->f_alloc_data)
-		od = obj_data_allocv(odsc);
-	else	
-		/* No need to allocate/setup data for rexec transactions. */
-		od = obj_data_alloc_no_data(odsc, NULL);
-	if (!od)
-		return err;
+    if (qte->f_alloc_data)
+        od = obj_data_allocv(odsc);
+    else    
+        /* No need to allocate/setup data for rexec transactions. */
+        od = obj_data_alloc_no_data(odsc, NULL);
+    if (!od)
+        return err;
 
-	od->obj_desc.st = qte->q_obj.st;
+    od->obj_desc.st = qte->q_obj.st;
 
-	memset(&qod, 0, sizeof(qod));
-	qod.obj_desc = qte->q_obj;
-	qod.data = qte->data_ref;
+    memset(&qod, 0, sizeof(qod));
+    qod.obj_desc = qte->q_obj;
+    qod.data = qte->data_ref;
 
-	/* Setup pointers into the storage of the query object. */
-	if (qte->f_alloc_data)
-		ssd_copyv(od, &qod);
+    /* Setup pointers into the storage of the query object. */
+    if (qte->f_alloc_data)
+        ssd_copyv(od, &qod);
 
-	list_add(&od->obj_entry, &qte->od_list);
-	qte->num_od++;
+    list_add(&od->obj_entry, &qte->od_list);
+    qte->num_od++;
 
-	return 0;
+    return 0;
 }
 
 
@@ -501,148 +501,148 @@ static void qc_free(struct query_cache *qc)
 */
 int instructionCount(const _u8 *func, int *size, int *off)
 { 
-	const _u8 *pfn = func;
-	int twoByte, operandSize, FPU;
-	int found_off = 0;
+    const _u8 *pfn = func;
+    int twoByte, operandSize, FPU;
+    int found_off = 0;
 
-	while (*func != 0xC3 && *func != 0xC9) { 
-		// Skip prefixes F0h, F2h, F3h, 66h, 67h, D8h-DFh, 2Eh, 36h, 3Eh, 26h, 64h and 65h
-		operandSize = 4; 
-		FPU = 0; 
+    while (*func != 0xC3 && *func != 0xC9) { 
+        // Skip prefixes F0h, F2h, F3h, 66h, 67h, D8h-DFh, 2Eh, 36h, 3Eh, 26h, 64h and 65h
+        operandSize = 4; 
+        FPU = 0; 
 
-		while (*func == 0xF0 || 
-		       *func == 0xF2 || 
-		       *func == 0xF3 ||
-		       *func == 0x48 ||
-		       (*func & 0xFC) == 0x64 || 
-		       (*func & 0xF8) == 0xD8 ||
-		       (*func & 0x7E) == 0x64) { 
+        while (*func == 0xF0 || 
+               *func == 0xF2 || 
+               *func == 0xF3 ||
+               *func == 0x48 ||
+               (*func & 0xFC) == 0x64 || 
+               (*func & 0xF8) == 0xD8 ||
+               (*func & 0x7E) == 0x64) { 
 
-			if (*func == 0x66) { 
-				operandSize = 2; 
-			}
-			else if ((*func & 0xF8) == 0xD8) {
-				FPU = *func++;
-				break;
-			}
+            if (*func == 0x66) { 
+                operandSize = 2; 
+            }
+            else if ((*func & 0xF8) == 0xD8) {
+                FPU = *func++;
+                break;
+            }
 
-			func++;
-		}
+            func++;
+        }
 
-		// Skip two-byte opcode byte 
-		twoByte = 0; 
-		if (*func == 0x0F) { 
-			twoByte = 1; 
-			func++; 
-		} 
+        // Skip two-byte opcode byte 
+        twoByte = 0; 
+        if (*func == 0x0F) { 
+            twoByte = 1; 
+            func++; 
+        } 
 
-		// Skip opcode byte 
-		_u8 opcode = *func++; 
-		if (!found_off && opcode == 0xC7) {
-			found_off = 1;
-			*off = func - pfn - 2;
-		}
+        // Skip opcode byte 
+        _u8 opcode = *func++; 
+        if (!found_off && opcode == 0xC7) {
+            found_off = 1;
+            *off = func - pfn - 2;
+        }
 
-		// Skip mod R/M byte 
-		_u8 modRM = 0xFF; 
-		if (FPU) { 
-			if ((opcode & 0xC0) != 0xC0) { 
-				modRM = opcode; 
-			}
-		} 
-		else if (!twoByte) { 
-			if ((opcode & 0xC4) == 0x00 || 
-			    ((opcode & 0xF4) == 0x60 && ((opcode & 0x0A) == 0x02 || (opcode & 0x09) == 0x09)) || 
-			    (opcode & 0xF0) == 0x80 || 
-			    ((opcode & 0xF8) == 0xC0 && (opcode & 0x0E) != 0x02) || 
-			    (opcode & 0xFC) == 0xD0 || 
-			    (opcode & 0xF6) == 0xF6)  { 
-				modRM = *func++; 
-			} 
-		} 
-		else { 
-			if (((opcode & 0xF0) == 0x00 && (opcode & 0x0F) >= 0x04 && (opcode & 0x0D) != 0x0D) || 
-			    (opcode & 0xF0) == 0x30 || 
-			    opcode == 0x77 || 
-			    (opcode & 0xF0) == 0x80 || 
-			    ((opcode & 0xF0) == 0xA0 && (opcode & 0x07) <= 0x02) || 
-			    (opcode & 0xF8) == 0xC8) { 
-				// No mod R/M byte 
-			} 
-			else { 
-				modRM = *func++; 
-			} 
-		} 
-		// Skip SIB
-		if ((modRM & 0x07) == 0x04 &&
-		    (modRM & 0xC0) != 0xC0) {
-			func += 1;   // SIB
-		}
+        // Skip mod R/M byte 
+        _u8 modRM = 0xFF; 
+        if (FPU) { 
+            if ((opcode & 0xC0) != 0xC0) { 
+                modRM = opcode; 
+            }
+        } 
+        else if (!twoByte) { 
+            if ((opcode & 0xC4) == 0x00 || 
+                ((opcode & 0xF4) == 0x60 && ((opcode & 0x0A) == 0x02 || (opcode & 0x09) == 0x09)) || 
+                (opcode & 0xF0) == 0x80 || 
+                ((opcode & 0xF8) == 0xC0 && (opcode & 0x0E) != 0x02) || 
+                (opcode & 0xFC) == 0xD0 || 
+                (opcode & 0xF6) == 0xF6)  { 
+                modRM = *func++; 
+            } 
+        } 
+        else { 
+            if (((opcode & 0xF0) == 0x00 && (opcode & 0x0F) >= 0x04 && (opcode & 0x0D) != 0x0D) || 
+                (opcode & 0xF0) == 0x30 || 
+                opcode == 0x77 || 
+                (opcode & 0xF0) == 0x80 || 
+                ((opcode & 0xF0) == 0xA0 && (opcode & 0x07) <= 0x02) || 
+                (opcode & 0xF8) == 0xC8) { 
+                // No mod R/M byte 
+            } 
+            else { 
+                modRM = *func++; 
+            } 
+        } 
+        // Skip SIB
+        if ((modRM & 0x07) == 0x04 &&
+            (modRM & 0xC0) != 0xC0) {
+            func += 1;   // SIB
+        }
 
-		// Skip displacement
-		if ((modRM & 0xC5) == 0x05) func += 4;   // Dword displacement, no base 
-		if ((modRM & 0xC0) == 0x40) func += 1;   // Byte displacement 
-		if ((modRM & 0xC0) == 0x80) func += 4;   // Dword displacement 
+        // Skip displacement
+        if ((modRM & 0xC5) == 0x05) func += 4;   // Dword displacement, no base 
+        if ((modRM & 0xC0) == 0x40) func += 1;   // Byte displacement 
+        if ((modRM & 0xC0) == 0x80) func += 4;   // Dword displacement 
 
-		// Skip immediate 
-		if (FPU) { 
-			// Can't have immediate operand 
-		} 
-		else if(!twoByte) { 
-			if ((opcode & 0xC7) == 0x04 || 
-			    (opcode & 0xFE) == 0x6A ||   // PUSH/POP/IMUL 
-			    (opcode & 0xF0) == 0x70 ||   // Jcc 
-			    opcode == 0x80 || 
-			    opcode == 0x83 || 
-			    (opcode & 0xFD) == 0xA0 ||   // MOV 
-			    opcode == 0xA8 ||            // TEST 
-			    (opcode & 0xF8) == 0xB0 ||   // MOV
-			    (opcode & 0xFE) == 0xC0 ||   // RCL 
-			    opcode == 0xC6 ||            // MOV 
-			    opcode == 0xCD ||            // INT 
-			    (opcode & 0xFE) == 0xD4 ||   // AAD/AAM 
-			    (opcode & 0xF8) == 0xE0 ||   // LOOP/JCXZ 
-			    opcode == 0xEB || 
-			    (opcode == 0xF6 && (modRM & 0x30) == 0x00)) {  // TEST
-				func += 1; 
-			} 
-			else if((opcode & 0xF7) == 0xC2) { 
-				func += 2;   // RET 
-			} 
-			else if ((opcode & 0xFC) == 0x80 || 
-				 (opcode & 0xC7) == 0x05 || 
-				 (opcode & 0xF8) == 0xB8 ||
-				 (opcode & 0xFE) == 0xE8 ||      // CALL/Jcc 
-				 (opcode & 0xFE) == 0x68 || 
-				 (opcode & 0xFC) == 0xA0 || 
-				 (opcode & 0xEE) == 0xA8 || 
-				 opcode == 0xC7 || 
-				 (opcode == 0xF7 && (modRM & 0x30) == 0x00)) { 
-				func += operandSize; 
-			} 
-		} 
-		else { 
-			if (opcode == 0xBA ||            // BT 
-			    opcode == 0x0F ||            // 3DNow! 
-			    (opcode & 0xFC) == 0x70 ||   // PSLLW 
-			    (opcode & 0xF7) == 0xA4 ||   // SHLD 
-			    opcode == 0xC2 || 
-			    opcode == 0xC4 || 
-			    opcode == 0xC5 || 
-			    opcode == 0xC6) { 
-				func += 1; 
-			} 
-			else if((opcode & 0xF0) == 0x80) {
-				func += operandSize;   // Jcc -i
-			}
-		}
+        // Skip immediate 
+        if (FPU) { 
+            // Can't have immediate operand 
+        } 
+        else if(!twoByte) { 
+            if ((opcode & 0xC7) == 0x04 || 
+                (opcode & 0xFE) == 0x6A ||   // PUSH/POP/IMUL 
+                (opcode & 0xF0) == 0x70 ||   // Jcc 
+                opcode == 0x80 || 
+                opcode == 0x83 || 
+                (opcode & 0xFD) == 0xA0 ||   // MOV 
+                opcode == 0xA8 ||            // TEST 
+                (opcode & 0xF8) == 0xB0 ||   // MOV
+                (opcode & 0xFE) == 0xC0 ||   // RCL 
+                opcode == 0xC6 ||            // MOV 
+                opcode == 0xCD ||            // INT 
+                (opcode & 0xFE) == 0xD4 ||   // AAD/AAM 
+                (opcode & 0xF8) == 0xE0 ||   // LOOP/JCXZ 
+                opcode == 0xEB || 
+                (opcode == 0xF6 && (modRM & 0x30) == 0x00)) {  // TEST
+                func += 1; 
+            } 
+            else if((opcode & 0xF7) == 0xC2) { 
+                func += 2;   // RET 
+            } 
+            else if ((opcode & 0xFC) == 0x80 || 
+                 (opcode & 0xC7) == 0x05 || 
+                 (opcode & 0xF8) == 0xB8 ||
+                 (opcode & 0xFE) == 0xE8 ||      // CALL/Jcc 
+                 (opcode & 0xFE) == 0x68 || 
+                 (opcode & 0xFC) == 0xA0 || 
+                 (opcode & 0xEE) == 0xA8 || 
+                 opcode == 0xC7 || 
+                 (opcode == 0xF7 && (modRM & 0x30) == 0x00)) { 
+                func += operandSize; 
+            } 
+        } 
+        else { 
+            if (opcode == 0xBA ||            // BT 
+                opcode == 0x0F ||            // 3DNow! 
+                (opcode & 0xFC) == 0x70 ||   // PSLLW 
+                (opcode & 0xF7) == 0xA4 ||   // SHLD 
+                opcode == 0xC2 || 
+                opcode == 0xC4 || 
+                opcode == 0xC5 || 
+                opcode == 0xC6) { 
+                func += 1; 
+            } 
+            else if((opcode & 0xF0) == 0x80) {
+                func += operandSize;   // Jcc -i
+            }
+        }
 
-		// count++;
-	}
+        // count++;
+    }
 
-	// return count;
-	*size = func - pfn + 2;
-	return 0;
+    // return count;
+    *size = func - pfn + 2;
+    return 0;
 }
 
 static int syncop_next(void)
@@ -683,26 +683,26 @@ static inline struct node_id * dcg_which_peer(void)
 */
 static int dcgrpc_code_reply(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	struct hdr_bin_result *hr = (typeof(hr)) cmd->pad;
-	struct query_tran_entry *qte;
-	int err = -ENOENT;
+    struct hdr_bin_result *hr = (typeof(hr)) cmd->pad;
+    struct query_tran_entry *qte;
+    int err = -ENOENT;
 
-	qte = qt_find(&dcg->qt, hr->qid);
-	if (!qte) 
-		goto err_out;
+    qte = qt_find(&dcg->qt, hr->qid);
+    if (!qte) 
+        goto err_out;
 
-	/* Copy  the   code  execution  result  back   on  the  result
-	   reference.  There  can be  more  than  one partial  result,
-	   depending on the object distribution in the space. */
-	memcpy((char *) qte->data_ref + qte->num_parts_rec * qte->q_obj.size, 
-		hr->pad, qte->q_obj.size);
+    /* Copy  the   code  execution  result  back   on  the  result
+       reference.  There  can be  more  than  one partial  result,
+       depending on the object distribution in the space. */
+    memcpy((char *) qte->data_ref + qte->num_parts_rec * qte->q_obj.size, 
+        hr->pad, qte->q_obj.size);
 
-	if (++qte->num_parts_rec == qte->size_od)
-		qte->f_complete = 1;
+    if (++qte->num_parts_rec == qte->size_od)
+        qte->f_complete = 1;
 
-	return 0;
+    return 0;
  err_out:
-	ERROR_TRACE();
+    ERROR_TRACE();
 }
 #endif // end of #ifdef DS_HAVE_ACTIVESPACE
 
@@ -712,49 +712,49 @@ static int dcgrpc_code_reply(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 */
 static int dcgrpc_collect_timing(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	struct hdr_timing *ht = (struct hdr_timing *) cmd->pad;
+    struct hdr_timing *ht = (struct hdr_timing *) cmd->pad;
 
-	demo_num_timing_recv++;
+    demo_num_timing_recv++;
 
-	if (ht->time_num == 1)
-		demo_sum_timing += ht->time_tab[0];
+    if (ht->time_num == 1)
+        demo_sum_timing += ht->time_tab[0];
 
-	return 0;
+    return 0;
 }
 
 // TODO: in the server free
 static struct dcg_lock *lock_get(const char *lock_name, int should_alloc)
 {
-	struct dcg_lock *lock;
+    struct dcg_lock *lock;
 
-	list_for_each_entry(lock, &dcg->locks_list, struct dcg_lock, lock_entry) {
-		if (!strncmp(lock->name, lock_name, sizeof(lock->name)-1))
-			return lock;
-	}
+    list_for_each_entry(lock, &dcg->locks_list, struct dcg_lock, lock_entry) {
+        if (!strncmp(lock->name, lock_name, sizeof(lock->name)-1))
+            return lock;
+    }
 
-	if (!should_alloc)
-		return NULL;
+    if (!should_alloc)
+        return NULL;
 
-	lock = malloc(sizeof(*lock));
-	if (!lock) 
-		return NULL;
-	memset(lock, 0, sizeof(*lock));
+    lock = malloc(sizeof(*lock));
+    if (!lock) 
+        return NULL;
+    memset(lock, 0, sizeof(*lock));
 
-	strncpy(lock->name, lock_name, sizeof(lock->name));
-	lock->name[sizeof(lock->name)-1] = '\0';
+    strncpy(lock->name, lock_name, sizeof(lock->name));
+    lock->name[sizeof(lock->name)-1] = '\0';
 
-	list_add(&lock->lock_entry, &dcg->locks_list);
-	return lock;
+    list_add(&lock->lock_entry, &dcg->locks_list);
+    return lock;
 }
 
 static void lock_free(void)
 {
-	struct dcg_lock *lock, *tlock;
+    struct dcg_lock *lock, *tlock;
 
-	list_for_each_entry_safe(lock, tlock, &dcg->locks_list, struct dcg_lock, lock_entry) {
-		list_del(&lock->lock_entry);
-		free(lock);
-	}
+    list_for_each_entry_safe(lock, tlock, &dcg->locks_list, struct dcg_lock, lock_entry) {
+        list_del(&lock->lock_entry);
+        free(lock);
+    }
 }
 
 /*
@@ -764,7 +764,7 @@ static int dcg_lock_request(struct dcg_lock *lock, enum lock_type type)
 {
         struct node_id *peer;
         struct msg_buf *msg;
-	struct lockhdr *lh;
+    struct lockhdr *lh;
         int err = -ENOMEM;
 
         peer = dc_get_peer(dcg->dc, 0);
@@ -776,9 +776,9 @@ static int dcg_lock_request(struct dcg_lock *lock, enum lock_type type)
         msg->msg_rpc->cmd = cp_lock;
         msg->msg_rpc->id = DCG_ID;      
 
-	lh = (struct lockhdr *) msg->msg_rpc->pad;
-	strcpy(lh->name, lock->name);
-	lh->type = type;
+    lh = (struct lockhdr *) msg->msg_rpc->pad;
+    strcpy(lh->name, lock->name);
+    lh->type = type;
         lh->lock_num = lock->lock_num;
 
         err = rpc_send(dcg->dc->rpc_s, peer, msg);
@@ -787,12 +787,12 @@ static int dcg_lock_request(struct dcg_lock *lock, enum lock_type type)
                 goto err_out;
         }
 
-	lock->ack = 0;
-	lock->req = 1;
+    lock->ack = 0;
+    lock->req = 1;
 
         return 0;
  err_out:
-	ERROR_TRACE();
+    ERROR_TRACE();
 }
 
 /* 
@@ -802,13 +802,13 @@ static int dcg_lock_request(struct dcg_lock *lock, enum lock_type type)
 static int dcgrpc_lock_service(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
         struct lockhdr *lh = (struct lockhdr *) cmd->pad;
-	struct dcg_lock *lock;
+    struct dcg_lock *lock;
 
-	lock = lock_get(lh->name, 0);
-	if (!lock) {
-		int err = -ENOENT;
-		ERROR_TRACE();
-	}
+    lock = lock_get(lh->name, 0);
+    if (!lock) {
+        int err = -ENOENT;
+        ERROR_TRACE();
+    }
 
         lock->lock_num = lh->lock_num;
         lock->ack = 1;
@@ -1102,7 +1102,7 @@ static int dcgrpc_obj_get_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *cm
         msg->cb = obj_get_dht_peers_completion;
         //peer->mb = cmd->mbits;
 
-	rpc_mem_info_cache(peer, cmd);
+    rpc_mem_info_cache(peer, cmd);
 
         err = rpc_receive_direct(rpc_s, peer, msg);
         peer->mb = MB_RPC_MSG;
@@ -1274,9 +1274,9 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
 
         qte = qt_find(&dcg->qt, oh->qid);
         if (!qte) {
-		uloga("can not find transaction ID = %d.\n", oh->qid);
+        uloga("can not find transaction ID = %d.\n", oh->qid);
                 goto err_out_free;
-	}
+    }
 
         qte->qh->qh_num_rep_received++;
         qte->size_od += oh->u.o.num_de;
@@ -1284,15 +1284,15 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
         for (i = 0; i < oh->u.o.num_de; i++) {
                 if (!qt_find_obj(qte, od_tab+i)) {
                         err = qt_add_obj(qte, od_tab+i);
-			// err = qt_add_objv(qte, od_tab+i);
+            // err = qt_add_objv(qte, od_tab+i);
                         if (err < 0)
                                 goto err_out_free;
                 }
                 else {
-			/* DEBUG:
+            /* DEBUG:
                         uloga("'%s()': duplicate obj descriptor detected, "
                               "keep only one copy.\n", __func__);
-			*/
+            */
                         qte->size_od--;
                 }
         }
@@ -1305,7 +1305,7 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
                 /* Object descriptor receive completed. */
                 qte->f_odsc_recv = 1;
 
-		/* NOTE: disabled the cache for object descriptors.
+        /* NOTE: disabled the cache for object descriptors.
                 if (qte->f_err == 0) {
                         struct query_cache_entry *qce;
                         qce = qce_alloc(qte->num_od);
@@ -1314,7 +1314,7 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
                                 qc_add_entry(&dcg->qc, qce);
                         }
                 }
-		*/
+        */
         }
 
         return 0;
@@ -1323,26 +1323,26 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
         free(od_tab);
         free(msg);
 
-	ERROR_TRACE();
+    ERROR_TRACE();
 }
 
 static void versions_reset(void)
 {
-	memset(dcg->versions, 0, sizeof(dcg->versions));
-	dcg->num_vers = 0;
+    memset(dcg->versions, 0, sizeof(dcg->versions));
+    dcg->num_vers = 0;
 }
 
 static void versions_add(int n, int versions[])
 {
-	int i, j;
+    int i, j;
 
-	for (i = 0; i < n; i++) {
-		for (j = 0; j < dcg->num_vers; j++)
-			if (dcg->versions[j] == versions[i])
-				break;
-		if (j == dcg->num_vers) 
-			dcg->versions[dcg->num_vers++] = versions[i];
-	}
+    for (i = 0; i < n; i++) {
+        for (j = 0; j < dcg->num_vers; j++)
+            if (dcg->versions[j] == versions[i])
+                break;
+        if (j == dcg->num_vers) 
+            dcg->versions[dcg->num_vers++] = versions[i];
+    }
 }
 
 /*
@@ -1358,7 +1358,7 @@ static int dcgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
         /* Test for errors ... */
         if (oh->rc < 0) {
-		/* TODO: copy versions available if any !!! */
+        /* TODO: copy versions available if any !!! */
                 struct query_tran_entry *qte = qt_find(&dcg->qt, oh->qid);
                 if (!qte) {
                         err = -ENOENT;
@@ -1369,11 +1369,11 @@ static int dcgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
                         qte->f_odsc_recv = 1;
                 qte->f_err = 1;
 
-		versions_add(oh->u.v.num_vers, oh->u.v.versions);
+        versions_add(oh->u.v.num_vers, oh->u.v.versions);
 
                 return 0;
         }
-	//printf("sizeof obj_descriptor is %d.\n", sizeof(struct obj_descriptor));//debug
+    //printf("sizeof obj_descriptor is %d.\n", sizeof(struct obj_descriptor));//debug
         od_tab = malloc(sizeof(*od_tab) * oh->u.o.num_de);
         if (!od_tab)
                 goto err_out;
@@ -1399,7 +1399,7 @@ static int dcgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
         rpc_mem_info_cache(peer, msg, cmd); 
         err = rpc_receive_direct(rpc_s, peer, msg);
-        rpc_mem_info_reset(peer, msg, cmd);	
+        rpc_mem_info_reset(peer, msg, cmd); 
 
         if (err == 0)
                 return 0;
@@ -1448,23 +1448,23 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 */
 static int dcgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-	struct hdr_ss_info *hsi = (struct hdr_ss_info *) cmd->pad;
+    struct hdr_ss_info *hsi = (struct hdr_ss_info *) cmd->pad;
 
-	dcg->ss_info.num_dims = hsi->num_dims;
-	dcg->ss_info.num_space_srv = hsi->num_space_srv;
+    dcg->ss_info.num_dims = hsi->num_dims;
+    dcg->ss_info.num_space_srv = hsi->num_space_srv;
     dcg->ss_domain.num_dims = hsi->num_dims;
     dcg->default_gdim.ndim = hsi->num_dims;
     dcg->hash_version = hsi->hash_version;
     dcg->max_versions = hsi->max_versions;
-	int i;
-	for(i = 0; i < hsi->num_dims; i++){
-		dcg->ss_domain.lb.c[i] = 0;
-		dcg->ss_domain.ub.c[i] = hsi->dims.c[i]-1;
+    int i;
+    for(i = 0; i < hsi->num_dims; i++){
+        dcg->ss_domain.lb.c[i] = 0;
+        dcg->ss_domain.ub.c[i] = hsi->dims.c[i]-1;
         dcg->default_gdim.sizes.c[i] = hsi->dims.c[i];
-	}
-	dcg->f_ss_info = 1;
+    }
+    dcg->f_ss_info = 1;
 
-	return 0;
+    return 0;
 }
 
 /*
@@ -1514,7 +1514,7 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
 
         dcg_l->num_pending = 0;
         qt_init(&dcg_l->qt);
-        // rpc_add_service(ss_obj_get_dht_peers, dcgrpc_obj_get_dht_peers);
+        //rpc_add_service(ss_obj_get_dht_peers, dcgrpc_obj_get_dht_peers);
         rpc_add_service(ss_obj_get_desc, dcgrpc_obj_get_desc);
         rpc_add_service(ss_obj_cq_notify, dcgrpc_obj_cq_update);
         rpc_add_service(cp_lock, dcgrpc_lock_service);
@@ -1524,8 +1524,8 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
         rpc_add_service(ss_code_reply, dcgrpc_code_reply);
 #endif
         /* Added for ccgrid demo. */
-        rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);	
-	
+        rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);  
+    
         dcg_l->dc = dc_alloc(num_nodes, appid, dcg_l, comm);
         if (!dcg_l->dc) {
                 free(dcg_l);
@@ -1559,13 +1559,13 @@ void dcg_free(struct dcg_space *dcg)
         uloga("'%s()': num pending = %d.\n", __func__, dcg->num_pending);
 #endif
 
-	while (dcg->num_pending) {
-	      dc_process(dcg->dc);
-	}
+    while (dcg->num_pending) {
+          dc_process(dcg->dc);
+    }
 
     dc_free(dcg->dc);
     qc_free(&dcg->qc);
-	lock_free();
+    lock_free();
 
     free_gdim_list(&dcg->gdim_list);
     free(dcg);
@@ -1622,6 +1622,54 @@ int dcg_obj_put(struct obj_data *od)
         return err;
 }
 
+int dcg_obj_put_ssd(struct obj_data *od)
+{
+        struct msg_buf *msg;
+        struct node_id *peer;
+        struct hdr_obj_put *hdr; 
+        int sync_op_id;
+        int err = -ENOMEM;
+
+        if (flag_set_mpi_rank) {
+            int peer_id = mpi_rank % dcg->dc->num_sp;
+            peer = dc_get_peer(dcg->dc, peer_id);
+        } else {
+            peer = dcg_which_peer();
+        }
+
+        sync_op_id = syncop_next();
+
+        msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+        if (!msg)
+                goto err_out;
+
+        msg->msg_data = od->data;
+        msg->size = obj_data_size(&od->obj_desc);
+        msg->cb = obj_put_completion;
+        msg->private = od;
+
+        msg->sync_op_id = syncop_ref(sync_op_id);
+
+        msg->msg_rpc->cmd = ss_obj_put_ssd;
+        msg->msg_rpc->id = DCG_ID; // dcg->dc->self->id;
+
+        hdr = msg->msg_rpc->pad;
+        hdr->odsc = od->obj_desc;
+        memcpy(&hdr->gdim, &od->gdim, sizeof(struct global_dimension));
+
+        err = rpc_send(dcg->dc->rpc_s, peer, msg);
+        if (err < 0) {
+                free(msg);
+                goto err_out;
+        }
+
+        dcg_inc_pending();
+
+        return sync_op_id;
+ err_out:
+        uloga("'%s()': failed with %d.\n", __func__, err);
+        return err;
+}
 /* 
    Register a region for continuous queries and return the transaction
    id; it will be used for transaction completion checks.
@@ -1666,15 +1714,15 @@ int dcg_obj_cq_register(struct obj_data *od)
 int dcg_obj_cq_update(int cq_id)
 {
         struct query_tran_entry *qte;
-	// struct obj_data od;
+    // struct obj_data od;
         int err = 0;
 
         qte = qt_find(&dcg->qt, cq_id);
         if (!qte) {
-		uloga("'%s()': looking for qte id %d.\n", __func__, cq_id);
-		err = -ENOENT;
-		goto err_out;
-	}
+        uloga("'%s()': looking for qte id %d.\n", __func__, cq_id);
+        err = -ENOENT;
+        goto err_out;
+    }
 
         while (!qte->f_complete) {
                 err = dc_process(dcg->dc);
@@ -1683,13 +1731,13 @@ int dcg_obj_cq_update(int cq_id)
         }
         qte->f_complete = 0;
 
-	/*
+    /*
         // TODO: do I need more fields here ?!
         od.data = qte->data_ref;
         od.obj_desc = qte->q_obj;
 
         err = dcg_obj_assemble(qte, &od);
-	*/
+    */
         qt_free_obj_data(qte, 1);
 
         if (!list_empty(&qte->od_list)) {
@@ -1701,7 +1749,7 @@ int dcg_obj_cq_update(int cq_id)
         // qte->size_od = 0;
         qte->num_parts_rec = 0;
 
-	// TODO: where do I free the qte ?!
+    // TODO: where do I free the qte ?!
 
         if (err == 0)
                 return 0;
@@ -1768,7 +1816,7 @@ int dcg_obj_get(struct obj_data *od)
                 if (err < 0) {
                     if (err == -EAGAIN)
                         goto out_no_data;
-                    else	goto err_qt_free;
+                    else    goto err_qt_free;
                 }
                 DC_WAIT_COMPLETION(qte->f_odsc_recv == 1);
         }
@@ -1837,14 +1885,14 @@ int dcg_obj_get(struct obj_data *od)
 
 int dcg_get_versions(int **p_version)
 {
-	static int versions[sizeof(dcg->versions)/sizeof(int)];
+    static int versions[sizeof(dcg->versions)/sizeof(int)];
 
-	memset(versions, 0, sizeof(versions));
-	memcpy(versions, dcg->versions, dcg->num_vers);
+    memset(versions, 0, sizeof(versions));
+    memcpy(versions, dcg->versions, dcg->num_vers);
 
-	*p_version = versions;
+    *p_version = versions;
 
-	return dcg->num_vers;
+    return dcg->num_vers;
 }
 
 /*
@@ -1900,33 +1948,33 @@ int dcg_obj_filter(struct obj_data *od)
 
 int dcg_ss_info(struct dcg_space *dcg, int *num_dims)
 {
-	struct msg_buf *msg;
-	struct node_id *peer;
-	int err = -ENOMEM;
+    struct msg_buf *msg;
+    struct node_id *peer;
+    int err = -ENOMEM;
 
-	if (dcg->f_ss_info) {
-		*num_dims = dcg->ss_info.num_dims;
-		return 0;
-	}
+    if (dcg->f_ss_info) {
+        *num_dims = dcg->ss_info.num_dims;
+        return 0;
+    }
 
-	peer = dcg_which_peer();
-	msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
-	if (!msg)
-		goto err_out;
+    peer = dcg_which_peer();
+    msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+    if (!msg)
+        goto err_out;
 
-	msg->msg_rpc->cmd = ss_info;
-	msg->msg_rpc->id = DCG_ID;
+    msg->msg_rpc->cmd = ss_info;
+    msg->msg_rpc->id = DCG_ID;
 
-	err = rpc_send(dcg->dc->rpc_s, peer, msg);
-	if (err < 0)
-		goto err_out;
+    err = rpc_send(dcg->dc->rpc_s, peer, msg);
+    if (err < 0)
+        goto err_out;
 
-	DC_WAIT_COMPLETION(dcg->f_ss_info == 1);
+    DC_WAIT_COMPLETION(dcg->f_ss_info == 1);
 
-	*num_dims = dcg->ss_info.num_dims;
-	return 0;
+    *num_dims = dcg->ss_info.num_dims;
+    return 0;
  err_out:
-	ERROR_TRACE();
+    ERROR_TRACE();
 }
 
 int dcghlp_get_id(struct dcg_space *dcg)
@@ -1952,7 +2000,7 @@ int dcg_get_num_servers(struct dcg_space *dcg)
 
 int dcg_get_num_space_peers(struct dcg_space *dcg)
 {
-	return dcg->dc->num_sp;
+    return dcg->dc->num_sp;
 }
 
 /* 
@@ -1997,34 +2045,34 @@ int dcg_time_log(double time_tab[], int n)
 
 int dcg_remove(const char *var_name, unsigned int ver)
 {
-	int err = -ENOMEM;
-	int i;
-	for(i=0; i <dcg->dc->num_sp;i++){
-	        struct node_id *peer;
-	        struct msg_buf *msg;
-	        //using struct lockhdr to transport var_name and version to server side
-	        struct lockhdr *lh;
+    int err = -ENOMEM;
+    int i;
+    for(i=0; i <dcg->dc->num_sp;i++){
+            struct node_id *peer;
+            struct msg_buf *msg;
+            //using struct lockhdr to transport var_name and version to server side
+            struct lockhdr *lh;
 
-        	peer = dc_get_peer(dcg->dc, i);
+            peer = dc_get_peer(dcg->dc, i);
 
-	        msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
-	        if (!msg)
-        	        goto err_out;
+            msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+            if (!msg)
+                    goto err_out;
 
-	        msg->msg_rpc->cmd = cp_remove;
-	        msg->msg_rpc->id = DCG_ID;
+            msg->msg_rpc->cmd = cp_remove;
+            msg->msg_rpc->id = DCG_ID;
 
-        	lh = (struct lockhdr *) msg->msg_rpc->pad;
-	        strcpy(lh->name, var_name);
-        	//using lock_num for version number
-	        lh->lock_num = ver;
+            lh = (struct lockhdr *) msg->msg_rpc->pad;
+            strcpy(lh->name, var_name);
+            //using lock_num for version number
+            lh->lock_num = ver;
 
-	        err = rpc_send(dcg->dc->rpc_s, peer, msg);
-	        if (err < 0) {
-        	        free(msg);
-                	goto err_out;
-	        }
-	}
+            err = rpc_send(dcg->dc->rpc_s, peer, msg);
+            if (err < 0) {
+                    free(msg);
+                    goto err_out;
+            }
+    }
 
         return 0;
  err_out:
@@ -2036,276 +2084,276 @@ int dcg_remove(const char *var_name, unsigned int ver)
 
 int dcg_lock_on_read(const char *lock_name, void *comm)
 {
-	struct dcg_lock *lock;
-	int err = -ENOMEM;
-	int myid, app_minid;
+    struct dcg_lock *lock;
+    int err = -ENOMEM;
+    int myid, app_minid;
 
-	lock = lock_get(lock_name, 1);
-	if (!lock) 
-		goto err_out;
+    lock = lock_get(lock_name, 1);
+    if (!lock) 
+        goto err_out;
 
-	if (comm == NULL) {
-		myid = DCG_ID;
-		app_minid = dcg->dc->cp_min_rank;
-	} else {
-		MPI_Comm_rank(*(MPI_Comm *)comm, &myid);
-		app_minid = 0;
-	}
+    if (comm == NULL) {
+        myid = DCG_ID;
+        app_minid = dcg->dc->cp_min_rank;
+    } else {
+        MPI_Comm_rank(*(MPI_Comm *)comm, &myid);
+        app_minid = 0;
+    }
 
-	if (myid == app_minid) {
-		/* I am the master peer for this app job. */
-		err = dcg_lock_request(lock, lk_read_get);
-		if (err < 0)
-			goto err_out;
+    if (myid == app_minid) {
+        /* I am the master peer for this app job. */
+        err = dcg_lock_request(lock, lk_read_get);
+        if (err < 0)
+            goto err_out;
 
-		while (lock->ack == 0) {
-			err = dc_process(dcg->dc);
-			if (err < 0)
-				goto err_out;
-		}
-	}
+        while (lock->ack == 0) {
+            err = dc_process(dcg->dc);
+            if (err < 0)
+                goto err_out;
+        }
+    }
 
 
-	if(comm == NULL){
-		err = dc_barrier(dcg->dc);
-		if (err == 0)
-			return 0;
-	}
-	else{
-		err = MPI_Barrier(*(MPI_Comm *)comm);
-		if(err == MPI_SUCCESS)
-			return 0;
-	}
+    if(comm == NULL){
+        err = dc_barrier(dcg->dc);
+        if (err == 0)
+            return 0;
+    }
+    else{
+        err = MPI_Barrier(*(MPI_Comm *)comm);
+        if(err == MPI_SUCCESS)
+            return 0;
+    }
 
  err_out:
-	ERROR_TRACE();
+    ERROR_TRACE();
 }
 
 int dcg_unlock_on_read(const char *lock_name, void *comm)
 {
-	struct dcg_lock *lock;
-	int err = -ENOMEM;
-	int myid, app_minid;
+    struct dcg_lock *lock;
+    int err = -ENOMEM;
+    int myid, app_minid;
 
-	lock = lock_get(lock_name, 1);
-	if (!lock)
-		goto err_out;
+    lock = lock_get(lock_name, 1);
+    if (!lock)
+        goto err_out;
 
-	if(comm == NULL){
-		err = dc_barrier(dcg->dc);
-		if (err < 0)
-			goto err_out;
-	}
-	else{
-		err = MPI_Barrier(*(MPI_Comm *)comm);
-		if(err != MPI_SUCCESS)
-			goto err_out;
-	}
+    if(comm == NULL){
+        err = dc_barrier(dcg->dc);
+        if (err < 0)
+            goto err_out;
+    }
+    else{
+        err = MPI_Barrier(*(MPI_Comm *)comm);
+        if(err != MPI_SUCCESS)
+            goto err_out;
+    }
 
-	if (comm == NULL) {
-		myid = DCG_ID;
-		app_minid = dcg->dc->cp_min_rank;
-	} else {
-		MPI_Comm_rank(*(MPI_Comm *)comm, &myid);
-		app_minid = 0;
-	}
+    if (comm == NULL) {
+        myid = DCG_ID;
+        app_minid = dcg->dc->cp_min_rank;
+    } else {
+        MPI_Comm_rank(*(MPI_Comm *)comm, &myid);
+        app_minid = 0;
+    }
 
-	if (myid == app_minid) {
-		err = dcg_lock_request(lock, lk_read_release);
-		if (err < 0)
-			goto err_out;
-	}
+    if (myid == app_minid) {
+        err = dcg_lock_request(lock, lk_read_release);
+        if (err < 0)
+            goto err_out;
+    }
 
-	return 0;
+    return 0;
  err_out:
-	ERROR_TRACE();
+    ERROR_TRACE();
 }
 
 int dcg_lock_on_write(const char *lock_name, void *comm)
 {
-	struct dcg_lock *lock;
-	int err = -ENOMEM;
-	int myid, app_minid;
+    struct dcg_lock *lock;
+    int err = -ENOMEM;
+    int myid, app_minid;
 
-	lock = lock_get(lock_name, 1);
-	if (!lock)
-		goto err_out;
+    lock = lock_get(lock_name, 1);
+    if (!lock)
+        goto err_out;
 
-	if (comm == NULL) {
-		myid = DCG_ID;
-		app_minid = dcg->dc->cp_min_rank;
-	} else {
-		MPI_Comm_rank(*(MPI_Comm *)comm, &myid);
-		app_minid = 0;
-	}
+    if (comm == NULL) {
+        myid = DCG_ID;
+        app_minid = dcg->dc->cp_min_rank;
+    } else {
+        MPI_Comm_rank(*(MPI_Comm *)comm, &myid);
+        app_minid = 0;
+    }
 
-	if (myid == app_minid) {
-		/* I am the master peer for this app job. */
-		err = dcg_lock_request(lock, lk_write_get);
-		if (err < 0)
-			goto err_out;
+    if (myid == app_minid) {
+        /* I am the master peer for this app job. */
+        err = dcg_lock_request(lock, lk_write_get);
+        if (err < 0)
+            goto err_out;
 
-		while (lock->ack == 0) {
-			err = dc_process(dcg->dc);
-			if (err < 0)
-				goto err_out;
-		}
-	}
+        while (lock->ack == 0) {
+            err = dc_process(dcg->dc);
+            if (err < 0)
+                goto err_out;
+        }
+    }
 
-	if(comm == NULL){
-		err = dc_barrier(dcg->dc);
-		if (err == 0)
-			return 0;
-	}
-	else{
-		err = MPI_Barrier(*(MPI_Comm *)comm);
-		if(err == MPI_SUCCESS)
-			return 0;
-	}
+    if(comm == NULL){
+        err = dc_barrier(dcg->dc);
+        if (err == 0)
+            return 0;
+    }
+    else{
+        err = MPI_Barrier(*(MPI_Comm *)comm);
+        if(err == MPI_SUCCESS)
+            return 0;
+    }
 
  err_out:
-	ERROR_TRACE();
+    ERROR_TRACE();
 }
 
 int dcg_unlock_on_write(const char *lock_name, void *comm)
 {
-	struct dcg_lock *lock;
-	int err = -ENOMEM;
-	int myid, app_minid;
+    struct dcg_lock *lock;
+    int err = -ENOMEM;
+    int myid, app_minid;
 
-	lock = lock_get(lock_name, 1);
-	if (!lock)
-		goto err_out;
+    lock = lock_get(lock_name, 1);
+    if (!lock)
+        goto err_out;
 
-	if(comm == NULL){
-		err = dc_barrier(dcg->dc);
-		if (err < 0)
-			goto err_out;
-	}
-	else{
-		err = MPI_Barrier(*(MPI_Comm *)comm);
-		if(err != MPI_SUCCESS)
-			goto err_out;
-	}
+    if(comm == NULL){
+        err = dc_barrier(dcg->dc);
+        if (err < 0)
+            goto err_out;
+    }
+    else{
+        err = MPI_Barrier(*(MPI_Comm *)comm);
+        if(err != MPI_SUCCESS)
+            goto err_out;
+    }
 
-	if (comm == NULL) {
-		myid = DCG_ID;
-		app_minid = dcg->dc->cp_min_rank;
-	} else {
-		MPI_Comm_rank(*(MPI_Comm *)comm, &myid);
-		app_minid = 0;
-	}
+    if (comm == NULL) {
+        myid = DCG_ID;
+        app_minid = dcg->dc->cp_min_rank;
+    } else {
+        MPI_Comm_rank(*(MPI_Comm *)comm, &myid);
+        app_minid = 0;
+    }
 
-	if (myid == app_minid) {
-		err = dcg_lock_request(lock, lk_write_release);
-		if (err < 0)
-			goto err_out;
-	}
+    if (myid == app_minid) {
+        err = dcg_lock_request(lock, lk_write_release);
+        if (err < 0)
+            goto err_out;
+    }
 
-	//debug
-	//printf("rank %d: barrier done.\n", dcg->dc->self->ptlmap.id);
-	return 0;
+    //debug
+    //printf("rank %d: barrier done.\n", dcg->dc->self->ptlmap.id);
+    return 0;
  err_out:
-	ERROR_TRACE();
+    ERROR_TRACE();
 }
 
 #ifdef DS_HAVE_ACTIVESPACE
 // TODO: move this to the non public API area !
 static int 
 dcg_code_rexec_at_peers(const void *fn_addr, int size, int off, 
-			struct query_tran_entry *qte)
+            struct query_tran_entry *qte)
 {
-	struct node_id *peer;
-	struct msg_buf *msg;
-	struct hdr_bin_code *hc;
-	struct obj_data *od;
-	int err;
+    struct node_id *peer;
+    struct msg_buf *msg;
+    struct hdr_bin_code *hc;
+    struct obj_data *od;
+    int err;
 
-	list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
-		peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
+    list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
+        peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
 
-		err = -ENOMEM;
-		msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
-		if (!msg)
-			goto err_out;
+        err = -ENOMEM;
+        msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+        if (!msg)
+            goto err_out;
 
-		msg->msg_rpc->cmd = ss_code_put;
-		msg->msg_rpc->id = DCG_ID;
-		// NOTE: const fn_addr gets aliased here, you will get
-		// a  warning from the  compiler; the  address however
-		// will not be changed through the assigned pointer.
-		msg->msg_data = fn_addr;
-		msg->size = size;
+        msg->msg_rpc->cmd = ss_code_put;
+        msg->msg_rpc->id = DCG_ID;
+        // NOTE: const fn_addr gets aliased here, you will get
+        // a  warning from the  compiler; the  address however
+        // will not be changed through the assigned pointer.
+        msg->msg_data = fn_addr;
+        msg->size = size;
 
-		hc = (struct hdr_bin_code *) msg->msg_rpc->pad;
-		hc->offset = off;
-		hc->size = size;
-		hc->odsc = od->obj_desc;
-		hc->qid = qte->q_id;
+        hc = (struct hdr_bin_code *) msg->msg_rpc->pad;
+        hc->offset = off;
+        hc->size = size;
+        hc->odsc = od->obj_desc;
+        hc->qid = qte->q_id;
 
-		err = rpc_send(dcg->dc->rpc_s, peer, msg);
-		if (err < 0) {
-			free(msg);
-			goto err_out;
-		}
-	}
+        err = rpc_send(dcg->dc->rpc_s, peer, msg);
+        if (err < 0) {
+            free(msg);
+            goto err_out;
+        }
+    }
 
-	return 0;
+    return 0;
  err_out:
-	ERROR_TRACE();
+    ERROR_TRACE();
 }
 
 
 // TODO: make this synchronous, i.e., wait for the retrieval of the result !
 int dcg_code_send(const void *addr, /* int off, int size, */ struct obj_data *od)
 {
-	struct query_tran_entry *qte;
-	int n, err = -ENOMEM;
-	int size, off;
+    struct query_tran_entry *qte;
+    int n, err = -ENOMEM;
+    int size, off;
 
-	instructionCount(addr, &size, &off);
-	// printf("Size: %d, offset: %d;\n", size, off);
-	//	my_size, my_off, size, off);
+    instructionCount(addr, &size, &off);
+    // printf("Size: %d, offset: %d;\n", size, off);
+    //  my_size, my_off, size, off);
 
-	/* Do not allocate data for objects, e.g., 2nd param is 0. */
-	qte = qte_alloc(od, 0);
-	if (!qte)
-		goto err_out;
+    /* Do not allocate data for objects, e.g., 2nd param is 0. */
+    qte = qte_alloc(od, 0);
+    if (!qte)
+        goto err_out;
 
-	qt_add(&dcg->qt, qte);
+    qt_add(&dcg->qt, qte);
 
-	err = get_dht_peers(qte);
-	if (err < 0)
-		goto err_qte_free;
-	DC_WAIT_COMPLETION(qte->f_peer_received == 1);
+    err = get_dht_peers(qte);
+    if (err < 0)
+        goto err_qte_free;
+    DC_WAIT_COMPLETION(qte->f_peer_received == 1);
 
-	err = get_obj_descriptors(qte);
-	if (err < 0)
-		goto err_qte_free;
-	DC_WAIT_COMPLETION(qte->f_odsc_recv == 1);
+    err = get_obj_descriptors(qte);
+    if (err < 0)
+        goto err_qte_free;
+    DC_WAIT_COMPLETION(qte->f_odsc_recv == 1);
 
-	err = dcg_code_rexec_at_peers(addr, size, off, qte);
-	if (err < 0)
-		goto err_qte_free;
+    err = dcg_code_rexec_at_peers(addr, size, off, qte);
+    if (err < 0)
+        goto err_qte_free;
 
-	// TODO: error path is not right here, should change
-	// DC_WAIT_COMPLETION to break the loop instead of jumping to
-	// err_out;
-	DC_WAIT_COMPLETION(qte->f_complete == 1);
+    // TODO: error path is not right here, should change
+    // DC_WAIT_COMPLETION to break the loop instead of jumping to
+    // err_out;
+    DC_WAIT_COMPLETION(qte->f_complete == 1);
 
-	n = qte->size_od;
-	qt_free_obj_data(qte, 1);
+    n = qte->size_od;
+    qt_free_obj_data(qte, 1);
 
-	qt_remove(&dcg->qt, qte);
-	qte_free(qte);
+    qt_remove(&dcg->qt, qte);
+    qte_free(qte);
 
-	return n;
+    return n;
 
  err_qte_free:
-	qt_remove(&dcg->qt, qte);
-	qte_free(qte);
+    qt_remove(&dcg->qt, qte);
+    qte_free(qte);
  err_out:
-	ERROR_TRACE();
+    ERROR_TRACE();
 }
 
 /*
@@ -2313,11 +2361,11 @@ int dcg_code_send(const void *addr, /* int off, int size, */ struct obj_data *od
 */
 int dcg_rexe_voidfunc_exec(const void *addr)
 {
-	int size, off;
+    int size, off;
 
-	instructionCount(addr, &size, &off);
-	// TODO : continue from here ... 
-	return 0;
+    instructionCount(addr, &size, &off);
+    // TODO : continue from here ... 
+    return 0;
 }
 #endif // end of #ifdef DS_HAVE_ACTIVESPACE
 
@@ -2327,50 +2375,50 @@ int dcg_rexe_voidfunc_exec(const void *addr)
 */
 int dcg_collect_timing(double time, double *sum_ptr)
 {
-	struct node_id *peer;
-	struct msg_buf *msg;
-	struct hdr_timing *ht;
-	int i, err;
-	
-	if (dcg->dc->cp_min_rank == DCG_ID) {
-		DC_WAIT_COMPLETION(
-			demo_num_timing_recv == dcg->dc->cp_in_job-1);
+    struct node_id *peer;
+    struct msg_buf *msg;
+    struct hdr_timing *ht;
+    int i, err;
+    
+    if (dcg->dc->cp_min_rank == DCG_ID) {
+        DC_WAIT_COMPLETION(
+            demo_num_timing_recv == dcg->dc->cp_in_job-1);
 
-		demo_sum_timing += time;
+        demo_sum_timing += time;
 
-		if (sum_ptr)
-			*sum_ptr = demo_sum_timing;	
+        if (sum_ptr)
+            *sum_ptr = demo_sum_timing; 
 
-		demo_num_timing_recv = 0;
-		demo_sum_timing = 0;		
+        demo_num_timing_recv = 0;
+        demo_sum_timing = 0;        
 
-		return 0;
-	}
-	
-	peer = dc_get_peer(dcg->dc, dcg->dc->cp_min_rank);
-	msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
-	if (!msg) {
-		err = -ENOMEM;
-		goto err_out;
-	}
+        return 0;
+    }
+    
+    peer = dc_get_peer(dcg->dc, dcg->dc->cp_min_rank);
+    msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+    if (!msg) {
+        err = -ENOMEM;
+        goto err_out;
+    }
 
-	msg->msg_rpc->cmd = CN_TIMING_AVG;
-	msg->msg_rpc->id = DCG_ID;	
+    msg->msg_rpc->cmd = CN_TIMING_AVG;
+    msg->msg_rpc->id = DCG_ID;  
 
-	ht = (struct hdr_timing *) msg->msg_rpc->pad;
-	ht->time_tab[0] = time;
-	ht->time_num = 1;
+    ht = (struct hdr_timing *) msg->msg_rpc->pad;
+    ht->time_tab[0] = time;
+    ht->time_num = 1;
 
-	err = rpc_send(dcg->dc->rpc_s, peer, msg);
-	if (err == 0)
-		return 0;
+    err = rpc_send(dcg->dc->rpc_s, peer, msg);
+    if (err == 0)
+        return 0;
 err_out:
-	ERROR_TRACE();
+    ERROR_TRACE();
 }
 
 int dcg_get_num_space_srv(struct dcg_space *dcg)
 {
-	return dcg->ss_info.num_space_srv;
+    return dcg->ss_info.num_space_srv;
 }
 
 void dcg_set_mpi_rank_hint(int rank)

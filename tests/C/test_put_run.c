@@ -106,7 +106,7 @@ static int couple_write_nd(unsigned int ts, int num_vars, enum transport_type ty
 	for(i = 0; i < num_vars; i++)
 		data_tab[i] = NULL;
 
-	common_lock_on_write("mnd_lock", &gcomm_);
+	//common_lock_on_write("mnd_lock", &gcomm_);
 	//common_lock_on_write("mnd_lock", NULL);	//Test dspaces_barrier()
 	if (type == USE_DIMES) {
 		common_put_sync(type);
@@ -139,8 +139,13 @@ static int couple_write_nd(unsigned int ts, int num_vars, enum transport_type ty
 			uloga("%s(): allocate_nd() failed.\n", __func__);
             return -1; // TODO: free buffers
 		}
+		//if(ts==3 || ts==4 || ts==5 || ts==6){
+		//	int changed_ts = 2;
+		//	generate_nd(data, changed_ts, dims);
+		//}else{
+			generate_nd(data, ts, dims);
+		//}
 		
-		generate_nd(data, ts, dims);
 		data_tab[i] = data;
 	}
 
@@ -157,8 +162,8 @@ static int couple_write_nd(unsigned int ts, int num_vars, enum transport_type ty
 	}
 	tm_end = timer_read(&timer_);
 
-	sleep(3);
-	common_unlock_on_write("mnd_lock", &gcomm_);
+	sleep(8);
+	//common_unlock_on_write("mnd_lock", &gcomm_);
 	//common_unlock_on_write("mnd_lock", NULL);	//Test dspaces_barrier
 
 	tm_diff = tm_end-tm_st;
@@ -216,10 +221,11 @@ int test_put_run(enum transport_type type, int npapp, int ndims, int* npdim,
 #endif
 
 	unsigned int ts;
+	common_lock_on_write("mnd_lock", &gcomm_);
 	for(ts = 1; ts <= timesteps_; ts++){
 		couple_write_nd(ts, num_vars, type, ndims);
 	}
-
+	common_unlock_on_write("mnd_lock", &gcomm_);
 	if(type == USE_DIMES){
 		common_lock_on_write("mnd_lock", &gcomm_);
 		common_put_sync(type);

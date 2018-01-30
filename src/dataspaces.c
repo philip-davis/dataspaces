@@ -87,47 +87,47 @@ int get_topology_info(int *out_pmi_rank, int *out_nid,
 
 int dspaces_init(int num_peers, int appid, void *comm, const char *parameters)
 {
-	return common_dspaces_init(num_peers, appid, comm, parameters);
+    return common_dspaces_init(num_peers, appid, comm, parameters);
 }
 
 int dspaces_rank(void)
 {
-	return common_dspaces_rank();
+    return common_dspaces_rank();
 }
 
 int dspaces_peers(void)
 {
-	return common_dspaces_peers();
+    return common_dspaces_peers();
 }
 
 int dspaces_get_num_space_server(void)
 {
-	return common_dspaces_get_num_space_server();
+    return common_dspaces_get_num_space_server();
 }
 
 void dspaces_barrier(void)
 {
-	common_dspaces_barrier();
+    common_dspaces_barrier();
 }
 
 void dspaces_lock_on_read(const char *lock_name, void *comm)
 {
-	common_dspaces_lock_on_read(lock_name, comm);
+    common_dspaces_lock_on_read(lock_name, comm);
 }
 
 void dspaces_unlock_on_read(const char *lock_name, void *comm)
 {
-	common_dspaces_unlock_on_read(lock_name, comm);
+    common_dspaces_unlock_on_read(lock_name, comm);
 }
 
 void dspaces_lock_on_write(const char *lock_name, void *comm)
 {
-	common_dspaces_lock_on_write(lock_name, comm);
+    common_dspaces_lock_on_write(lock_name, comm);
 }
 
 void dspaces_unlock_on_write(const char *lock_name, void *comm)
 {
-	common_dspaces_unlock_on_write(lock_name, comm);
+    common_dspaces_unlock_on_write(lock_name, comm);
 }
 
 void dspaces_define_gdim (const char *var_name,
@@ -144,6 +144,13 @@ int dspaces_put (const char *var_name,
     return common_dspaces_put(var_name, ver, size, ndim, lb, ub, data);
 }
 
+int dspaces_put_ssd (const char *var_name,
+        unsigned int ver, int size,
+        int ndim, uint64_t *lb, uint64_t *ub,
+        const void *data)
+{
+    return common_dspaces_put_ssd(var_name, ver, size, ndim, lb, ub, data);
+}
 int dspaces_get (const char *var_name,
         unsigned int ver, int size,
         int ndim, uint64_t *lb, uint64_t *ub,
@@ -162,18 +169,18 @@ int dspaces_remove (const char *var_name,
 
 int dspaces_put_sync(void)
 {
-	return common_dspaces_put_sync();
+    return common_dspaces_put_sync();
 }
 
 void dspaces_finalize(void)
 {
-	common_dspaces_finalize();
+    common_dspaces_finalize();
 }
 
 #ifdef DS_HAVE_DIMES
 int dimes_put_sync_all(void)
 {
-	return common_dimes_put_sync_all();
+    return common_dimes_put_sync_all();
 }
 
 void dimes_define_gdim (const char *var_name,

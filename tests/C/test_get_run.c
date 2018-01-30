@@ -91,7 +91,7 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
 		data_tab[i] = NULL;
 	}	
 
-	common_lock_on_read("mnd_lock", &gcomm_);	//Test dspaces_barrier
+	//Test dspaces_barrier
 	//common_lock_on_read("mnd_lock", NULL);
 
 	set_offset_nd(rank_, dims);
@@ -132,8 +132,11 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
 
 	for(i = 0; i < num_vars; i++){
 		sprintf(var_name, "mnd_%d", i);
+		//if(ts > 1) ts = (short)ts-1;
 		common_get(var_name, ts, elem_size, dims, lb, ub,
 			data_tab[i], type);
+		
+		//ts++;
 	}
 	tm_end = timer_read(&timer_);
 	common_unlock_on_read("mnd_lock", &gcomm_);
@@ -153,6 +156,10 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
 
 	for (i = 0; i < num_vars; i++) {
 		sprintf(var_name, "mnd_%d", i);
+
+		//if(ts==3 || ts==4 || ts==5 || ts==6){
+		//	ts = 2;
+		//}
 		check_data(var_name, data_tab[i],dims_size*elem_size_/sizeof(double),
 			rank_, ts);
         if (data_tab[i]) {
@@ -198,6 +205,324 @@ int test_get_run(enum transport_type type, int npapp, int ndims, int* npdim, uin
 		couple_read_nd(ts, num_vars, type, ndims);
 	}
 
+	if(rank_ == 0){
+		uloga("%s(): done\n", __func__);
+	}
+
+	MPI_Barrier(gcomm_);
+
+	int ds_rank = common_rank();
+	tm_st = timer_read(&timer_);
+	common_finalize();
+	tm_end = timer_read(&timer_);
+
+#ifdef TIMING_PERF
+	uloga("TIMING_PERF fini_dspaces peer %d time= %lf\n", ds_rank, tm_end-tm_st);
+#endif
+
+    return 0;
+}
+int test_get_run_case1(enum transport_type type, int npapp, int ndims, int* npdim, uint64_t* spdim, int timestep, int appid, size_t elem_size, int num_vars, MPI_Comm gcomm)
+{
+	gcomm_ = gcomm;
+	elem_size_ = elem_size;
+	timesteps_ = timestep;
+	npapp_ = npapp;
+	
+	int i;
+	for(i = 0; i < ndims; i++){
+        np[i] = npdim[i];
+		sp[i] = spdim[i];
+	}
+
+	timer_init(&timer_, 1);
+    timer_start(&timer_);
+
+	int app_id = appid;
+	double tm_st, tm_end;
+	tm_st = timer_read(&timer_);
+	common_init(npapp_, app_id, &gcomm_, NULL);
+	tm_end = timer_read(&timer_);
+	common_get_transport_type_str(type, transport_type_str_);
+
+	MPI_Comm_rank(gcomm_, &rank_);
+    MPI_Comm_size(gcomm_, &nproc_);
+
+#ifdef TIMING_PERF
+	uloga("TIMING_PERF init_dspaces peer %d time %lf\n", common_rank(), tm_end-tm_st);
+#endif
+	unsigned int ts;
+	common_lock_on_read("mnd_lock", &gcomm_);	
+	for(ts = 1; ts <= timesteps_; ts++){
+		couple_read_nd(ts, num_vars, type, ndims);
+	}
+	common_unlock_on_read("mnd_lock", &gcomm_);	
+	if(rank_ == 0){
+		uloga("%s(): done\n", __func__);
+	}
+
+	MPI_Barrier(gcomm_);
+
+	int ds_rank = common_rank();
+	tm_st = timer_read(&timer_);
+	common_finalize();
+	tm_end = timer_read(&timer_);
+
+#ifdef TIMING_PERF
+	uloga("TIMING_PERF fini_dspaces peer %d time= %lf\n", ds_rank, tm_end-tm_st);
+#endif
+
+    return 0;
+}
+int test_get_run_case2(enum transport_type type, int npapp, int ndims, int* npdim, uint64_t* spdim, int timestep, int appid, size_t elem_size, int num_vars, MPI_Comm gcomm)
+{
+	gcomm_ = gcomm;
+	elem_size_ = elem_size;
+	timesteps_ = timestep;
+	npapp_ = npapp;
+	
+	int i;
+	for(i = 0; i < ndims; i++){
+        np[i] = npdim[i];
+		sp[i] = spdim[i];
+	}
+
+	timer_init(&timer_, 1);
+    timer_start(&timer_);
+
+	int app_id = appid;
+	double tm_st, tm_end;
+	tm_st = timer_read(&timer_);
+	common_init(npapp_, app_id, &gcomm_, NULL);
+	tm_end = timer_read(&timer_);
+	common_get_transport_type_str(type, transport_type_str_);
+
+	MPI_Comm_rank(gcomm_, &rank_);
+    MPI_Comm_size(gcomm_, &nproc_);
+
+#ifdef TIMING_PERF
+	uloga("TIMING_PERF init_dspaces peer %d time %lf\n", common_rank(), tm_end-tm_st);
+#endif
+	unsigned int ts;
+	common_lock_on_read("mnd_lock", &gcomm_);	
+	for(ts = 1; ts <= timesteps_; ts++){
+		if((ts%30)<=20)
+			couple_read_nd(ts, num_vars, type, ndims);
+	}
+	common_unlock_on_read("mnd_lock", &gcomm_);	
+	if(rank_ == 0){
+		uloga("%s(): done\n", __func__);
+	}
+
+	MPI_Barrier(gcomm_);
+
+	int ds_rank = common_rank();
+	tm_st = timer_read(&timer_);
+	common_finalize();
+	tm_end = timer_read(&timer_);
+
+#ifdef TIMING_PERF
+	uloga("TIMING_PERF fini_dspaces peer %d time= %lf\n", ds_rank, tm_end-tm_st);
+#endif
+
+    return 0;
+}
+int test_get_run_case3(enum transport_type type, int npapp, int ndims, int* npdim, uint64_t* spdim, int timestep, int appid, size_t elem_size, int num_vars, MPI_Comm gcomm)
+{
+	gcomm_ = gcomm;
+	elem_size_ = elem_size;
+	timesteps_ = timestep;
+	npapp_ = npapp;
+	
+	int i;
+	for(i = 0; i < ndims; i++){
+        np[i] = npdim[i];
+		sp[i] = spdim[i];
+	}
+
+	timer_init(&timer_, 1);
+    timer_start(&timer_);
+
+	int app_id = appid;
+	double tm_st, tm_end;
+	tm_st = timer_read(&timer_);
+	common_init(npapp_, app_id, &gcomm_, NULL);
+	tm_end = timer_read(&timer_);
+	common_get_transport_type_str(type, transport_type_str_);
+
+	MPI_Comm_rank(gcomm_, &rank_);
+    MPI_Comm_size(gcomm_, &nproc_);
+
+#ifdef TIMING_PERF
+	uloga("TIMING_PERF init_dspaces peer %d time %lf\n", common_rank(), tm_end-tm_st);
+#endif
+	unsigned int ts;
+	common_lock_on_read("mnd_lock", &gcomm_);	
+	for(ts = 1; ts <= timesteps_; ts++){
+		if((ts%10)==1)
+			couple_read_nd(ts, num_vars, type, ndims);
+	}
+	common_unlock_on_read("mnd_lock", &gcomm_);	
+	if(rank_ == 0){
+		uloga("%s(): done\n", __func__);
+	}
+
+	MPI_Barrier(gcomm_);
+
+	int ds_rank = common_rank();
+	tm_st = timer_read(&timer_);
+	common_finalize();
+	tm_end = timer_read(&timer_);
+
+#ifdef TIMING_PERF
+	uloga("TIMING_PERF fini_dspaces peer %d time= %lf\n", ds_rank, tm_end-tm_st);
+#endif
+
+    return 0;
+}
+int test_get_run_case4(enum transport_type type, int npapp, int ndims, int* npdim, uint64_t* spdim, int timestep, int appid, size_t elem_size, int num_vars, MPI_Comm gcomm)
+{
+	gcomm_ = gcomm;
+	elem_size_ = elem_size;
+	timesteps_ = timestep;
+	npapp_ = npapp;
+	
+	int i;
+	for(i = 0; i < ndims; i++){
+        np[i] = npdim[i];
+		sp[i] = spdim[i];
+	}
+
+	timer_init(&timer_, 1);
+    timer_start(&timer_);
+
+	int app_id = appid;
+	double tm_st, tm_end;
+	tm_st = timer_read(&timer_);
+	common_init(npapp_, app_id, &gcomm_, NULL);
+	tm_end = timer_read(&timer_);
+	common_get_transport_type_str(type, transport_type_str_);
+
+	MPI_Comm_rank(gcomm_, &rank_);
+    MPI_Comm_size(gcomm_, &nproc_);
+
+#ifdef TIMING_PERF
+	uloga("TIMING_PERF init_dspaces peer %d time %lf\n", common_rank(), tm_end-tm_st);
+#endif
+	unsigned int ts;
+	common_lock_on_read("mnd_lock", &gcomm_);	
+	for(ts = 1; ts <= timesteps_; ts++){
+		int j = 1 + (int) (10.0 * (rand() / (RAND_MAX + 1.0)));
+		if(j<6)
+			couple_read_nd(ts, num_vars, type, ndims);
+	}
+	common_unlock_on_read("mnd_lock", &gcomm_);	
+	if(rank_ == 0){
+		uloga("%s(): done\n", __func__);
+	}
+
+	MPI_Barrier(gcomm_);
+
+	int ds_rank = common_rank();
+	tm_st = timer_read(&timer_);
+	common_finalize();
+	tm_end = timer_read(&timer_);
+
+#ifdef TIMING_PERF
+	uloga("TIMING_PERF fini_dspaces peer %d time= %lf\n", ds_rank, tm_end-tm_st);
+#endif
+
+    return 0;
+}
+int test_get_run_case5_1(enum transport_type type, int npapp, int ndims, int* npdim, uint64_t* spdim, int timestep, int appid, size_t elem_size, int num_vars, MPI_Comm gcomm)
+{
+	gcomm_ = gcomm;
+	elem_size_ = elem_size;
+	timesteps_ = timestep;
+	npapp_ = npapp;
+	
+	int i;
+	for(i = 0; i < ndims; i++){
+        np[i] = npdim[i];
+		sp[i] = spdim[i];
+	}
+
+	timer_init(&timer_, 1);
+    timer_start(&timer_);
+
+	int app_id = appid;
+	double tm_st, tm_end;
+	tm_st = timer_read(&timer_);
+	common_init(npapp_, app_id, &gcomm_, NULL);
+	tm_end = timer_read(&timer_);
+	common_get_transport_type_str(type, transport_type_str_);
+
+	MPI_Comm_rank(gcomm_, &rank_);
+    MPI_Comm_size(gcomm_, &nproc_);
+
+#ifdef TIMING_PERF
+	uloga("TIMING_PERF init_dspaces peer %d time %lf\n", common_rank(), tm_end-tm_st);
+#endif
+	unsigned int ts;
+	common_lock_on_read("mnd_lock", &gcomm_);	
+	for(ts = 1; ts <= timesteps_; ts++){
+		if((ts%10)==1)
+			couple_read_nd(ts, num_vars, type, ndims);
+	}
+	common_unlock_on_read("mnd_lock", &gcomm_);	
+	if(rank_ == 0){
+		uloga("%s(): done\n", __func__);
+	}
+
+	MPI_Barrier(gcomm_);
+
+	int ds_rank = common_rank();
+	tm_st = timer_read(&timer_);
+	common_finalize();
+	tm_end = timer_read(&timer_);
+
+#ifdef TIMING_PERF
+	uloga("TIMING_PERF fini_dspaces peer %d time= %lf\n", ds_rank, tm_end-tm_st);
+#endif
+
+    return 0;
+}
+int test_get_run_case5_2(enum transport_type type, int npapp, int ndims, int* npdim, uint64_t* spdim, int timestep, int appid, size_t elem_size, int num_vars, MPI_Comm gcomm)
+{
+	gcomm_ = gcomm;
+	elem_size_ = elem_size;
+	timesteps_ = timestep;
+	npapp_ = npapp;
+	
+	int i;
+	for(i = 0; i < ndims; i++){
+        np[i] = npdim[i];
+		sp[i] = spdim[i];
+	}
+
+	timer_init(&timer_, 1);
+    timer_start(&timer_);
+
+	int app_id = appid;
+	double tm_st, tm_end;
+	tm_st = timer_read(&timer_);
+	common_init(npapp_, app_id, &gcomm_, NULL);
+	tm_end = timer_read(&timer_);
+	common_get_transport_type_str(type, transport_type_str_);
+
+	MPI_Comm_rank(gcomm_, &rank_);
+    MPI_Comm_size(gcomm_, &nproc_);
+
+#ifdef TIMING_PERF
+	uloga("TIMING_PERF init_dspaces peer %d time %lf\n", common_rank(), tm_end-tm_st);
+#endif
+	unsigned int ts;
+	common_lock_on_read("mnd_lock", &gcomm_);	
+	for(ts = 1; ts <= timesteps_; ts++){
+		if((ts%5)==1)
+			couple_read_nd(ts, num_vars, type, ndims);
+	}
+	common_unlock_on_read("mnd_lock", &gcomm_);	
 	if(rank_ == 0){
 		uloga("%s(): done\n", __func__);
 	}

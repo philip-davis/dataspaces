@@ -29,20 +29,30 @@
 *  zhangfan@cac.rutgers.edu
 *  Qian Sun (2014) TASSL Rutgers University
 *  qiansun@cac.rutgers.edu
+*   Pradeep Subedi (2017)   Rutgers University
+*   pradeep.subedi@rutgers.edu
 */
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "common.h"
 #include "mpi.h"
 
+#define DSG_ID                  dsg->ds->self->ptlmap.id
+//extern pthread_mutex_t ml_mutex;
+//extern pthread_cond_t ml_cond;
+extern pthread_mutex_t pmutex;//init prefetching pthread function lock
+extern pthread_cond_t  pcond;//init prefetching pthread function cond
+extern int complete;
+
 int read_config_file(const char* fname,
-	int *num_sp, int *num_cp, int *iter,
-	int *num_writer, int *w,
-	int *num_reader, int *r,
-	int *dims, int *dim)
+    int *num_sp, int *num_cp, int *iter,
+    int *num_writer, int *w,
+    int *num_reader, int *r,
+    int *dims, int *dim)
 {
-	FILE *f = NULL;
+    FILE *f = NULL;
         f = fopen(fname,"rt");
         if(!f){
                 goto err_out;
@@ -85,47 +95,47 @@ err_out:
 }
 
 int parse_args(int argc, char** argv, enum transport_type *type, int *npapp, 
-	int *dims, int* npdim, uint64_t* spdim, int *timestep, int *appid, 
-	size_t *elem_size, int *num_vars)
+    int *dims, int* npdim, uint64_t* spdim, int *timestep, int *appid, 
+    size_t *elem_size, int *num_vars)
 {
-	int i = 0, j = 0, count = 0;
-	*type = USE_DSPACES;
-	if(0 == strcmp(argv[1], "DIMES")){
-		*type = USE_DIMES;
-	}
-	*npapp = atoi(argv[2]);
-	*dims = atoi(argv[3]);
-	count = 3;
+    int i = 0, j = 0, count = 0;
+    *type = USE_DSPACES;
+    if(0 == strcmp(argv[1], "DIMES")){
+        *type = USE_DIMES;
+    }
+    *npapp = atoi(argv[2]);
+    *dims = atoi(argv[3]);
+    count = 3;
 
-	if(argc < 3 + (*dims)*2 + 2 + 1){
-		uloga("Wrong number of arguments!\n");
-		return -1;
-	}
+    if(argc < 3 + (*dims)*2 + 2 + 1){
+        uloga("Wrong number of arguments!\n");
+        return -1;
+    }
 
-	for(i = count + 1, j = 0; j < *dims; i++, j++){
-		*(npdim+j) = atoi(argv[i]);
-	}
-	count += *dims;
+    for(i = count + 1, j = 0; j < *dims; i++, j++){
+        *(npdim+j) = atoi(argv[i]);
+    }
+    count += *dims;
 
-	for(i = count + 1, j = 0; j < *dims; i++, j++){
-		*(spdim+j) = strtoull(argv[i], NULL, 10); 
-	}
-	count += *dims;
+    for(i = count + 1, j = 0; j < *dims; i++, j++){
+        *(spdim+j) = strtoull(argv[i], NULL, 10); 
+    }
+    count += *dims;
 
-	*timestep = atoi(argv[++count]);
-	*appid = atoi(argv[++count]);
+    *timestep = atoi(argv[++count]);
+    *appid = atoi(argv[++count]);
 
-	if(argc >= ++count + 1)
-		*elem_size = atoi(argv[count]);
-	else
-		*elem_size = sizeof(double);
+    if(argc >= ++count + 1)
+        *elem_size = atoi(argv[count]);
+    else
+        *elem_size = sizeof(double);
 
-	if(argc >= ++count + 1)
-		*num_vars = atoi(argv[count]);
-	else
-		*num_vars = 1;
+    if(argc >= ++count + 1)
+        *num_vars = atoi(argv[count]);
+    else
+        *num_vars = 1;
 
-	return 0;
+    return 0;
 }
 
 int common_init(int num_peers, int appid, void* comm, const char* parameters) {
@@ -165,44 +175,44 @@ void common_unlock_on_write(const char *lock_name, void *gcomm) {
 }
 
 int common_put(const char *var_name, 
-	unsigned int ver, int size,
-	int ndim,
-	uint64_t *lb, uint64_t *ub,
-	void *data, enum transport_type type)
+    unsigned int ver, int size,
+    int ndim,
+    uint64_t *lb, uint64_t *ub,
+    void *data, enum transport_type type)
 {
-	if ( type == USE_DSPACES ) {
-		return dspaces_put(var_name, ver, size,
+    if ( type == USE_DSPACES ) {
+        return dspaces_put_ssd(var_name, ver, size,
                         ndim,lb, ub,data);
-	} else if (type == USE_DIMES) {
+    } else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
-		return dimes_put(var_name, ver, size, 
-			ndim, lb, ub, data);
+        return dimes_put(var_name, ver, size, 
+            ndim, lb, ub, data);
 #else
-		uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
-		return -1;
+        uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
+        return -1;
 #endif
-	}
+    }
     return 0;
 }
 
 int common_get(const char *var_name,
-	unsigned int ver, int size,
-	int ndim,
-	uint64_t *lb, uint64_t *ub,
-	void *data, enum transport_type type)
+    unsigned int ver, int size,
+    int ndim,
+    uint64_t *lb, uint64_t *ub,
+    void *data, enum transport_type type)
 {
-	if ( type == USE_DSPACES ) {
-		return dspaces_get(var_name, ver, size,
+    if ( type == USE_DSPACES ) {
+        return dspaces_get(var_name, ver, size,
                         ndim,lb, ub,data);
-	} else if (type == USE_DIMES) {
+    } else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
-		return dimes_get(var_name, ver, size, 
-			ndim, lb, ub, data);
+        return dimes_get(var_name, ver, size, 
+            ndim, lb, ub, data);
 #else
-		uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
-		return -1;
+        uloga("%s(): DataSpaces DIMES is not enabled!\n", __func__);
+        return -1;
 #endif
-	}
+    }
     return 0;
 }
 
@@ -227,15 +237,20 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
                 dsg = dsg_alloc(num_sp, num_cp, "dataspaces.conf", gcomm);
                 if (!dsg)
                         return -1;
+                pthread_t t_pref;//prefetch thread
+                pthread_create(&t_pref, NULL, prefetch_thread, (void*)NULL);
 
                 while (!dsg_complete(dsg)){
                         err = dsg_process(dsg);
                         if(err<0)
                                 break;
                 }
-
+                pthread_cancel(t_pref);//kill t_pref thread
+                pthread_join(t_pref, NULL);//wait t_pref thread end
+                pthread_mutex_destroy(&pmutex);//destroy mutex lock
+                pthread_cond_destroy(&pcond);//destroy condition
                 //dsg_barrier(dsg);
-		MPI_Barrier(*(MPI_Comm*)gcomm);
+        MPI_Barrier(*(MPI_Comm*)gcomm);
                 dsg_free(dsg);
 
                 if (err == 0)
@@ -255,7 +270,7 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
                 }
 
                 //dimes_server_barrier(dsg);
-		MPI_Barrier(*(MPI_Comm*)gcomm);
+        MPI_Barrier(*(MPI_Comm*)gcomm);
                 dimes_server_free(dsg);
 
                 if (err == 0)

@@ -310,7 +310,9 @@ enum cmd_type {
 #endif
 	/* Added for CCGrid Demo. */
 	CN_TIMING_AVG,
-	_CMD_COUNT
+	_CMD_COUNT,
+    /*Added for SSD commands*/
+    ss_obj_put_ssd
 };
 
 enum lock_type {

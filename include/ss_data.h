@@ -38,8 +38,8 @@
 #include "list.h"
 
 typedef struct {
-	void			*iov_base;
-	size_t			iov_len;
+    void            *iov_base;
+    size_t          iov_len;
 } iovec_t;
 
 enum storage_type {row_major, column_major};
@@ -72,14 +72,16 @@ struct gdim_list_entry {
         struct global_dimension gdim; 
 };
 
+enum storage_level { in_memory, in_ssd, in_memory_ssd, in_memory_ceph, in_ceph };/* storage level Duan*/
+enum storage_opera { normal, prefetching, caching };/* storage operation */
 struct obj_data {
         struct list_head        obj_entry;
 
         struct obj_descriptor   obj_desc;
         struct global_dimension gdim;
 
-        void			*_data;		/* Unaligned pointer */
-        void                    *data;		/* Aligned pointer */
+        void            *_data;     /* Unaligned pointer */
+        void                    *data;      /* Aligned pointer */
 
         /* Reference to the parent object; used only for sub-objects. */
         struct obj_data         *obj_ref;
@@ -89,6 +91,11 @@ struct obj_data {
 
         /* Flag to mark if we should free this data object. */
         unsigned int            f_free:1;
+
+        enum storage_level       sl; //Duan
+        enum storage_opera       so;
+
+        //int obj_ml_id;
 };
 
 struct ss_storage {
@@ -99,8 +106,8 @@ struct ss_storage {
 };
 
 struct obj_desc_list {
-	struct list_head	odsc_entry;
-	struct obj_descriptor	odsc;
+    struct list_head    odsc_entry;
+    struct obj_descriptor   odsc;
 };
 
 struct dht_entry {
@@ -120,8 +127,8 @@ struct dht_entry {
         int size_bb_tab;
         struct bbox             *bb_tab;
 
-        int			odsc_size, odsc_num;
-        struct list_head	odsc_hash[1];
+        int         odsc_size, odsc_num;
+        struct list_head    odsc_hash[1];
 };
 
 struct dht {
@@ -185,10 +192,10 @@ struct hdr_obj_get {
         } o;
         struct {
             /* Number of versions available. */
-            int			num_vers;
-            int			versions[1];
+            int         num_vers;
+            int         versions[1];
         } v;
-	} u;
+    } u;
     struct global_dimension gdim;
 } __attribute__((__packed__));
 
@@ -208,25 +215,25 @@ struct hdr_obj_filter {
 
 /*  Header structure for sending binary codes. */
 struct hdr_bin_code {
-	/* Offset from the start of the code to the first loading
-	   instruction for the PLT. */
-	int			offset;
+    /* Offset from the start of the code to the first loading
+       instruction for the PLT. */
+    int         offset;
 
-	/* Size of the code to be send and executed remotely. */
-	int			size;
+    /* Size of the code to be send and executed remotely. */
+    int         size;
 
-	int			qid;
+    int         qid;
 
-	struct obj_descriptor	odsc;
+    struct obj_descriptor   odsc;
 } __attribute__((__packed__));
 
 /* Header structure for returning the  result of the code execution on
    the space. */
 struct hdr_bin_result {
-	int			qid;
-	int			rc;
+    int         qid;
+    int         rc;
 
-	unsigned char		pad[210]; // max is sizeof(struct rpc_cmd.pad == 218)
+    unsigned char       pad[210]; // max is sizeof(struct rpc_cmd.pad == 218)
 } __attribute__((__packed__));
 
 struct sspace* ssd_alloc(const struct bbox *, int, int, enum sspace_hash_version);
@@ -252,6 +259,7 @@ struct obj_data* ls_lookup(struct ss_storage *, char *);
 void ls_remove(struct ss_storage *, struct obj_data *);
 void ls_try_remove_free(struct ss_storage *, struct obj_data *);
 struct obj_data * ls_find(struct ss_storage *, const struct obj_descriptor *);
+int ls_find_list(struct ss_storage *, const struct obj_descriptor *, const struct obj_data *[]);
 struct obj_data * ls_find_no_version(struct ss_storage *, struct obj_descriptor *);
 
 struct obj_data *obj_data_alloc(struct obj_descriptor *);
@@ -283,4 +291,8 @@ struct gdim_list_entry* lookup_gdim_list(struct list_head *gdim_list, const char
 void free_gdim_list(struct list_head *gdim_list);
 void set_global_dimension(struct list_head *gdim_list, const char *var_name,
             const struct global_dimension *default_gdim, struct global_dimension *gdim);
+void obj_data_copy_to_mem(struct obj_data *od, int id);
+void obj_data_move_to_mem(struct obj_data *od, int id);
+void obj_data_free_in_mem(struct obj_data *od);
+void obj_data_free_in_ssd(struct obj_data *od);
 #endif /* __SS_DATA_H_ */
