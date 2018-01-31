@@ -1420,10 +1420,9 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 // double tm_start, tm_ending;
 //  tm_start = timer_read(&tm_perf);
     if(od->sl == in_memory_ssd){
-        //obj_data_copy_to_ssd_direct(od);
-        //obj_data_free_pointer(od);
-        obj_data_write_to_ssd(od, DSG_ID);
-        obj_data_free_in_mem(od);
+        //obj_data_write_to_ssd(od, DSG_ID);
+        //obj_data_free_in_mem(od);
+        obj_data_write_to_ssd_emulate(od, DSG_ID);
     }
     free(msg);
 #ifdef DEBUG
@@ -1708,11 +1707,10 @@ void *prefetch_thread(void*attr){
     }else{ /*cond_num > 0 */
         local_cond_index = cond_index;
         do{
-            //uloga("Prefetch started \n");
             pthread_mutex_lock(&odscmutex);
-            obj_data_move_to_mem(pod_list.pref_od[local_cond_index], DSG_ID);
+            obj_data_move_to_mem_emulate(pod_list.pref_od[local_cond_index], DSG_ID);
+            //obj_data_move_to_mem(pod_list.pref_od[local_cond_index], DSG_ID);
             pthread_mutex_unlock(&odscmutex);
-            //pod_list.pref_od[local_cond_index]->sl = in_memory_ssd;
             pod_list.pref_od[local_cond_index]->so = prefetching;
             local_cond_index = get_prev(local_cond_index, MAX_PREFETCH);
         } while (pod_list.pref_od[local_cond_index] !=NULL && pod_list.pref_od[local_cond_index]->so == prefetching && (pod_list.pref_od[local_cond_index]->sl == in_ssd || pod_list.pref_od[local_cond_index]->sl == in_ceph));
@@ -2451,6 +2449,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
      free(str);
  }
 #endif
+    /*
         char * predicted_var = (char*)malloc(sizeof(char)*50);
         char * insert_var = (char*)malloc(sizeof(char)*50);
         insert_n_predict_data(oh->u.o.odsc.name, predicted_var);
@@ -2501,6 +2500,8 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             //uloga("Current_version %d, Predicted version %d \n", (int)oh->u.o.odsc.version, pred_version);
             local_obj_get_desc(oh->u.o.odsc.name, lb, ub, pred_version);
         }
+        */
+
 
         pthread_mutex_lock(&odscmutex);
         from_obj = ls_find(dsg->ls, &oh->u.o.odsc);
@@ -2535,7 +2536,8 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         if (!od)
                 goto err_out;
         if(from_obj->sl == in_ssd){
-            obj_data_copy_to_mem(from_obj, DSG_ID);
+            //bj_data_copy_to_mem(from_obj, DSG_ID);
+            obj_data_copy_to_mem_emulate(from_obj, DSG_ID);
             (fast_v)? ssd_copyv(od, from_obj) : ssd_copy(od, from_obj);
 
         }else{

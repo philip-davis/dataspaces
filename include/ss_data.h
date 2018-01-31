@@ -240,6 +240,7 @@ struct sspace* ssd_alloc(const struct bbox *, int, int, enum sspace_hash_version
 int ssd_init(struct sspace *, int);
 void ssd_free(struct sspace *);
 int ssd_copy(struct obj_data *, struct obj_data *);
+int ssd_copy_emulate(struct obj_data *, struct obj_data *);
 // TODO: ssd_copyv is not supported yet
 int ssd_copyv(struct obj_data *, struct obj_data *);
 int ssd_copy_list(struct obj_data *, struct list_head *);
@@ -295,4 +296,7 @@ void obj_data_copy_to_mem(struct obj_data *od, int id);
 void obj_data_move_to_mem(struct obj_data *od, int id);
 void obj_data_free_in_mem(struct obj_data *od);
 void obj_data_free_in_ssd(struct obj_data *od);
+void obj_data_move_to_mem_emulate(struct obj_data *od, int id);
+void obj_data_copy_to_mem_emulate(struct obj_data *od, int id);
+void obj_data_write_to_ssd_emulate(struct obj_data *od, int id);
 #endif /* __SS_DATA_H_ */

@@ -327,6 +327,115 @@ dim1:               numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
     }
 }
 
+static void matrix_copy_emulate(struct matrix *a, struct matrix *b) //need to pass name for copy from ceph
+{
+        char *A = a->pdata;
+        char *B = b->pdata;
+
+        uint64_t a0, a1, a2, a3, a4, a5, a6, a7, a8, a9;
+        uint64_t aloc=0, aloc1=0, aloc2=0, aloc3=0, aloc4=0, aloc5=0, aloc6=0, aloc7=0, aloc8=0, aloc9=0;
+        uint64_t b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
+        uint64_t bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
+        uint64_t numelem;
+        uint64_t actual_time;
+
+    switch(a->num_dims){
+        case(1):    
+            goto dim1;
+            break;
+        case(2):
+            goto dim2;
+            break;
+        case(3):
+            goto dim3;
+            break;
+        case(4):
+            goto dim4;
+            break;
+        case(5):
+            goto dim5;
+            break;
+        case(6):
+            goto dim6;
+            break;
+        case(7):
+            goto dim7;
+            break;
+        case(8):
+            goto dim8;
+            break;
+        case(9):
+            goto dim9;
+            break;
+        case(10):
+            goto dim10;
+            break;
+        default:
+            break;
+    }
+    
+dim10:        for(a9 = a->mat_view.lb[9], b9 = b->mat_view.lb[9];   //TODO-Q
+            a9 <= a->mat_view.ub[9]; a9++, b9++){
+            aloc9 = a9 * a->dist[8];
+            bloc9 = a9 * b->dist[8];
+dim9:        for(a8 = a->mat_view.lb[8], b8 = b->mat_view.lb[8];    //TODO-Q
+            a8 <= a->mat_view.ub[8]; a8++, b8++){
+            aloc8 = (aloc9 + a8) * a->dist[7];
+            bloc8 = (bloc9 + b8) * b->dist[7];
+dim8:        for(a7 = a->mat_view.lb[7], b7 = b->mat_view.lb[7];    //TODO-Q
+            a7 <= a->mat_view.ub[7]; a7++, b7++){
+            aloc7 = (aloc8 + a7) * a->dist[6];
+            bloc7 = (bloc8 + b7) * b->dist[6];
+dim7:        for(a6 = a->mat_view.lb[6], b6 = b->mat_view.lb[6];    //TODO-Q
+            a6 <= a->mat_view.ub[6]; a6++, b6++){
+            aloc6 = (aloc7 + a6) * a->dist[5];
+            bloc6 = (bloc7 + b6) * b->dist[5];
+dim6:        for(a5 = a->mat_view.lb[5], b5 = b->mat_view.lb[5];    //TODO-Q
+            a5 <= a->mat_view.ub[5]; a5++, b5++){
+            aloc5 = (aloc6 + a5) * a->dist[4];
+            bloc5 = (bloc6 + b5) * b->dist[4];
+dim5:        for(a4 = a->mat_view.lb[4], b4 = b->mat_view.lb[4];
+            a4 <= a->mat_view.ub[4]; a4++, b4++){
+            aloc4 = (aloc5 + a4) * a->dist[3];
+            bloc4 = (bloc5 + b4) * b->dist[3];
+dim4:        for(a3 = a->mat_view.lb[3], b3 = b->mat_view.lb[3];
+            a3 <= a->mat_view.ub[3]; a3++, b3++){
+            aloc3 = (aloc4 + a3) * a->dist[2];
+            bloc3 = (bloc4 + b3) * b->dist[2];
+dim3:            for(a2 = a->mat_view.lb[2], b2 = b->mat_view.lb[2];
+                a2 <= a->mat_view.ub[2]; a2++, b2++){
+                aloc2 = (aloc3 + a2) * a->dist[1];
+                bloc2 = (bloc3 + b2) * b->dist[1];
+dim2:                for(a1 = a->mat_view.lb[1], b1 = b->mat_view.lb[1];
+                    a1 <= a->mat_view.ub[1]; a1++, b1++){
+                    aloc1 = (aloc2 + a1) * a->dist[0];
+                    bloc1 = (bloc2 + b1) * b->dist[0];
+dim1:               numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
+                    aloc = aloc1 + a->mat_view.lb[0];
+                    bloc = bloc1 + b->mat_view.lb[0];
+                    actual_time = ((a->size_elem * numelem)/3449815040)+0.000079;
+                    sleep(actual_time);
+                    memcpy(&A[aloc*a->size_elem], &B[bloc*a->size_elem], (a->size_elem * numelem));     
+            if(a->num_dims == 1)    return;
+                }
+        if(a->num_dims == 2)    return;
+            }
+        if(a->num_dims == 3)    return; 
+        }
+    if(a->num_dims == 4)    return;
+    }
+    if(a->num_dims == 5)    return;
+    }
+    if(a->num_dims == 6)    return;
+    }
+    if(a->num_dims == 7)    return;
+    }
+    if(a->num_dims == 8)    return;
+    }
+    if(a->num_dims == 9)    return;
+    }
+}
+
 static void matrix_copy_ssd(struct matrix *a, struct matrix *b, char* old_name, uint64_t num_elems) //need to pass name for copy from ceph
 {
         
@@ -1114,7 +1223,24 @@ int ssd_copy(struct obj_data *to_obj, struct obj_data *from_obj)
         matrix_copy(&to_mat, &from_mat);
         return 0;
 }
+int ssd_copy_emulate(struct obj_data *to_obj, struct obj_data *from_obj)
+{
+        struct matrix to_mat, from_mat;
+        struct bbox bbcom;
 
+        bbox_intersect(&to_obj->obj_desc.bb, &from_obj->obj_desc.bb, &bbcom);
+
+        matrix_init(&from_mat, from_obj->obj_desc.st,
+                    &from_obj->obj_desc.bb, &bbcom, 
+                    from_obj->data, from_obj->obj_desc.size);
+
+        matrix_init(&to_mat, to_obj->obj_desc.st, 
+                    &to_obj->obj_desc.bb, &bbcom,
+                    to_obj->data, to_obj->obj_desc.size);
+
+        matrix_copy_emulate(&to_mat, &from_mat);
+        return 0;
+}
 int ssd_copy_ssd(struct obj_data *to_obj, struct obj_data *from_obj, int id)
 {
         struct matrix to_mat, from_mat;
@@ -1733,6 +1859,32 @@ void obj_data_move_to_mem(struct obj_data *od, int id)
         
 
     } 
+}
+void obj_data_move_to_mem_emulate(struct obj_data *od, int id)
+{   
+    if(od->sl == in_ssd){
+        //simulate INTEL® SSD DC P4600 SERIES
+        uint64_t actual_time = (obj_data_size(&od->obj_desc)/3449815040)+0.000079;
+        sleep(actual_time);
+        od->sl = in_memory;
+
+    } 
+}
+
+void obj_data_copy_to_mem_emulate(struct obj_data *od, int id)
+{   
+    if(od->sl == in_ssd){
+
+        uint64_t actual_time = (obj_data_size(&od->obj_desc)/3449815040)+0.000079;
+        sleep(actual_time);
+        //od->sl = in_memory;
+
+    } 
+}
+void obj_data_write_to_ssd_emulate(struct obj_data *od, int id){
+    uint64_t actual_time = (obj_data_size(&od->obj_desc)/2202009600)+0.000034;
+    sleep(actual_time);
+    od->sl = in_ssd;
 }
 
 void obj_data_free(struct obj_data *od)
