@@ -136,6 +136,8 @@ if test "x$enable_dart2" == "xyes"; then
 	AC_DEFINE(USE_DART2, 1, [DART2 is enabled])
     AM_CONDITIONAL(USE_DART2, true)
 	echo "Using DART2!"
+else
+    AM_CONDITIONAL(USE_DART2, false)
 fi
 
 dnl Check if DataSpaces location-aware write is enabled
