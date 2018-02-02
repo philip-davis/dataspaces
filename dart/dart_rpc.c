@@ -30,13 +30,6 @@
 
 #define RPC_DEFAULT_CMD_NS 0
 
-static int num_service = 0;
-
-static struct {
-    enum cmd_type rpc_cmd;
-    rpc_service rpc_func;
-} rpc_commands[64];
-
 /* globally defined rpc_server, for backwards compatibility and non-threadsafe operation */
 static struct rpc_server *g_rpc_s = NULL;
 
@@ -53,7 +46,7 @@ rpc_return_t rpc_add_service_with_namespace(rpc_cmd_ns_t rpc_ns, rpc_cmd_t rpc_c
 /* allocate a new rpc namespace with the given id (rpc_ns) */
 static struct rpc_cmd_ns *alloc_rpc_ns(struct rpc_server *rpc_s, rpc_cmd_ns_t rpc_ns)
 {
-	rpc_cmd_ns *ns = NULL;
+	struct rpc_cmd_ns *ns = NULL;
 
 	if(!rpc_s) {
 		uloga("%s(): rpc_s is NULL.\n", __func__);
@@ -93,7 +86,7 @@ static struct rpc_cmd_ns *find_rpc_ns(struct rpc_server *rpc_s, rpc_cmd_ns_t rpc
 		goto err_out;
 	}
 
-	list_for_each_entry(ns_temp, rpc_s->rpc_ns, struct rpc_cmd_ns, rpc_ns_entry) {
+	list_for_each_entry(ns_temp, &rpc_s->rpc_ns, struct rpc_cmd_ns, rpc_ns_entry) {
 		if(ns_temp->ns == rpc_ns) {
 			ns = ns_temp;
 			break;
@@ -137,7 +130,7 @@ rpc_return_t rpc_add_service_with_namespace_r(struct rpc_server *rpc_s,
 	}
 
 	if(rpc_cmd >= ns->num_rpc_funcs) {
-		uloga("%s(): rcp_cmd (%d) is out of range. Max rpc_cmd is %d\n",
+		uloga("'%s': rcp_cmd (%d) is out of range. Max rpc_cmd is %lu\n",
 			__func__, rpc_cmd, ns->num_rpc_funcs - 1);
 		err = RPC_RC_INVALID_PARAM;
 		goto err_out;

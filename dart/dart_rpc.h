@@ -38,8 +38,6 @@ struct rpc_cmd {
         rpc_cmd_t cmd;            // type of command
         unsigned char num_msg;
         unsigned int id; //Dart ID
-
-        unsigned char pad[280+(BBOX_MAX_NDIM-3)*24]; // payload of the command
 } __attribute__((__packed__));
 
 struct ptlid_map {
