@@ -37,6 +37,8 @@ if test -n $LIBS; then
 fi
 LIBS=$save_LIBS
 
+AC_CHECK_LIB([hdf5], [H5Fopen])
+
 dnl Generate flags for dataspaces lib creation which depends on the particular network transport layer. DSPACESLIB_* is used for compiling the lib, and linking testing codes.
 DSPACESLIB_CFLAGS="${PTHREAD_CFLAGS}"
 DSPACESLIB_CPPFLAGS="${PTHREAD_CFLAGS}"

@@ -237,6 +237,20 @@ int dspaces_get (const char *var_name,
         void *data);
 
 /**
+ * @brief Query the dimensions of a variable stored into dataspaces
+ *
+ * @param[in]  var_name: Name of the variable
+ * @param[in]  ver:      Version of the variable
+ * @param[in]  ndim:     Number of dimensions of the variable
+ * @param[out] dims:     Pointer to a buffer allocated to receive ndims
+ *              dimensions.
+ *
+ * @return  0 indicates success.
+ */
+int dspaces_get_dims(const char *var_name, unsigned int ver,
+        int ndim, uint64_t *dims);
+
+/**
  * Remove a particular version of a variable (whole domain)
  * @param[in] var_name:     Name of the variable.
  * @param[in] ver:      Version of the variable.

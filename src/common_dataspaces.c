@@ -219,6 +219,12 @@ void common_dspaces_define_gdim(const char *var_name, int ndim, uint64_t *gdim)
     update_gdim_list(&dcg->gdim_list, var_name, ndim, gdim);
 }
 
+int common_dspaces_get_dims(const char *var_name, unsigned int ver,
+        int ndim, uint64_t *dims)
+{
+    return dcg_obj_get_dims(var_name, ver, ndim, dims);
+}
+
 int common_dspaces_get(const char *var_name,
 	unsigned int ver, int size,
 	int ndim,

@@ -152,6 +152,12 @@ int dspaces_get (const char *var_name,
     return common_dspaces_get(var_name, ver, size, ndim, lb, ub, data);    
 }
 
+int dspaces_get_dims(const char *var_name, unsigned int ver,
+        int ndim, uint64_t *dims)
+{
+    return common_dspaces_get_dims(var_name, ver, ndim, dims);
+}
+
 int dspaces_remove (const char *var_name,
         unsigned int ver)
 {

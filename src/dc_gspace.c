@@ -59,6 +59,8 @@ static struct timer tm_perf;
 static int mpi_rank = 0;
 static int flag_set_mpi_rank = 0;
 
+static enum storage_type st = column_major; // TODO: still need this?
+
 /* Record the number of timing msgs received */
 static int demo_num_timing_recv;
 
@@ -264,6 +266,13 @@ static void qt_remove_obj(struct query_tran_entry *qte, struct obj_data *od)
         qte->size_od--;
 
         free(od);
+}
+
+static void qt_unlk(struct query_tran_entry *qte){
+	struct obj_data *od, *t;
+
+	list_for_each_entry_safe(od, t, &qte->od_list, struct obj_data, obj_entry)
+		qt_remove_obj(qte, od);
 }
 
 /*
@@ -1725,6 +1734,102 @@ int dcg_obj_sync(int sync_op_id)
  err_out:
         uloga("'%s()': failed with %d.\n", __func__, err);
         return err;
+}
+
+/*
+*/
+int dcg_obj_get_dims(const char *var_name, unsigned int ver,
+		int ndim, uint64_t *dims)
+{
+	struct obj_descriptor odsc = {
+		.version = ver, .owner = -1,
+		.st = st,
+		.bb = {.num_dims = ndim }
+	};
+
+	// Bounding box initialized to {0, 0, ...} to {1, 1, ...}
+	memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*ndim);
+	memset(odsc.bb.ub.c, 9, sizeof(uint64_t)*ndim);
+
+	int err = -ENOMEM;
+
+	strcpy(odsc.name, var_name);
+	odsc.name[strlen(var_name)] = '\0';
+
+	struct obj_data *od = (struct obj_data*) malloc(sizeof(struct obj_data));
+	void *od_data = NULL;
+
+	if (!od) {
+		uloga("'%s()': failed, cannot allocate data object.\n", __func__);
+		return -ENOMEM;
+	}
+
+	memset(od, 0, sizeof(*od));
+	od->obj_desc = odsc;
+	od->data = od_data;
+	od->_data = NULL;
+
+	// Set phony dimension
+	set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim, &od->gdim);
+
+	struct query_tran_entry *qte;
+	qte = qte_alloc(od, 0);
+
+	if (!qte)
+		goto err_out;
+
+	qt_add(&dcg->qt, qte);
+	versions_reset();
+
+	// Get the peer that has this object
+	err = get_dht_peers(qte);
+	if (err < 0)
+		goto err_qt_free;
+	DC_WAIT_COMPLETION(qte->f_peer_received == 1);
+
+	if(*(qte->qh->qh_peerid_tab) == -1) {
+		uloga("No peer found for the requested object\n");
+		return -1;
+	}
+
+	// Get the object description
+	err = get_obj_descriptors(qte);
+	if (err < 0) {
+		uloga("get_obj_descriptor returned %d\n", err);
+		if (err == -EAGAIN)
+			goto out_no_data;
+		else
+			goto err_qt_free;
+	}
+	DC_WAIT_COMPLETION(qte->f_odsc_recv == 1);
+
+	if(qte->f_err != 0) {
+		uloga("Error: get_obj_descriptor() could not find variable\n");
+		err = -EAGAIN;
+		goto out_no_data;
+	}
+
+	obj_data_free(od);
+
+	// TODO check that list is not empty
+
+	// TODO Here we assume the variable has a single object
+	struct obj_data *tmp_od;
+	list_for_each_entry(tmp_od, &qte->od_list, struct obj_data, obj_entry) {
+		memcpy(dims, tmp_od->obj_desc.bb.ub.c, sizeof(uint64_t) * ndim);
+	}
+
+	return 0;
+
+err_out:
+	return err;
+out_no_data:
+	qt_unlk(qte);
+err_qt_free:
+	qt_remove(&dcg->qt, qte);
+	free(qte);
+
+	return err;
 }
 
 /*

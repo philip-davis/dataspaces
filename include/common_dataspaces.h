@@ -52,6 +52,8 @@ void common_dspaces_unlock_on_read(const char *lock_name, void *comm);
 void common_dspaces_lock_on_write(const char *lock_name, void *comm);
 void common_dspaces_unlock_on_write(const char *lock_name,void *comm);
 void common_dspaces_define_gdim(const char *var_name, int ndim, uint64_t *gdim);
+int  common_dspaces_get_dims(const char *var_name, unsigned int ver,
+        int ndim, uint64_t *dims);
 int common_dspaces_get (const char *var_name, 
         unsigned int ver, int size,
         int ndim,
