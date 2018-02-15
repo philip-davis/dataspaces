@@ -86,6 +86,18 @@ const char* MapWrap::get_value(const char *pred){
 	return rstr;
 }
 
+int MapWrap::get_size(){
+	int out_records = cMap.size();
+	int inner_records = 0;
+	map<string, map<string, int> >::iterator it;
+	for (it=cMap.begin(); it!=cMap.end(); ++it){
+        map<string, int> inner_map;
+		inner_map = it->second;
+		inner_records = inner_records+inner_map.size();
+    }
+	return (inner_records+out_records);
+}
+
 MapOnly::MapOnly(int i){
 	map <string, int>  mymap;
 	this->cMap = mymap;

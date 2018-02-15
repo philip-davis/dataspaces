@@ -44,6 +44,8 @@
 //extern pthread_cond_t ml_cond;
 extern pthread_mutex_t pmutex;//init prefetching pthread function lock
 extern pthread_cond_t  pcond;//init prefetching pthread function cond
+extern pthread_mutex_t emutex;//init prefetching pthread function lock
+extern pthread_cond_t  econd;//init prefetching pthread function cond
 extern int complete;
 
 int read_config_file(const char* fname,
@@ -238,7 +240,9 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
                 if (!dsg)
                         return -1;
                 pthread_t t_pref;//prefetch thread
+                pthread_t t_evict;
                 pthread_create(&t_pref, NULL, prefetch_thread, (void*)NULL);
+                pthread_create(&t_evict, NULL, evict_thread, (void*)NULL);
 
                 while (!dsg_complete(dsg)){
                         err = dsg_process(dsg);
@@ -247,8 +251,12 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
                 }
                 pthread_cancel(t_pref);//kill t_pref thread
                 pthread_join(t_pref, NULL);//wait t_pref thread end
+                pthread_cancel(t_evict);//kill t_pref thread
+                pthread_join(t_evict, NULL);//wait t_pref thread end
                 pthread_mutex_destroy(&pmutex);//destroy mutex lock
                 pthread_cond_destroy(&pcond);//destroy condition
+                pthread_mutex_destroy(&emutex);//destroy mutex lock
+                pthread_cond_destroy(&econd);//destroy condition
                 //dsg_barrier(dsg);
         MPI_Barrier(*(MPI_Comm*)gcomm);
                 dsg_free(dsg);

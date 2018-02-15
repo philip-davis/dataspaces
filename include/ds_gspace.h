@@ -94,6 +94,7 @@ struct objdesc_list{
 struct objdesc_list podesc_list;
 
 void *prefetch_thread(void*);
+void *evict_thread(void*);
 void *push_thread(void*);
 int cache_replacement(int mem_size);
 int prefetch_insert_tail(struct obj_data * pod, int array_size);

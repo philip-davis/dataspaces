@@ -8,6 +8,7 @@ extern "C" {
 	WrapperMap * map_new(int i);
 	void map_insert( const WrapperMap *t, const char *pred, const char *succ);
 	const char* map_get_value(const WrapperMap *t, const char *pred);
+	int map_get_size(const WrapperMap *t);
 	void map_delete(WrapperMap *t);
 
 	OnlyMap * map_only(int i);

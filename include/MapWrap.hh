@@ -7,6 +7,7 @@ class MapWrap {
         public:
                 void mp_insert(const char *pred, const char *succ);
                 const char* get_value(const char *pred);
+                int get_size();
                 MapWrap(int i);
 
         private:

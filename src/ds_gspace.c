@@ -131,7 +131,8 @@ static struct ds_gspace *dsg;
 
 pthread_mutex_t pmutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  pcond = PTHREAD_COND_INITIALIZER;
-
+pthread_mutex_t emutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t  econd = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t odscmutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  odsccond = PTHREAD_COND_INITIALIZER;
 
@@ -141,6 +142,7 @@ int cond_index = 0;
 int cond_num = 0;
 int counter;
 int last_request = 0;
+int evict_num = 0;
 
 static enum storage_type st = column_major; 
 
@@ -1461,7 +1463,41 @@ int req_count[10] = {0};
 int curr_lb[3] = {0};
 int curr_ub[3] = {0};
 
+typedef struct evict_node{
+    struct obj_data * curr_od;
+    struct evict_node * next;
+}evict_node;
 
+evict_node *in_mem_head;
+
+void node_insert(struct obj_data * od){
+    evict_node *temp = (evict_node*) malloc (sizeof(evict_node));
+    temp->curr_od = od;
+    temp->next = NULL;
+    if(in_mem_head ==NULL){
+        in_mem_head = temp;
+    }else{
+        evict_node *traverser = in_mem_head;
+        while(traverser->next !=NULL){
+            traverser = traverser->next;
+        }
+        traverser->next = temp;
+    }
+    dsg->ls->mem_used = dsg->ls->mem_used + obj_data_size(&(od->obj_desc));
+    uloga("Mem used after adding in mem is %llu\n", dsg->ls->mem_used);
+}
+
+void del_node(){
+    dsg->ls->mem_used = dsg->ls->mem_used - obj_data_size(&(in_mem_head->curr_od->obj_desc));
+    uloga("Mem used after deleting from mem is %llu\n", dsg->ls->mem_used);
+    if(in_mem_head->next!=NULL){
+        evict_node *temp;
+        temp = in_mem_head;
+        in_mem_head = in_mem_head->next;
+        free(temp);
+    }
+    
+}
 
 void freeList(m_node* head)
 {
@@ -1480,9 +1516,19 @@ void free_all(){
     int i;
     for (i = 0; i < 10; ++i)
     {
+        if(i<var_counter)
+            uloga("Total records are %d \n", map_get_size(reqmap[i]));
         freeList(req_org_head[i]);
         map_delete(reqmap[i]);
     }
+    
+    evict_node *temp;
+    while(in_mem_head != NULL){
+        temp = in_mem_head;
+        in_mem_head = in_mem_head->next;
+        free(temp);
+    }
+    
 
 }
 
@@ -1509,7 +1555,7 @@ static void request_lbub_predict(int var_id, char *request_name, char *predicted
         req_curr_head[var_id] = req_curr_head[var_id]->next;
         req_chain_length[var_id]++;
 
-        if(req_chain_length[var_id]> 20){
+        if(req_chain_length[var_id]> 5){
     //delete the irrevelant node
             m_node * tmp_del;
             tmp_del = req_org_head[var_id];
@@ -1709,6 +1755,15 @@ void *prefetch_thread(void*attr){
         do{
             pthread_mutex_lock(&odscmutex);
             obj_data_move_to_mem_emulate(pod_list.pref_od[local_cond_index], DSG_ID);
+
+            pthread_mutex_lock(&emutex);
+            node_insert(pod_list.pref_od[local_cond_index]);
+            if(dsg->ls->mem_used > dsg->ls->mem_size){
+                evict_num = 1;
+                pthread_cond_signal(&econd);
+            }
+            pthread_mutex_unlock(&emutex);
+
             //obj_data_move_to_mem(pod_list.pref_od[local_cond_index], DSG_ID);
             pthread_mutex_unlock(&odscmutex);
             pod_list.pref_od[local_cond_index]->so = prefetching;
@@ -1723,9 +1778,23 @@ void *prefetch_thread(void*attr){
     return NULL;
 }
 
-
-
-
+//thread to move data between layers
+void *evict_thread(void*attr){
+    int j = 0;
+    uloga("Starting evict thread \n");
+    while(j==0){
+        pthread_mutex_lock(&emutex);
+        if (evict_num == 0){
+            pthread_cond_wait(&econd, &emutex);
+        }else{ 
+            obj_data_write_to_ssd_emulate(in_mem_head->curr_od, DSG_ID);
+            del_node();
+            evict_num = 0;
+        }
+        pthread_mutex_unlock(&emutex);
+    }
+    return NULL;
+}
 
 static int local_obj_get_desc(const char * var_name, uint64_t *lb, uint64_t *ub, int ver)
 {
@@ -2449,7 +2518,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
      free(str);
  }
 #endif
-    /*
+    
         char * predicted_var = (char*)malloc(sizeof(char)*50);
         char * insert_var = (char*)malloc(sizeof(char)*50);
         insert_n_predict_data(oh->u.o.odsc.name, predicted_var);
@@ -2500,7 +2569,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             //uloga("Current_version %d, Predicted version %d \n", (int)oh->u.o.odsc.version, pred_version);
             local_obj_get_desc(oh->u.o.odsc.name, lb, ub, pred_version);
         }
-        */
+        
 
 
         pthread_mutex_lock(&odscmutex);

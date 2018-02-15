@@ -338,6 +338,7 @@ static void matrix_copy_emulate(struct matrix *a, struct matrix *b) //need to pa
         uint64_t bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
         uint64_t numelem;
         uint64_t actual_time;
+        uint64_t data_accu = 0;
 
     switch(a->num_dims){
         case(1):    
@@ -413,8 +414,13 @@ dim2:                for(a1 = a->mat_view.lb[1], b1 = b->mat_view.lb[1];
 dim1:               numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
                     aloc = aloc1 + a->mat_view.lb[0];
                     bloc = bloc1 + b->mat_view.lb[0];
-                    actual_time = ((a->size_elem * numelem)/3449815040)+0.000079;
-                    sleep(actual_time);
+                    data_accu+=a->size_elem * numelem;
+                    if(data_accu >=32768){
+                        data_accu-= 32768;
+                        actual_time = 32768.0/3449.815040+79;
+                        uloga("Mini copy, Sleep %llu usecs\n", actual_time);
+                        usleep(actual_time);
+                    }
                     memcpy(&A[aloc*a->size_elem], &B[bloc*a->size_elem], (a->size_elem * numelem));     
             if(a->num_dims == 1)    return;
                 }
@@ -1346,7 +1352,9 @@ struct ss_storage *ls_alloc(int max_versions)
         for (i = 0; i < max_versions; i++)
                 INIT_LIST_HEAD(&ls->obj_hash[i]);
         ls->size_hash = max_versions;
-
+        //ls->mem_size = 1073741824; //1GB mem allocated for prefetch
+        ls->mem_size = 65536;
+        ls->mem_used = 0; //1GB mem allocated for prefetch
         return ls;
 }
 
@@ -1864,26 +1872,30 @@ void obj_data_move_to_mem_emulate(struct obj_data *od, int id)
 {   
     if(od->sl == in_ssd){
         //simulate INTEL® SSD DC P4600 SERIES
-        uint64_t actual_time = (obj_data_size(&od->obj_desc)/3449815040)+0.000079;
-        sleep(actual_time);
+        uint64_t actual_time = (float)(obj_data_size(&od->obj_desc))/3449.815040+79;
+        uloga("Move to mem, Sleeping %llu usecs\n", actual_time);
+        usleep(actual_time);
         od->sl = in_memory;
 
     } 
 }
 
+
 void obj_data_copy_to_mem_emulate(struct obj_data *od, int id)
 {   
     if(od->sl == in_ssd){
 
-        uint64_t actual_time = (obj_data_size(&od->obj_desc)/3449815040)+0.000079;
-        sleep(actual_time);
+        uint64_t actual_time = (float)(obj_data_size(&od->obj_desc))/3449.815040+79;
+        uloga("Copy to mem, Sleeping %llu usecs\n", actual_time);
+        usleep(actual_time);
         //od->sl = in_memory;
 
     } 
 }
 void obj_data_write_to_ssd_emulate(struct obj_data *od, int id){
-    uint64_t actual_time = (obj_data_size(&od->obj_desc)/2202009600)+0.000034;
-    sleep(actual_time);
+    uint64_t actual_time = (float)(obj_data_size(&od->obj_desc)/2202.009600)+34;
+    uloga("Write to ssd, Sleeping %llu usecs\n", actual_time);
+    usleep(actual_time);
     od->sl = in_ssd;
 }
 

@@ -101,6 +101,8 @@ struct obj_data {
 struct ss_storage {
         int                     num_obj;
         int                     size_hash;
+        uint64_t    mem_used;
+        uint64_t    mem_size;
         /* List of data objects. */
         struct list_head        obj_hash[1];
 };

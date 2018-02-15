@@ -19,6 +19,11 @@ extern "C" {
 		return t->get_value(pred);
 	}
 
+	int map_get_size(const WrapperMap *test){
+		MapWrap *t = (MapWrap*)test;
+		return t->get_size();
+	}
+
 	void map_delete(WrapperMap *test) {
 		MapWrap *t = (MapWrap *)test;
 
