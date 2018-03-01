@@ -1977,10 +1977,6 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 	if (err != 0)
 		goto err_free;
 
-	rpc_s->peer_tab = gather_node_id(appid, comm);
-		goto err_free;
-	}
-
 	rpc_s->peer_tab = gather_node_id(appid, comm);////DSaaS (num of peer in self-app)
 	if(rpc_s->peer_tab == NULL) {
 		goto err_free;

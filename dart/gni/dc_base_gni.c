@@ -771,37 +771,38 @@ err_out:
 	return err;
 }
 
-/*
 static int dcrpc_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-        struct dart_client *dc = dc_ref_from_rpc(rpc_s);
-	struct node_id *peer;
-	struct msg_buf *msg;
-    int i, num, err = -ENOMEM;
 
-	peer = &dc->peer_tab[0];
+    struct dart_client *dc = dc_ref_from_rpc(rpc_s);
+    struct node_id *peer;
+    struct msg_buf *msg;
+        int i, num, err = -ENOMEM;
 
-	msg = msg_buf_alloc(dc->rpc_s, peer, 0);
-	msg->size = dc->num_sp * sizeof(gni_smsg_attr_t);
-	msg->msg_data = (gni_smsg_attr_t *)malloc(msg->size);
-	memset(msg->msg_data, 0, msg->size);
-	msg->cb = register_completion;
 
-	rpc_mem_info_cache(peer, msg, cmd); 
-	err = rpc_receive_direct(rpc_s, peer, msg);
-    if (err != 0){
-		free(msg);
-        goto err_out;
-	}
-	rpc_mem_info_reset(peer, msg, cmd);
+    peer = &dc->peer_tab[0];
 
-	return 0;
+    msg = msg_buf_alloc(dc->rpc_s, peer, 0);
+    msg->size = dc->num_sp * sizeof(gni_smsg_attr_t);
+    msg->msg_data = (gni_smsg_attr_t *)malloc(msg->size);
+    memset(msg->msg_data, 0, msg->size);
+    msg->cb = register_completion;
+
+    rpc_mem_info_cache(peer, msg, cmd); 
+    err = rpc_receive_direct(rpc_s, peer, msg);
+        if (err != 0){
+        free(msg);
+                goto err_out;
+    }
+    rpc_mem_info_reset(peer, msg, cmd);
+
+    return 0;
 
 err_out:
         printf("'%s()': failed with %d.\n", __func__, err);
         return err;
 }
-*/
+
 static int dc_boot_master(struct dart_client *dc, int appid)
 {
     int i, err = -ENOMEM;
@@ -1104,7 +1105,7 @@ static int dc_boot(struct dart_client *dc, int appid)
 
 struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *comm)
 {
-	struct dart_client *dc;
+	struct dart_client *dc = NULL;
 	struct node_id *peer_list, *peer;
 	int err, i, j;
 	int node_size;
@@ -1138,7 +1139,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 
 	err = dc_boot(dc, appid);
 	if (err < 0) {
-		rpc_server_free(dc->rpc_s, dc->boot);
+		rpc_server_free(dc->rpc_s, dc->comm);
 		goto err_free;
 	}
 

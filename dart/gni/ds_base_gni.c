@@ -518,7 +518,7 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
     return 0;
 
 err_out:
-	ulogaf("(%s): failed. (%d)\n", __func__, err);
+	uloga("(%s): failed. (%d)\n", __func__, err);
 	return err;
 
 }
