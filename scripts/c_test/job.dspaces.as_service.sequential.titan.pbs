@@ -1,0 +1,51 @@
+#!/bin/sh
+#PBS -N test_dspaces_titan 
+#PBS -A csc143titan
+#PBS -q debug 
+#PBS -j oe
+#PBS -l walltime=00:10:00
+#PBS -l nodes=2
+
+cd $PBS_O_WORKDIR
+
+rm -f conf *.log dataspaces.conf
+
+num_ts=20
+num_loop_iter=4
+
+# Prepare config file for dataspaces
+echo "## Config file for DataSpaces
+ndim = 3 
+dims = 128, 64, 64 
+max_versions = ${num_ts} 
+lock_type = 1 
+hash_version = 2 
+" > dataspaces.conf
+
+## Run DataSpaces servers
+aprun -n 2 ./dataspaces_server -s 2 -c 16  &> server.log &
+
+## Test DataSpaces method
+for ((i=1; i<=${num_loop_iter}; i++))
+do
+    echo "iteration $i"
+    ## Give some time for the servers to load and startup
+    while [ ! -f conf ]; do
+        sleep 1s
+    done
+    sleep 5s  # wait server to fill up the conf file
+
+    ## Run writer application
+    aprun -n 16 ./test_writer DATASPACES 16 3 4 4 1 32 16 64 ${num_ts} 1 >> writer.log 2>&1 
+
+
+    ## Give some time for the servers to load and startup
+    while [ ! -f conf ]; do
+        sleep 1s
+    done
+    sleep 5s  # wait server to fill up the conf file
+ 
+    aprun -n 16 ./test_reader DATASPACES 16 3 4 4 1 32 16 64 ${num_ts} 2 >> reader.log 2>&1
+done
+#wait
+

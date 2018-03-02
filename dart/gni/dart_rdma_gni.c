@@ -548,4 +548,75 @@ int dart_rdma_get_memregion_from_cmd(struct dart_rdma_mem_handle *mem_hndl,
 	return 0;
 }
 
+#ifdef DS_HAVE_DIMES_SHMEM
+int dart_rdma_perform_reads_local(int tran_id)
+{
+    if (!drh) {
+        uloga("%s(): dart rdma not init!\n", __func__);
+        return -1;
+    }
+
+    struct dart_rdma_tran *tran = NULL;
+    tran = common_dart_rdma_find_tran(tran_id, dart_rdma_tran_type_read);
+    if (tran == NULL) {
+        return -1;
+    }    
+
+    dart_perform_local_copy(tran); 
+    return 0;
+}
+#endif
+
+struct node_id* dart_rdma_create_remote_peer(struct ptlid_map *ptlmap)
+{
+    struct node_id *peer;
+    gni_return_t status;
+    // Create new node_id on the fly.
+    peer = (struct node_id*)malloc(sizeof(*peer));
+    if (!peer) return NULL;
+
+    peer->ptlmap = *ptlmap;
+    if (peer->ptlmap.id != drh->rpc_s->ptlmap.id) {
+        // Create and bind GNI end point
+        status = GNI_EpCreate(drh->rpc_s->nic_hndl,
+                    drh->rpc_s->src_cq_hndl, &peer->ep_hndl);
+        if (status != GNI_RC_SUCCESS) {
+            uloga("%s(): ERROR! GNI_EpCreate returned %d\n", __func__, status);
+            goto err_out;
+        }
+        status = GNI_EpBind(peer->ep_hndl, peer->ptlmap.nid, peer->ptlmap.id);
+        if (status != GNI_RC_SUCCESS) {
+            uloga("%s(): ERROR! GNI_EpBind returned %d\n", __func__, status);
+            goto err_out;
+        }
+    }
+    return peer;
+ err_out:
+    if (peer) free(peer);
+    return NULL;
+}
+
+int dart_rdma_delete_remote_peer(struct node_id* peer)
+{
+    if (!peer) goto err_out;
+    gni_return_t status;
+    if (peer->ptlmap.id != drh->rpc_s->ptlmap.id) {
+        // Unbind and destroy GNI end point
+        status = GNI_EpUnbind(peer->ep_hndl);
+        if (status != GNI_RC_SUCCESS && status != GNI_RC_NOT_DONE) {
+            uloga("%s(): ERROR! GNI_EpUnbind returned %d\n", __func__, status);
+            goto err_out;
+        }
+        status = GNI_EpDestroy(peer->ep_hndl);
+        if (status != GNI_RC_SUCCESS) {
+            uloga("%s(): ERROR! GNI_EpDestroy returned %d\n", __func__, status);
+            goto err_out;
+        }
+    }
+    free(peer);
+    return 0;    
+ err_out:
+    return -1;
+}
+
 #endif

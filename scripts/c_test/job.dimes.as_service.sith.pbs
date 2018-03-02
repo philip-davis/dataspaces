@@ -1,0 +1,59 @@
+#!/bin/bash
+#PBS -N test_dimes_sith
+#PBS -A csc143 
+#PBS -j oe
+#PBS -q batch
+#PBS -l nodes=4:ppn=32,walltime=00:10:00
+
+cd $PBS_O_WORKDIR
+
+rm -f hostfile*
+rm -f conf* srv.lck* 
+rm -f dataspaces.conf
+
+#nodes=(`sort $PBS_NODEFILE | uniq`)
+nodes=(`cat $PBS_NODEFILE | uniq`)
+
+num_nodes_server=1
+idx=0
+# Put first $num_nodes_server to hostfile-server
+for ((i=0; i < $num_nodes_server; i++))
+do
+    echo "${nodes[$idx]} slots=32 max_slots=32" >> hostfile-server
+    let "idx=idx+1"
+done
+
+num_nodes_app1=2
+num_nodes_app2=1
+# Put the first $num_nodes_app1 nodes to hostfile-app1
+for ((i=0; i < $num_nodes_app1; i++))
+do
+    echo "${nodes[$idx]} slots=32 max_slots=32" >> hostfile-app1
+    let "idx=idx+1"
+done
+
+# Put the next $num_nodes_app2 nodes to hostfile-app2
+for ((i=0; i < $num_nodes_app2; i++))
+do
+    echo "${nodes[$idx]} slots=32 max_slots=32" >> hostfile-app2
+    let "idx=idx+1"
+done
+
+# Write dataspaces config file
+echo "## Config file for DataSpaces
+ndim = 3 
+dims = 256,256,256
+max_versions = 1
+max_readers = 1 
+lock_type = 2
+" > dataspaces.conf
+
+# Start dataspaces servers
+mpirun --hostfile hostfile-server --map-by ppr:4:node -n 4 dataspaces_server -s 4 -c 48 >& server.log &
+
+# Start testing applications
+mpirun --hostfile hostfile-app1 --map-by ppr:16:node -n 32 test_writer DIMES 32 3 2 4 4 128 64 64 20 1 >& writer.log &
+mpirun --hostfile hostfile-app2 --map-by ppr:16:node -n 16 test_reader DIMES 16 3 2 2 4 128 128 64 20 2 >& reader.log
+
+#wait
+

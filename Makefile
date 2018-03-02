@@ -15,6 +15,7 @@
 
 
 
+
 pkgdatadir = $(datadir)/dataspaces
 pkgincludedir = $(includedir)/dataspaces
 pkglibdir = $(libdir)/dataspaces
@@ -34,9 +35,11 @@ POST_UNINSTALL = :
 build_triplet = x86_64-unknown-linux-gnu
 host_triplet = x86_64-unknown-linux-gnu
 subdir = .
-DIST_COMMON = README $(am__configure_deps) $(srcdir)/Makefile.am \
-	$(srcdir)/Makefile.in $(srcdir)/config.h.in \
-	$(top_srcdir)/configure AUTHORS COPYING ChangeLog INSTALL NEWS \
+DIST_COMMON = README $(am__configure_deps) $(dist_bin_SCRIPTS) \
+	$(srcdir)/Makefile.am $(srcdir)/Makefile.in \
+	$(srcdir)/config.h.in $(top_srcdir)/configure \
+	$(top_srcdir)/scripts/dspaces_config.makesrc.in AUTHORS \
+	COPYING ChangeLog INSTALL NEWS config/compile \
 	config/config.guess config/config.sub config/depcomp \
 	config/install-sh config/missing
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -45,6 +48,8 @@ am__aclocal_m4_deps = $(top_srcdir)/config/ac_configure_options.m4 \
 	$(top_srcdir)/config/ac_gni_ptag.m4 \
 	$(top_srcdir)/config/ac_infiniband.m4 \
 	$(top_srcdir)/config/ac_pami.m4 \
+	$(top_srcdir)/config/ac_portals.m4 \
+	$(top_srcdir)/config/ac_tcp_socket.m4 \
 	$(top_srcdir)/config/ac_ugni.m4 \
 	$(top_srcdir)/config/acx_pthread.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
@@ -53,8 +58,31 @@ am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
  configure.lineno config.status.lineno
 mkinstalldirs = $(install_sh) -d
 CONFIG_HEADER = config.h
-CONFIG_CLEAN_FILES =
+CONFIG_CLEAN_FILES = scripts/dspaces_config.makesrc
 CONFIG_CLEAN_VPATH_FILES =
+am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
+am__vpath_adj = case $$p in \
+    $(srcdir)/*) f=`echo "$$p" | sed "s|^$$srcdirstrip/||"`;; \
+    *) f=$$p;; \
+  esac;
+am__strip_dir = f=`echo $$p | sed -e 's|^.*/||'`;
+am__install_max = 40
+am__nobase_strip_setup = \
+  srcdirstrip=`echo "$(srcdir)" | sed 's/[].[^$$\\*|]/\\\\&/g'`
+am__nobase_strip = \
+  for p in $$list; do echo "$$p"; done | sed -e "s|$$srcdirstrip/||"
+am__nobase_list = $(am__nobase_strip_setup); \
+  for p in $$list; do echo "$$p $$p"; done | \
+  sed "s| $$srcdirstrip/| |;"' / .*\//!s/ .*/ ./; s,\( .*\)/[^/]*$$,\1,' | \
+  $(AWK) 'BEGIN { files["."] = "" } { files[$$2] = files[$$2] " " $$1; \
+    if (++n[$$2] == $(am__install_max)) \
+      { print $$2, files[$$2]; n[$$2] = 0; files[$$2] = "" } } \
+    END { for (dir in files) print dir, files[dir] }'
+am__base_list = \
+  sed '$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;s/\n/ /g' | \
+  sed '$$!N;$$!N;$$!N;$$!N;s/\n/ /g'
+am__installdirs = "$(DESTDIR)$(bindir)"
+SCRIPTS = $(dist_bin_SCRIPTS)
 SOURCES =
 DIST_SOURCES =
 RECURSIVE_TARGETS = all-recursive check-recursive dvi-recursive \
@@ -108,15 +136,16 @@ DIST_ARCHIVES = $(distdir).tar.gz
 GZIP_ENV = --best
 distuninstallcheck_listfiles = find . -type f -print
 distcleancheck_listfiles = find . -type f -print
-ACLOCAL = ${SHELL} /home1/yq47/code/dataspace/dataspaces_dmh/config/missing --run aclocal-1.11
-AMTAR = ${SHELL} /home1/yq47/code/dataspace/dataspaces_dmh/config/missing --run tar
-AUTOCONF = ${SHELL} /home1/yq47/code/dataspace/dataspaces_dmh/config/missing --run autoconf
-AUTOHEADER = ${SHELL} /home1/yq47/code/dataspace/dataspaces_dmh/config/missing --run autoheader
-AUTOMAKE = ${SHELL} /home1/yq47/code/dataspace/dataspaces_dmh/config/missing --run automake-1.11
+ACLOCAL = ${SHELL} /cac/u01/yq47/Documents/ds_hybrid_mt/config/missing --run aclocal-1.11
+AMTAR = ${SHELL} /cac/u01/yq47/Documents/ds_hybrid_mt/config/missing --run tar
+AUTOCONF = ${SHELL} /cac/u01/yq47/Documents/ds_hybrid_mt/config/missing --run autoconf
+AUTOHEADER = ${SHELL} /cac/u01/yq47/Documents/ds_hybrid_mt/config/missing --run autoheader
+AUTOMAKE = ${SHELL} /cac/u01/yq47/Documents/ds_hybrid_mt/config/missing --run automake-1.11
 AWK = gawk
 CC = mpicc
 CCDEPMODE = depmode=gcc3
-CFLAGS = -DHAVE_INFINIBAND -lrdmacm
+CFLAGS = -g -O2
+CONFIG_ARG =  'CC=mpicc' 'FC=mpif90' '--enable-dart-tcp' 'LIBS=-lpthread -lm'
 CPP = mpicc -E
 CPPFLAGS = 
 CXX = g++
@@ -129,10 +158,16 @@ DCMF_LDFLAGS =
 DCMF_LIBS = 
 DEFS = -DHAVE_CONFIG_H
 DEPDIR = .deps
-DSPACESLIB_CFLAGS = $  
-DSPACESLIB_CPPFLAGS =   
-DSPACESLIB_LDADD =    -lrdmacm
+DRC_CPPFLAGS = 
+DRC_LIBS = 
+DSPACESLIB_CFLAGS =  
+DSPACESLIB_CPPFLAGS =  
+DSPACESLIB_LDADD =  -lm  
 DSPACESLIB_LDFLAGS =  
+DSPACES_EXT_CFLAGS =  
+DSPACES_EXT_CPPFLAGS = 
+DSPACES_EXT_LDADD =  -lm  
+DSPACES_EXT_LDFLAGS = 
 ECHO_C = 
 ECHO_N = -n
 ECHO_T = 
@@ -140,29 +175,30 @@ EGREP = /bin/grep -E
 EXEEXT = 
 FC = mpif90
 FCFLAGS = -g -O2
+FCLIBS =  -L/usr/mpi/gcc/openmpi-1.10.5a1/lib64 -L/usr/lib/gcc/x86_64-redhat-linux/4.4.7 -L/usr/lib/gcc/x86_64-redhat-linux/4.4.7/../../../../lib64 -L/lib/../lib64 -L/usr/lib/../lib64 -L/usr/lib/gcc/x86_64-redhat-linux/4.4.7/../../.. -lpthread -lgfortranbegin -lgfortran -lm -lmpi_usempi -lmpi_mpifh -lmpi
 GREP = /bin/grep
 INFINIBAND_CFLAGS =  
 INFINIBAND_CPPFLAGS =  
 INFINIBAND_LDFLAGS = 
-INFINIBAND_LIBS =  
+INFINIBAND_LIBS =  -libverbs 
 INSTALL = /usr/bin/install -c
 INSTALL_DATA = ${INSTALL} -m 644
 INSTALL_PROGRAM = ${INSTALL}
 INSTALL_SCRIPT = ${INSTALL}
 INSTALL_STRIP_PROGRAM = $(install_sh) -c -s
-LDFLAGS = 
+LDFLAGS =  
 LIBOBJS = 
-LIBS = 
+LIBS = -lpthread -lm
 LTLIBOBJS = 
-MAKEINFO = ${SHELL} /home1/yq47/code/dataspace/dataspaces_dmh/config/missing --run makeinfo
+MAKEINFO = ${SHELL} /cac/u01/yq47/Documents/ds_hybrid_mt/config/missing --run makeinfo
 MKDIR_P = /bin/mkdir -p
 OBJEXT = o
 PACKAGE = dataspaces
 PACKAGE_BUGREPORT = 
 PACKAGE_NAME = dataspaces
-PACKAGE_STRING = dataspaces 1.4.0
+PACKAGE_STRING = dataspaces 1.6.5
 PACKAGE_TARNAME = dataspaces
-PACKAGE_VERSION = 1.4.0
+PACKAGE_VERSION = 1.6.5
 PAMI_CFLAGS = 
 PAMI_CPPFLAGS = 
 PAMI_LDFLAGS = 
@@ -171,6 +207,13 @@ PATH_SEPARATOR = :
 PMI_CPPFLAGS = 
 PMI_LDLAGS = 
 PMI_LIBS = -lpmi
+PORTALS_CFLAGS = 
+PORTALS_CPPFLAGS = 
+PORTALS_HEADER = 
+PORTALS_LDFLAGS = 
+PORTALS_LIBS = 
+PORTALS_NAL_HEADER = 
+PORTALS_RT_HEADER = 
 PTHREAD_CC = mpicc
 PTHREAD_CFLAGS = 
 PTHREAD_LIBS = 
@@ -178,14 +221,18 @@ RANLIB = ranlib
 SET_MAKE = 
 SHELL = /bin/sh
 STRIP = 
+TCP_SOCKET_CFLAGS = 
+TCP_SOCKET_CPPFLAGS = 
+TCP_SOCKET_LDFLAGS = 
+TCP_SOCKET_LIBS = 
 UGNI_CPPFLAGS = 
 UGNI_LDLAGS = 
 UGNI_LIBS = -lugni
-VERSION = 1.4.0
-abs_builddir = /home1/yq47/code/dataspace/dataspaces_dmh
-abs_srcdir = /home1/yq47/code/dataspace/dataspaces_dmh
-abs_top_builddir = /home1/yq47/code/dataspace/dataspaces_dmh
-abs_top_srcdir = /home1/yq47/code/dataspace/dataspaces_dmh
+VERSION = 1.6.5
+abs_builddir = /cac/u01/yq47/Documents/ds_hybrid_mt
+abs_srcdir = /cac/u01/yq47/Documents/ds_hybrid_mt
+abs_top_builddir = /cac/u01/yq47/Documents/ds_hybrid_mt
+abs_top_srcdir = /cac/u01/yq47/Documents/ds_hybrid_mt
 ac_ct_CC = mpicc
 ac_ct_CXX = g++
 ac_ct_FC = 
@@ -214,7 +261,7 @@ host_vendor = unknown
 htmldir = ${docdir}
 includedir = ${prefix}/include
 infodir = ${datarootdir}/info
-install_sh = ${SHELL} /home1/yq47/code/dataspace/dataspaces_dmh/config/install-sh
+install_sh = ${SHELL} /cac/u01/yq47/Documents/ds_hybrid_mt/config/install-sh
 libdir = ${exec_prefix}/lib
 libexecdir = ${exec_prefix}/libexec
 localedir = ${datarootdir}/locale
@@ -236,6 +283,10 @@ top_builddir = .
 top_srcdir = .
 EXTRA_DIST = autogen.sh scripts
 SUBDIRS = dart src tests
+dist_bin_SCRIPTS = dspaces_config
+do_subst = sed -e 's|%incdir[%]|$(includedir)|g' \
+        -e 's|%libdir[%]|$(libdir)|g'
+
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
 
@@ -291,6 +342,42 @@ $(srcdir)/config.h.in:  $(am__configure_deps)
 
 distclean-hdr:
 	-rm -f config.h stamp-h1
+scripts/dspaces_config.makesrc: $(top_builddir)/config.status $(top_srcdir)/scripts/dspaces_config.makesrc.in
+	cd $(top_builddir) && $(SHELL) ./config.status $@
+install-dist_binSCRIPTS: $(dist_bin_SCRIPTS)
+	@$(NORMAL_INSTALL)
+	test -z "$(bindir)" || $(MKDIR_P) "$(DESTDIR)$(bindir)"
+	@list='$(dist_bin_SCRIPTS)'; test -n "$(bindir)" || list=; \
+	for p in $$list; do \
+	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
+	  if test -f "$$d$$p"; then echo "$$d$$p"; echo "$$p"; else :; fi; \
+	done | \
+	sed -e 'p;s,.*/,,;n' \
+	    -e 'h;s|.*|.|' \
+	    -e 'p;x;s,.*/,,;$(transform)' | sed 'N;N;N;s,\n, ,g' | \
+	$(AWK) 'BEGIN { files["."] = ""; dirs["."] = 1; } \
+	  { d=$$3; if (dirs[d] != 1) { print "d", d; dirs[d] = 1 } \
+	    if ($$2 == $$4) { files[d] = files[d] " " $$1; \
+	      if (++n[d] == $(am__install_max)) { \
+		print "f", d, files[d]; n[d] = 0; files[d] = "" } } \
+	    else { print "f", d "/" $$4, $$1 } } \
+	  END { for (d in files) print "f", d, files[d] }' | \
+	while read type dir files; do \
+	     if test "$$dir" = .; then dir=; else dir=/$$dir; fi; \
+	     test -z "$$files" || { \
+	       echo " $(INSTALL_SCRIPT) $$files '$(DESTDIR)$(bindir)$$dir'"; \
+	       $(INSTALL_SCRIPT) $$files "$(DESTDIR)$(bindir)$$dir" || exit $$?; \
+	     } \
+	; done
+
+uninstall-dist_binSCRIPTS:
+	@$(NORMAL_UNINSTALL)
+	@list='$(dist_bin_SCRIPTS)'; test -n "$(bindir)" || exit 0; \
+	files=`for p in $$list; do echo "$$p"; done | \
+	       sed -e 's,.*/,,;$(transform)'`; \
+	test -n "$$list" || exit 0; \
+	echo " ( cd '$(DESTDIR)$(bindir)' && rm -f" $$files ")"; \
+	cd "$(DESTDIR)$(bindir)" && rm -f $$files
 
 # This directory's subdirectories are mostly independent; you can cd
 # into them and run `make' without going through this Makefile.
@@ -604,9 +691,12 @@ distcleancheck: distclean
 	       exit 1; } >&2
 check-am: all-am
 check: check-recursive
-all-am: Makefile config.h
+all-am: Makefile $(SCRIPTS) config.h
 installdirs: installdirs-recursive
 installdirs-am:
+	for dir in "$(DESTDIR)$(bindir)"; do \
+	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
+	done
 install: install-recursive
 install-exec: install-exec-recursive
 install-data: install-data-recursive
@@ -659,7 +749,7 @@ install-dvi: install-dvi-recursive
 
 install-dvi-am:
 
-install-exec-am:
+install-exec-am: install-dist_binSCRIPTS
 
 install-html: install-html-recursive
 
@@ -699,7 +789,7 @@ ps: ps-recursive
 
 ps-am:
 
-uninstall-am:
+uninstall-am: uninstall-dist_binSCRIPTS
 
 .MAKE: $(RECURSIVE_CLEAN_TARGETS) $(RECURSIVE_TARGETS) all \
 	ctags-recursive install-am install-strip tags-recursive
@@ -711,14 +801,20 @@ uninstall-am:
 	distclean distclean-generic distclean-hdr distclean-tags \
 	distcleancheck distdir distuninstallcheck dvi dvi-am html \
 	html-am info info-am install install-am install-data \
-	install-data-am install-dvi install-dvi-am install-exec \
-	install-exec-am install-html install-html-am install-info \
-	install-info-am install-man install-pdf install-pdf-am \
-	install-ps install-ps-am install-strip installcheck \
-	installcheck-am installdirs installdirs-am maintainer-clean \
-	maintainer-clean-generic mostlyclean mostlyclean-generic pdf \
-	pdf-am ps ps-am tags tags-recursive uninstall uninstall-am
+	install-data-am install-dist_binSCRIPTS install-dvi \
+	install-dvi-am install-exec install-exec-am install-html \
+	install-html-am install-info install-info-am install-man \
+	install-pdf install-pdf-am install-ps install-ps-am \
+	install-strip installcheck installcheck-am installdirs \
+	installdirs-am maintainer-clean maintainer-clean-generic \
+	mostlyclean mostlyclean-generic pdf pdf-am ps ps-am tags \
+	tags-recursive uninstall uninstall-am \
+	uninstall-dist_binSCRIPTS
 
+
+dspaces_config: scripts/dspaces_config.makesrc
+	$(do_subst) < scripts/dspaces_config.makesrc > dspaces_config
+	chmod +x dspaces_config
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

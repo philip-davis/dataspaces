@@ -35,8 +35,9 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = x86_64-unknown-linux-gnu
 host_triplet = x86_64-unknown-linux-gnu
+#am__append_1 = ../include/dimes_interface.h
 subdir = src
-DIST_COMMON = $(include_HEADERS) $(noinst_HEADERS) \
+DIST_COMMON = $(am__include_HEADERS_DIST) $(noinst_HEADERS) \
 	$(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/config/ac_configure_options.m4 \
@@ -44,6 +45,8 @@ am__aclocal_m4_deps = $(top_srcdir)/config/ac_configure_options.m4 \
 	$(top_srcdir)/config/ac_gni_ptag.m4 \
 	$(top_srcdir)/config/ac_infiniband.m4 \
 	$(top_srcdir)/config/ac_pami.m4 \
+	$(top_srcdir)/config/ac_portals.m4 \
+	$(top_srcdir)/config/ac_tcp_socket.m4 \
 	$(top_srcdir)/config/ac_ugni.m4 \
 	$(top_srcdir)/config/acx_pthread.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
@@ -79,24 +82,22 @@ AR = ar
 ARFLAGS = cru
 libdscommon_a_AR = $(AR) $(ARFLAGS)
 libdscommon_a_LIBADD =
-am_libdscommon_a_OBJECTS = bbox.$(OBJEXT) mem_persist.$(OBJEXT) \
-	ss_data.$(OBJEXT) timer.$(OBJEXT) util.$(OBJEXT)
+am_libdscommon_a_OBJECTS = bbox.$(OBJEXT) ss_data.$(OBJEXT) \
+	timer.$(OBJEXT) util.$(OBJEXT)
 libdscommon_a_OBJECTS = $(am_libdscommon_a_OBJECTS)
 libdspaces_a_AR = $(AR) $(ARFLAGS)
 libdspaces_a_LIBADD =
 am_libdspaces_a_OBJECTS = dataspaces.$(OBJEXT) \
 	common_dataspaces.$(OBJEXT) ds_gspace.$(OBJEXT) \
-	ds_cache_prefetch.$(OBJEXT) dc_gspace.$(OBJEXT) \
-	dimes_data.$(OBJEXT) dimes_server.$(OBJEXT) \
-	dimes_client.$(OBJEXT)
+	dc_gspace.$(OBJEXT) dimes_data.$(OBJEXT) \
+	dimes_server.$(OBJEXT) dimes_client.$(OBJEXT)
 libdspaces_a_OBJECTS = $(am_libdspaces_a_OBJECTS)
 libdspacesf_a_AR = $(AR) $(ARFLAGS)
 libdspacesf_a_LIBADD =
 am_libdspacesf_a_OBJECTS = dataspaces_fortran.$(OBJEXT) \
 	common_dataspaces.$(OBJEXT) ds_gspace.$(OBJEXT) \
-	ds_cache_prefetch.$(OBJEXT) dc_gspace.$(OBJEXT) \
-	dimes_data.$(OBJEXT) dimes_server.$(OBJEXT) \
-	dimes_client.$(OBJEXT)
+	dc_gspace.$(OBJEXT) dimes_data.$(OBJEXT) \
+	dimes_server.$(OBJEXT) dimes_client.$(OBJEXT)
 libdspacesf_a_OBJECTS = $(am_libdspacesf_a_OBJECTS)
 DEFAULT_INCLUDES = -I. -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/config/depcomp
@@ -110,19 +111,22 @@ SOURCES = $(libdscommon_a_SOURCES) $(libdspaces_a_SOURCES) \
 	$(libdspacesf_a_SOURCES)
 DIST_SOURCES = $(libdscommon_a_SOURCES) $(libdspaces_a_SOURCES) \
 	$(libdspacesf_a_SOURCES)
+am__include_HEADERS_DIST = ../include/dataspaces.h \
+	../include/dimes_interface.h
 HEADERS = $(include_HEADERS) $(noinst_HEADERS)
 ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
-ACLOCAL = ${SHELL} /home1/yq47/code/dataspace/dataspaces_dmh/config/missing --run aclocal-1.11
-AMTAR = ${SHELL} /home1/yq47/code/dataspace/dataspaces_dmh/config/missing --run tar
-AUTOCONF = ${SHELL} /home1/yq47/code/dataspace/dataspaces_dmh/config/missing --run autoconf
-AUTOHEADER = ${SHELL} /home1/yq47/code/dataspace/dataspaces_dmh/config/missing --run autoheader
-AUTOMAKE = ${SHELL} /home1/yq47/code/dataspace/dataspaces_dmh/config/missing --run automake-1.11
+ACLOCAL = ${SHELL} /cac/u01/yq47/Documents/ds_hybrid_mt/config/missing --run aclocal-1.11
+AMTAR = ${SHELL} /cac/u01/yq47/Documents/ds_hybrid_mt/config/missing --run tar
+AUTOCONF = ${SHELL} /cac/u01/yq47/Documents/ds_hybrid_mt/config/missing --run autoconf
+AUTOHEADER = ${SHELL} /cac/u01/yq47/Documents/ds_hybrid_mt/config/missing --run autoheader
+AUTOMAKE = ${SHELL} /cac/u01/yq47/Documents/ds_hybrid_mt/config/missing --run automake-1.11
 AWK = gawk
 CC = mpicc
 CCDEPMODE = depmode=gcc3
-CFLAGS = -DHAVE_INFINIBAND -lrdmacm
+CFLAGS = -g -O2
+CONFIG_ARG =  'CC=mpicc' 'FC=mpif90' '--enable-dart-tcp' 'LIBS=-lpthread -lm'
 CPP = mpicc -E
 CPPFLAGS = 
 CXX = g++
@@ -135,10 +139,16 @@ DCMF_LDFLAGS =
 DCMF_LIBS = 
 DEFS = -DHAVE_CONFIG_H
 DEPDIR = .deps
-DSPACESLIB_CFLAGS = $  
-DSPACESLIB_CPPFLAGS =   
-DSPACESLIB_LDADD =    -lrdmacm
+DRC_CPPFLAGS = 
+DRC_LIBS = 
+DSPACESLIB_CFLAGS =  
+DSPACESLIB_CPPFLAGS =  
+DSPACESLIB_LDADD =  -lm  
 DSPACESLIB_LDFLAGS =  
+DSPACES_EXT_CFLAGS =  
+DSPACES_EXT_CPPFLAGS = 
+DSPACES_EXT_LDADD =  -lm  
+DSPACES_EXT_LDFLAGS = 
 ECHO_C = 
 ECHO_N = -n
 ECHO_T = 
@@ -146,29 +156,30 @@ EGREP = /bin/grep -E
 EXEEXT = 
 FC = mpif90
 FCFLAGS = -g -O2
+FCLIBS =  -L/usr/mpi/gcc/openmpi-1.10.5a1/lib64 -L/usr/lib/gcc/x86_64-redhat-linux/4.4.7 -L/usr/lib/gcc/x86_64-redhat-linux/4.4.7/../../../../lib64 -L/lib/../lib64 -L/usr/lib/../lib64 -L/usr/lib/gcc/x86_64-redhat-linux/4.4.7/../../.. -lpthread -lgfortranbegin -lgfortran -lm -lmpi_usempi -lmpi_mpifh -lmpi
 GREP = /bin/grep
 INFINIBAND_CFLAGS =  
 INFINIBAND_CPPFLAGS =  
 INFINIBAND_LDFLAGS = 
-INFINIBAND_LIBS =  
+INFINIBAND_LIBS =  -libverbs 
 INSTALL = /usr/bin/install -c
 INSTALL_DATA = ${INSTALL} -m 644
 INSTALL_PROGRAM = ${INSTALL}
 INSTALL_SCRIPT = ${INSTALL}
 INSTALL_STRIP_PROGRAM = $(install_sh) -c -s
-LDFLAGS = 
+LDFLAGS =  
 LIBOBJS = 
-LIBS = 
+LIBS = -lpthread -lm
 LTLIBOBJS = 
-MAKEINFO = ${SHELL} /home1/yq47/code/dataspace/dataspaces_dmh/config/missing --run makeinfo
+MAKEINFO = ${SHELL} /cac/u01/yq47/Documents/ds_hybrid_mt/config/missing --run makeinfo
 MKDIR_P = /bin/mkdir -p
 OBJEXT = o
 PACKAGE = dataspaces
 PACKAGE_BUGREPORT = 
 PACKAGE_NAME = dataspaces
-PACKAGE_STRING = dataspaces 1.4.0
+PACKAGE_STRING = dataspaces 1.6.5
 PACKAGE_TARNAME = dataspaces
-PACKAGE_VERSION = 1.4.0
+PACKAGE_VERSION = 1.6.5
 PAMI_CFLAGS = 
 PAMI_CPPFLAGS = 
 PAMI_LDFLAGS = 
@@ -177,6 +188,13 @@ PATH_SEPARATOR = :
 PMI_CPPFLAGS = 
 PMI_LDLAGS = 
 PMI_LIBS = -lpmi
+PORTALS_CFLAGS = 
+PORTALS_CPPFLAGS = 
+PORTALS_HEADER = 
+PORTALS_LDFLAGS = 
+PORTALS_LIBS = 
+PORTALS_NAL_HEADER = 
+PORTALS_RT_HEADER = 
 PTHREAD_CC = mpicc
 PTHREAD_CFLAGS = 
 PTHREAD_LIBS = 
@@ -184,14 +202,18 @@ RANLIB = ranlib
 SET_MAKE = 
 SHELL = /bin/sh
 STRIP = 
+TCP_SOCKET_CFLAGS = 
+TCP_SOCKET_CPPFLAGS = 
+TCP_SOCKET_LDFLAGS = 
+TCP_SOCKET_LIBS = 
 UGNI_CPPFLAGS = 
 UGNI_LDLAGS = 
 UGNI_LIBS = -lugni
-VERSION = 1.4.0
-abs_builddir = /home1/yq47/code/dataspace/dataspaces_dmh/src
-abs_srcdir = /home1/yq47/code/dataspace/dataspaces_dmh/src
-abs_top_builddir = /home1/yq47/code/dataspace/dataspaces_dmh
-abs_top_srcdir = /home1/yq47/code/dataspace/dataspaces_dmh
+VERSION = 1.6.5
+abs_builddir = /cac/u01/yq47/Documents/ds_hybrid_mt/src
+abs_srcdir = /cac/u01/yq47/Documents/ds_hybrid_mt/src
+abs_top_builddir = /cac/u01/yq47/Documents/ds_hybrid_mt
+abs_top_srcdir = /cac/u01/yq47/Documents/ds_hybrid_mt
 ac_ct_CC = mpicc
 ac_ct_CXX = g++
 ac_ct_FC = 
@@ -220,7 +242,7 @@ host_vendor = unknown
 htmldir = ${docdir}
 includedir = ${prefix}/include
 infodir = ${datarootdir}/info
-install_sh = ${SHELL} /home1/yq47/code/dataspace/dataspaces_dmh/config/install-sh
+install_sh = ${SHELL} /cac/u01/yq47/Documents/ds_hybrid_mt/config/install-sh
 libdir = ${exec_prefix}/lib
 libexecdir = ${exec_prefix}/libexec
 localedir = ${datarootdir}/locale
@@ -245,7 +267,6 @@ AM_CPPFLAGS = -I../dart/ -I../include/ $(DSPACESLIB_CPPFLAGS)
 AM_LDFLAGS = -L../dart -ldart $(DSPACESLIB_LDFLAGS) $(DSPACESLIB_LDADD)
 lib_LIBRARIES = libdscommon.a libdspaces.a libdspacesf.a
 libdscommon_a_SOURCES = bbox.c \
-			mem_persist.c \
 			ss_data.c \
 			timer.c \
 			util.c 
@@ -253,7 +274,6 @@ libdscommon_a_SOURCES = bbox.c \
 libdspaces_a_SOURCES = dataspaces.c \
 			common_dataspaces.c \
 			ds_gspace.c \
-			ds_cache_prefetch.c \
 			dc_gspace.c \
 			dimes_data.c \
 			dimes_server.c \
@@ -262,22 +282,17 @@ libdspaces_a_SOURCES = dataspaces.c \
 libdspacesf_a_SOURCES = dataspaces_fortran.c \
 			common_dataspaces.c \
 			ds_gspace.c \
-			ds_cache_prefetch.c \
 			dc_gspace.c \
 			dimes_data.c \
 			dimes_server.c \
 			dimes_client.c 
 
-include_HEADERS = ../include/dataspaces.h \
-		  ../include/dimes_interface.h
-
+include_HEADERS = ../include/dataspaces.h $(am__append_1)
 noinst_HEADERS = ../include/sfc.h \
 		 ../include/timer.h \
 		 ../include/merge.h \
 		 ../include/queue.h \
 		 ../include/ds_gspace.h \
-		 ../include/ds_cache_prefetch.h \
-		 ../include/mem_persist.h \
 		 ../include/dc_gspace.h \
 		 ../include/ss_data.h \
 		 ../include/bbox.h \
@@ -380,9 +395,7 @@ include ./$(DEPDIR)/dc_gspace.Po
 include ./$(DEPDIR)/dimes_client.Po
 include ./$(DEPDIR)/dimes_data.Po
 include ./$(DEPDIR)/dimes_server.Po
-include ./$(DEPDIR)/ds_cache_prefetch.Po
 include ./$(DEPDIR)/ds_gspace.Po
-include ./$(DEPDIR)/mem_persist.Po
 include ./$(DEPDIR)/ss_data.Po
 include ./$(DEPDIR)/timer.Po
 include ./$(DEPDIR)/util.Po

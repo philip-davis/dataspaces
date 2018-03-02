@@ -915,7 +915,7 @@ int ds_boot(struct dart_server* ds_)
 
 /*****************************************  Public API  *******************************************/
 // Allocate and initialize dart server; the server initializes rpc server. 
-struct dart_server* ds_alloc(int num_sp, int num_cp, void* dart_ref_)
+struct dart_server* ds_alloc(int num_sp, int num_cp, void* dart_ref_, void *comm)
 {
   log(DEBUG, "started; num_sp= " << num_sp << ", num_cp= " << num_cp)
   int err;

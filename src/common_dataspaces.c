@@ -123,14 +123,13 @@ int common_dspaces_init(int num_peers, int appid, void *comm, const char *parame
         p = p->next;
     }*/
 
-
 	dcg = dcg_alloc(num_peers, appid, comm);
 	if (!dcg) {
         uloga("%s(): failed to initialize.\n", __func__);
 		return err;
 	}
 
-	err = dcg_ss_info(dcg, &num_dims); 
+	err = dcg_ss_info(dcg, &num_dims);
 	if (err < 0) {
 		uloga("%s(): failed to obtain space info.\n", __func__);
 		return err;
@@ -220,56 +219,6 @@ void common_dspaces_define_gdim(const char *var_name, int ndim, uint64_t *gdim)
     update_gdim_list(&dcg->gdim_list, var_name, ndim, gdim);
 }
 
-int common_dspaces_hint(const char *var_name,
-	unsigned int ver, int size,
-        int ndim,
-	uint64_t *lb,
-	uint64_t *ub)
-{
-	void *data;
-	if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) {
-		return -EINVAL;
-	}
-
-	struct obj_descriptor odsc = {
-		.version = ver, .owner = -1,
-		.st = st,
-		.size = size,
-		.bb = { .num_dims = ndim, }
-	};
-	memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
-	memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
-
-	memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
-	memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
-
-	struct obj_data *od;
-	int err = -ENOMEM;
-
-	strncpy(odsc.name, var_name, sizeof(odsc.name) - 1);
-	odsc.name[sizeof(odsc.name) - 1] = '\0';
-
-	od = obj_data_alloc_no_data(&odsc, data);
-
-	if (!od) {
-		uloga("'%s()': failed, can not allocate data object.\n",
-			__func__);
-		return -ENOMEM;
-	}
-
-	// set global dimension
-	set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
-		&od->gdim);
-
-        err = dcg_obj_hint(od);//duan
-        obj_data_free(od);
-        if (err < 0 && err != -EAGAIN)
-                uloga("'%s()': failed with %d, can not get data object.\n",
-                __func__, err);
-
-        return err;
-}
-
 int common_dspaces_get(const char *var_name,
 	unsigned int ver, int size,
 	int ndim,
@@ -309,7 +258,14 @@ int common_dspaces_get(const char *var_name,
     // set global dimension
     set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
                          &od->gdim);
-
+#ifdef DEBUG
+/*
+    uloga("%s(): %s default_gdim %llu %llu %llu od->gdim %llu %llu %llu\n",
+        __func__, var_name, dcg->default_gdim.sizes.c[0], dcg->default_gdim.sizes.c[1],
+        dcg->default_gdim.sizes.c[2], od->gdim.sizes.c[0], od->gdim.sizes.c[1],
+        od->gdim.sizes.c[2]);
+*/
+#endif
     err = dcg_obj_get(od);
     obj_data_free(od);
     if (err < 0 && err != -EAGAIN) 
@@ -324,7 +280,69 @@ int common_dspaces_put(const char *var_name,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
-        void *data)
+        const void *data)
+{
+#if defined(DS_HAVE_DSPACES_LOCATION_AWARE_WRITE)
+        return common_dspaces_put_location_aware(var_name, ver, size, ndim,
+                                        lb, ub, data);
+#else
+        if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) {
+            return -EINVAL;
+        }
+
+        struct obj_descriptor odsc = {
+                .version = ver, .owner = -1, 
+                .st = st,
+                .size = size,
+                .bb = {.num_dims = ndim,}
+        };
+
+        memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+        memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+
+        memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
+        memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
+
+        struct obj_data *od;
+        int err = -ENOMEM;
+
+        strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
+        odsc.name[sizeof(odsc.name)-1] = '\0';
+
+        od = obj_data_alloc_with_data(&odsc, data);
+        if (!od) {
+            uloga("'%s()': failed, can not allocate data object.\n", 
+                __func__);
+                return -ENOMEM;
+        }
+
+        // set global dimension
+        set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
+                             &od->gdim); 
+
+        //uloga("%s(Yubo) I am in normal common_dspaces_put\n",__func__);
+
+        err = dcg_obj_put(od);
+        if (err < 0) {
+            obj_data_free(od);
+            uloga("'%s()': failed with %d, can not put data object.\n", 
+                __func__, err);
+            return err;
+        }
+        sync_op_id = err;
+
+        return 0;
+#endif
+}
+
+#ifdef DS_HAVE_DSPACES_LOCATION_AWARE_WRITE
+#define MAX_NUM_PEER_PER_NODE 64
+int common_dspaces_put_location_aware(const char *var_name, 
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        const void *data)
 {
         if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) {
             return -EINVAL;
@@ -359,7 +377,40 @@ int common_dspaces_put(const char *var_name,
         // set global dimension
         set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
                              &od->gdim); 
-        err = dcg_obj_put(od);
+
+/*
+        // find dataspaces servers running on local compute node
+        struct node_id* peer_tab[MAX_NUM_PEER_PER_NODE];
+        int local_server_ids[MAX_NUM_PEER_PER_NODE];
+        int num_space_srv = 0, num_local_peer = 0, num_local_server = 0;
+        num_space_srv = dcg_get_num_space_peers(dcg); //total number of server 
+        rpc_server_find_local_peers(dcg->dc->rpc_s, peer_tab,
+            &num_local_peer, MAX_NUM_PEER_PER_NODE);
+        int i, j;
+        //Why the first few ptlmap.id are server?
+        for (i = j = 0; i < num_local_peer; i++) {
+            if (peer_tab[i]->ptlmap.id < num_space_srv) {
+                local_server_ids[j++] = peer_tab[i]->ptlmap.id;
+                num_local_server++;        
+            }
+        }
+       // uloga("%s(Yubo) I am in common_dspaces_put_location_aware, num_space_srv=%d, num_local_peer=%d, num_local_server=%d\n",\
+            __func__, num_space_srv, num_local_peer, num_local_server);
+*/
+        dcg_find_local_server(dcg, MAX_NUM_PEER_PER_NODE);
+
+        //uloga("%s(Yubo) I am in common_dspaces_put_location_aware, I have num_local_server=%d\n",\
+            __func__, dcg->dc->num_local_server);
+
+
+        if (dcg->dc->num_local_server == 0) {
+            err = dcg_obj_put(od);
+        } else {
+            // select on local server to put the data
+            int server_id = dcg->dc->local_server_ids[dcg->dc->rpc_s->ptlmap.id % dcg->dc->num_local_server];
+            // Application can use dspaces_get() to fetch the data.
+            err = dcg_obj_put_to_server(od, server_id);
+        }
         if (err < 0) {
             obj_data_free(od);
             uloga("'%s()': failed with %d, can not put data object.\n", 
@@ -370,17 +421,22 @@ int common_dspaces_put(const char *var_name,
 
         return 0;
 }
+#endif
 
-
-int common_dspaces_remove (const char *var_name, unsigned int ver)
+int common_dspaces_remove(const char *var_name, unsigned int ver)
 {
 
-	if (!is_dspaces_lib_init()) return 0;
+	if (!is_dspaces_lib_init())  {
+		return 0;
+	}
 
-        int err = dcg_remove(var_name, ver);
-        if (err < 0)
-                ERROR_TRACE_AND_EXIT();
+	int err = dcg_remove(var_name, ver);
+	if (err < 0) {
+		ERROR_TRACE_AND_EXIT();
+	}
+
 	return err;
+
 }
 
 
@@ -570,7 +626,6 @@ void common_dspaces_finalize(void)
 #ifdef DS_HAVE_DIMES
     dimes_client_free();
 #endif
-    
     dcg_free(dcg);
     dcg = 0;
 }
@@ -635,6 +690,84 @@ int common_dimes_put_sync_group(const char *group_name, int step)
     if (!is_dimes_lib_init()) return -EINVAL;
     return dimes_client_put_sync_group(group_name, step);
 }
+
+#ifdef DS_HAVE_DIMES_SHMEM
+int common_dimes_shmem_init(void *comm, size_t shmem_obj_size) {
+    return dimes_client_shmem_init(comm, shmem_obj_size);
+}
+
+int common_dimes_shmem_finalize(unsigned int unlink) {
+    return dimes_client_shmem_finalize(unlink);
+}
+
+int common_dimes_shmem_checkpoint() {
+    return dimes_client_shmem_checkpoint();
+}
+
+int common_dimes_shmem_restart(void *comm) {
+    return dimes_client_shmem_restart(comm);
+}
+
+int common_dimes_shmem_clear() {
+    return dimes_client_shmem_clear_testing();
+}
+
+int common_dimes_shmem_reset_server_state(int server_id)
+{
+    return dimes_client_shmem_reset_server_state(server_id);
+}
+
+int common_dimes_shmem_update_server_state()
+{
+    return dimes_client_shmem_update_server_state();
+}
+
+uint32_t common_dimes_shmem_get_nid()
+{
+    return dimes_client_shmem_get_nid();
+}
+
+int common_dimes_shmem_get_node_rank()
+{
+    return dimes_client_shmem_get_node_rank();
+}
+
+MPI_Comm common_dimes_shmem_get_node_mpi_comm()
+{
+    return dimes_client_shmem_get_node_mpi_comm();
+}
+
+int common_dimes_shmem_put_local(const char *var_name,
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        void *data)
+{
+    if (!is_dimes_lib_init() || !is_ndim_within_bound(ndim)) {
+        return -EINVAL;
+    }
+
+    return dimes_client_shmem_put_local(var_name, ver, size,
+                ndim, lb, ub, data);
+}
+
+int common_dimes_shmem_get_local(const char *var_name,
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        void *data)
+{
+    if (!is_dimes_lib_init() || !is_ndim_within_bound(ndim)) {
+        return -EINVAL;
+    }
+
+    return dimes_client_shmem_get_local(var_name, ver, size,
+                ndim, lb, ub, data);
+}
+#endif
+
 #endif
 
 void common_dspaces_set_mpi_rank_hint(int rank)

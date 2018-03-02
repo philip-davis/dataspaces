@@ -59,10 +59,16 @@ static inline void list_add_before_pos(struct list_head *np, struct list_head *n
 /* Unlink element 'old' from the list it belongs. */
 static inline void list_del(struct list_head *old)
 {
+
+	//printf("Debug #1\n");
 	old->prev->next = old->next;
+	//printf("Debug #2\n");
 	old->next->prev = old->prev;
+	//printf("Debug #3\n");
 	old->next = NULL;
+	//printf("Debug #4\n");
 	old->prev = NULL;
+	//printf("Debug #5\n");
 }
 
 static inline int list_empty( struct list_head *head)

@@ -42,6 +42,10 @@
 #include <stdint.h>
 #include "config.h"
 
+#ifdef DS_HAVE_DIMES_SHMEM
+#include "mpi.h"
+#endif
+
 int common_dspaces_init(int num_peers, int appid, void *comm, const char *parameters);
 int common_dspaces_rank(void);
 int common_dspaces_peers(void);
@@ -58,20 +62,18 @@ int common_dspaces_get (const char *var_name,
         uint64_t *lb, 
         uint64_t *ub,
         void *data);
-
-int common_dspaces_hint (const char *var_name,
-	unsigned int ver, int size,
-	int ndim,
-	uint64_t *lb,
-	uint64_t *ub);
-
 int common_dspaces_put (const char *var_name, 
         unsigned int ver, int size,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
-        void *data);
-
+        const void *data);
+int common_dspaces_put_location_aware (const char *var_name, 
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        const void *data);
 int common_dspaces_remove (const char *var_name, unsigned int ver);
 
 int common_dspaces_put_sync(void);
@@ -96,6 +98,56 @@ int common_dimes_put_sync_all(void);
 int common_dimes_put_set_group(const char *group_name, int step);
 int common_dimes_put_unset_group();
 int common_dimes_put_sync_group(const char *group_name, int step);
+/* 
+    Source code enclosed within macro #ifdef DS_HAVE_DIMES_SHMEM implements
+    the dimes_shmem_xxx APIs that are used by EPSI coupling workflow. dimes_shmem_xxx 
+    APIs enables using shared memory segment to share data between sequentially executing
+    applications on a node. 
+
+    A writer application typically invokes the dimes_shmem_xxx APIs in the following sequence:
+        call dspaces_init
+        call dimes_shmem_init
+        call dimes_shmem_put_local
+        ...
+        call dimes_shmem_checkpoint
+        call dimes_shmem_finalize
+        call dimes_shmem_reset_server_state
+        call dspaces_finalize
+
+    A reader application typically invokes the dimes_shmem_xxx APIs in the following sequence:
+        call dspaces_init
+        call dimes_shmem_restart
+        call dimes_shmem_update_server_state
+        call dimes_shmem_get_local
+        ...
+        call dimes_shmem_finalize
+        call dimes_shmem_reset_server_state
+        call dspaces_finalize  
+*/
+#ifdef DS_HAVE_DIMES_SHMEM
+int common_dimes_shmem_init(void *comm, size_t shmem_obj_size);
+int common_dimes_shmem_finalize(unsigned int unlink);
+int common_dimes_shmem_checkpoint();
+int common_dimes_shmem_restart(void *comm);
+int common_dimes_shmem_clear();
+int common_dimes_shmem_reset_server_state(int server_id);
+int common_dimes_shmem_update_server_state();
+uint32_t common_dimes_shmem_get_nid();
+int common_dimes_shmem_get_node_rank();
+MPI_Comm common_dimes_shmem_get_node_mpi_comm();
+int common_dimes_shmem_put_local(const char *var_name,
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        void *data);
+int common_dimes_shmem_get_local(const char *var_name,
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        void *data);
+#endif
 #endif
 
 void common_dspaces_set_mpi_rank_hint(int rank);

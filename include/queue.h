@@ -56,17 +56,20 @@ static void queue_enqueue(struct queue *q, void *obj)
 {
         struct queue_node *qn;
 
+        
         qn = malloc(sizeof(struct queue_node));
         qn->obj = obj;
         qn->next = NULL;
 
-        if (q->num_elem == 0)
+        if (q->num_elem == 0){
                 q->head = q->tail = qn;
+        }
         else {
                 q->tail->next = qn;
                 q->tail = qn;
         }
         q->num_elem++;
+
 }
 
 static void * queue_dequeue(struct queue *q)

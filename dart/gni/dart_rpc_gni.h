@@ -56,6 +56,10 @@
 #include "config.h"
 #include "list.h"
 
+#ifdef DS_HAVE_DRC
+#include "rdmacred.h"
+#endif
+
 #define RPC_CMD_PAD_BASE_SIZE 296 
 #define RPC_CMD_PAD_SIZE RPC_CMD_PAD_BASE_SIZE+(BBOX_MAX_NDIM-3)*24
 
@@ -214,6 +218,18 @@ enum io_dir {
 	io_count
 };
 
+struct gni_smsg_attr_info {
+	void *rpc_mem;
+        gni_smsg_attr_t   local_smsg_attr;
+
+	int appid;
+
+	gni_smsg_attr_t     *remote_smsg_attr; // temp cache the remote_smsg_attr of same app for another certain app.
+	int tmp_num; // used to track the number of attr in list of *remote_smsg_attr
+
+	struct gni_smsg_attr_info  *next;
+};
+
 struct rpc_cmd {
 	unsigned char			cmd;            // type of command
 	unsigned int			srcnid;		// nid means node address in GNI
@@ -229,6 +245,9 @@ struct rpc_cmd {
 
 struct node_id {
 	struct ptlid_map	ptlmap;
+	int	peer_rank; // the rank for this peer in its application.
+	int	peer_num; // the number of peers in this continous peer_tab/application.
+
 	struct mdh_addr_t	mdh_addr;
 
 	gni_ep_handle_t		ep_hndl;
@@ -264,6 +283,8 @@ struct node_id {
 	// Number of SYS message I received from this peer (Add in Gemini Version)
 	int			sys_msg_recv;
 
+	struct node_id *next;
+
 };
 
 struct msg_buf {
@@ -271,7 +292,7 @@ struct msg_buf {
 
 	struct rpc_cmd		*msg_rpc;
 
-    void            *original_msg_data;
+	void            *original_msg_data;
 	void			*msg_data;
 	size_t			size;
 
@@ -332,21 +353,17 @@ struct rpc_server{
 	gni_cdm_handle_t	cdm_handle;
 	gni_nic_handle_t	nic_hndl;
 
+    struct gni_smsg_attr_info      *attr_info_start;
+
 	gni_cq_handle_t		src_cq_hndl;
 	gni_cq_handle_t		dst_cq_hndl;
-
-	gni_smsg_attr_t		local_smsg_attr;
-	gni_smsg_attr_t		*remote_smsg_attr;
 
 	gni_cq_handle_t		sys_cq_hndl;		// completion queue for system message
 	gni_smsg_attr_t		sys_local_smsg_attr;	// local system message attributes
 
-    gni_mem_handle_t    dart_mem_mdh;
+    	gni_mem_handle_t    dart_mem_mdh;
 
 	unsigned int		*all_nic_addresses;
-
-	void			*sys_mem;
-	void			*rpc_mem;
 
 	struct list_head	rpc_list;
 	int			rr_num;
@@ -367,6 +384,8 @@ struct rpc_server{
 
 	int			num_md_posted;
 	int			num_md_unlinked;
+
+	uint32_t drc_credential_id; //used for DRC
 
 	enum rpc_component	cmp_type;
 
@@ -412,6 +431,10 @@ enum cmd_type {
 	dimes_ss_info_msg,
 	dimes_locate_data_msg,
 	dimes_put_msg,
+#ifdef DS_HAVE_DIMES_SHMEM
+    dimes_shmem_reset_server_msg,
+    dimes_shmem_update_server_msg,
+#endif
 #endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,
@@ -440,21 +463,14 @@ static int default_completion_with_data_callback(struct rpc_server *rpc_s, struc
 }
 
 //------------------
-int rpc_smsg_init(struct rpc_server *rpc_s, int num);
-int rpc_smsg_config(struct rpc_server *rpc_s, struct node_id *peer);
-int rpc_ep_smsg_init(struct rpc_server *rpc_s, struct node_id *peer);
-void rpc_smsg_check(struct rpc_server *rpc_s);
-
-int sys_smsg_init(struct rpc_server *rpc_s, int num);
-int sys_smsg_config(struct rpc_server *rpc_s, struct node_id *peer);
-int sys_ep_smsg_init(struct rpc_server *rpc_s, struct node_id *peer);
-void sys_smsg_check(struct rpc_server *rpc_s);
-
+int rpc_smsg_init(struct rpc_server *rpc_s, struct gni_smsg_attr_info *attr_info, int num);
+int rpc_smsg_config(struct rpc_server *rpc_s, struct gni_smsg_attr_info *attr_info, struct node_id *peer);
+ 
 void peer_smsg_check(struct rpc_server *rpc_s, struct node_id *peer, gni_smsg_attr_t *smsg_attr);
 //------------------
 
 
-struct node_id *gather_node_id(int appid);
+struct node_id *gather_node_id(int appid, void *comm);
 
 int rpc_read_config(struct ptlid_map *ptlmap);
 int rpc_write_config(struct rpc_server *rpc_s);
@@ -462,10 +478,10 @@ int rpc_write_config(struct rpc_server *rpc_s);
 int rpc_read_socket(struct sockaddr_in *address);
 int rpc_write_socket(struct rpc_server *rpc_s);
 
-struct rpc_server *rpc_server_init (int num_buff, int num_rpc_per_buff, void *dart_ref, enum rpc_component cmp_type, int appid);
+struct rpc_server *rpc_server_init (int num_buff, int num_rpc_per_buff, void *dart_ref, enum rpc_component cmp_type, int appid, void *comm);
 void rpc_server_set_peer_ref(struct rpc_server *rpc_s, struct node_id peer_tab[], int num_peers);
 void rpc_server_set_rpc_per_buff(struct rpc_server *rpc_s, int num_rpc_per_buff);
-int rpc_server_free(struct rpc_server *rpc_s);
+int rpc_server_free(struct rpc_server *rpc_s, void *comm);
 struct rpc_server *rpc_server_get_instance(void);
 int rpc_server_get_id(void);
 
@@ -487,5 +503,13 @@ struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *pe
 
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
+
+void rpc_server_find_local_peer(struct rpc_server *rpc_s, struct node_id **peer_tab, int *num_local_peer, int peer_tab_size);
+uint32_t rpc_server_get_nid(struct rpc_server *rpc_s);
+
+int rpc_peer_cleanup(struct rpc_server *rpc_s, struct node_id *peer);
+int rpc_attr_cleanup(struct rpc_server *rpc_s, struct gni_smsg_attr_info *cur_attr_info);
+
+void rpc_peer_check(struct rpc_server *rpc_s);
 
 #endif

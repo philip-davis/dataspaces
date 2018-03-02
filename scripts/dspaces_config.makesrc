@@ -1,0 +1,59 @@
+#!/bin/bash
+
+DSPACES_INC="-I%incdir%   "
+DSPACES_LIB="-L%libdir% -ldspaces -ldscommon -ldart   -lm     -lpthread -lm"
+DSPACES_VER="1.6.5"
+DSPACES_ARG="dataspaces 1.6.5 
+              'CC=mpicc' 'FC=mpif90' '--enable-dart-tcp' 'LIBS=-lpthread -lm'"
+
+OPTIND=1
+
+PRINT_CFLAGS=no
+PRINT_LDFLAGS=no
+PRINT_VERSION=no
+PRINT_ARGUMENTS=no
+
+function usage() {
+    echo "`basename $0` [-c | -l | -v | -V]
+Arguments
+    -c Compiler flags
+    -l Linker flags
+    -v Version flags
+    -v Configure options"
+}
+
+while getopts "h?clvV" opt; do
+    case "$opt" in
+    h|\?)
+        usage
+        exit 0
+        ;;
+    c)
+        PRINT_CFLAGS=yes
+        ;;
+    l)
+        PRINT_LDFLAGS=yes
+        ;;
+    v)
+	PRINT_VERSION=yes
+	;;
+    V)
+        PRINT_ARGUMENTS=yes
+        ;;    
+    esac
+done
+
+if [ "$PRINT_CFLAGS" == "yes" ]; then
+    echo $DSPACES_INC
+fi
+
+if [ "$PRINT_LDFLAGS" == "yes" ]; then
+    echo $DSPACES_LIB
+fi
+
+if [ "$PRINT_VERSION" == "yes" ]; then
+    echo $DSPACES_VER
+fi
+if [ "$PRINT_ARGUMENTS" == "yes" ]; then
+    echo $DSPACES_ARG
+fi

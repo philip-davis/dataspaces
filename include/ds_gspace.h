@@ -36,7 +36,6 @@
 
 #include "dart.h"
 #include "ss_data.h"
-#include "ds_cache_prefetch.h"
 
 struct ds_gspace {
         struct dart_server      *ds;
@@ -65,7 +64,7 @@ struct ds_gspace {
         struct list_head        locks_list;
 };
 
-struct ds_gspace *dsg_alloc(int, int, char *);
+struct ds_gspace *dsg_alloc(int, int, char *, void *);
 void dsg_free(struct ds_gspace *);
 int dsg_process(struct ds_gspace *);
 int dsg_complete(struct ds_gspace *);

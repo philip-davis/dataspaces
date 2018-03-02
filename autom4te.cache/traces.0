@@ -382,6 +382,27 @@ AC_SUBST([am__quote])
 AC_MSG_RESULT([$_am_result])
 rm -f confinc confmf
 ])
+m4trace:/usr/share/aclocal-1.11/minuso.m4:14: -1- AC_DEFUN([AM_PROG_CC_C_O], [AC_REQUIRE([AC_PROG_CC_C_O])dnl
+AC_REQUIRE([AM_AUX_DIR_EXPAND])dnl
+AC_REQUIRE_AUX_FILE([compile])dnl
+# FIXME: we rely on the cache variable name because
+# there is no other way.
+set dummy $CC
+am_cc=`echo $[2] | sed ['s/[^a-zA-Z0-9_]/_/g;s/^[0-9]/_/']`
+eval am_t=\$ac_cv_prog_cc_${am_cc}_c_o
+if test "$am_t" != yes; then
+   # Losing compiler, so override with the script.
+   # FIXME: It is wrong to rewrite CC.
+   # But if we don't then we get into trouble of one sort or another.
+   # A longer-term fix would be to have automake use am__CC in this case,
+   # and then we could set am__CC="\$(top_srcdir)/compile \$(CC)"
+   CC="$am_aux_dir/compile $CC"
+fi
+dnl Make sure AC_PROG_CC is never called again, or it will override our
+dnl setting of CC.
+m4_define([AC_PROG_CC],
+          [m4_fatal([AC_PROG_CC cannot be called after AM_PROG_CC_C_O])])
+])
 m4trace:/usr/share/aclocal-1.11/missing.m4:14: -1- AC_DEFUN([AM_MISSING_PROG], [AC_REQUIRE([AM_MISSING_HAS_RUN])
 $1=${$1-"${am_missing_run}$2"}
 AC_SUBST($1)])
@@ -829,13 +850,18 @@ if test x"$ac_with_infiniband" = xyes; then
 
 
         if test x"$ac_infiniband_hdr_ok" = xno; then
-                AC_CHECK_HEADER(infiniband/verbs.h,
+                AC_CHECK_HEADER(rdma/rdma_verbs.h,
                          [AC_DEFINE(HAVE_IBVERBS_H, 1,
-                                [Define to 1 if you have <infiniband/verbs.h>.])
+                                [Define to 1 if you have <rdma/rdma_verbs.h>.])
                          ac_infiniband_hdr_ok=yes;
                          INFINIBAND_CFLAGS="$INFINIBAND_CFLAGS $EXTRA_CFLAGS";
                          INFINIBAND_CPPFLAGS="$INFINIBAND_CPPFLAGS $EXTRA_CFLAGS"],
                          [ac_infiniband_hdr_ok=no])
+		AC_CHECK_HEADER(rdma/rdma_cma.h,
+			[AC_DEFINE(HAVE_IBCM_H, 1,
+				[Define to 1 if you have <rdma/rdma_cma.h>.])
+			ac_infiniband_hdr_ok=yes;],
+                        [ac_infiniband_hdr_ok=no])
         fi
 
         if test x"$ac_infiniband_hdr_ok" = xno; then
@@ -1368,6 +1394,9 @@ AC_ARG_WITH(ugni-libdir,
 	[ac_ugni_lib_ok=no;
 	 UGNI_LDFLAGS="-I$withval";])
 
+AC_ARG_ENABLE([drc],
+    AS_HELP_STRING([--enable-drc], [Enable Cray Dynamic RDMA Credential]))
+
 PMI_LIBS="-lpmi"
 UGNI_LIBS="-lugni"
 save_CPPFLAGS="$CPPFLAGS"
@@ -1390,13 +1419,33 @@ if test x"$ac_ugni_lib_ok" = xno; then
 	UGNI_LDFLAGS=$(pkg-config cray-ugni --libs-only-L 2>/dev/null)
 fi
 
-CPPFLAGS="$CPPFLAGS $PMI_CPPFLAGS $UGNI_CPPFLAGS"
+if test "x$enable_drc" = "xyes" ; then 
+    have_drc=yes
+    DRC_CPPFLAGS=$(pkg-config cray-drc --cflags 2>/dev/null)
+    DRC_LIBS=$(pkg-config cray-drc --libs 2>/dev/null)
+else
+    AM_CONDITIONAL(HAVE_DRC,false)
+fi
+
+CPPFLAGS="$CPPFLAGS $PMI_CPPFLAGS $UGNI_CPPFLAGS $DRC_CPPFLAGS"
 LDFLAGS="$LDFLAGS $PMI_LDFLAGS $UGNI_LDFLAGS"
-LIBS="$LIBS -lpmi -lugni"
+LIBS="$LIBS -lpmi -lugni $DRC_LIBS"
 
 AC_CHECK_HEADERS(pmi.h, [:], [have_ugni=no])
 AC_CHECK_HEADERS(gni_pub.h, [:], [have_ugni=no])
 
+if test "x$enable_drc" = "xyes" ; then
+    AC_CHECK_HEADERS("rdmacred.h", [:], [have_drc=no])
+    AC_CHECK_LIB([drc], [drc_acquire], [:], [have_drc=no])
+fi
+
+if test "x$have_drc" = "xyes" ; then
+    AM_CONDITIONAL(HAVE_DRC,true)
+    AC_DEFINE([DS_HAVE_DRC], [1],
+        ["uGNI Dynamic Credentials is enabled"])
+elif test "x$have_drc" = "xno" ; then
+    AC_MSG_ERROR([Dynamic Credentials enabled, but not found on this machine.])
+fi
 
 if test "$have_ugni" = no; then
   AM_CONDITIONAL(HAVE_UGNI,false)
@@ -1412,11 +1461,22 @@ AC_SUBST(PMI_LIBS)
 AC_SUBST(UGNI_CPPFLAGS)
 AC_SUBST(UGNI_LDLAGS)
 AC_SUBST(UGNI_LIBS)
+AC_SUBST(DRC_CPPFLAGS)
+AC_SUBST(DRC_LIBS)
+
+if test "${CRAYPE_NETWORK_TARGET}" = aries -o \
+        "${XTPE_NETWORK_TARGET}" = aries; then
+    AM_CONDITIONAL(HAVE_ARIES, true)
+else
+    AM_CONDITIONAL(HAVE_ARIES, false)
+fi
 
 # Finally, execute ACTION-IF-FOUND/ACTION-IF-NOT-FOUND:
 if test -z "${HAVE_UGNI_TRUE}"; then
         ifelse([$1],,[AC_DEFINE(HAVE_UGNI,1,[Define if you have the Gemini.])],[$1])
-        :
+        if test -z "${HAVE_ARIES_TRUE}" ; then
+            AC_DEFINE(DS_HAVE_ARIES, 1, [uGNI-Aries is enabled])
+        fi         
 else
         $2
         :
@@ -1815,343 +1875,458 @@ m4trace:configure.ac:9: -1- m4_pattern_allow([^LIBS$])
 m4trace:configure.ac:9: -1- m4_pattern_allow([^FC$])
 m4trace:configure.ac:9: -1- m4_pattern_allow([^ac_ct_FC$])
 m4trace:configure.ac:10: -1- m4_pattern_allow([^RANLIB$])
-m4trace:configure.ac:17: -1- AC_PORTALS
-m4trace:configure.ac:17: -1- _m4_warn([obsolete], [The macro `AC_LANG_SAVE' is obsolete.
-You should run autoupdate.], [../../lib/autoconf/lang.m4:148: AC_LANG_SAVE is expanded from...
-config/ac_portals.m4:22: AC_PORTALS is expanded from...
-configure.ac:17: the top level])
-m4trace:configure.ac:17: -1- _m4_warn([obsolete], [The macro `AC_LANG_C' is obsolete.
-You should run autoupdate.], [../../lib/autoconf/c.m4:95: AC_LANG_C is expanded from...
-config/ac_portals.m4:22: AC_PORTALS is expanded from...
-configure.ac:17: the top level])
-m4trace:configure.ac:17: -1- AM_CONDITIONAL([HAVE_PORTALS], [true])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^HAVE_PORTALS_TRUE$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^HAVE_PORTALS_FALSE$])
-m4trace:configure.ac:17: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_TRUE])
-m4trace:configure.ac:17: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_FALSE])
-m4trace:configure.ac:17: -1- AM_CONDITIONAL([NEED_DARWIN_SINGLE_MODULE], [false])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^NEED_DARWIN_SINGLE_MODULE_TRUE$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^NEED_DARWIN_SINGLE_MODULE_FALSE$])
-m4trace:configure.ac:17: -1- _AM_SUBST_NOTMAKE([NEED_DARWIN_SINGLE_MODULE_TRUE])
-m4trace:configure.ac:17: -1- _AM_SUBST_NOTMAKE([NEED_DARWIN_SINGLE_MODULE_FALSE])
-m4trace:configure.ac:17: -1- AM_CONDITIONAL([HAVE_PORTALS], [false])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^HAVE_PORTALS_TRUE$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^HAVE_PORTALS_FALSE$])
-m4trace:configure.ac:17: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_TRUE])
-m4trace:configure.ac:17: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_FALSE])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^CPP$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^CPPFLAGS$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^CPP$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^GREP$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^EGREP$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^STDC_HEADERS$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^HAVE_PORTALS3_H$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^HAVE_PORTALS_PORTALS3_H$])
-m4trace:configure.ac:17: -1- AM_CONDITIONAL([NEED_DARWIN_SINGLE_MODULE], [true])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^NEED_DARWIN_SINGLE_MODULE_TRUE$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^NEED_DARWIN_SINGLE_MODULE_FALSE$])
-m4trace:configure.ac:17: -1- _AM_SUBST_NOTMAKE([NEED_DARWIN_SINGLE_MODULE_TRUE])
-m4trace:configure.ac:17: -1- _AM_SUBST_NOTMAKE([NEED_DARWIN_SINGLE_MODULE_FALSE])
-m4trace:configure.ac:17: -1- AM_CONDITIONAL([HAVE_PORTALS], [false])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^HAVE_PORTALS_TRUE$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^HAVE_PORTALS_FALSE$])
-m4trace:configure.ac:17: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_TRUE])
-m4trace:configure.ac:17: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_FALSE])
-m4trace:configure.ac:17: -1- AM_CONDITIONAL([HAVE_PORTALS], [true])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^HAVE_PORTALS_TRUE$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^HAVE_PORTALS_FALSE$])
-m4trace:configure.ac:17: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_TRUE])
-m4trace:configure.ac:17: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_FALSE])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^HAVE_PTL_NO_ACK_REQ$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^HAVE_PTL_NOACK_REQ$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^HAVE_PTL_TIME_T$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^HAVE_PTL_EQ_HANDLER_T$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^HAVE_CRAY_PORTALS$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^PORTALS_CPPFLAGS$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^PORTALS_CFLAGS$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^PORTALS_LDFLAGS$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^PORTALS_LIBS$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^PORTALS_HEADER$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^PORTALS_NAL_HEADER$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^PORTALS_RT_HEADER$])
-m4trace:configure.ac:17: -1- m4_pattern_allow([^HAVE_PORTALS$])
-m4trace:configure.ac:17: -1- _m4_warn([obsolete], [The macro `AC_LANG_RESTORE' is obsolete.
-You should run autoupdate.], [../../lib/autoconf/lang.m4:157: AC_LANG_RESTORE is expanded from...
-config/ac_portals.m4:22: AC_PORTALS is expanded from...
-configure.ac:17: the top level])
-m4trace:configure.ac:18: -1- AC_INFINIBAND
-m4trace:configure.ac:18: -1- m4_pattern_allow([^build$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^build_cpu$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^build_vendor$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^build_os$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^host$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^host_cpu$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^host_vendor$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^host_os$])
-m4trace:configure.ac:18: -1- ACX_PTHREAD
-m4trace:configure.ac:18: -1- _m4_warn([obsolete], [The macro `AC_LANG_SAVE' is obsolete.
-You should run autoupdate.], [../../lib/autoconf/lang.m4:148: AC_LANG_SAVE is expanded from...
-config/acx_pthread.m4:56: ACX_PTHREAD is expanded from...
-config/ac_infiniband.m4:22: AC_INFINIBAND is expanded from...
-configure.ac:18: the top level])
-m4trace:configure.ac:18: -1- _m4_warn([obsolete], [The macro `AC_LANG_C' is obsolete.
-You should run autoupdate.], [../../lib/autoconf/c.m4:95: AC_LANG_C is expanded from...
-config/acx_pthread.m4:56: ACX_PTHREAD is expanded from...
-config/ac_infiniband.m4:22: AC_INFINIBAND is expanded from...
-configure.ac:18: the top level])
-m4trace:configure.ac:18: -1- _m4_warn([obsolete], [The macro `AC_TRY_LINK' is obsolete.
-You should run autoupdate.], [../../lib/autoconf/general.m4:2527: AC_TRY_LINK is expanded from...
-config/acx_pthread.m4:56: ACX_PTHREAD is expanded from...
-config/ac_infiniband.m4:22: AC_INFINIBAND is expanded from...
-configure.ac:18: the top level])
-m4trace:configure.ac:18: -1- _m4_warn([obsolete], [The macro `AC_TRY_LINK' is obsolete.
-You should run autoupdate.], [../../lib/autoconf/general.m4:2527: AC_TRY_LINK is expanded from...
-config/acx_pthread.m4:56: ACX_PTHREAD is expanded from...
-config/ac_infiniband.m4:22: AC_INFINIBAND is expanded from...
-configure.ac:18: the top level])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^PTHREAD_CREATE_JOINABLE$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^PTHREAD_CC$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^PTHREAD_LIBS$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^PTHREAD_CFLAGS$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^PTHREAD_CC$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^HAVE_PTHREAD$])
-m4trace:configure.ac:18: -2- m4_pattern_allow([^HAVE_PTHREAD$])
-m4trace:configure.ac:18: -1- _m4_warn([obsolete], [The macro `AC_LANG_RESTORE' is obsolete.
-You should run autoupdate.], [../../lib/autoconf/lang.m4:157: AC_LANG_RESTORE is expanded from...
-config/acx_pthread.m4:56: ACX_PTHREAD is expanded from...
-config/ac_infiniband.m4:22: AC_INFINIBAND is expanded from...
-configure.ac:18: the top level])
-m4trace:configure.ac:18: -1- _m4_warn([obsolete], [The macro `AC_LANG_SAVE' is obsolete.
-You should run autoupdate.], [../../lib/autoconf/lang.m4:148: AC_LANG_SAVE is expanded from...
-config/ac_infiniband.m4:22: AC_INFINIBAND is expanded from...
-configure.ac:18: the top level])
-m4trace:configure.ac:18: -1- _m4_warn([obsolete], [The macro `AC_LANG_C' is obsolete.
-You should run autoupdate.], [../../lib/autoconf/c.m4:95: AC_LANG_C is expanded from...
-config/ac_infiniband.m4:22: AC_INFINIBAND is expanded from...
-configure.ac:18: the top level])
-m4trace:configure.ac:18: -1- AM_CONDITIONAL([HAVE_INFINIBAND], [test x$ac_with_infiniband = xyes])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^HAVE_INFINIBAND_TRUE$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^HAVE_INFINIBAND_FALSE$])
-m4trace:configure.ac:18: -1- _AM_SUBST_NOTMAKE([HAVE_INFINIBAND_TRUE])
-m4trace:configure.ac:18: -1- _AM_SUBST_NOTMAKE([HAVE_INFINIBAND_FALSE])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^HAVE_IBVERBS_H$])
-m4trace:configure.ac:18: -1- AM_CONDITIONAL([HAVE_INFINIBAND], [false])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^HAVE_INFINIBAND_TRUE$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^HAVE_INFINIBAND_FALSE$])
-m4trace:configure.ac:18: -1- _AM_SUBST_NOTMAKE([HAVE_INFINIBAND_TRUE])
-m4trace:configure.ac:18: -1- _AM_SUBST_NOTMAKE([HAVE_INFINIBAND_FALSE])
-m4trace:configure.ac:18: -1- AM_CONDITIONAL([HAVE_INFINIBAND], [true])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^HAVE_INFINIBAND_TRUE$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^HAVE_INFINIBAND_FALSE$])
-m4trace:configure.ac:18: -1- _AM_SUBST_NOTMAKE([HAVE_INFINIBAND_TRUE])
-m4trace:configure.ac:18: -1- _AM_SUBST_NOTMAKE([HAVE_INFINIBAND_FALSE])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^INFINIBAND_CPPFLAGS$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^INFINIBAND_CFLAGS$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^INFINIBAND_LDFLAGS$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^INFINIBAND_LIBS$])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^HAVE_INFINIBAND$])
-m4trace:configure.ac:18: -1- _m4_warn([obsolete], [The macro `AC_LANG_RESTORE' is obsolete.
-You should run autoupdate.], [../../lib/autoconf/lang.m4:157: AC_LANG_RESTORE is expanded from...
-config/ac_infiniband.m4:22: AC_INFINIBAND is expanded from...
-configure.ac:18: the top level])
-m4trace:configure.ac:19: -1- AC_DCMF
-m4trace:configure.ac:19: -1- AM_CONDITIONAL([HAVE_DCMF], [true])
-m4trace:configure.ac:19: -1- m4_pattern_allow([^HAVE_DCMF_TRUE$])
-m4trace:configure.ac:19: -1- m4_pattern_allow([^HAVE_DCMF_FALSE$])
-m4trace:configure.ac:19: -1- _AM_SUBST_NOTMAKE([HAVE_DCMF_TRUE])
-m4trace:configure.ac:19: -1- _AM_SUBST_NOTMAKE([HAVE_DCMF_FALSE])
-m4trace:configure.ac:19: -1- AM_CONDITIONAL([HAVE_DCMF], [false])
-m4trace:configure.ac:19: -1- m4_pattern_allow([^HAVE_DCMF_TRUE$])
-m4trace:configure.ac:19: -1- m4_pattern_allow([^HAVE_DCMF_FALSE$])
-m4trace:configure.ac:19: -1- _AM_SUBST_NOTMAKE([HAVE_DCMF_TRUE])
-m4trace:configure.ac:19: -1- _AM_SUBST_NOTMAKE([HAVE_DCMF_FALSE])
-m4trace:configure.ac:19: -1- _m4_warn([obsolete], [The macro `AC_TRY_LINK' is obsolete.
-You should run autoupdate.], [../../lib/autoconf/general.m4:2527: AC_TRY_LINK is expanded from...
-config/ac_dcmf.m4:7: AC_DCMF is expanded from...
-configure.ac:19: the top level])
-m4trace:configure.ac:19: -1- AM_CONDITIONAL([HAVE_DCMF], [false])
-m4trace:configure.ac:19: -1- m4_pattern_allow([^HAVE_DCMF_TRUE$])
-m4trace:configure.ac:19: -1- m4_pattern_allow([^HAVE_DCMF_FALSE$])
-m4trace:configure.ac:19: -1- _AM_SUBST_NOTMAKE([HAVE_DCMF_TRUE])
-m4trace:configure.ac:19: -1- _AM_SUBST_NOTMAKE([HAVE_DCMF_FALSE])
-m4trace:configure.ac:19: -1- m4_pattern_allow([^DCMF_CFLAGS$])
-m4trace:configure.ac:19: -1- m4_pattern_allow([^DCMF_CPPFLAGS$])
-m4trace:configure.ac:19: -1- m4_pattern_allow([^DCMF_LDFLAGS$])
-m4trace:configure.ac:19: -1- m4_pattern_allow([^DCMF_LIBS$])
-m4trace:configure.ac:19: -1- m4_pattern_allow([^HAVE_DCMF$])
-m4trace:configure.ac:20: -1- AC_UGNI
+m4trace:configure.ac:11: -1- AM_PROG_CC_C_O
+m4trace:configure.ac:11: -1- m4_pattern_allow([^NO_MINUS_C_MINUS_O$])
+m4trace:configure.ac:13: -1- m4_pattern_allow([^FCLIBS$])
+m4trace:configure.ac:13: -1- m4_pattern_allow([^FC_DUMMY_MAIN$])
+m4trace:configure.ac:13: -1- m4_pattern_allow([^FC_DUMMY_MAIN_EQ_F77$])
+m4trace:configure.ac:13: -1- m4_pattern_allow([^FC_FUNC$])
+m4trace:configure.ac:13: -1- m4_pattern_allow([^FC_FUNC_$])
+m4trace:configure.ac:13: -1- m4_pattern_allow([^FC_FUNC$])
+m4trace:configure.ac:13: -1- m4_pattern_allow([^FC_FUNC_$])
+m4trace:configure.ac:13: -1- m4_pattern_allow([^FC_FUNC$])
+m4trace:configure.ac:13: -1- m4_pattern_allow([^FC_FUNC_$])
+m4trace:configure.ac:13: -1- m4_pattern_allow([^FC_FUNC$])
+m4trace:configure.ac:13: -1- m4_pattern_allow([^FC_FUNC_$])
+m4trace:configure.ac:13: -1- m4_pattern_allow([^FC_FUNC$])
+m4trace:configure.ac:13: -1- m4_pattern_allow([^FC_FUNC_$])
+m4trace:configure.ac:13: -1- m4_pattern_allow([^FC_FUNC$])
+m4trace:configure.ac:13: -1- m4_pattern_allow([^FC_FUNC_$])
+m4trace:configure.ac:13: -1- m4_pattern_allow([^FC_FUNC$])
+m4trace:configure.ac:13: -1- m4_pattern_allow([^FC_FUNC_$])
+m4trace:configure.ac:13: -1- m4_pattern_allow([^FC_FUNC$])
+m4trace:configure.ac:13: -1- m4_pattern_allow([^FC_FUNC_$])
+m4trace:configure.ac:20: -1- AC_PORTALS
 m4trace:configure.ac:20: -1- _m4_warn([obsolete], [The macro `AC_LANG_SAVE' is obsolete.
 You should run autoupdate.], [../../lib/autoconf/lang.m4:148: AC_LANG_SAVE is expanded from...
-config/ac_ugni.m4:7: AC_UGNI is expanded from...
+config/ac_portals.m4:22: AC_PORTALS is expanded from...
 configure.ac:20: the top level])
 m4trace:configure.ac:20: -1- _m4_warn([obsolete], [The macro `AC_LANG_C' is obsolete.
 You should run autoupdate.], [../../lib/autoconf/c.m4:95: AC_LANG_C is expanded from...
-config/ac_ugni.m4:7: AC_UGNI is expanded from...
+config/ac_portals.m4:22: AC_PORTALS is expanded from...
 configure.ac:20: the top level])
-m4trace:configure.ac:20: -1- AM_CONDITIONAL([HAVE_UGNI], [true])
-m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_UGNI_TRUE$])
-m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_UGNI_FALSE$])
-m4trace:configure.ac:20: -1- _AM_SUBST_NOTMAKE([HAVE_UGNI_TRUE])
-m4trace:configure.ac:20: -1- _AM_SUBST_NOTMAKE([HAVE_UGNI_FALSE])
-m4trace:configure.ac:20: -1- AM_CONDITIONAL([HAVE_UGNI], [false])
-m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_UGNI_TRUE$])
-m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_UGNI_FALSE$])
-m4trace:configure.ac:20: -1- _AM_SUBST_NOTMAKE([HAVE_UGNI_TRUE])
-m4trace:configure.ac:20: -1- _AM_SUBST_NOTMAKE([HAVE_UGNI_FALSE])
-m4trace:configure.ac:20: -1- m4_pattern_allow([^PMI_CPPFLAGS$])
-m4trace:configure.ac:20: -1- m4_pattern_allow([^PMI_LDLAGS$])
-m4trace:configure.ac:20: -1- m4_pattern_allow([^PMI_LIBS$])
-m4trace:configure.ac:20: -1- m4_pattern_allow([^UGNI_CPPFLAGS$])
-m4trace:configure.ac:20: -1- m4_pattern_allow([^UGNI_LDLAGS$])
-m4trace:configure.ac:20: -1- m4_pattern_allow([^UGNI_LIBS$])
-m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_UGNI$])
-m4trace:configure.ac:21: -1- AC_GNI_PTAG
-m4trace:configure.ac:21: -1- m4_pattern_allow([^GNI_PTAG$])
-m4trace:configure.ac:21: -1- m4_pattern_allow([^GNI_COOKIE$])
-m4trace:configure.ac:22: -1- AC_PAMI
-m4trace:configure.ac:22: -1- AM_CONDITIONAL([HAVE_PAMI], [true])
-m4trace:configure.ac:22: -1- m4_pattern_allow([^HAVE_PAMI_TRUE$])
-m4trace:configure.ac:22: -1- m4_pattern_allow([^HAVE_PAMI_FALSE$])
-m4trace:configure.ac:22: -1- _AM_SUBST_NOTMAKE([HAVE_PAMI_TRUE])
-m4trace:configure.ac:22: -1- _AM_SUBST_NOTMAKE([HAVE_PAMI_FALSE])
-m4trace:configure.ac:22: -1- AM_CONDITIONAL([HAVE_PAMI], [false])
-m4trace:configure.ac:22: -1- m4_pattern_allow([^HAVE_PAMI_TRUE$])
-m4trace:configure.ac:22: -1- m4_pattern_allow([^HAVE_PAMI_FALSE$])
-m4trace:configure.ac:22: -1- _AM_SUBST_NOTMAKE([HAVE_PAMI_TRUE])
-m4trace:configure.ac:22: -1- _AM_SUBST_NOTMAKE([HAVE_PAMI_FALSE])
+m4trace:configure.ac:20: -1- AM_CONDITIONAL([HAVE_PORTALS], [true])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_PORTALS_TRUE$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_PORTALS_FALSE$])
+m4trace:configure.ac:20: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_TRUE])
+m4trace:configure.ac:20: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_FALSE])
+m4trace:configure.ac:20: -1- AM_CONDITIONAL([NEED_DARWIN_SINGLE_MODULE], [false])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^NEED_DARWIN_SINGLE_MODULE_TRUE$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^NEED_DARWIN_SINGLE_MODULE_FALSE$])
+m4trace:configure.ac:20: -1- _AM_SUBST_NOTMAKE([NEED_DARWIN_SINGLE_MODULE_TRUE])
+m4trace:configure.ac:20: -1- _AM_SUBST_NOTMAKE([NEED_DARWIN_SINGLE_MODULE_FALSE])
+m4trace:configure.ac:20: -1- AM_CONDITIONAL([HAVE_PORTALS], [false])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_PORTALS_TRUE$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_PORTALS_FALSE$])
+m4trace:configure.ac:20: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_TRUE])
+m4trace:configure.ac:20: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_FALSE])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^CPP$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^CPPFLAGS$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^CPP$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^GREP$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^EGREP$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^STDC_HEADERS$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_PORTALS3_H$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_PORTALS_PORTALS3_H$])
+m4trace:configure.ac:20: -1- AM_CONDITIONAL([NEED_DARWIN_SINGLE_MODULE], [true])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^NEED_DARWIN_SINGLE_MODULE_TRUE$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^NEED_DARWIN_SINGLE_MODULE_FALSE$])
+m4trace:configure.ac:20: -1- _AM_SUBST_NOTMAKE([NEED_DARWIN_SINGLE_MODULE_TRUE])
+m4trace:configure.ac:20: -1- _AM_SUBST_NOTMAKE([NEED_DARWIN_SINGLE_MODULE_FALSE])
+m4trace:configure.ac:20: -1- AM_CONDITIONAL([HAVE_PORTALS], [false])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_PORTALS_TRUE$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_PORTALS_FALSE$])
+m4trace:configure.ac:20: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_TRUE])
+m4trace:configure.ac:20: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_FALSE])
+m4trace:configure.ac:20: -1- AM_CONDITIONAL([HAVE_PORTALS], [true])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_PORTALS_TRUE$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_PORTALS_FALSE$])
+m4trace:configure.ac:20: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_TRUE])
+m4trace:configure.ac:20: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_FALSE])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_PTL_NO_ACK_REQ$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_PTL_NOACK_REQ$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_PTL_TIME_T$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_PTL_EQ_HANDLER_T$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_CRAY_PORTALS$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^PORTALS_CPPFLAGS$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^PORTALS_CFLAGS$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^PORTALS_LDFLAGS$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^PORTALS_LIBS$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^PORTALS_HEADER$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^PORTALS_NAL_HEADER$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^PORTALS_RT_HEADER$])
+m4trace:configure.ac:20: -1- m4_pattern_allow([^HAVE_PORTALS$])
+m4trace:configure.ac:20: -1- _m4_warn([obsolete], [The macro `AC_LANG_RESTORE' is obsolete.
+You should run autoupdate.], [../../lib/autoconf/lang.m4:157: AC_LANG_RESTORE is expanded from...
+config/ac_portals.m4:22: AC_PORTALS is expanded from...
+configure.ac:20: the top level])
+m4trace:configure.ac:21: -1- AC_INFINIBAND
+m4trace:configure.ac:21: -1- m4_pattern_allow([^build$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^build_cpu$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^build_vendor$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^build_os$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^host$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^host_cpu$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^host_vendor$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^host_os$])
+m4trace:configure.ac:21: -1- ACX_PTHREAD
+m4trace:configure.ac:21: -1- _m4_warn([obsolete], [The macro `AC_LANG_SAVE' is obsolete.
+You should run autoupdate.], [../../lib/autoconf/lang.m4:148: AC_LANG_SAVE is expanded from...
+config/acx_pthread.m4:56: ACX_PTHREAD is expanded from...
+config/ac_infiniband.m4:22: AC_INFINIBAND is expanded from...
+configure.ac:21: the top level])
+m4trace:configure.ac:21: -1- _m4_warn([obsolete], [The macro `AC_LANG_C' is obsolete.
+You should run autoupdate.], [../../lib/autoconf/c.m4:95: AC_LANG_C is expanded from...
+config/acx_pthread.m4:56: ACX_PTHREAD is expanded from...
+config/ac_infiniband.m4:22: AC_INFINIBAND is expanded from...
+configure.ac:21: the top level])
+m4trace:configure.ac:21: -1- _m4_warn([obsolete], [The macro `AC_TRY_LINK' is obsolete.
+You should run autoupdate.], [../../lib/autoconf/general.m4:2527: AC_TRY_LINK is expanded from...
+config/acx_pthread.m4:56: ACX_PTHREAD is expanded from...
+config/ac_infiniband.m4:22: AC_INFINIBAND is expanded from...
+configure.ac:21: the top level])
+m4trace:configure.ac:21: -1- _m4_warn([obsolete], [The macro `AC_TRY_LINK' is obsolete.
+You should run autoupdate.], [../../lib/autoconf/general.m4:2527: AC_TRY_LINK is expanded from...
+config/acx_pthread.m4:56: ACX_PTHREAD is expanded from...
+config/ac_infiniband.m4:22: AC_INFINIBAND is expanded from...
+configure.ac:21: the top level])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^PTHREAD_CREATE_JOINABLE$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^PTHREAD_CC$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^PTHREAD_LIBS$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^PTHREAD_CFLAGS$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^PTHREAD_CC$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^HAVE_PTHREAD$])
+m4trace:configure.ac:21: -2- m4_pattern_allow([^HAVE_PTHREAD$])
+m4trace:configure.ac:21: -1- _m4_warn([obsolete], [The macro `AC_LANG_RESTORE' is obsolete.
+You should run autoupdate.], [../../lib/autoconf/lang.m4:157: AC_LANG_RESTORE is expanded from...
+config/acx_pthread.m4:56: ACX_PTHREAD is expanded from...
+config/ac_infiniband.m4:22: AC_INFINIBAND is expanded from...
+configure.ac:21: the top level])
+m4trace:configure.ac:21: -1- _m4_warn([obsolete], [The macro `AC_LANG_SAVE' is obsolete.
+You should run autoupdate.], [../../lib/autoconf/lang.m4:148: AC_LANG_SAVE is expanded from...
+config/ac_infiniband.m4:22: AC_INFINIBAND is expanded from...
+configure.ac:21: the top level])
+m4trace:configure.ac:21: -1- _m4_warn([obsolete], [The macro `AC_LANG_C' is obsolete.
+You should run autoupdate.], [../../lib/autoconf/c.m4:95: AC_LANG_C is expanded from...
+config/ac_infiniband.m4:22: AC_INFINIBAND is expanded from...
+configure.ac:21: the top level])
+m4trace:configure.ac:21: -1- AM_CONDITIONAL([HAVE_INFINIBAND], [test x$ac_with_infiniband = xyes])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^HAVE_INFINIBAND_TRUE$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^HAVE_INFINIBAND_FALSE$])
+m4trace:configure.ac:21: -1- _AM_SUBST_NOTMAKE([HAVE_INFINIBAND_TRUE])
+m4trace:configure.ac:21: -1- _AM_SUBST_NOTMAKE([HAVE_INFINIBAND_FALSE])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^HAVE_IBVERBS_H$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^HAVE_IBCM_H$])
+m4trace:configure.ac:21: -1- AM_CONDITIONAL([HAVE_INFINIBAND], [false])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^HAVE_INFINIBAND_TRUE$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^HAVE_INFINIBAND_FALSE$])
+m4trace:configure.ac:21: -1- _AM_SUBST_NOTMAKE([HAVE_INFINIBAND_TRUE])
+m4trace:configure.ac:21: -1- _AM_SUBST_NOTMAKE([HAVE_INFINIBAND_FALSE])
+m4trace:configure.ac:21: -1- AM_CONDITIONAL([HAVE_INFINIBAND], [true])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^HAVE_INFINIBAND_TRUE$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^HAVE_INFINIBAND_FALSE$])
+m4trace:configure.ac:21: -1- _AM_SUBST_NOTMAKE([HAVE_INFINIBAND_TRUE])
+m4trace:configure.ac:21: -1- _AM_SUBST_NOTMAKE([HAVE_INFINIBAND_FALSE])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^INFINIBAND_CPPFLAGS$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^INFINIBAND_CFLAGS$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^INFINIBAND_LDFLAGS$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^INFINIBAND_LIBS$])
+m4trace:configure.ac:21: -1- m4_pattern_allow([^HAVE_INFINIBAND$])
+m4trace:configure.ac:21: -1- _m4_warn([obsolete], [The macro `AC_LANG_RESTORE' is obsolete.
+You should run autoupdate.], [../../lib/autoconf/lang.m4:157: AC_LANG_RESTORE is expanded from...
+config/ac_infiniband.m4:22: AC_INFINIBAND is expanded from...
+configure.ac:21: the top level])
+m4trace:configure.ac:22: -1- AC_DCMF
+m4trace:configure.ac:22: -1- AM_CONDITIONAL([HAVE_DCMF], [true])
+m4trace:configure.ac:22: -1- m4_pattern_allow([^HAVE_DCMF_TRUE$])
+m4trace:configure.ac:22: -1- m4_pattern_allow([^HAVE_DCMF_FALSE$])
+m4trace:configure.ac:22: -1- _AM_SUBST_NOTMAKE([HAVE_DCMF_TRUE])
+m4trace:configure.ac:22: -1- _AM_SUBST_NOTMAKE([HAVE_DCMF_FALSE])
+m4trace:configure.ac:22: -1- AM_CONDITIONAL([HAVE_DCMF], [false])
+m4trace:configure.ac:22: -1- m4_pattern_allow([^HAVE_DCMF_TRUE$])
+m4trace:configure.ac:22: -1- m4_pattern_allow([^HAVE_DCMF_FALSE$])
+m4trace:configure.ac:22: -1- _AM_SUBST_NOTMAKE([HAVE_DCMF_TRUE])
+m4trace:configure.ac:22: -1- _AM_SUBST_NOTMAKE([HAVE_DCMF_FALSE])
 m4trace:configure.ac:22: -1- _m4_warn([obsolete], [The macro `AC_TRY_LINK' is obsolete.
 You should run autoupdate.], [../../lib/autoconf/general.m4:2527: AC_TRY_LINK is expanded from...
-config/ac_pami.m4:7: AC_PAMI is expanded from...
+config/ac_dcmf.m4:7: AC_DCMF is expanded from...
 configure.ac:22: the top level])
-m4trace:configure.ac:22: -1- AM_CONDITIONAL([HAVE_PAMI], [false])
-m4trace:configure.ac:22: -1- m4_pattern_allow([^HAVE_PAMI_TRUE$])
-m4trace:configure.ac:22: -1- m4_pattern_allow([^HAVE_PAMI_FALSE$])
-m4trace:configure.ac:22: -1- _AM_SUBST_NOTMAKE([HAVE_PAMI_TRUE])
-m4trace:configure.ac:22: -1- _AM_SUBST_NOTMAKE([HAVE_PAMI_FALSE])
-m4trace:configure.ac:22: -1- m4_pattern_allow([^PAMI_CFLAGS$])
-m4trace:configure.ac:22: -1- m4_pattern_allow([^PAMI_CPPFLAGS$])
-m4trace:configure.ac:22: -1- m4_pattern_allow([^PAMI_LDFLAGS$])
-m4trace:configure.ac:22: -1- m4_pattern_allow([^PAMI_LIBS$])
-m4trace:configure.ac:22: -1- m4_pattern_allow([^HAVE_PAMI$])
-m4trace:configure.ac:23: -1- AC_TCP_SOCKET
-m4trace:configure.ac:23: -1- AM_CONDITIONAL([HAVE_TCP_SOCKET], [true])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_TRUE$])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_FALSE$])
-m4trace:configure.ac:23: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_TRUE])
-m4trace:configure.ac:23: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_FALSE])
-m4trace:configure.ac:23: -1- AM_CONDITIONAL([HAVE_TCP_SOCKET], [false])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_TRUE$])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_FALSE$])
-m4trace:configure.ac:23: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_TRUE])
-m4trace:configure.ac:23: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_FALSE])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^TCP_SOCKET_CFLAGS$])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^TCP_SOCKET_CPPFLAGS$])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^TCP_SOCKET_LDFLAGS$])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^TCP_SOCKET_LIBS$])
-m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_TCP_SOCKET$])
-m4trace:configure.ac:25: -1- AC_CONFIGURE_OPTIONS
-m4trace:configure.ac:25: -1- AM_CONDITIONAL([ENABLE_IB_CPP], [true])
-m4trace:configure.ac:25: -1- m4_pattern_allow([^ENABLE_IB_CPP_TRUE$])
-m4trace:configure.ac:25: -1- m4_pattern_allow([^ENABLE_IB_CPP_FALSE$])
-m4trace:configure.ac:25: -1- _AM_SUBST_NOTMAKE([ENABLE_IB_CPP_TRUE])
-m4trace:configure.ac:25: -1- _AM_SUBST_NOTMAKE([ENABLE_IB_CPP_FALSE])
-m4trace:configure.ac:25: -1- AM_CONDITIONAL([ENABLE_IB_CPP], [false])
-m4trace:configure.ac:25: -1- m4_pattern_allow([^ENABLE_IB_CPP_TRUE$])
-m4trace:configure.ac:25: -1- m4_pattern_allow([^ENABLE_IB_CPP_FALSE$])
-m4trace:configure.ac:25: -1- _AM_SUBST_NOTMAKE([ENABLE_IB_CPP_TRUE])
-m4trace:configure.ac:25: -1- _AM_SUBST_NOTMAKE([ENABLE_IB_CPP_FALSE])
-m4trace:configure.ac:25: -1- m4_pattern_allow([^BBOX_MAX_NDIM$])
-m4trace:configure.ac:25: -1- m4_pattern_allow([^BBOX_MAX_NDIM$])
-m4trace:configure.ac:25: -1- m4_pattern_allow([^DIMES_RDMA_BUFFER_SIZE$])
-m4trace:configure.ac:25: -1- m4_pattern_allow([^DIMES_RDMA_BUFFER_SIZE$])
-m4trace:configure.ac:25: -1- m4_pattern_allow([^IB_INTERFACE$])
-m4trace:configure.ac:25: -1- m4_pattern_allow([^IB_INTERFACE$])
-m4trace:configure.ac:25: -1- m4_pattern_allow([^INFINIBAND_MSG_QUEUE_SIZE$])
-m4trace:configure.ac:25: -1- m4_pattern_allow([^INFINIBAND_MSG_QUEUE_SIZE$])
-m4trace:configure.ac:25: -1- m4_pattern_allow([^INFINIBAND_TIMEOUT$])
-m4trace:configure.ac:25: -1- m4_pattern_allow([^INFINIBAND_TIMEOUT$])
-m4trace:configure.ac:25: -1- m4_pattern_allow([^DIMES_RDMA_MAX_NUM_CONCURRENT_READ$])
-m4trace:configure.ac:25: -1- m4_pattern_allow([^DIMES_RDMA_MAX_NUM_CONCURRENT_READ$])
-m4trace:configure.ac:41: -1- AM_CONDITIONAL([HAVE_UGNI], [false])
-m4trace:configure.ac:41: -1- m4_pattern_allow([^HAVE_UGNI_TRUE$])
-m4trace:configure.ac:41: -1- m4_pattern_allow([^HAVE_UGNI_FALSE$])
-m4trace:configure.ac:41: -1- _AM_SUBST_NOTMAKE([HAVE_UGNI_TRUE])
-m4trace:configure.ac:41: -1- _AM_SUBST_NOTMAKE([HAVE_UGNI_FALSE])
-m4trace:configure.ac:42: -1- m4_pattern_allow([^HAVE_UGNI$])
-m4trace:configure.ac:44: -1- AM_CONDITIONAL([HAVE_DCMF], [false])
-m4trace:configure.ac:44: -1- m4_pattern_allow([^HAVE_DCMF_TRUE$])
-m4trace:configure.ac:44: -1- m4_pattern_allow([^HAVE_DCMF_FALSE$])
-m4trace:configure.ac:44: -1- _AM_SUBST_NOTMAKE([HAVE_DCMF_TRUE])
-m4trace:configure.ac:44: -1- _AM_SUBST_NOTMAKE([HAVE_DCMF_FALSE])
-m4trace:configure.ac:45: -1- m4_pattern_allow([^HAVE_DCMF$])
-m4trace:configure.ac:47: -1- AM_CONDITIONAL([HAVE_PAMI], [false])
-m4trace:configure.ac:47: -1- m4_pattern_allow([^HAVE_PAMI_TRUE$])
-m4trace:configure.ac:47: -1- m4_pattern_allow([^HAVE_PAMI_FALSE$])
-m4trace:configure.ac:47: -1- _AM_SUBST_NOTMAKE([HAVE_PAMI_TRUE])
-m4trace:configure.ac:47: -1- _AM_SUBST_NOTMAKE([HAVE_PAMI_FALSE])
-m4trace:configure.ac:48: -1- m4_pattern_allow([^HAVE_PAMI$])
-m4trace:configure.ac:50: -1- AM_CONDITIONAL([HAVE_INFINIBAND], [false])
-m4trace:configure.ac:50: -1- m4_pattern_allow([^HAVE_INFINIBAND_TRUE$])
-m4trace:configure.ac:50: -1- m4_pattern_allow([^HAVE_INFINIBAND_FALSE$])
-m4trace:configure.ac:50: -1- _AM_SUBST_NOTMAKE([HAVE_INFINIBAND_TRUE])
-m4trace:configure.ac:50: -1- _AM_SUBST_NOTMAKE([HAVE_INFINIBAND_FALSE])
-m4trace:configure.ac:51: -1- m4_pattern_allow([^HAVE_INFINIBAND$])
-m4trace:configure.ac:53: -1- AM_CONDITIONAL([HAVE_PORTALS], [false])
-m4trace:configure.ac:53: -1- m4_pattern_allow([^HAVE_PORTALS_TRUE$])
-m4trace:configure.ac:53: -1- m4_pattern_allow([^HAVE_PORTALS_FALSE$])
-m4trace:configure.ac:53: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_TRUE])
-m4trace:configure.ac:53: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_FALSE])
-m4trace:configure.ac:54: -1- m4_pattern_allow([^HAVE_PORTALS$])
-m4trace:configure.ac:58: -1- AM_CONDITIONAL([HAVE_TCP_SOCKET], [false])
-m4trace:configure.ac:58: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_TRUE$])
-m4trace:configure.ac:58: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_FALSE$])
-m4trace:configure.ac:58: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_TRUE])
-m4trace:configure.ac:58: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_FALSE])
-m4trace:configure.ac:59: -1- m4_pattern_allow([^HAVE_TCP_SOCKET$])
-m4trace:configure.ac:61: -1- AM_CONDITIONAL([HAVE_TCP_SOCKET], [false])
-m4trace:configure.ac:61: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_TRUE$])
-m4trace:configure.ac:61: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_FALSE$])
-m4trace:configure.ac:61: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_TRUE])
-m4trace:configure.ac:61: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_FALSE])
-m4trace:configure.ac:62: -1- m4_pattern_allow([^HAVE_TCP_SOCKET$])
-m4trace:configure.ac:64: -1- AM_CONDITIONAL([HAVE_TCP_SOCKET], [false])
-m4trace:configure.ac:64: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_TRUE$])
-m4trace:configure.ac:64: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_FALSE$])
-m4trace:configure.ac:64: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_TRUE])
-m4trace:configure.ac:64: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_FALSE])
-m4trace:configure.ac:65: -1- m4_pattern_allow([^HAVE_TCP_SOCKET$])
-m4trace:configure.ac:67: -1- AM_CONDITIONAL([HAVE_TCP_SOCKET], [false])
-m4trace:configure.ac:67: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_TRUE$])
-m4trace:configure.ac:67: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_FALSE$])
-m4trace:configure.ac:67: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_TRUE])
-m4trace:configure.ac:67: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_FALSE])
-m4trace:configure.ac:68: -1- m4_pattern_allow([^HAVE_TCP_SOCKET$])
-m4trace:configure.ac:70: -1- AM_CONDITIONAL([HAVE_TCP_SOCKET], [false])
-m4trace:configure.ac:70: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_TRUE$])
-m4trace:configure.ac:70: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_FALSE$])
-m4trace:configure.ac:70: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_TRUE])
-m4trace:configure.ac:70: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_FALSE])
-m4trace:configure.ac:71: -1- m4_pattern_allow([^HAVE_TCP_SOCKET$])
-m4trace:configure.ac:80: -1- AM_CONDITIONAL([DIMES], [test "x$enable_dimes" == "xyes"])
-m4trace:configure.ac:80: -1- m4_pattern_allow([^DIMES_TRUE$])
-m4trace:configure.ac:80: -1- m4_pattern_allow([^DIMES_FALSE$])
-m4trace:configure.ac:80: -1- _AM_SUBST_NOTMAKE([DIMES_TRUE])
-m4trace:configure.ac:80: -1- _AM_SUBST_NOTMAKE([DIMES_FALSE])
-m4trace:configure.ac:84: -1- m4_pattern_allow([^DS_HAVE_DIMES$])
-m4trace:configure.ac:87: -1- m4_pattern_allow([^DS_HAVE_DIMES$])
-m4trace:configure.ac:90: -1- m4_pattern_allow([^DS_HAVE_DIMES$])
-m4trace:configure.ac:93: -1- m4_pattern_allow([^DS_HAVE_DIMES$])
-m4trace:configure.ac:106: -1- m4_pattern_allow([^DS_HAVE_ARIES$])
-m4trace:configure.ac:152: -1- m4_pattern_allow([^DSPACESLIB_CFLAGS$])
-m4trace:configure.ac:153: -1- m4_pattern_allow([^DSPACESLIB_CPPFLAGS$])
-m4trace:configure.ac:154: -1- m4_pattern_allow([^DSPACESLIB_LDFLAGS$])
-m4trace:configure.ac:155: -1- m4_pattern_allow([^DSPACESLIB_LDADD$])
-m4trace:configure.ac:167: -1- m4_pattern_allow([^LIB@&t@OBJS$])
-m4trace:configure.ac:167: -1- m4_pattern_allow([^LTLIBOBJS$])
-m4trace:configure.ac:167: -1- AM_CONDITIONAL([am__EXEEXT], [test -n "$EXEEXT"])
-m4trace:configure.ac:167: -1- m4_pattern_allow([^am__EXEEXT_TRUE$])
-m4trace:configure.ac:167: -1- m4_pattern_allow([^am__EXEEXT_FALSE$])
-m4trace:configure.ac:167: -1- _AM_SUBST_NOTMAKE([am__EXEEXT_TRUE])
-m4trace:configure.ac:167: -1- _AM_SUBST_NOTMAKE([am__EXEEXT_FALSE])
-m4trace:configure.ac:167: -1- _AC_AM_CONFIG_HEADER_HOOK(["$ac_file"])
-m4trace:configure.ac:167: -1- _AM_OUTPUT_DEPENDENCY_COMMANDS
+m4trace:configure.ac:22: -1- AM_CONDITIONAL([HAVE_DCMF], [false])
+m4trace:configure.ac:22: -1- m4_pattern_allow([^HAVE_DCMF_TRUE$])
+m4trace:configure.ac:22: -1- m4_pattern_allow([^HAVE_DCMF_FALSE$])
+m4trace:configure.ac:22: -1- _AM_SUBST_NOTMAKE([HAVE_DCMF_TRUE])
+m4trace:configure.ac:22: -1- _AM_SUBST_NOTMAKE([HAVE_DCMF_FALSE])
+m4trace:configure.ac:22: -1- m4_pattern_allow([^DCMF_CFLAGS$])
+m4trace:configure.ac:22: -1- m4_pattern_allow([^DCMF_CPPFLAGS$])
+m4trace:configure.ac:22: -1- m4_pattern_allow([^DCMF_LDFLAGS$])
+m4trace:configure.ac:22: -1- m4_pattern_allow([^DCMF_LIBS$])
+m4trace:configure.ac:22: -1- m4_pattern_allow([^HAVE_DCMF$])
+m4trace:configure.ac:23: -1- AC_UGNI
+m4trace:configure.ac:23: -1- _m4_warn([obsolete], [The macro `AC_LANG_SAVE' is obsolete.
+You should run autoupdate.], [../../lib/autoconf/lang.m4:148: AC_LANG_SAVE is expanded from...
+config/ac_ugni.m4:7: AC_UGNI is expanded from...
+configure.ac:23: the top level])
+m4trace:configure.ac:23: -1- _m4_warn([obsolete], [The macro `AC_LANG_C' is obsolete.
+You should run autoupdate.], [../../lib/autoconf/c.m4:95: AC_LANG_C is expanded from...
+config/ac_ugni.m4:7: AC_UGNI is expanded from...
+configure.ac:23: the top level])
+m4trace:configure.ac:23: -1- AM_CONDITIONAL([HAVE_UGNI], [true])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_UGNI_TRUE$])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_UGNI_FALSE$])
+m4trace:configure.ac:23: -1- _AM_SUBST_NOTMAKE([HAVE_UGNI_TRUE])
+m4trace:configure.ac:23: -1- _AM_SUBST_NOTMAKE([HAVE_UGNI_FALSE])
+m4trace:configure.ac:23: -1- AM_CONDITIONAL([HAVE_DRC], [false])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DRC_TRUE$])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DRC_FALSE$])
+m4trace:configure.ac:23: -1- _AM_SUBST_NOTMAKE([HAVE_DRC_TRUE])
+m4trace:configure.ac:23: -1- _AM_SUBST_NOTMAKE([HAVE_DRC_FALSE])
+m4trace:configure.ac:23: -1- AM_CONDITIONAL([HAVE_DRC], [true])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DRC_TRUE$])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_DRC_FALSE$])
+m4trace:configure.ac:23: -1- _AM_SUBST_NOTMAKE([HAVE_DRC_TRUE])
+m4trace:configure.ac:23: -1- _AM_SUBST_NOTMAKE([HAVE_DRC_FALSE])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^DS_HAVE_DRC$])
+m4trace:configure.ac:23: -1- AM_CONDITIONAL([HAVE_UGNI], [false])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_UGNI_TRUE$])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_UGNI_FALSE$])
+m4trace:configure.ac:23: -1- _AM_SUBST_NOTMAKE([HAVE_UGNI_TRUE])
+m4trace:configure.ac:23: -1- _AM_SUBST_NOTMAKE([HAVE_UGNI_FALSE])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^PMI_CPPFLAGS$])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^PMI_LDLAGS$])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^PMI_LIBS$])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^UGNI_CPPFLAGS$])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^UGNI_LDLAGS$])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^UGNI_LIBS$])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^DRC_CPPFLAGS$])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^DRC_LIBS$])
+m4trace:configure.ac:23: -1- AM_CONDITIONAL([HAVE_ARIES], [true])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_ARIES_TRUE$])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_ARIES_FALSE$])
+m4trace:configure.ac:23: -1- _AM_SUBST_NOTMAKE([HAVE_ARIES_TRUE])
+m4trace:configure.ac:23: -1- _AM_SUBST_NOTMAKE([HAVE_ARIES_FALSE])
+m4trace:configure.ac:23: -1- AM_CONDITIONAL([HAVE_ARIES], [false])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_ARIES_TRUE$])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_ARIES_FALSE$])
+m4trace:configure.ac:23: -1- _AM_SUBST_NOTMAKE([HAVE_ARIES_TRUE])
+m4trace:configure.ac:23: -1- _AM_SUBST_NOTMAKE([HAVE_ARIES_FALSE])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^HAVE_UGNI$])
+m4trace:configure.ac:23: -1- m4_pattern_allow([^DS_HAVE_ARIES$])
+m4trace:configure.ac:24: -1- AC_GNI_PTAG
+m4trace:configure.ac:24: -1- m4_pattern_allow([^GNI_PTAG$])
+m4trace:configure.ac:24: -1- m4_pattern_allow([^GNI_COOKIE$])
+m4trace:configure.ac:25: -1- AC_PAMI
+m4trace:configure.ac:25: -1- AM_CONDITIONAL([HAVE_PAMI], [true])
+m4trace:configure.ac:25: -1- m4_pattern_allow([^HAVE_PAMI_TRUE$])
+m4trace:configure.ac:25: -1- m4_pattern_allow([^HAVE_PAMI_FALSE$])
+m4trace:configure.ac:25: -1- _AM_SUBST_NOTMAKE([HAVE_PAMI_TRUE])
+m4trace:configure.ac:25: -1- _AM_SUBST_NOTMAKE([HAVE_PAMI_FALSE])
+m4trace:configure.ac:25: -1- AM_CONDITIONAL([HAVE_PAMI], [false])
+m4trace:configure.ac:25: -1- m4_pattern_allow([^HAVE_PAMI_TRUE$])
+m4trace:configure.ac:25: -1- m4_pattern_allow([^HAVE_PAMI_FALSE$])
+m4trace:configure.ac:25: -1- _AM_SUBST_NOTMAKE([HAVE_PAMI_TRUE])
+m4trace:configure.ac:25: -1- _AM_SUBST_NOTMAKE([HAVE_PAMI_FALSE])
+m4trace:configure.ac:25: -1- _m4_warn([obsolete], [The macro `AC_TRY_LINK' is obsolete.
+You should run autoupdate.], [../../lib/autoconf/general.m4:2527: AC_TRY_LINK is expanded from...
+config/ac_pami.m4:7: AC_PAMI is expanded from...
+configure.ac:25: the top level])
+m4trace:configure.ac:25: -1- AM_CONDITIONAL([HAVE_PAMI], [false])
+m4trace:configure.ac:25: -1- m4_pattern_allow([^HAVE_PAMI_TRUE$])
+m4trace:configure.ac:25: -1- m4_pattern_allow([^HAVE_PAMI_FALSE$])
+m4trace:configure.ac:25: -1- _AM_SUBST_NOTMAKE([HAVE_PAMI_TRUE])
+m4trace:configure.ac:25: -1- _AM_SUBST_NOTMAKE([HAVE_PAMI_FALSE])
+m4trace:configure.ac:25: -1- m4_pattern_allow([^PAMI_CFLAGS$])
+m4trace:configure.ac:25: -1- m4_pattern_allow([^PAMI_CPPFLAGS$])
+m4trace:configure.ac:25: -1- m4_pattern_allow([^PAMI_LDFLAGS$])
+m4trace:configure.ac:25: -1- m4_pattern_allow([^PAMI_LIBS$])
+m4trace:configure.ac:25: -1- m4_pattern_allow([^HAVE_PAMI$])
+m4trace:configure.ac:26: -1- AC_TCP_SOCKET
+m4trace:configure.ac:26: -1- AM_CONDITIONAL([HAVE_TCP_SOCKET], [true])
+m4trace:configure.ac:26: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_TRUE$])
+m4trace:configure.ac:26: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_FALSE$])
+m4trace:configure.ac:26: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_TRUE])
+m4trace:configure.ac:26: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_FALSE])
+m4trace:configure.ac:26: -1- AM_CONDITIONAL([HAVE_TCP_SOCKET], [false])
+m4trace:configure.ac:26: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_TRUE$])
+m4trace:configure.ac:26: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_FALSE$])
+m4trace:configure.ac:26: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_TRUE])
+m4trace:configure.ac:26: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_FALSE])
+m4trace:configure.ac:26: -1- m4_pattern_allow([^TCP_SOCKET_CFLAGS$])
+m4trace:configure.ac:26: -1- m4_pattern_allow([^TCP_SOCKET_CPPFLAGS$])
+m4trace:configure.ac:26: -1- m4_pattern_allow([^TCP_SOCKET_LDFLAGS$])
+m4trace:configure.ac:26: -1- m4_pattern_allow([^TCP_SOCKET_LIBS$])
+m4trace:configure.ac:26: -1- m4_pattern_allow([^HAVE_TCP_SOCKET$])
+m4trace:configure.ac:28: -1- AC_CONFIGURE_OPTIONS
+m4trace:configure.ac:28: -1- AM_CONDITIONAL([ENABLE_IB_CPP], [true])
+m4trace:configure.ac:28: -1- m4_pattern_allow([^ENABLE_IB_CPP_TRUE$])
+m4trace:configure.ac:28: -1- m4_pattern_allow([^ENABLE_IB_CPP_FALSE$])
+m4trace:configure.ac:28: -1- _AM_SUBST_NOTMAKE([ENABLE_IB_CPP_TRUE])
+m4trace:configure.ac:28: -1- _AM_SUBST_NOTMAKE([ENABLE_IB_CPP_FALSE])
+m4trace:configure.ac:28: -1- AM_CONDITIONAL([ENABLE_IB_CPP], [false])
+m4trace:configure.ac:28: -1- m4_pattern_allow([^ENABLE_IB_CPP_TRUE$])
+m4trace:configure.ac:28: -1- m4_pattern_allow([^ENABLE_IB_CPP_FALSE$])
+m4trace:configure.ac:28: -1- _AM_SUBST_NOTMAKE([ENABLE_IB_CPP_TRUE])
+m4trace:configure.ac:28: -1- _AM_SUBST_NOTMAKE([ENABLE_IB_CPP_FALSE])
+m4trace:configure.ac:28: -1- m4_pattern_allow([^BBOX_MAX_NDIM$])
+m4trace:configure.ac:28: -1- m4_pattern_allow([^BBOX_MAX_NDIM$])
+m4trace:configure.ac:28: -1- m4_pattern_allow([^DIMES_RDMA_BUFFER_SIZE$])
+m4trace:configure.ac:28: -1- m4_pattern_allow([^DIMES_RDMA_BUFFER_SIZE$])
+m4trace:configure.ac:28: -1- m4_pattern_allow([^IB_INTERFACE$])
+m4trace:configure.ac:28: -1- m4_pattern_allow([^IB_INTERFACE$])
+m4trace:configure.ac:28: -1- m4_pattern_allow([^INFINIBAND_MSG_QUEUE_SIZE$])
+m4trace:configure.ac:28: -1- m4_pattern_allow([^INFINIBAND_MSG_QUEUE_SIZE$])
+m4trace:configure.ac:28: -1- m4_pattern_allow([^INFINIBAND_TIMEOUT$])
+m4trace:configure.ac:28: -1- m4_pattern_allow([^INFINIBAND_TIMEOUT$])
+m4trace:configure.ac:28: -1- m4_pattern_allow([^DIMES_RDMA_MAX_NUM_CONCURRENT_READ$])
+m4trace:configure.ac:28: -1- m4_pattern_allow([^DIMES_RDMA_MAX_NUM_CONCURRENT_READ$])
+m4trace:configure.ac:30: -1- ACX_PTHREAD
+m4trace:configure.ac:30: -1- _m4_warn([obsolete], [The macro `AC_LANG_SAVE' is obsolete.
+You should run autoupdate.], [../../lib/autoconf/lang.m4:148: AC_LANG_SAVE is expanded from...
+config/acx_pthread.m4:56: ACX_PTHREAD is expanded from...
+configure.ac:30: the top level])
+m4trace:configure.ac:30: -1- _m4_warn([obsolete], [The macro `AC_LANG_C' is obsolete.
+You should run autoupdate.], [../../lib/autoconf/c.m4:95: AC_LANG_C is expanded from...
+config/acx_pthread.m4:56: ACX_PTHREAD is expanded from...
+configure.ac:30: the top level])
+m4trace:configure.ac:30: -1- _m4_warn([obsolete], [The macro `AC_TRY_LINK' is obsolete.
+You should run autoupdate.], [../../lib/autoconf/general.m4:2527: AC_TRY_LINK is expanded from...
+config/acx_pthread.m4:56: ACX_PTHREAD is expanded from...
+configure.ac:30: the top level])
+m4trace:configure.ac:30: -1- _m4_warn([obsolete], [The macro `AC_TRY_LINK' is obsolete.
+You should run autoupdate.], [../../lib/autoconf/general.m4:2527: AC_TRY_LINK is expanded from...
+config/acx_pthread.m4:56: ACX_PTHREAD is expanded from...
+configure.ac:30: the top level])
+m4trace:configure.ac:30: -1- m4_pattern_allow([^PTHREAD_CREATE_JOINABLE$])
+m4trace:configure.ac:30: -1- m4_pattern_allow([^PTHREAD_CC$])
+m4trace:configure.ac:30: -1- m4_pattern_allow([^PTHREAD_LIBS$])
+m4trace:configure.ac:30: -1- m4_pattern_allow([^PTHREAD_CFLAGS$])
+m4trace:configure.ac:30: -1- m4_pattern_allow([^PTHREAD_CC$])
+m4trace:configure.ac:30: -1- m4_pattern_allow([^HAVE_PTHREAD$])
+m4trace:configure.ac:30: -2- m4_pattern_allow([^HAVE_PTHREAD$])
+m4trace:configure.ac:30: -1- _m4_warn([obsolete], [The macro `AC_LANG_RESTORE' is obsolete.
+You should run autoupdate.], [../../lib/autoconf/lang.m4:157: AC_LANG_RESTORE is expanded from...
+config/acx_pthread.m4:56: ACX_PTHREAD is expanded from...
+configure.ac:30: the top level])
+m4trace:configure.ac:34: -1- m4_pattern_allow([^HAVE_LIBM$])
+m4trace:configure.ac:59: -1- AM_CONDITIONAL([HAVE_UGNI], [false])
+m4trace:configure.ac:59: -1- m4_pattern_allow([^HAVE_UGNI_TRUE$])
+m4trace:configure.ac:59: -1- m4_pattern_allow([^HAVE_UGNI_FALSE$])
+m4trace:configure.ac:59: -1- _AM_SUBST_NOTMAKE([HAVE_UGNI_TRUE])
+m4trace:configure.ac:59: -1- _AM_SUBST_NOTMAKE([HAVE_UGNI_FALSE])
+m4trace:configure.ac:60: -1- m4_pattern_allow([^HAVE_UGNI$])
+m4trace:configure.ac:62: -1- AM_CONDITIONAL([HAVE_DCMF], [false])
+m4trace:configure.ac:62: -1- m4_pattern_allow([^HAVE_DCMF_TRUE$])
+m4trace:configure.ac:62: -1- m4_pattern_allow([^HAVE_DCMF_FALSE$])
+m4trace:configure.ac:62: -1- _AM_SUBST_NOTMAKE([HAVE_DCMF_TRUE])
+m4trace:configure.ac:62: -1- _AM_SUBST_NOTMAKE([HAVE_DCMF_FALSE])
+m4trace:configure.ac:63: -1- m4_pattern_allow([^HAVE_DCMF$])
+m4trace:configure.ac:65: -1- AM_CONDITIONAL([HAVE_PAMI], [false])
+m4trace:configure.ac:65: -1- m4_pattern_allow([^HAVE_PAMI_TRUE$])
+m4trace:configure.ac:65: -1- m4_pattern_allow([^HAVE_PAMI_FALSE$])
+m4trace:configure.ac:65: -1- _AM_SUBST_NOTMAKE([HAVE_PAMI_TRUE])
+m4trace:configure.ac:65: -1- _AM_SUBST_NOTMAKE([HAVE_PAMI_FALSE])
+m4trace:configure.ac:66: -1- m4_pattern_allow([^HAVE_PAMI$])
+m4trace:configure.ac:68: -1- AM_CONDITIONAL([HAVE_INFINIBAND], [false])
+m4trace:configure.ac:68: -1- m4_pattern_allow([^HAVE_INFINIBAND_TRUE$])
+m4trace:configure.ac:68: -1- m4_pattern_allow([^HAVE_INFINIBAND_FALSE$])
+m4trace:configure.ac:68: -1- _AM_SUBST_NOTMAKE([HAVE_INFINIBAND_TRUE])
+m4trace:configure.ac:68: -1- _AM_SUBST_NOTMAKE([HAVE_INFINIBAND_FALSE])
+m4trace:configure.ac:69: -1- m4_pattern_allow([^HAVE_INFINIBAND$])
+m4trace:configure.ac:71: -1- AM_CONDITIONAL([HAVE_PORTALS], [false])
+m4trace:configure.ac:71: -1- m4_pattern_allow([^HAVE_PORTALS_TRUE$])
+m4trace:configure.ac:71: -1- m4_pattern_allow([^HAVE_PORTALS_FALSE$])
+m4trace:configure.ac:71: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_TRUE])
+m4trace:configure.ac:71: -1- _AM_SUBST_NOTMAKE([HAVE_PORTALS_FALSE])
+m4trace:configure.ac:72: -1- m4_pattern_allow([^HAVE_PORTALS$])
+m4trace:configure.ac:76: -1- AM_CONDITIONAL([HAVE_TCP_SOCKET], [false])
+m4trace:configure.ac:76: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_TRUE$])
+m4trace:configure.ac:76: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_FALSE$])
+m4trace:configure.ac:76: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_TRUE])
+m4trace:configure.ac:76: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_FALSE])
+m4trace:configure.ac:77: -1- m4_pattern_allow([^HAVE_TCP_SOCKET$])
+m4trace:configure.ac:79: -1- AM_CONDITIONAL([HAVE_TCP_SOCKET], [false])
+m4trace:configure.ac:79: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_TRUE$])
+m4trace:configure.ac:79: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_FALSE$])
+m4trace:configure.ac:79: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_TRUE])
+m4trace:configure.ac:79: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_FALSE])
+m4trace:configure.ac:80: -1- m4_pattern_allow([^HAVE_TCP_SOCKET$])
+m4trace:configure.ac:82: -1- AM_CONDITIONAL([HAVE_TCP_SOCKET], [false])
+m4trace:configure.ac:82: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_TRUE$])
+m4trace:configure.ac:82: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_FALSE$])
+m4trace:configure.ac:82: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_TRUE])
+m4trace:configure.ac:82: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_FALSE])
+m4trace:configure.ac:83: -1- m4_pattern_allow([^HAVE_TCP_SOCKET$])
+m4trace:configure.ac:85: -1- AM_CONDITIONAL([HAVE_TCP_SOCKET], [false])
+m4trace:configure.ac:85: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_TRUE$])
+m4trace:configure.ac:85: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_FALSE$])
+m4trace:configure.ac:85: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_TRUE])
+m4trace:configure.ac:85: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_FALSE])
+m4trace:configure.ac:86: -1- m4_pattern_allow([^HAVE_TCP_SOCKET$])
+m4trace:configure.ac:88: -1- AM_CONDITIONAL([HAVE_TCP_SOCKET], [false])
+m4trace:configure.ac:88: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_TRUE$])
+m4trace:configure.ac:88: -1- m4_pattern_allow([^HAVE_TCP_SOCKET_FALSE$])
+m4trace:configure.ac:88: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_TRUE])
+m4trace:configure.ac:88: -1- _AM_SUBST_NOTMAKE([HAVE_TCP_SOCKET_FALSE])
+m4trace:configure.ac:89: -1- m4_pattern_allow([^HAVE_TCP_SOCKET$])
+m4trace:configure.ac:97: -1- AM_CONDITIONAL([HAVE_INFINIBAND], [false])
+m4trace:configure.ac:97: -1- m4_pattern_allow([^HAVE_INFINIBAND_TRUE$])
+m4trace:configure.ac:97: -1- m4_pattern_allow([^HAVE_INFINIBAND_FALSE$])
+m4trace:configure.ac:97: -1- _AM_SUBST_NOTMAKE([HAVE_INFINIBAND_TRUE])
+m4trace:configure.ac:97: -1- _AM_SUBST_NOTMAKE([HAVE_INFINIBAND_FALSE])
+m4trace:configure.ac:98: -1- m4_pattern_allow([^HAVE_INFINIBAND$])
+m4trace:configure.ac:105: -1- AM_CONDITIONAL([DIMES], [test "x$enable_dimes" == "xyes"])
+m4trace:configure.ac:105: -1- m4_pattern_allow([^DIMES_TRUE$])
+m4trace:configure.ac:105: -1- m4_pattern_allow([^DIMES_FALSE$])
+m4trace:configure.ac:105: -1- _AM_SUBST_NOTMAKE([DIMES_TRUE])
+m4trace:configure.ac:105: -1- _AM_SUBST_NOTMAKE([DIMES_FALSE])
+m4trace:configure.ac:109: -1- m4_pattern_allow([^DS_HAVE_DIMES$])
+m4trace:configure.ac:110: -1- AM_CONDITIONAL([BUILD_DIMES], [true])
+m4trace:configure.ac:110: -1- m4_pattern_allow([^BUILD_DIMES_TRUE$])
+m4trace:configure.ac:110: -1- m4_pattern_allow([^BUILD_DIMES_FALSE$])
+m4trace:configure.ac:110: -1- _AM_SUBST_NOTMAKE([BUILD_DIMES_TRUE])
+m4trace:configure.ac:110: -1- _AM_SUBST_NOTMAKE([BUILD_DIMES_FALSE])
+m4trace:configure.ac:113: -1- m4_pattern_allow([^DS_HAVE_DIMES$])
+m4trace:configure.ac:114: -1- AM_CONDITIONAL([BUILD_DIMES], [true])
+m4trace:configure.ac:114: -1- m4_pattern_allow([^BUILD_DIMES_TRUE$])
+m4trace:configure.ac:114: -1- m4_pattern_allow([^BUILD_DIMES_FALSE$])
+m4trace:configure.ac:114: -1- _AM_SUBST_NOTMAKE([BUILD_DIMES_TRUE])
+m4trace:configure.ac:114: -1- _AM_SUBST_NOTMAKE([BUILD_DIMES_FALSE])
+m4trace:configure.ac:117: -1- m4_pattern_allow([^DS_HAVE_DIMES$])
+m4trace:configure.ac:118: -1- AM_CONDITIONAL([BUILD_DIMES], [true])
+m4trace:configure.ac:118: -1- m4_pattern_allow([^BUILD_DIMES_TRUE$])
+m4trace:configure.ac:118: -1- m4_pattern_allow([^BUILD_DIMES_FALSE$])
+m4trace:configure.ac:118: -1- _AM_SUBST_NOTMAKE([BUILD_DIMES_TRUE])
+m4trace:configure.ac:118: -1- _AM_SUBST_NOTMAKE([BUILD_DIMES_FALSE])
+m4trace:configure.ac:121: -1- m4_pattern_allow([^DS_HAVE_DIMES$])
+m4trace:configure.ac:122: -1- AM_CONDITIONAL([BUILD_DIMES], [true])
+m4trace:configure.ac:122: -1- m4_pattern_allow([^BUILD_DIMES_TRUE$])
+m4trace:configure.ac:122: -1- m4_pattern_allow([^BUILD_DIMES_FALSE$])
+m4trace:configure.ac:122: -1- _AM_SUBST_NOTMAKE([BUILD_DIMES_TRUE])
+m4trace:configure.ac:122: -1- _AM_SUBST_NOTMAKE([BUILD_DIMES_FALSE])
+m4trace:configure.ac:128: -1- AM_CONDITIONAL([BUILD_DIMES], [false])
+m4trace:configure.ac:128: -1- m4_pattern_allow([^BUILD_DIMES_TRUE$])
+m4trace:configure.ac:128: -1- m4_pattern_allow([^BUILD_DIMES_FALSE$])
+m4trace:configure.ac:128: -1- _AM_SUBST_NOTMAKE([BUILD_DIMES_TRUE])
+m4trace:configure.ac:128: -1- _AM_SUBST_NOTMAKE([BUILD_DIMES_FALSE])
+m4trace:configure.ac:138: -1- AM_CONDITIONAL([DATASPACES_LOCATION_AWARE_WRITE], [test "x$enable_dataspaces_location_aware_write" == "xyes"])
+m4trace:configure.ac:138: -1- m4_pattern_allow([^DATASPACES_LOCATION_AWARE_WRITE_TRUE$])
+m4trace:configure.ac:138: -1- m4_pattern_allow([^DATASPACES_LOCATION_AWARE_WRITE_FALSE$])
+m4trace:configure.ac:138: -1- _AM_SUBST_NOTMAKE([DATASPACES_LOCATION_AWARE_WRITE_TRUE])
+m4trace:configure.ac:138: -1- _AM_SUBST_NOTMAKE([DATASPACES_LOCATION_AWARE_WRITE_FALSE])
+m4trace:configure.ac:197: -1- m4_pattern_allow([^DSPACESLIB_CFLAGS$])
+m4trace:configure.ac:198: -1- m4_pattern_allow([^DSPACESLIB_CPPFLAGS$])
+m4trace:configure.ac:199: -1- m4_pattern_allow([^DSPACESLIB_LDFLAGS$])
+m4trace:configure.ac:200: -1- m4_pattern_allow([^DSPACESLIB_LDADD$])
+m4trace:configure.ac:201: -1- m4_pattern_allow([^DSPACES_EXT_CFLAGS$])
+m4trace:configure.ac:202: -1- m4_pattern_allow([^DSPACES_EXT_CPPFLAGS$])
+m4trace:configure.ac:203: -1- m4_pattern_allow([^DSPACES_EXT_LDFLAGS$])
+m4trace:configure.ac:204: -1- m4_pattern_allow([^DSPACES_EXT_LDADD$])
+m4trace:configure.ac:205: -1- m4_pattern_allow([^CONFIG_ARG$])
+m4trace:configure.ac:218: -1- m4_pattern_allow([^LIB@&t@OBJS$])
+m4trace:configure.ac:218: -1- m4_pattern_allow([^LTLIBOBJS$])
+m4trace:configure.ac:218: -1- AM_CONDITIONAL([am__EXEEXT], [test -n "$EXEEXT"])
+m4trace:configure.ac:218: -1- m4_pattern_allow([^am__EXEEXT_TRUE$])
+m4trace:configure.ac:218: -1- m4_pattern_allow([^am__EXEEXT_FALSE$])
+m4trace:configure.ac:218: -1- _AM_SUBST_NOTMAKE([am__EXEEXT_TRUE])
+m4trace:configure.ac:218: -1- _AM_SUBST_NOTMAKE([am__EXEEXT_FALSE])
+m4trace:configure.ac:218: -1- _AC_AM_CONFIG_HEADER_HOOK(["$ac_file"])
+m4trace:configure.ac:218: -1- _AM_OUTPUT_DEPENDENCY_COMMANDS

@@ -5,7 +5,6 @@ AM_LDFLAGS = -L../dart -ldart $(DSPACESLIB_LDFLAGS) $(DSPACESLIB_LDADD)
 lib_LIBRARIES =  libdscommon.a libdspaces.a libdspacesf.a
 
 libdscommon_a_SOURCES = bbox.c \
-			mem_persist.c \
 			ss_data.c \
 			timer.c \
 			util.c 
@@ -13,7 +12,6 @@ libdscommon_a_SOURCES = bbox.c \
 libdspaces_a_SOURCES =  dataspaces.c \
 			common_dataspaces.c \
 			ds_gspace.c \
-			ds_cache_prefetch.c \
 			dc_gspace.c \
 			dimes_data.c \
 			dimes_server.c \
@@ -22,22 +20,21 @@ libdspaces_a_SOURCES =  dataspaces.c \
 libdspacesf_a_SOURCES = dataspaces_fortran.c \
 			common_dataspaces.c \
 			ds_gspace.c \
-			ds_cache_prefetch.c \
 			dc_gspace.c \
 			dimes_data.c \
 			dimes_server.c \
 			dimes_client.c 
 
-include_HEADERS = ../include/dataspaces.h \
-		  ../include/dimes_interface.h
+include_HEADERS = ../include/dataspaces.h 
+if BUILD_DIMES
+    include_HEADERS += ../include/dimes_interface.h
+endif BUILD_DIMES
 
 noinst_HEADERS = ../include/sfc.h \
 		 ../include/timer.h \
 		 ../include/merge.h \
 		 ../include/queue.h \
 		 ../include/ds_gspace.h \
-		 ../include/ds_cache_prefetch.h \
-		 ../include/mem_persist.h \
 		 ../include/dc_gspace.h \
 		 ../include/ss_data.h \
 		 ../include/bbox.h \

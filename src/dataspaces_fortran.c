@@ -47,13 +47,6 @@
 #include "common_dataspaces.h"
 #include "dc_gspace.h"
 
-/* Name mangling for C functions to adapt Fortran compiler */
-#if defined(HAVE_DCMF) || defined(HAVE_PAMI) 
-#define FC_FUNC(name,NAME) name  
-#else
-#define FC_FUNC(name,NAME) name ## _
-#endif
-
 static struct timer timer;
 
 char *fstrncpy(char *cstr, const char *fstr, size_t len, size_t maxlen)
@@ -417,5 +410,89 @@ void FC_FUNC(dspaces_set_mpi_rank_hint, DSPACES_SET_MPI_RANK_HINT)(int *rank)
 void FC_FUNC(dspaces_unset_mpi_rank_hint, DSPACES_UNSET_MPI_RANK_HINT)()
 {
     common_dspaces_unset_mpi_rank_hint();
-} 
+}
+#ifdef DS_HAVE_DIMES_SHMEM
+void FC_FUNC(dimes_shmem_init, DIMES_SHMEM_INIT)(void *comm,
+                    unsigned int *shmem_obj_size, int *err)
+{
+        MPI_Comm c_comm;
+            c_comm = MPI_Comm_f2c(*(MPI_Fint*)comm);
+
+                *err = common_dimes_shmem_init(&c_comm, *shmem_obj_size);
+}
+
+void FC_FUNC(dimes_shmem_finalize, DIMES_SHMEM_FINALIZE)(unsigned int *unlink,
+                int *err)
+{
+        *err = common_dimes_shmem_finalize(*unlink);
+}
+
+void FC_FUNC(dimes_shmem_checkpoint, DIMES_SHMEM_CHECKPOINT)(int *err) {
+        *err = common_dimes_shmem_checkpoint();
+}
+
+void FC_FUNC(dimes_shmem_restart, DIMES_SHMEM_RESTART)(void *comm, int *err) {
+        MPI_Comm c_comm;
+            c_comm = MPI_Comm_f2c(*(MPI_Fint*)comm);
+
+                *err = common_dimes_shmem_restart(&c_comm);
+}
+
+void FC_FUNC(dimes_shmem_reset_server_state, DIMES_SHMEM_RESET_SERVER_STATE)(
+                    int *server_id, int *err)
+{
+        *err = common_dimes_shmem_reset_server_state(*server_id);
+}
+
+void FC_FUNC(dimes_shmem_update_server_state, DIMES_SHMEM_UPDATE_SERVER_STATE)(int *err)
+{
+        *err = common_dimes_shmem_update_server_state();
+}
+
+void FC_FUNC(dimes_shmem_get_nid, DIMES_SHMEM_GET_NID)(int64_t *nid)
+{
+        *nid = common_dimes_shmem_get_nid();
+}
+
+void FC_FUNC(dimes_shmem_get_node_rank, DIMES_SHMEM_GET_NODE_RANK)(int *node_rank)
+{
+        *node_rank = common_dimes_shmem_get_node_rank();
+}
+
+void FC_FUNC(dimes_shmem_get_node_mpi_comm, DIMES_SHMEM_GET_NODE_MPI_COMM)(void *comm)
+{
+        MPI_Fint *p = (MPI_Fint*)comm;
+            *p = MPI_Comm_c2f(common_dimes_shmem_get_node_mpi_comm());
+}
+
+void FC_FUNC(dimes_shmem_put_local, DIMES_SHMEM_PUT_LOCAL) (const char *var_name,
+                unsigned int *ver, int *size, int *ndim,
+                        uint64_t *lb, uint64_t *ub, void *data, int *err, int len)
+{
+        char vname[256];
+
+            if (!fstrncpy(vname, var_name, (size_t) len, sizeof(vname))) {
+                            uloga("'%s()': failed, can not copy Fortran var of len %d.\n",
+                                                        __func__, len);
+                                        *err = -ENOMEM;
+                                            }
+
+                *err = common_dimes_shmem_put_local(vname, *ver, *size, *ndim, lb, ub, data);
+}
+
+void FC_FUNC(dimes_shmem_get_local, DIMES_SHMEM_GET_LOCAL) (const char *var_name,
+                unsigned int *ver, int *size, int *ndim,
+                        uint64_t *lb, uint64_t *ub, void *data, int *err, int len)
+{
+        char vname[256];
+
+            if (!fstrncpy(vname, var_name, (size_t) len, sizeof(vname))) {
+                            uloga("'%s()': failed, can not copy Fortran var of len %d.\n",
+                                                        __func__, len);
+                                        *err = -ENOMEM;
+                                            }
+
+                *err = common_dimes_shmem_get_local(vname, *ver, *size, *ndim, lb, ub, data);
+}
+#endif
 #endif

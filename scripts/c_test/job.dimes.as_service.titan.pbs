@@ -1,0 +1,40 @@
+#!/bin/sh
+#PBS -N test_dimes_titan 
+#PBS -A csc143titan 
+#PBS -q debug 
+#PBS -j oe
+#PBS -l walltime=00:05:00
+#PBS -l nodes=4
+
+cd $PBS_O_WORKDIR
+
+## Clean up
+rm -f conf *.log
+rm -f dataspaces.conf
+
+## Create dataspaces configuration file
+echo "## Config file for DataSpaces
+ndim = 3
+dims = 256,256,256
+max_versions = 1
+max_readers = 1
+lock_type = 2
+" > dataspaces.conf
+
+## Run DataSpaces servers
+aprun -n 2 ./dataspaces_server -s 2 -c 48  >& server.log &
+## Give some time for the servers to load and startup
+while [ ! -f conf ]; do
+    sleep 1s
+done
+sleep 5s  # wait server to fill up the conf file
+
+## Run writer application
+aprun -n 32 ./test_writer DIMES 32 3 2 4 4 128 64 64 20 1 >& writer.log &
+
+## Run reader application
+aprun -n 16 ./test_reader DIMES 16 3 2 2 4 128 128 64 20 2 >& reader.log
+
+## Wait for the entire workflow to finish
+#wait
+

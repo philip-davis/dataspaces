@@ -35,11 +35,6 @@
 #include <stdlib.h>
 #include "common.h"
 #include "mpi.h"
-#include "mem_persist.h" 
-#define DSG_ID                  dsg->ds->self->ptlmap.id
-
-extern pthread_mutex_t pmutex;//init prefetching pthread function lock
-extern pthread_cond_t  pcond;//init prefetching pthread function cond
 
 int read_config_file(const char* fname,
 	int *num_sp, int *num_cp, int *iter,
@@ -197,7 +192,6 @@ int common_get(const char *var_name,
 	void *data, enum transport_type type)
 {
 	if ( type == USE_DSPACES ) {
-        //dspaces_hint(var_name, ver, size,ndim,lb, ub); //Yubo
 		return dspaces_get(var_name, ver, size,
                         ndim,lb, ub,data);
 	} else if (type == USE_DIMES) {
@@ -228,49 +222,17 @@ int common_put_sync(enum transport_type type) {
 
 int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gcomm) {
         int err;
-        int i;
         if (type == USE_DSPACES) {
                 struct ds_gspace *dsg;
-                dsg = dsg_alloc(num_sp, num_cp, "dataspaces.conf");
+                dsg = dsg_alloc(num_sp, num_cp, "dataspaces.conf", gcomm);
                 if (!dsg)
                         return -1;
-		char dsg_id_str[100];//ssd storage file name
-		int_to_char(DSG_ID, dsg_id_str);
-#ifdef DEBUG
-		{
-			char *str;
-			asprintf(&str, "S%2d: common_run_server: dsg_id_str '%s'", DSG_ID, dsg_id_str);
-			uloga("'%s()': %s\n", __func__, str);
-			free(str);
-		}
-#endif
-		pmem_init(dsg_id_str);//ssd storage initiate						
-		pthread_t t_pref[1];//prefetch thread
-        for(i=0; i<1; i++){
-		pthread_create(&t_pref[i], NULL, prefetch_thread, (void*)i); //Create thread
-        }
 
                 while (!dsg_complete(dsg)){
                         err = dsg_process(dsg);
                         if(err<0)
                                 break;
                 }
-
-#ifdef DEBUG
-		{
-		char *str;
-		asprintf(&str, "dataspaces closing!");
-		uloga("'%s()': %s\n", __func__, str);
-		free(str);
-		}
-#endif
-        for(i=0; i<1; i++){	
-		pthread_join(t_pref[i], NULL);//wait t_pref thread end
-        pthread_cancel(t_pref[i]);//kill t_pref thread
-        }
-		pthread_mutex_destroy(&pmutex);//destroy mutex lock
-		pthread_cond_destroy(&pcond);//destroy condition
-		pmem_destroy();//ssd storage destroy
 
                 //dsg_barrier(dsg);
 		MPI_Barrier(*(MPI_Comm*)gcomm);
@@ -282,7 +244,7 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
         } else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
                 struct dimes_server *dsg;
-                dsg = dimes_server_alloc(num_sp, num_cp, "dataspaces.conf");
+                dsg = dimes_server_alloc(num_sp, num_cp, "dataspaces.conf", gcomm);
                 if (!dsg)
                         return -1;
 
