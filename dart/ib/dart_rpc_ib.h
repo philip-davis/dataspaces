@@ -413,6 +413,9 @@ enum cmd_type {
 	_CMD_COUNT,
 	cn_s_unregister,
     /*Added for SSD commands*/
+    ss_obj_put_ceph,
+    ss_obj_promote,
+    ss_obj_demote,
     ss_obj_put_ssd
 };
 

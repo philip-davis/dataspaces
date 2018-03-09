@@ -37,6 +37,11 @@
 #include "bbox.h"
 #include "list.h"
 
+#ifdef DS_HAVE_CEPH
+#include <rados/librados.h>
+rados_t cluster;
+#endif
+
 typedef struct {
     void            *iov_base;
     size_t          iov_len;
@@ -72,7 +77,7 @@ struct gdim_list_entry {
         struct global_dimension gdim; 
 };
 
-enum storage_level { in_memory, in_ssd, in_memory_ssd, in_memory_ceph, in_ceph };/* storage level Duan*/
+enum storage_level { in_memory, in_ssd, in_memory_ssd, in_memory_ceph, in_ceph };/* storage level*/
 enum storage_opera { normal, prefetching, caching };/* storage operation */
 struct obj_data {
         struct list_head        obj_entry;
@@ -243,11 +248,16 @@ int ssd_init(struct sspace *, int);
 void ssd_free(struct sspace *);
 int ssd_copy(struct obj_data *, struct obj_data *);
 int ssd_copy_emulate(struct obj_data *, struct obj_data *);
+
+#ifdef DS_HAVE_CEPH
+int ssd_copy_ceph(struct obj_data *, struct obj_data *, int id);
+#endif
 // TODO: ssd_copyv is not supported yet
 int ssd_copyv(struct obj_data *, struct obj_data *);
 int ssd_copy_list(struct obj_data *, struct list_head *);
 int ssd_filter(struct obj_data *, struct obj_descriptor *, double *);
 int ssd_hash(struct sspace *, const struct bbox *, struct dht_entry *[]);
+
 
 int dht_add_entry(struct dht_entry *, const struct obj_descriptor *);
 const struct obj_descriptor * dht_find_entry(struct dht_entry *, const struct obj_descriptor *);
@@ -269,6 +279,7 @@ struct obj_data *obj_data_alloc(struct obj_descriptor *);
 struct obj_data *obj_data_allocv(struct obj_descriptor *);
 struct obj_data *obj_data_alloc_no_data(struct obj_descriptor *, void *);
 struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *, const void *);
+struct obj_data *obj_data_alloc_with_data_split(struct obj_descriptor *, const void *, struct obj_descriptor *);
 
 void obj_data_free(struct obj_data *od);
 void obj_data_free_with_data(struct obj_data *);
@@ -298,7 +309,12 @@ void obj_data_copy_to_mem(struct obj_data *od, int id);
 void obj_data_move_to_mem(struct obj_data *od, int id);
 void obj_data_free_in_mem(struct obj_data *od);
 void obj_data_free_in_ssd(struct obj_data *od);
+void obj_data_write_to_ssd(struct obj_data *od, int id);
 void obj_data_move_to_mem_emulate(struct obj_data *od, int id);
 void obj_data_copy_to_mem_emulate(struct obj_data *od, int id);
 void obj_data_write_to_ssd_emulate(struct obj_data *od, int id);
+
+#ifdef DS_HAVE_CEPH
+void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id);
+#endif
 #endif /* __SS_DATA_H_ */

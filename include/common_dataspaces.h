@@ -40,7 +40,6 @@
 #define __COMMON_DATASPACES_H_
 
 #include <stdint.h>
-#include "config.h"
 
 int common_dspaces_init(int num_peers, int appid, void *comm, const char *parameters);
 int common_dspaces_rank(void);
@@ -64,12 +63,33 @@ int common_dspaces_put (const char *var_name,
         uint64_t *lb,
         uint64_t *ub,
         const void *data);
+int common_dspaces_put_split(const char *var_name, 
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        const void *data);
 int common_dspaces_put_ssd (const char *var_name, 
         unsigned int ver, int size,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
         const void *data);
+
+//#ifdef DS_HAVE_CEPH
+int common_dspaces_put_ceph (const char *var_name, 
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        const void *data);
+int common_dspaces_promote(const char *var_name,
+        unsigned int ver,
+        int ndim, uint64_t *lb, uint64_t *ub);
+int common_dspaces_demote(const char *var_name,
+        unsigned int ver,
+        int ndim, uint64_t *lb, uint64_t *ub);
+//#endif
 
 int common_dspaces_remove (const char *var_name, unsigned int ver);
 

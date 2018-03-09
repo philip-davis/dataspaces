@@ -40,6 +40,8 @@
 #include "mpi.h"
 
 #define DSG_ID                  dsg->ds->self->ptlmap.id
+
+#define DISABLE_ML     1
 //extern pthread_mutex_t ml_mutex;
 //extern pthread_cond_t ml_cond;
 extern pthread_mutex_t pmutex;//init prefetching pthread function lock
@@ -239,20 +241,23 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
                 dsg = dsg_alloc(num_sp, num_cp, "dataspaces.conf", gcomm);
                 if (!dsg)
                         return -1;
+            #ifndef DISABLE_ML
                 pthread_t t_pref;//prefetch thread
                 pthread_t t_evict;
                 pthread_create(&t_pref, NULL, prefetch_thread, (void*)NULL);
                 pthread_create(&t_evict, NULL, evict_thread, (void*)NULL);
-
+            #endif
                 while (!dsg_complete(dsg)){
                         err = dsg_process(dsg);
                         if(err<0)
                                 break;
                 }
+            #ifndef DISABLE_ML
                 pthread_cancel(t_pref);//kill t_pref thread
                 pthread_join(t_pref, NULL);//wait t_pref thread end
                 pthread_cancel(t_evict);//kill t_pref thread
                 pthread_join(t_evict, NULL);//wait t_pref thread end
+            #endif
                 pthread_mutex_destroy(&pmutex);//destroy mutex lock
                 pthread_cond_destroy(&pcond);//destroy condition
                 pthread_mutex_destroy(&emutex);//destroy mutex lock

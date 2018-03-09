@@ -239,6 +239,9 @@ enum cmd_type {
     CN_TIMING_AVG,
     _CMD_COUNT,
     /*Added for SSD commands*/
+    ss_obj_put_ceph,
+    ss_obj_promote,
+    ss_obj_demote,
     ss_obj_put_ssd
 };
 

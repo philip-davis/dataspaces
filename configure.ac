@@ -128,6 +128,19 @@ else
         AM_CONDITIONAL(BUILD_DIMES, false)
 fi
 
+dnl Check if CEPH is enabled
+AC_ARG_ENABLE(ceph,
+    [AS_HELP_STRING([--enable-ceph],
+        [Include the ceph mechanism. By default this is not included])])
+AM_CONDITIONAL([CEPH], [test "x$enable_ceph" == "xyes"])
+
+if test "x$enable_ceph" == "xyes"; then
+            AC_DEFINE(DS_HAVE_CEPH, 1, [CEPH is enabled])
+            echo "CEPH enabled!"
+            DSPACESLIB_LDADD+=" -lrados"
+            DSPACES_EXT_LDADD+=" -lrados"
+fi
+
 dnl Check the max array dimension
 
 if test -z "${HAVE_UGNI_TRUE}"; then
