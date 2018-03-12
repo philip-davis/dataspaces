@@ -46,6 +46,8 @@
 //#define SSD_DIR_PATH "/lustre/atlas/scratch/subedip1/csc143/"
 //#define SSD_DIR_PATH "/xfs/scratch/subedip1/"
 #define SSD_DIR_PATH "/home/subedip/"
+
+#define CEPH_EMULATE_DIR "/home/subedip/ceph/"
 // TODO: I should  import the header file with  the definition for the
 // iovec_t data type.
 
@@ -1939,20 +1941,16 @@ void obj_data_free_in_mem(struct obj_data *od)
     else if (od->data){
         free(od->data); 
     }
-    else{
-        uloga("'%s()': ERROR double data free on descriptor %s.\n",
-            __func__, od->obj_desc.name);
-    }
     od->data = NULL;
     od->_data = NULL;
     if (od->sl == in_memory_ssd || od->sl == in_memory){ 
         od->sl = in_ssd;
     }
-    #ifdef DS_HAVE_CEPH
+    //#ifdef DS_HAVE_CEPH
     if (od->sl == in_memory_ceph){ 
         od->sl = in_ceph;
     }
-    #endif
+    //#endif
 }
 void obj_data_free_in_ssd(struct obj_data *od)
 {
@@ -1988,6 +1986,7 @@ void obj_data_write_to_ssd(struct obj_data *od, int id){
             fwrite(od->data, obj_data_size(&od->obj_desc), 1, f);
         }
         fclose(f);
+
 }
 
 #ifdef DS_HAVE_CEPH
@@ -2043,7 +2042,42 @@ void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id)
 
     //free the ioctx
     rados_ioctx_destroy(io);
-    od->sl = in_memory_ceph;
+    od->sl = in_ceph;
+    obj_data_free_in_mem(od);
+}
+#endif
+
+#ifndef DS_HAVE_CEPH
+void obj_data_copy_to_ceph_emulate(struct obj_data *od, int id)
+{
+    
+    char name[100];
+    char lb_name[100];
+    char *ap = lb_name;
+    //char ub_name[50];
+    int i;
+    for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
+    {
+        ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+    }
+    sprintf(name, "%2d_%s_%d%s",id, &od->obj_desc.name, (od->obj_desc).version, lb_name);
+    char *new_name = (char *)malloc(sizeof(char)*1000);
+    memset(new_name, '\0', sizeof(new_name));
+    strcpy(new_name, CEPH_EMULATE_DIR);
+    strcat(new_name, name);
+    //uloga("Creating file %s \n", new_name);
+    FILE *f=fopen(new_name, "wb");
+    if(!f){
+        uloga("File could not be created in SSD\n");
+        exit(1);
+    }
+    if(od->_data){
+            fwrite(od->_data, obj_data_size(&od->obj_desc) + 7, 1, f);
+        }else{
+            fwrite(od->data, obj_data_size(&od->obj_desc), 1, f);
+        }
+        fclose(f);
+    od->sl = in_ceph;
     obj_data_free_in_mem(od);
 }
 #endif
@@ -2117,6 +2151,45 @@ void ceph_read(struct obj_data *od, int id, int move){
         else
             od->sl = in_memory_ceph;
     #endif
+
+        #ifndef DS_HAVE_CEPH
+        struct obj_descriptor *odsc = &od->obj_desc;
+        //perform aio read
+        od->_data = od->data = malloc(obj_data_size(odsc)+7);
+            char name[100];
+            char lb_name[100];
+            char *ap = lb_name;
+            int i;
+            for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
+            {
+                ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+            }
+            sprintf(name, "%2d_%s_%d%s",id, &od->obj_desc.name, (od->obj_desc).version, lb_name);
+            char *new_name = (char *)malloc(sizeof(char)*1000);
+            memset(new_name, '\0', sizeof(new_name));
+            strcpy(new_name, CEPH_EMULATE_DIR);
+            strcat(new_name, name);
+            FILE *f=fopen(new_name, "rb");
+            if(f){
+                if(od->_data){
+                    fread(od->_data, obj_data_size(&od->obj_desc) + 7, 1, f);
+                }else{
+                    fread(od->_data, obj_data_size(&od->obj_desc), 1, f);
+                }
+                //uloga("Moved %s to memory \n", name);
+                fclose(f);
+               // uloga("Going to remove file %s as its moved to memory", new_name);
+                if(move==1){
+                    od->sl = in_memory;
+                    remove(new_name);
+                }else{
+                    od->sl = in_memory_ceph;
+                }
+                
+            }else{
+                uloga("File could not be found \n");
+            }
+        #endif
 }
 
 void ssd_read(struct obj_data *od, int id, int move){
@@ -2181,11 +2254,11 @@ void obj_data_move_to_mem(struct obj_data *od, int id)
         struct obj_descriptor *odsc = &od->obj_desc;
         ssd_read(od, id, 1);
     }
-    #ifdef DS_HAVE_CEPH
+   // #ifdef DS_HAVE_CEPH
     if(od->sl == in_ceph){
         ceph_read(od, id, 1);
         }
-    #endif 
+    //#endif 
 }
 
 void obj_data_move_to_mem_emulate(struct obj_data *od, int id)

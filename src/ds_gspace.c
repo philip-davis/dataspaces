@@ -1448,6 +1448,9 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
         #ifdef DS_HAVE_CEPH
         obj_data_copy_to_ceph(od, cluster, DSG_ID);
         #endif
+        #ifndef DS_HAVE_CEPH
+        obj_data_copy_to_ceph_emulate(od, DSG_ID);
+        #endif
     }
     free(msg);
 #ifdef DEBUG
@@ -1871,6 +1874,7 @@ void *prefetch_thread(void*attr){
                 node_insert(pod_list.pref_od[local_cond_index], 1);
                 if(dsg->ls->mem_used > dsg->ls->mem_size){
                     evict_num = 1;
+                    //pthread_cond_signal(&econd);
                     pthread_cond_signal(&econd);
                 }
                 pthread_mutex_unlock(&emutex);
@@ -1902,23 +1906,24 @@ void *evict_thread(void*attr){
                 //uloga("Memory full, start evicting to SSD");
                 obj_data_write_to_ssd(in_mem_head->curr_od, DSG_ID);
                 //uloga("File Copied to ssd");
-                node_insert(in_mem_head->curr_od, 0);
-                //uloga("Inserted to SSD, SSD used: %llu, Mem used %llu \n", dsg->ls->ssd_used, dsg->ls->mem_used);
+                obj_data_free_in_mem(in_mem_head->curr_od);
+                node_insert(in_mem_head->curr_od, 0); 
                 if(dsg->ls->ssd_used > dsg->ls->ssd_size){
                     evict_ssd = 1;
+                    //uloga("SSD Full, evict\n");
                 }
                 del_node(1);
                 evict_num = 0;
             }
             if(evict_ssd == 1){
                 obj_data_move_to_mem(in_ssd_head->curr_od, DSG_ID);
-                //uloga("Mem used before moving to mem for evicting to Ceph is %llu\n", dsg->ls->mem_used);
-                dsg->ls->mem_used = dsg->ls->mem_used + obj_data_size(&(in_ssd_head->curr_od->obj_desc));
-                //uloga("Mem used after moving to mem for evicting to Ceph is %llu\n", dsg->ls->mem_used);
+                #ifdef DS_HAVE_CEPH
                 obj_data_copy_to_ceph(in_ssd_head->curr_od, cluster, DSG_ID);
-                dsg->ls->mem_used = dsg->ls->mem_used - obj_data_size(&(in_ssd_head->curr_od->obj_desc));
-                //uloga("Mem used after evicting to Ceph is %llu\n", dsg->ls->mem_used);
-                //uloga("Inserted to Ceph, SSD used: %llu, Mem used %llu \n", dsg->ls->ssd_used, dsg->ls->mem_used);
+                #endif
+                #ifndef DS_HAVE_CEPH
+                obj_data_copy_to_ceph_emulate(in_ssd_head->curr_od, DSG_ID);
+                #endif
+                dsg->ls->ssd_used = dsg->ls->ssd_used - obj_data_size(&(in_ssd_head->curr_od->obj_desc));
                 del_node(0);
                 evict_ssd = 0;
             } 
@@ -2729,7 +2734,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         {
             curr_lb[j] = (int)oh->u.o.odsc.bb.lb.c[j];
             curr_ub[j] =  (int)oh->u.o.odsc.bb.ub.c[j];
-            uloga("%d,%d ", curr_lb[j], curr_ub[j]);
+            //uloga("%d,%d ", curr_lb[j], curr_ub[j]);
             int diff = curr_ub[j]-curr_lb[j];
             if(diff>0){
                 new_lb[j] = (uint64_t)(curr_ub[j]+1);
@@ -2800,6 +2805,12 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         }
 
         #ifdef DS_HAVE_CEPH
+        if(from_obj->sl == in_memory_ceph){
+            obj_data_free_in_mem(from_obj);
+        }
+        #endif
+
+        #ifndef DS_HAVE_CEPH
         if(from_obj->sl == in_memory_ceph){
             obj_data_free_in_mem(from_obj);
         }
@@ -2891,6 +2902,13 @@ static int dsgrpc_obj_demote(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         if(from_obj->sl == in_ssd){
             obj_data_move_to_mem(from_obj, DSG_ID);
             obj_data_copy_to_ceph(from_obj, cluster, DSG_ID);
+        }
+    #endif
+
+    #ifndef DS_HAVE_CEPH
+        if(from_obj->sl == in_ssd){
+            obj_data_move_to_mem(from_obj, DSG_ID);
+            obj_data_copy_to_ceph_emulate(from_obj, DSG_ID);
         }
     #endif
 

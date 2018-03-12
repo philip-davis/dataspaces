@@ -319,4 +319,8 @@ void obj_data_write_to_ssd_emulate(struct obj_data *od, int id);
 #ifdef DS_HAVE_CEPH
 void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id);
 #endif
+
+#ifndef DS_HAVE_CEPH
+void obj_data_copy_to_ceph_emulate(struct obj_data *od, int id);
+#endif
 #endif /* __SS_DATA_H_ */

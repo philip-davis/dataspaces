@@ -345,12 +345,12 @@ int dspaces_put_split(const char *var_name,
  *
  * @return  0 indicates success.
  */
-#ifdef DS_HAVE_CEPH
+//#ifdef DS_HAVE_CEPH
 int dspaces_put_ceph (const char *var_name,
         unsigned int ver, int size,
         int ndim, uint64_t *lb, uint64_t *ub, 
         void *data);
-#endif
+//#endif
 
 /**
  * @brief Query the space to demote data  
