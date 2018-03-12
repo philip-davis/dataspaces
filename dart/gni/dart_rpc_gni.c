@@ -307,11 +307,11 @@ static int init_gni (struct rpc_server *rpc_s)
 				#ifdef DS_HAVE_ARIES
        	 				err = get_named_dom_aries(pdomainName, &cookie, &cookie2);
        	 			#else
-       	 				err = get_named_dom(pdomainName, &cookie, &cookie2);
+       	 				err = get_named_dom(pdomainName, &ptag, &cookie);
        	 			#endif
         			
         			if(err != 0){
-					printf("Fail: cookie(%x) and cookie2(%d) returned error. %d.\n", err, cookie, cookie2);
+					printf("Error: Could not obtain cookie information from pdomain provided. Pdomain: %c, Cookie: %x, Err %d. (%s)\n",pdomainName,cookie,err,__func__);
 					printf("Please use 'apstat -P' to check if shared protection domain is activiated.\n"); 
         				goto err_out;
         			}
