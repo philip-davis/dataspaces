@@ -41,7 +41,7 @@
 
 #define DSG_ID                  dsg->ds->self->ptlmap.id
 
-#define DISABLE_ML     1
+//#define DISABLE_ML     1
 //extern pthread_mutex_t ml_mutex;
 //extern pthread_cond_t ml_cond;
 extern pthread_mutex_t pmutex;//init prefetching pthread function lock
@@ -185,7 +185,7 @@ int common_put(const char *var_name,
     void *data, enum transport_type type)
 {
     if ( type == USE_DSPACES ) {
-        return dspaces_put_ssd(var_name, ver, size,
+        return dspaces_put(var_name, ver, size,
                         ndim,lb, ub,data);
     } else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES

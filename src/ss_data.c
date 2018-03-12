@@ -44,7 +44,6 @@
 #endif
 
 //#define SSD_DIR_PATH "/lustre/atlas/scratch/subedip1/csc143/"
-//#define SSD_DIR_PATH "/ssd/users/ps917/"
 //#define SSD_DIR_PATH "/xfs/scratch/subedip1/"
 #define SSD_DIR_PATH "/home/subedip/"
 // TODO: I should  import the header file with  the definition for the
@@ -1533,8 +1532,10 @@ struct ss_storage *ls_alloc(int max_versions)
                 INIT_LIST_HEAD(&ls->obj_hash[i]);
         ls->size_hash = max_versions;
         //ls->mem_size = 1073741824; //1GB mem allocated for prefetch
-        ls->mem_size = 65536;
+        ls->mem_size = 32768;
         ls->mem_used = 0; //1GB mem allocated for prefetch
+        ls->ssd_size = 32768;
+        ls->ssd_used = 0; //1GB mem allocated for prefetch
         return ls;
 }
 
@@ -2042,6 +2043,7 @@ void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id)
 
     //free the ioctx
     rados_ioctx_destroy(io);
+    od->sl = in_memory_ceph;
     obj_data_free_in_mem(od);
 }
 #endif
@@ -2177,7 +2179,7 @@ void obj_data_move_to_mem(struct obj_data *od, int id)
 {   
     if(od->sl == in_ssd){
         struct obj_descriptor *odsc = &od->obj_desc;
-        ssd_read(od, id, 0);
+        ssd_read(od, id, 1);
     }
     #ifdef DS_HAVE_CEPH
     if(od->sl == in_ceph){

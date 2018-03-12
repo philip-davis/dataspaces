@@ -59,6 +59,8 @@ static struct timer tm_perf;
 #define DSG_ID                  dsg->ds->self->ptlmap.id
 #define DISABLE_ML     1
 
+#define ENABLE_LB 1
+
 struct cont_query {
         int                     cq_id;
         int                     cq_rank;
@@ -144,6 +146,7 @@ int cond_num = 0;
 int counter;
 int last_request = 0;
 int evict_num = 0;
+int evict_ssd = 0;
 
 static enum storage_type st = column_major; 
 
@@ -1418,14 +1421,28 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
     struct obj_data *od = msg->private;
     ls_add_obj(dsg->ls, od);
     if(od->sl == in_memory){
-//    uloga("Object sl shows in_memory \n");
+        //dsg->ls->mem_used = dsg->ls->mem_used + obj_data_size(&(od->obj_desc));
+        pthread_mutex_lock(&emutex);
+        node_insert(od, 1);
+        if(dsg->ls->mem_used > dsg->ls->mem_size){
+            evict_num = 1;
+            pthread_cond_signal(&econd);
+        }
+        pthread_mutex_unlock(&emutex);
+
     }
-// double tm_start, tm_ending;
-//  tm_start = timer_read(&tm_perf);
     if(od->sl == in_memory_ssd){
         obj_data_write_to_ssd(od, DSG_ID);
         obj_data_free_in_mem(od);
-        //obj_data_write_to_ssd_emulate(od, DSG_ID);
+
+        pthread_mutex_lock(&emutex);
+        node_insert(od, 0);
+        if(dsg->ls->ssd_used > dsg->ls->ssd_size){
+            evict_ssd = 1;
+            pthread_cond_signal(&econd);
+        }
+        pthread_mutex_unlock(&emutex);
+        //dsg->ls->ssd_used = dsg->ls->ssd_used + obj_data_size(&(od->obj_desc));
     }
     if(od->sl == in_memory_ceph){
         #ifdef DS_HAVE_CEPH
@@ -1466,6 +1483,8 @@ WrapperMap *reqmap[10] = {NULL};
 int past_ver[10] = {0};
 int req_count[10] = {0};
 
+#endif
+
 int curr_lb[3] = {0};
 int curr_ub[3] = {0};
 
@@ -1475,36 +1494,78 @@ typedef struct evict_node{
 }evict_node;
 
 evict_node *in_mem_head;
+evict_node *in_ssd_head;
 
-void node_insert(struct obj_data * od){
+void node_insert(struct obj_data * od, int mem){
     evict_node *temp = (evict_node*) malloc (sizeof(evict_node));
     temp->curr_od = od;
     temp->next = NULL;
-    if(in_mem_head ==NULL){
-        in_mem_head = temp;
-    }else{
-        evict_node *traverser = in_mem_head;
-        while(traverser->next !=NULL){
-            traverser = traverser->next;
+    if(mem==1){
+        if(in_mem_head ==NULL){
+            in_mem_head = temp;
+        }else{
+            evict_node *traverser = in_mem_head;
+            while(traverser->next !=NULL){
+                traverser = traverser->next;
+            }
+            traverser->next = temp;
         }
-        traverser->next = temp;
+        dsg->ls->mem_used = dsg->ls->mem_used + obj_data_size(&(od->obj_desc));
+        //uloga("Mem used after adding in mem is %llu\n", dsg->ls->mem_used);
+    }else{
+        if(in_ssd_head ==NULL){
+            in_ssd_head = temp;
+        }else{
+            evict_node *traverser = in_ssd_head;
+            while(traverser->next !=NULL){
+                traverser = traverser->next;
+            }
+            traverser->next = temp;
+        }
+        dsg->ls->ssd_used = dsg->ls->ssd_used + obj_data_size(&(od->obj_desc));
+        //uloga("SSD used after adding in ssd is %llu\n", dsg->ls->ssd_used);
     }
-    dsg->ls->mem_used = dsg->ls->mem_used + obj_data_size(&(od->obj_desc));
-    uloga("Mem used after adding in mem is %llu\n", dsg->ls->mem_used);
+        
 }
 
-void del_node(){
-    dsg->ls->mem_used = dsg->ls->mem_used - obj_data_size(&(in_mem_head->curr_od->obj_desc));
-    uloga("Mem used after deleting from mem is %llu\n", dsg->ls->mem_used);
-    if(in_mem_head->next!=NULL){
-        evict_node *temp;
+void del_node(int mem){
+    if(mem==1){
+        dsg->ls->mem_used = dsg->ls->mem_used - obj_data_size(&(in_mem_head->curr_od->obj_desc));
+        //uloga("Mem used after deleting from mem is %llu\n", dsg->ls->mem_used);
+        if(in_mem_head->next!=NULL){
+            evict_node *temp;
+            temp = in_mem_head;
+            in_mem_head = in_mem_head->next;
+            free(temp);
+        }
+    }else{
+        dsg->ls->ssd_used = dsg->ls->ssd_used - obj_data_size(&(in_ssd_head->curr_od->obj_desc));
+        //uloga("SSD used after deleting from SSD is %llu\n", dsg->ls->ssd_used);
+        if(in_ssd_head->next!=NULL){
+            evict_node *temp;
+            temp = in_ssd_head;
+            in_ssd_head = in_ssd_head->next;
+            free(temp);
+        }
+    }
+    
+    
+}
+
+void free_evict_list(){
+    evict_node *temp;
+    while(in_mem_head != NULL){
         temp = in_mem_head;
         in_mem_head = in_mem_head->next;
         free(temp);
     }
-    
+    while(in_ssd_head != NULL){
+        temp = in_ssd_head;
+        in_ssd_head = in_ssd_head->next;
+        free(temp);
+    }
 }
-
+#ifndef DISABLE_ML
 void freeList(m_node* head)
 {
    m_node* tmp;
@@ -1528,12 +1589,7 @@ void free_all(){
         map_delete(reqmap[i]);
     }
     
-    evict_node *temp;
-    while(in_mem_head != NULL){
-        temp = in_mem_head;
-        in_mem_head = in_mem_head->next;
-        free(temp);
-    }
+    free_evict_list();
     
 
 }
@@ -1697,7 +1753,7 @@ static void insert_n_predict_data(char * variable_name, char *predicted_word){
     strcpy(predicted_word, rstr);
 }
 
-
+#endif
 
 /*
 get next node index in the circle array list.
@@ -1744,63 +1800,6 @@ int prefetch_insert_tail(struct obj_data * pod, int array_size){
     return pod_list.tail;
 }
 
-
-
-
-//thread to move data between layers
-void *prefetch_thread(void*attr){
-        int j = 0;
-        int local_cond_index = 0;
-        while (j == 0)
-        {
-    pthread_mutex_lock(&pmutex);        
-    if (cond_num == 0){/*sleep */
-        pthread_cond_wait(&pcond, &pmutex); //wait
-    }else{ /*cond_num > 0 */
-        local_cond_index = cond_index;
-        do{
-            pthread_mutex_lock(&odscmutex);
-            obj_data_move_to_mem_emulate(pod_list.pref_od[local_cond_index], DSG_ID);
-
-            pthread_mutex_lock(&emutex);
-            node_insert(pod_list.pref_od[local_cond_index]);
-            if(dsg->ls->mem_used > dsg->ls->mem_size){
-                evict_num = 1;
-                pthread_cond_signal(&econd);
-            }
-            pthread_mutex_unlock(&emutex);
-
-            //obj_data_move_to_mem(pod_list.pref_od[local_cond_index], DSG_ID);
-            pthread_mutex_unlock(&odscmutex);
-            pod_list.pref_od[local_cond_index]->so = prefetching;
-            local_cond_index = get_prev(local_cond_index, MAX_PREFETCH);
-        } while (pod_list.pref_od[local_cond_index] !=NULL && pod_list.pref_od[local_cond_index]->so == prefetching && (pod_list.pref_od[local_cond_index]->sl == in_ssd || pod_list.pref_od[local_cond_index]->sl == in_ceph));
-
-        cond_num = 0;
-    }
-    //sleep(1);
-    pthread_mutex_unlock(&pmutex);
-    }
-    return NULL;
-}
-
-//thread to move data between layers
-void *evict_thread(void*attr){
-    int j = 0;
-    uloga("Starting evict thread \n");
-    while(j==0){
-        pthread_mutex_lock(&emutex);
-        if (evict_num == 0){
-            pthread_cond_wait(&econd, &emutex);
-        }else{ 
-            obj_data_write_to_ssd_emulate(in_mem_head->curr_od, DSG_ID);
-            del_node();
-            evict_num = 0;
-        }
-        pthread_mutex_unlock(&emutex);
-    }
-    return NULL;
-}
 
 static int local_obj_get_desc(const char * var_name, uint64_t *lb, uint64_t *ub, int ver)
 {
@@ -1852,7 +1851,83 @@ static int local_obj_get_desc(const char * var_name, uint64_t *lb, uint64_t *ub,
 
 }
 
-#endif
+//thread to move data between layers
+void *prefetch_thread(void*attr){
+    int j = 0;
+    int local_cond_index = 0;
+    while (j == 0)
+    {
+        pthread_mutex_lock(&pmutex);        
+        if (cond_num == 0){/*sleep */
+            pthread_cond_wait(&pcond, &pmutex); //wait
+        }else{ /*cond_num > 0 */
+            local_cond_index = cond_index;
+            do{
+                pthread_mutex_lock(&odscmutex);
+                obj_data_move_to_mem(pod_list.pref_od[local_cond_index], DSG_ID);
+                //uloga("Prefetched data to mem");
+
+                pthread_mutex_lock(&emutex);
+                node_insert(pod_list.pref_od[local_cond_index], 1);
+                if(dsg->ls->mem_used > dsg->ls->mem_size){
+                    evict_num = 1;
+                    pthread_cond_signal(&econd);
+                }
+                pthread_mutex_unlock(&emutex);
+
+                //obj_data_move_to_mem(pod_list.pref_od[local_cond_index], DSG_ID);
+                pthread_mutex_unlock(&odscmutex);
+                pod_list.pref_od[local_cond_index]->so = prefetching;
+                local_cond_index = get_prev(local_cond_index, MAX_PREFETCH);
+            } while (pod_list.pref_od[local_cond_index] !=NULL && pod_list.pref_od[local_cond_index]->so == prefetching && (pod_list.pref_od[local_cond_index]->sl == in_ssd || pod_list.pref_od[local_cond_index]->sl == in_ceph));
+
+            cond_num = 0;
+        }
+        //sleep(1);
+        pthread_mutex_unlock(&pmutex);
+    }
+    return NULL;
+}
+
+//thread to move data between layers
+void *evict_thread(void*attr){
+    int j = 0;
+    uloga("Starting evict thread \n");
+    while(j==0){
+        pthread_mutex_lock(&emutex);
+        if (evict_num == 0 && evict_ssd == 0){
+            pthread_cond_wait(&econd, &emutex);
+        }else{
+            if(evict_num == 1){
+                //uloga("Memory full, start evicting to SSD");
+                obj_data_write_to_ssd(in_mem_head->curr_od, DSG_ID);
+                //uloga("File Copied to ssd");
+                node_insert(in_mem_head->curr_od, 0);
+                //uloga("Inserted to SSD, SSD used: %llu, Mem used %llu \n", dsg->ls->ssd_used, dsg->ls->mem_used);
+                if(dsg->ls->ssd_used > dsg->ls->ssd_size){
+                    evict_ssd = 1;
+                }
+                del_node(1);
+                evict_num = 0;
+            }
+            if(evict_ssd == 1){
+                obj_data_move_to_mem(in_ssd_head->curr_od, DSG_ID);
+                //uloga("Mem used before moving to mem for evicting to Ceph is %llu\n", dsg->ls->mem_used);
+                dsg->ls->mem_used = dsg->ls->mem_used + obj_data_size(&(in_ssd_head->curr_od->obj_desc));
+                //uloga("Mem used after moving to mem for evicting to Ceph is %llu\n", dsg->ls->mem_used);
+                obj_data_copy_to_ceph(in_ssd_head->curr_od, cluster, DSG_ID);
+                dsg->ls->mem_used = dsg->ls->mem_used - obj_data_size(&(in_ssd_head->curr_od->obj_desc));
+                //uloga("Mem used after evicting to Ceph is %llu\n", dsg->ls->mem_used);
+                //uloga("Inserted to Ceph, SSD used: %llu, Mem used %llu \n", dsg->ls->ssd_used, dsg->ls->mem_used);
+                del_node(0);
+                evict_ssd = 0;
+            } 
+            
+        }
+        pthread_mutex_unlock(&emutex);
+    }
+    return NULL;
+}
 
 /*
 */
@@ -2645,6 +2720,30 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         
     #endif
 
+    #ifdef ENABLE_LB
+        uint64_t *new_lb= (uint64_t*)malloc(sizeof(uint64_t)*3);
+        uint64_t *new_ub = (uint64_t*)malloc(sizeof(uint64_t)*3);
+        memset(new_lb, 0, sizeof(uint64_t)*3);
+        memset(new_ub, 0, sizeof(uint64_t)*3);
+        for (j = 0; j < 3; ++j)
+        {
+            curr_lb[j] = (int)oh->u.o.odsc.bb.lb.c[j];
+            curr_ub[j] =  (int)oh->u.o.odsc.bb.ub.c[j];
+            uloga("%d,%d ", curr_lb[j], curr_ub[j]);
+            int diff = curr_ub[j]-curr_lb[j];
+            if(diff>0){
+                new_lb[j] = (uint64_t)(curr_ub[j]+1);
+                new_ub[j] =  (uint64_t)(curr_ub[j]+diff);
+            }else{
+                new_lb[j] = 0;
+                new_ub[j] = 0;
+            }
+        }
+        local_obj_get_desc(oh->u.o.odsc.name, new_lb, new_ub, (int)oh->u.o.odsc.version);
+
+        
+    #endif
+
         pthread_mutex_lock(&odscmutex);
         from_obj = ls_find(dsg->ls, &oh->u.o.odsc);
         if (!from_obj) {
@@ -2790,7 +2889,7 @@ static int dsgrpc_obj_demote(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
     #ifdef DS_HAVE_CEPH
         if(from_obj->sl == in_ssd){
-            obj_data_copy_to_mem(from_obj, DSG_ID);
+            obj_data_move_to_mem(from_obj, DSG_ID);
             obj_data_copy_to_ceph(from_obj, cluster, DSG_ID);
         }
     #endif
@@ -3086,6 +3185,9 @@ void dsg_free(struct ds_gspace *dsg)
         arr_delete(vm);
         map_delete(t);
         free_all();
+        #endif
+        #ifdef ENABLE_LB
+        free_evict_list();
         #endif
 
 }

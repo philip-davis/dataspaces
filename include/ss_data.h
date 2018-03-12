@@ -108,6 +108,8 @@ struct ss_storage {
         int                     size_hash;
         uint64_t    mem_used;
         uint64_t    mem_size;
+        uint64_t    ssd_used;
+        uint64_t    ssd_size;
         /* List of data objects. */
         struct list_head        obj_hash[1];
 };
