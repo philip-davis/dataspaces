@@ -286,41 +286,40 @@ static int init_gni (struct rpc_server *rpc_s)
 #endif 
 
     if (ptag == 0 || cookie == 0) {
+	#ifdef DS_HAVE_ARIES
+		ptag = GNI_FIND_ALLOC_PTAG;
+	#endif
+
 	#ifndef DS_HAVE_DRC
     	#ifdef GNI_COOKIE
     		cookie=GNI_COOKIE;
-
-    		#ifdef DS_HAVE_ARIES
-    			ptag = GNI_FIND_ALLOC_PTAG;
-    		#else
-    			ptag = GNI_PTAG;
+    		#ifndef DS_HAVE_ARIES
+    			ptag = GNI_PTAG; //IF GEMINI & COOKIE DEFINED, PTAG MUST BE DEFINED
     		#endif 
     	#else //condition: ifdef GNI_COOKIE
     			if(pdomainName==NULL){
-					printf("Error: Protection Domain Not Configured. (%s)\n",__func__);
-					printf("You must do one of the following to use DataSpaces:\n");
-					printf("1. Compile DataSpaces with --with-gni-cookie to provide your own cookie.\n");
-					printf("2. Use the environment variable DSPACES_GNI_PDOMAIN to provide the name of your protection domain.\n");
-					goto err_out;
-				}else{
-					#ifdef DS_HAVE_ARIES
+				printf("Error: Protection Domain Not Configured. (%s)\n",__func__);
+				printf("You must do one of the following to use DataSpaces:\n");
+				printf("1. Compile DataSpaces with --with-gni-cookie to provide your own cookie.\n");
+				printf("2. Use the environment variable DSPACES_GNI_PDOMAIN to provide the name of your protection domain.\n");
+				goto err_out;
+			}else{
+				#ifdef DS_HAVE_ARIES
        	 				err = get_named_dom_aries(pdomainName, &cookie, &cookie2);
-       	 				ptag = GNI_FIND_ALLOC_PTAG;
        	 			#else
        	 				err = get_named_dom(pdomainName, &cookie, &cookie2);
        	 			#endif
         			
         			if(err != 0){
-						printf("Fail: cookie(%x) and cookie2(%d) returned error. %d.\n", err, cookie, cookie2);
-						printf("Please use 'apstat -P' to check if shared protection domain is activiated.\n"); 
+					printf("Fail: cookie(%x) and cookie2(%d) returned error. %d.\n", err, cookie, cookie2);
+					printf("Please use 'apstat -P' to check if shared protection domain is activiated.\n"); 
         				goto err_out;
         			}
-				}
+			}
     	#endif
     #else //if we are using DRC
         	cookie = drc_get_first_cookie(drc_credential_info); //Cookie1
         	cookie2 = drc_get_second_cookie(drc_credential_info); //Not used for slurm. Included for future.
-        	ptag = GNI_FIND_ALLOC_PTAG;
         	
         	status = GNI_GetPtag(0, cookie, &ptag);
 
