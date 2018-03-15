@@ -199,6 +199,51 @@ void FC_FUNC(dspaces_put, DSPACES_PUT) (const char *var_name,
     *err = common_dspaces_put(vname, *ver, *size, *ndim, lb, ub, data);
 }
 
+void FC_FUNC(dspaces_put_ceph, DSPACES_PUT_CEPH) (const char *var_name, 
+        unsigned int *ver, int *size, int *ndim,
+        uint64_t *lb, uint64_t *ub, void *data, int *err, int len)
+{
+    char vname[256];
+
+    if (!fstrncpy(vname, var_name, (size_t) len, sizeof(vname))) {
+        uloga("'%s': failed, can not copy Fortran var of len %d.\n",
+            __func__, len);
+        *err = -ENOMEM;
+    }
+
+    *err = common_dspaces_put_ceph(vname, *ver, *size, *ndim, lb, ub, data);
+}
+
+void FC_FUNC(dspaces_put_ssd, DSPACES_PUT_SSD) (const char *var_name, 
+        unsigned int *ver, int *size, int *ndim,
+        uint64_t *lb, uint64_t *ub, void *data, int *err, int len)
+{
+    char vname[256];
+
+    if (!fstrncpy(vname, var_name, (size_t) len, sizeof(vname))) {
+        uloga("'%s': failed, can not copy Fortran var of len %d.\n",
+            __func__, len);
+        *err = -ENOMEM;
+    }
+
+    *err = common_dspaces_put_ssd(vname, *ver, *size, *ndim, lb, ub, data);
+}
+
+void FC_FUNC(dspaces_put_split, DSPACES_PUT_SPLIT) (const char *var_name, 
+        unsigned int *ver, int *size, int *ndim,
+        uint64_t *lb, uint64_t *ub, void *data, int *err, int len)
+{
+    char vname[256];
+
+    if (!fstrncpy(vname, var_name, (size_t) len, sizeof(vname))) {
+        uloga("'%s': failed, can not copy Fortran var of len %d.\n",
+            __func__, len);
+        *err = -ENOMEM;
+    }
+
+    *err = common_dspaces_put_split(vname, *ver, *size, *ndim, lb, ub, data);
+}
+
 /*
 void FC_FUNC(dspaces_select, DSPACES_SELECT)(char *var_name, unsigned int *vers,
         int *xl, int *yl, int *zl,

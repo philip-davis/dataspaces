@@ -59,7 +59,7 @@ static struct timer tm_perf;
 #define DSG_ID                  dsg->ds->self->ptlmap.id
 #define DISABLE_ML     1
 
-#define ENABLE_LB 1
+#define ENABLE_LB       1
 
 struct cont_query {
         int                     cq_id;
@@ -1416,50 +1416,7 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 
 /*
 */
-static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
-{
-    struct obj_data *od = msg->private;
-    ls_add_obj(dsg->ls, od);
-    if(od->sl == in_memory){
-        //dsg->ls->mem_used = dsg->ls->mem_used + obj_data_size(&(od->obj_desc));
-        pthread_mutex_lock(&emutex);
-        node_insert(od, 1);
-        if(dsg->ls->mem_used > dsg->ls->mem_size){
-            evict_num = 1;
-            pthread_cond_signal(&econd);
-        }
-        pthread_mutex_unlock(&emutex);
 
-    }
-    if(od->sl == in_memory_ssd){
-        obj_data_write_to_ssd(od, DSG_ID);
-        obj_data_free_in_mem(od);
-
-        pthread_mutex_lock(&emutex);
-        node_insert(od, 0);
-        if(dsg->ls->ssd_used > dsg->ls->ssd_size){
-            evict_ssd = 1;
-            pthread_cond_signal(&econd);
-        }
-        pthread_mutex_unlock(&emutex);
-        //dsg->ls->ssd_used = dsg->ls->ssd_used + obj_data_size(&(od->obj_desc));
-    }
-    if(od->sl == in_memory_ceph){
-        #ifdef DS_HAVE_CEPH
-        obj_data_copy_to_ceph(od, cluster, DSG_ID);
-        #endif
-        #ifndef DS_HAVE_CEPH
-        obj_data_copy_to_ceph_emulate(od, DSG_ID);
-        #endif
-    }
-    free(msg);
-#ifdef DEBUG
-    uloga("'%s()': server %d finished receiving  %s, version %d.\n",
-        __func__, DSG_ID, od->obj_desc.name, od->obj_desc.version);
-#endif
-
-    return 0;
-}
 
 #ifndef DISABLE_ML
 /*Definition of data structures for markov chain and Machine Learning*/
@@ -1568,6 +1525,52 @@ void free_evict_list(){
         free(temp);
     }
 }
+
+static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+    struct obj_data *od = msg->private;
+    ls_add_obj(dsg->ls, od);
+    if(od->sl == in_memory){
+        //dsg->ls->mem_used = dsg->ls->mem_used + obj_data_size(&(od->obj_desc));
+        pthread_mutex_lock(&emutex);
+        node_insert(od, 1);
+        if(dsg->ls->mem_used > dsg->ls->mem_size){
+            evict_num = 1;
+            pthread_cond_signal(&econd);
+        }
+        pthread_mutex_unlock(&emutex);
+
+    }
+    if(od->sl == in_memory_ssd){
+        obj_data_write_to_ssd(od, DSG_ID);
+        obj_data_free_in_mem(od);
+
+        pthread_mutex_lock(&emutex);
+        node_insert(od, 0);
+        if(dsg->ls->ssd_used > dsg->ls->ssd_size){
+            evict_ssd = 1;
+            pthread_cond_signal(&econd);
+        }
+        pthread_mutex_unlock(&emutex);
+        //dsg->ls->ssd_used = dsg->ls->ssd_used + obj_data_size(&(od->obj_desc));
+    }
+    if(od->sl == in_memory_ceph){
+        #ifdef DS_HAVE_CEPH
+        obj_data_copy_to_ceph(od, cluster, DSG_ID);
+        #endif
+        #ifndef DS_HAVE_CEPH
+        obj_data_copy_to_ceph_emulate(od, DSG_ID);
+        #endif
+    }
+    free(msg);
+#ifdef DEBUG
+    uloga("'%s()': server %d finished receiving  %s, version %d.\n",
+        __func__, DSG_ID, od->obj_desc.name, od->obj_desc.version);
+#endif
+
+    return 0;
+}
+
 #ifndef DISABLE_ML
 void freeList(m_node* head)
 {

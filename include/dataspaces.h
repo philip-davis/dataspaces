@@ -46,7 +46,6 @@ extern "C" {
 #endif
 
 #include <stdint.h>
-#include "config.h"
 
 /**
  * @file dataspaces.h
