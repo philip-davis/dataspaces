@@ -46,8 +46,9 @@
 //#define SSD_DIR_PATH "/lustre/atlas/scratch/subedip1/csc143/"
 //#define SSD_DIR_PATH "/xfs/scratch/subedip1/"
 #define SSD_DIR_PATH "/home/subedip/"
-
 #define CEPH_EMULATE_DIR "/home/subedip/ceph/"
+#define MEM_LIMIT 1073741824     //memory limit for staging in bytes
+#define SSD_LIMIT 1073741824     //ssd size for staging in bytes
 // TODO: I should  import the header file with  the definition for the
 // iovec_t data type.
 
@@ -1534,9 +1535,9 @@ struct ss_storage *ls_alloc(int max_versions)
                 INIT_LIST_HEAD(&ls->obj_hash[i]);
         ls->size_hash = max_versions;
         //ls->mem_size = 1073741824; //1GB mem allocated for prefetch
-        ls->mem_size = 32768;
+        ls->mem_size = MEM_LIMIT;
         ls->mem_used = 0; //1GB mem allocated for prefetch
-        ls->ssd_size = 32768;
+        ls->ssd_size = SSD_LIMIT;
         ls->ssd_used = 0; //1GB mem allocated for prefetch
         return ls;
 }
