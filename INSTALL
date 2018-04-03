@@ -19,6 +19,9 @@ to one another on the uGNI network and consist of a ptag and cookie (or, for Ari
 to the documentation below for DataSpaces configuration options based on the Cray uGNI network of your system. 
 For more general information on protection domains, please see the Cray uGNI Documentation.
 
+If you are creating a user-level protection domain using apmgr -c, please note that you must also modify
+your run command to pass the credential as `aprun -p MY_PDOMAIN_NAME`.
+
 ## Cray uGNI Gemini Systems
 
 If your system allows users to create user-level protection domains, `apmgr pdomain -c [YOUR-DOMAIN-NAME]` 
