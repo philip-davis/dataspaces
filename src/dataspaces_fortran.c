@@ -201,7 +201,7 @@ void FC_FUNC(dspaces_put, DSPACES_PUT) (const char *var_name,
 
 void FC_FUNC(dspaces_put_ceph, DSPACES_PUT_CEPH) (const char *var_name, 
         unsigned int *ver, int *size, int *ndim,
-        uint64_t *lb, uint64_t *ub, void *data, int *err, int len)
+        uint64_t *lb, uint64_t *ub, void *data, int tier, int *err, int len)
 {
     char vname[256];
 
@@ -211,7 +211,7 @@ void FC_FUNC(dspaces_put_ceph, DSPACES_PUT_CEPH) (const char *var_name,
         *err = -ENOMEM;
     }
 
-    *err = common_dspaces_put_ceph(vname, *ver, *size, *ndim, lb, ub, data);
+    *err = common_dspaces_put_ceph(vname, *ver, *size, *ndim, lb, ub, data, tier);
 }
 
 void FC_FUNC(dspaces_put_ssd, DSPACES_PUT_SSD) (const char *var_name, 

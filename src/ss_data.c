@@ -1936,7 +1936,6 @@ void obj_data_free_with_data(struct obj_data *od)
 void obj_data_free_in_mem(struct obj_data *od)
 {
     if (od->_data) {
-        //uloga("'%s()': explicit data free on descriptor %s.\n", __func__, od->obj_desc.name);
         free(od->_data);    
     }
     else if (od->data){
@@ -1948,8 +1947,14 @@ void obj_data_free_in_mem(struct obj_data *od)
         od->sl = in_ssd;
     }
     //#ifdef DS_HAVE_CEPH
-    if (od->sl == in_memory_ceph){ 
-        od->sl = in_ceph;
+    if (od->sl == in_memory_ceph_ssd){ 
+        od->sl = in_ceph_ssd;
+    }
+    if (od->sl == in_memory_ceph_hdd){ 
+        od->sl = in_ceph_hdd;
+    }
+    if (od->sl == in_memory_ceph_tape){ 
+        od->sl = in_ceph_tape;
     }
     //#endif
 }
@@ -1991,7 +1996,7 @@ void obj_data_write_to_ssd(struct obj_data *od, int id){
 }
 
 #ifdef DS_HAVE_CEPH
-void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id)
+void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id, int tier)
 {
     
     //create a rados ioctx
@@ -2003,10 +2008,10 @@ void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id)
                 rados_shutdown(cluster);
                 exit(EXIT_FAILURE);
         } else {
-             //   uloga("\nCreated I/O context.\n");
+                //uloga("\nCreated I/O context.\n");
         }
     //write data synchronously
-      //  uloga("sprintf start for %s ver %d\n", &od->obj_desc.name, (od->obj_desc).version);
+        //uloga("sprintf start for %s ver %d\n", &od->obj_desc.name, (od->obj_desc).version);
             char name[100];
             char lb_name[100];
             char *ap = lb_name;
@@ -2017,19 +2022,42 @@ void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id)
                 ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
             }
             sprintf(name, "%2d_%s_%d%s",id, &od->obj_desc.name, (od->obj_desc).version, lb_name);
-           // uloga ("%s writing \n", name);
+            //uloga ("%s writing \n", name);
         if(od->_data){
-            err = rados_write(io, name, od->_data, obj_data_size(&od->obj_desc) + 7, 0);
+            rados_write_op_t op = rados_create_write_op();
+            if(tier==3){
+                uloga("Writing to Ceph Tape \n");
+                //fill here
+
+            }else if (tier==2){
+                uloga("Writing to Ceph HDD \n");
+                //fill here
+            }else{
+                //tier ==1
+                uloga("Writing to Ceph SSD \n");
+                //rados_write_op_set_alloc_hint2(op, 0, 0, LIBRADOS_ALLOC_HINT_FLAG_FAST_TIER);
+            }
+            rados_write_op_write(op, od->_data, obj_data_size(&od->obj_desc) + 7, 0);
+            err = rados_write_op_operate(op, io, name, NULL, 0);
             if (err < 0) {
                 uloga("%s: Cannot write object to pool %s: %s\n", __func__, poolname, strerror(-err));
                 rados_ioctx_destroy(io);
                 rados_shutdown(cluster);
                 exit(1);
             } else{
-               // uloga("Finished ceph write %s \n", name);
+                //uloga("Finished ceph write _od%s \n", name);
             }
         }else{
-            err = rados_write(io, name, od->data, obj_data_size(&od->obj_desc), 0);
+            rados_write_op_t op = rados_create_write_op();
+            if(tier==3){
+
+            }else if (tier==2){
+
+            }else{
+                //tier ==1
+            }
+            rados_write_op_write(op, od->data, obj_data_size(&od->obj_desc), 0);
+            err = rados_write_op_operate(op, io, name, NULL, 0);
             if (err < 0) {
                 uloga("%s: Cannot write object to pool %s: %s\n", __func__, poolname, strerror(-err));
                 rados_ioctx_destroy(io);
@@ -2043,7 +2071,18 @@ void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id)
 
     //free the ioctx
     rados_ioctx_destroy(io);
-    od->sl = in_ceph;
+    if(tier==3){
+            //uloga("Updating to Ceph Tape \n");
+            od->sl = in_ceph_tape;
+        }else if (tier==2){
+            //uloga("Updating to Ceph HDD \n");
+            od->sl = in_ceph_hdd;
+        }else{
+            //tier ==1
+            //uloga("Updating to Ceph SSD \n");
+            od->sl = in_ceph_ssd;
+        }
+    //od->sl = in_ceph;
     obj_data_free_in_mem(od);
 }
 #endif
@@ -2078,12 +2117,12 @@ void obj_data_copy_to_ceph_emulate(struct obj_data *od, int id)
             fwrite(od->data, obj_data_size(&od->obj_desc), 1, f);
         }
         fclose(f);
-    od->sl = in_ceph;
+    od->sl = in_ceph_ssd;
     obj_data_free_in_mem(od);
 }
 #endif
 
-void ceph_read(struct obj_data *od, int id, int move){
+void ceph_read(struct obj_data *od, int id, int move, int tier){
     #ifdef DS_HAVE_CEPH
         struct obj_descriptor *odsc = &od->obj_desc;
         //perform aio read
@@ -2149,8 +2188,16 @@ void ceph_read(struct obj_data *od, int id, int move){
         rados_ioctx_destroy(io);
         if(move==1)
             od->sl = in_memory;
-        else
-            od->sl = in_memory_ceph;
+        else{
+            if(tier == 3){
+                od->sl = in_memory_ceph_tape;
+            }else if(tier ==2){
+                od->sl = in_memory_ceph_hdd;
+            }else{
+                od->sl = in_memory_ceph_ssd;
+            }
+        }
+        
     #endif
 
         #ifndef DS_HAVE_CEPH
@@ -2184,7 +2231,13 @@ void ceph_read(struct obj_data *od, int id, int move){
                     od->sl = in_memory;
                     remove(new_name);
                 }else{
-                    od->sl = in_memory_ceph;
+                    if(tier == 3){
+                        od->sl = in_memory_ceph_tape;
+                    }else if(tier ==2){
+                        od->sl = in_memory_ceph_hdd;
+                    }else{
+                        od->sl = in_memory_ceph_ssd;
+                    }
                 }
                 
             }else{
@@ -2241,9 +2294,15 @@ void obj_data_copy_to_mem(struct obj_data *od, int id)
 
     }
     #ifdef DS_HAVE_CEPH
-    if(od->sl == in_ceph){
-        ceph_read(od, id, 0);
-        }
+    if(od->sl == in_ceph_ssd){
+        ceph_read(od, id, 0, 1);
+    }
+    if(od->sl == in_ceph_hdd){
+        ceph_read(od, id, 0, 2);
+    }
+    if(od->sl == in_ceph_tape){
+        ceph_read(od, id, 0, 3);
+    }
     #endif 
 
 }
@@ -2256,9 +2315,15 @@ void obj_data_move_to_mem(struct obj_data *od, int id)
         ssd_read(od, id, 1);
     }
    // #ifdef DS_HAVE_CEPH
-    if(od->sl == in_ceph){
-        ceph_read(od, id, 1);
-        }
+    if(od->sl == in_ceph_ssd){
+        ceph_read(od, id, 1, 1);
+    }
+    if(od->sl == in_ceph_hdd){
+        ceph_read(od, id, 1, 2);
+    }
+    if(od->sl == in_ceph_tape){
+        ceph_read(od, id, 1, 3);
+    }
     //#endif 
 }
 

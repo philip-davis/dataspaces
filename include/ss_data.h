@@ -77,7 +77,7 @@ struct gdim_list_entry {
         struct global_dimension gdim; 
 };
 
-enum storage_level { in_memory, in_ssd, in_memory_ssd, in_memory_ceph, in_ceph };/* storage level*/
+enum storage_level { in_memory, in_ssd, in_memory_ssd, in_memory_ceph_ssd, in_memory_ceph_hdd, in_memory_ceph_tape, in_ceph_ssd, in_ceph_hdd, in_ceph_tape};/* storage level*/
 enum storage_opera { normal, prefetching, caching };/* storage operation */
 struct obj_data {
         struct list_head        obj_entry;
@@ -317,7 +317,7 @@ void obj_data_copy_to_mem_emulate(struct obj_data *od, int id);
 void obj_data_write_to_ssd_emulate(struct obj_data *od, int id);
 
 #ifdef DS_HAVE_CEPH
-void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id);
+void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id, int tier);
 #endif
 
 #ifndef DS_HAVE_CEPH

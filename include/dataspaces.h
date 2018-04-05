@@ -342,13 +342,15 @@ int dspaces_put_split(const char *var_name,
  *                  bounding box. 
  * @param[in] data:     Pointer to user data buffer. 
  *
+ * @param[in] tier:     tier hint for Ceph (1: Ceph SSD, 2: Ceph HDD, 3: Ceph Tape). 
+ *
  * @return  0 indicates success.
  */
 //#ifdef DS_HAVE_CEPH
 int dspaces_put_ceph (const char *var_name,
         unsigned int ver, int size,
         int ndim, uint64_t *lb, uint64_t *ub, 
-        void *data);
+        void *data, int tier);
 //#endif
 
 /**

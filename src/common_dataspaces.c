@@ -385,7 +385,7 @@ int common_dspaces_put_ceph(const char *var_name,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
-        const void *data)
+        const void *data, int tier)
 {
         if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) {
             return -EINVAL;
@@ -416,7 +416,13 @@ int common_dspaces_put_ceph(const char *var_name,
                 __func__);
                 return -ENOMEM;
         }
-
+        if(tier==3){
+            od->sl = in_ceph_tape;
+        }else if(tier==2){
+            od->sl = in_ceph_hdd;
+        }else{
+            od->sl = in_ceph_ssd;
+        }
         // set global dimension
         set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
                              &od->gdim); 

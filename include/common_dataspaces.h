@@ -82,7 +82,7 @@ int common_dspaces_put_ceph (const char *var_name,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
-        const void *data);
+        const void *data, int tier);
 int common_dspaces_promote(const char *var_name,
         unsigned int ver,
         int ndim, uint64_t *lb, uint64_t *ub);

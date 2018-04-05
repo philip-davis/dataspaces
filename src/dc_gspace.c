@@ -1714,8 +1714,14 @@ int dcg_obj_put_ceph(struct obj_data *od)
         msg->private = od;
 
         msg->sync_op_id = syncop_ref(sync_op_id);
-
-        msg->msg_rpc->cmd = ss_obj_put_ceph;
+        if(od->sl==in_ceph_tape){
+            msg->msg_rpc->cmd = ss_obj_put_ceph_tape;
+        }else if(od->sl==in_ceph_hdd){
+            msg->msg_rpc->cmd = ss_obj_put_ceph_hdd;
+        }else{
+            msg->msg_rpc->cmd = ss_obj_put_ceph_ssd;
+        }
+        
         msg->msg_rpc->id = DCG_ID; // dcg->dc->self->id;
 
         hdr = msg->msg_rpc->pad;
@@ -2143,7 +2149,7 @@ int dcg_obj_demote(struct obj_data *od)
 
         err = dcg_obj_data_demote(qte);
         if (err < 0) {
-             uloga("Received error in dcg_obj_data_demoten");
+             uloga("Received error in dcg_obj_data_demote");
             goto out_no_data;
                 
         }

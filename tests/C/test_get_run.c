@@ -133,10 +133,10 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
 	for(i = 0; i < num_vars; i++){
 		sprintf(var_name, "mnd_%d", i);
 		//if(ts > 1) ts = (short)ts-1;
-		dspaces_promote(var_name, ts, dims, lb, ub);
+		//dspaces_promote(var_name, ts, dims, lb, ub);
 		common_get(var_name, ts, elem_size, dims, lb, ub,
 			data_tab[i], type);
-		dspaces_demote(var_name, ts, dims, lb, ub);
+		//dspaces_demote(var_name, ts, dims, lb, ub);
 		
 		//ts++;
 	}
