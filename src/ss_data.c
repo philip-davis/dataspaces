@@ -1969,13 +1969,22 @@ void obj_data_write_to_ssd(struct obj_data *od, int id){
     char name[100];
     char lb_name[100];
     char *ap = lb_name;
+    char modified_name[100];
     //char ub_name[50];
     int i;
     for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
     {
-        ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+        ap+=sprintf(ap, "_%llu_%llu", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
     }
-    sprintf(name, "%2d_%s_%d%s",id, &od->obj_desc.name, (od->obj_desc).version, lb_name);
+    i =0;
+    sprintf(modified_name, "%s", &od->obj_desc.name);
+    while(modified_name[i] != '\0'){
+        if (modified_name[i] == '/'){
+            modified_name[i] = '_';
+        }
+        i++;
+    }
+    sprintf(name, "%d_%s_%d%s",id, modified_name, (od->obj_desc).version, lb_name);
     char *new_name = (char *)malloc(sizeof(char)*1000);
     memset(new_name, '\0', sizeof(new_name));
     strcpy(new_name, SSD_DIR_PATH);
@@ -2012,16 +2021,25 @@ void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id, int tie
         }
     //write data synchronously
         //uloga("sprintf start for %s ver %d\n", &od->obj_desc.name, (od->obj_desc).version);
-            char name[100];
+            char name[1000];
             char lb_name[100];
             char *ap = lb_name;
+            char modified_name[100];
             //char ub_name[50];
             int i;
             for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
             {
-                ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+                ap+=sprintf(ap, "_%llu_%llu", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
             }
-            sprintf(name, "%2d_%s_%d%s",id, &od->obj_desc.name, (od->obj_desc).version, lb_name);
+            i =0;
+            sprintf(modified_name, "%s", &od->obj_desc.name);
+            while(modified_name[i] != '\0'){
+                if (modified_name[i] == '/'){
+                    modified_name[i] = '_';
+                }
+                i++;
+            }
+            sprintf(name, "%d_%s_%d%s",id, modified_name, (od->obj_desc).version, lb_name);
             //uloga ("%s writing \n", name);
         if(od->_data){
             rados_write_op_t op = rados_create_write_op();
@@ -2091,16 +2109,25 @@ void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id, int tie
 void obj_data_copy_to_ceph_emulate(struct obj_data *od, int id)
 {
     
-    char name[100];
+    char name[1000];
     char lb_name[100];
     char *ap = lb_name;
+    char modified_name[100];
     //char ub_name[50];
     int i;
     for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
     {
-        ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+        ap+=sprintf(ap, "_%llu_%llu", (long)(od->obj_desc).bb.lb.c[i], (long)(od->obj_desc).bb.ub.c[i]);
     }
-    sprintf(name, "%2d_%s_%d%s",id, &od->obj_desc.name, (od->obj_desc).version, lb_name);
+    i =0;
+    sprintf(modified_name, "%s", &od->obj_desc.name);
+    while(modified_name[i] != '\0'){
+        if (modified_name[i] == '/'){
+            modified_name[i] = '_';
+        }
+        i++;
+    }
+    sprintf(name, "%d_%s_%d%s",id, modified_name, (od->obj_desc).version, lb_name);
     char *new_name = (char *)malloc(sizeof(char)*1000);
     memset(new_name, '\0', sizeof(new_name));
     strcpy(new_name, CEPH_EMULATE_DIR);
@@ -2140,16 +2167,25 @@ void ceph_read(struct obj_data *od, int id, int move, int tier){
         }
 
         //uloga("sprintf start for %s ver %d\n", &od->obj_desc.name, (od->obj_desc).version);
-            char name[100];
+            char name[1000];
             char lb_name[100];
             char *ap = lb_name;
+            char modified_name[100];
+            //char ub_name[50];
             int i;
             for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
             {
-                ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+                ap+=sprintf(ap, "_%llu_%llu", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
             }
-            sprintf(name, "%2d_%s_%d%s",id, &od->obj_desc.name, (od->obj_desc).version, lb_name);
-           // uloga("Reading %s \n", name);
+            i =0;
+            sprintf(modified_name, "%s", &od->obj_desc.name);
+            while(modified_name[i] != '\0'){
+                if (modified_name[i] == '/'){
+                    modified_name[i] = '_';
+                }
+                i++;
+            }
+            sprintf(name, "%d_%s_%d%s",id, modified_name, (od->obj_desc).version, lb_name);
         if(od->_data){
             err = rados_read(io, name, od->_data, obj_data_size(&od->obj_desc) + 7, 0);
             if (err < 0) {
@@ -2251,15 +2287,25 @@ void ssd_read(struct obj_data *od, int id, int move){
     struct obj_descriptor *odsc = &od->obj_desc;
         //perform aio read
         od->_data = od->data = malloc(obj_data_size(odsc)+7);
-            char name[100];
+             char name[100];
             char lb_name[100];
             char *ap = lb_name;
+            char modified_name[100];
+            //char ub_name[50];
             int i;
             for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
             {
-                ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+                ap+=sprintf(ap, "_%llu_%llu", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
             }
-            sprintf(name, "%2d_%s_%d%s",id, &od->obj_desc.name, (od->obj_desc).version, lb_name);
+            i =0;
+            sprintf(modified_name, "%s", &od->obj_desc.name);
+            while(modified_name[i] != '\0'){
+                if (modified_name[i] == '/'){
+                    modified_name[i] = '_';
+                }
+                i++;
+            }
+            sprintf(name, "%d_%s_%d%s",id, modified_name, (od->obj_desc).version, lb_name);
             char *new_name = (char *)malloc(sizeof(char)*1000);
             memset(new_name, '\0', sizeof(new_name));
             strcpy(new_name, SSD_DIR_PATH);

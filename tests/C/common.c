@@ -185,10 +185,10 @@ int common_put(const char *var_name,
     void *data, enum transport_type type)
 {
     if ( type == USE_DSPACES ) {
-        //return dspaces_put_ceph(var_name, ver, size,
-        //                ndim,lb, ub,data,3);
-        return dspaces_put(var_name, ver, size,
-                        ndim,lb, ub,data);
+        return dspaces_put_ceph(var_name, ver, size,
+                        ndim,lb, ub,data,3);
+        //return dspaces_put(var_name, ver, size,
+        //                ndim,lb, ub,data);
     } else if (type == USE_DIMES) {
 #ifdef DS_HAVE_DIMES
         return dimes_put(var_name, ver, size, 
