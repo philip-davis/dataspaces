@@ -1371,6 +1371,7 @@ int rpc_write_socket(struct rpc_server *rpc_s)
         while(!f) {
         	f = fopen("conf", "wt");
         	if (!f && errno != EINTR) {
+		err = errno;
                 goto err_out;
         	}
         }
