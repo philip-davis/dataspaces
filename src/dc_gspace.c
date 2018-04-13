@@ -132,6 +132,7 @@ struct dcg_lock {
 static struct {
         int next;
         int opid[4095];
+        int ds_comp[4095]; //receive server notification
 } sync_op;
 
 static struct dcg_space *dcg;
@@ -664,6 +665,11 @@ static int syncop_next(void)
 static int * syncop_ref(int opid)
 {
         return &sync_op.opid[opid];
+}
+
+static int * syncds_ref(int opid)
+{
+        return &sync_op.ds_comp[opid];
 }
 
 static inline struct node_id * dcg_which_peer(void)
@@ -1434,13 +1440,24 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
         struct obj_data *od = msg->private;
 
-        (*msg->sync_op_id) = 1;
-
         obj_data_free(od);
         free(msg);
 
         dcg_dec_pending();
         return 0;
+}
+
+/*
+    Server has completed processing data, release client sync 
+*/
+static int dcgrpc_server_completion(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+    
+    struct hdr_obj_put *hdr = (struct hdr_obj_put *)cmd->pad;
+     
+     (*hdr->sync_op_id_ptr) = 1;
+
+    return 0;
 }
 
 /*
@@ -1507,8 +1524,6 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
         dcg_l = calloc(1, sizeof(*dcg_l));
         if (!dcg_l)
                 goto err_out;
-
-
         for (i = 0; i < sizeof(sync_op.opid)/sizeof(sync_op.opid[0]); i++)
                 sync_op.opid[i] = 1;
 
@@ -1520,11 +1535,14 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
         rpc_add_service(cp_lock, dcgrpc_lock_service);
         rpc_add_service(cn_timing, dcgrpc_time_log);
         rpc_add_service(ss_info, dcgrpc_ss_info);
+        //server notify client 
+        rpc_add_service(ds_put_completion, dcgrpc_server_completion);
 #ifdef DS_HAVE_ACTIVESPACE
         rpc_add_service(ss_code_reply, dcgrpc_code_reply);
 #endif
         /* Added for ccgrid demo. */
         rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);	
+
 	
         dcg_l->dc = dc_alloc(num_nodes, appid, dcg_l, comm);
         if (!dcg_l->dc) {
@@ -1532,10 +1550,12 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
                 goto err_out;
         }
 
+
         INIT_LIST_HEAD(&dcg_l->locks_list);
         init_gdim_list(&dcg_l->gdim_list);    
         qc_init(&dcg_l->qc);
         dcg_l->hash_version = ssd_hash_version_v1; // set default hash version
+
 
 #ifdef TIMING_PERF
         timer_init(&tm_perf, 1);
@@ -1599,13 +1619,15 @@ int dcg_obj_put(struct obj_data *od)
         msg->cb = obj_put_completion;
         msg->private = od;
 
-        msg->sync_op_id = syncop_ref(sync_op_id);
+        //msg->sync_op_id = syncop_ref(sync_op_id);
+
 
         msg->msg_rpc->cmd = ss_obj_put;
         msg->msg_rpc->id = DCG_ID; // dcg->dc->self->id;
 
         hdr = msg->msg_rpc->pad;
         hdr->odsc = od->obj_desc;
+        hdr->sync_op_id_ptr = syncop_ref(sync_op_id); //passing the synchronization pointer to server
         memcpy(&hdr->gdim, &od->gdim, sizeof(struct global_dimension));
 
         err = rpc_send(dcg->dc->rpc_s, peer, msg);
@@ -1712,14 +1734,16 @@ int dcg_obj_cq_update(int cq_id)
 int dcg_obj_sync(int sync_op_id)
 {
         int *sync_op_ref = syncop_ref(sync_op_id);
+        int *sync_comp_ptr_ref = syncds_ref(sync_op_id); 
         int err;
 
-        while (sync_op_ref[0] != 1) {
+            while (sync_op_ref[0] != 1){
                 err = dc_process(dcg->dc);
                 if (err < 0) {
                         goto err_out;
                 }
         }
+
 
         return 0;
  err_out:
@@ -1815,6 +1839,7 @@ int dcg_obj_get(struct obj_data *od)
         }
 
         err = dcg_obj_assemble(qte, od);
+
 #ifdef TIMING_PERF
         tm_end = timer_read(&tm_perf);
         uloga("TIMING_PERF fetch_data ts %d peer %d time %lf %s\n",
@@ -1908,11 +1933,11 @@ int dcg_ss_info(struct dcg_space *dcg, int *num_dims)
 		*num_dims = dcg->ss_info.num_dims;
 		return 0;
 	}
-
 	peer = dcg_which_peer();
 	msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
 	if (!msg)
 		goto err_out;
+    
 
 	msg->msg_rpc->cmd = ss_info;
 	msg->msg_rpc->id = DCG_ID;
@@ -2039,8 +2064,8 @@ int dcg_lock_on_read(const char *lock_name, void *comm)
 	struct dcg_lock *lock;
 	int err = -ENOMEM;
 	int myid, app_minid;
-
-	lock = lock_get(lock_name, 1);
+	
+    lock = lock_get(lock_name, 1);
 	if (!lock) 
 		goto err_out;
 
@@ -2064,7 +2089,6 @@ int dcg_lock_on_read(const char *lock_name, void *comm)
 				goto err_out;
 		}
 	}
-
 
 	if(comm == NULL){
 		err = dc_barrier(dcg->dc);
@@ -2172,8 +2196,8 @@ int dcg_unlock_on_write(const char *lock_name, void *comm)
 	struct dcg_lock *lock;
 	int err = -ENOMEM;
 	int myid, app_minid;
-
-	lock = lock_get(lock_name, 1);
+	
+    lock = lock_get(lock_name, 1);
 	if (!lock)
 		goto err_out;
 
@@ -2202,8 +2226,6 @@ int dcg_unlock_on_write(const char *lock_name, void *comm)
 			goto err_out;
 	}
 
-	//debug
-	//printf("rank %d: barrier done.\n", dcg->dc->self->ptlmap.id);
 	return 0;
  err_out:
 	ERROR_TRACE();
