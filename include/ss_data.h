@@ -195,7 +195,7 @@ struct hdr_obj_get {
 struct hdr_obj_put {
     struct obj_descriptor odsc;
     struct global_dimension gdim;
-    int* sync_comp_ptr; //client side sync operation pointer
+    int* sync_op_id_ptr; //synchronization lock pointer
 } __attribute__((__packed__));
 
 /* Header structure for obj_filter requests. */
