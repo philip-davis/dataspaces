@@ -151,7 +151,6 @@ struct rpc_cmd {
 	unsigned int id;
 	struct ibv_mr mr;
 	int qp_num;
-	int* sync_comp_ptr; //client  sync_op.ds_comp[] pointer
 	// payload of the command 
 	unsigned char pad[RPC_CMD_PAD_SIZE];
 	uint64_t wr_id;
@@ -413,7 +412,7 @@ enum cmd_type {
 	CN_TIMING_AVG,
 	_CMD_COUNT,
 	cn_s_unregister,
-	ds_put_completion  //for server notify client that data processing has completed
+    ds_put_completion  //for server notify client that data processing has completed
 };
 
 enum lock_type {

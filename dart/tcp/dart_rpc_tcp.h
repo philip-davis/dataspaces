@@ -237,7 +237,8 @@ enum cmd_type {
 #endif
     /* Added for CCGrid Demo. */
     CN_TIMING_AVG,
-    _CMD_COUNT
+    _CMD_COUNT,
+    ds_put_completion  //for server notify client that data processing has completed
 };
 
 enum lock_type {
