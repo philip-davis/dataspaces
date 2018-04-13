@@ -1239,27 +1239,39 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 }
 
 /*
-    Send rpc call to notify client 
+    obj_put synchronization completion
+    Remove msg_ds buffer after obj_put_completion() send back rpc call
+*/
+static int obj_put_sync_completion(struct rpc_server *rpc_s, struct msg_buf *msg){
+    free(msg);
+    return 0;
+}
+
+/*
 */
 static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
     struct obj_data *od = msg->private;
     struct msg_buf *msg_ds;
-    int err = -ENOMEM;
     struct node_id *peer_ds;
-    
+    struct hdr_obj_put *hdr_ds;
+    int err = -ENOMEM;
+
+
     ls_add_obj(dsg->ls, od);
 
-
     peer_ds = (struct node_id*)msg->peer;
-
     msg_ds = msg_buf_alloc(rpc_s, peer_ds, 1);
 
     msg_ds->msg_rpc->cmd = ds_put_completion;
     msg_ds->msg_rpc->id = DSG_ID;
-    msg_ds->msg_rpc->sync_comp_ptr = msg->sync_op_id; //client sync_op.ds_completed pointer
+    msg_ds->cb = obj_put_sync_completion;
+
+    hdr_ds = msg_ds->msg_rpc->pad;
+    hdr_ds->sync_op_id_ptr = msg->sync_op_id;
 
     err = rpc_send(rpc_s, peer_ds, msg_ds);
+
 
     if (err < 0){
         free(msg_ds);
@@ -1267,7 +1279,7 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 
     }
 
-
+    
     free(msg);
 #ifdef DEBUG
     uloga("'%s()': server %d finished receiving  %s, version %d.\n",
@@ -1286,12 +1298,9 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         struct obj_data *od;
         struct node_id *peer;
         struct msg_buf *msg;
-        int* dc_sync_comp_ptr;
         int err;
 
         odsc->owner = DSG_ID;
-
-        dc_sync_comp_ptr = hdr->sync_comp_ptr; //get pointer
 
         err = -ENOMEM;
         peer = ds_get_peer(dsg->ds, cmd->id);
@@ -1310,10 +1319,8 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         msg->size = obj_data_size(&od->obj_desc);
         msg->private = od;
         msg->cb = obj_put_completion;
-        //adding peer to msg 
+        msg->sync_op_id = hdr->sync_op_id_ptr; //synchronization lock pointer passed from client
         msg->peer = peer; 
-        //add client sync pointer to msg sync flag
-        msg->sync_op_id = dc_sync_comp_ptr;
 
 
 #ifdef DEBUG
