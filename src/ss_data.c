@@ -46,7 +46,10 @@
 //#define SSD_DIR_PATH "/lustre/atlas/scratch/subedip1/csc143/"
 //#define SSD_DIR_PATH "/xfs/scratch/subedip1/"
 #define SSD_DIR_PATH "/home/subedip/"
-#define CEPH_EMULATE_DIR "/home/subedip/ceph/"
+//#define CEPH_EMULATE_DIR "/home/subedip/ceph/"
+#define CEPH_EMULATE_FIRST_TIER "home/subedip/ceph/tier1/"
+#define CEPH_EMULATE_SECOND_TIER "home/subedip/ceph/tier2/"
+#define CEPH_EMULATE_THIRD_TIER "home/subedip/ceph/tier3/"
 #define MEM_LIMIT 1073741824     //memory limit for staging in bytes
 #define SSD_LIMIT 1073741824     //ssd size for staging in bytes
 // TODO: I should  import the header file with  the definition for the
@@ -2106,7 +2109,7 @@ void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id, int tie
 #endif
 
 #ifndef DS_HAVE_CEPH
-void obj_data_copy_to_ceph_emulate(struct obj_data *od, int id)
+void obj_data_copy_to_ceph_emulate(struct obj_data *od, int id, int tier)
 {
     
     char name[1000];
@@ -2130,7 +2133,14 @@ void obj_data_copy_to_ceph_emulate(struct obj_data *od, int id)
     sprintf(name, "%d_%s_%d%s",id, modified_name, (od->obj_desc).version, lb_name);
     char *new_name = (char *)malloc(sizeof(char)*1000);
     memset(new_name, '\0', sizeof(new_name));
-    strcpy(new_name, CEPH_EMULATE_DIR);
+    if(tier == 1){
+        strcpy(new_name, CEPH_EMULATE_FIRST_TIER);
+    }else if (tier ==2){
+        strcpy(new_name, CEPH_EMULATE_SECOND_TIER);
+    }else{
+        strcpy(new_name, CEPH_EMULATE_THIRD_TIER);
+    }
+    //strcpy(new_name, CEPH_EMULATE_DIR);
     strcat(new_name, name);
     //uloga("Creating file %s \n", new_name);
     FILE *f=fopen(new_name, "wb");
@@ -2251,7 +2261,14 @@ void ceph_read(struct obj_data *od, int id, int move, int tier){
             sprintf(name, "%2d_%s_%d%s",id, &od->obj_desc.name, (od->obj_desc).version, lb_name);
             char *new_name = (char *)malloc(sizeof(char)*1000);
             memset(new_name, '\0', sizeof(new_name));
-            strcpy(new_name, CEPH_EMULATE_DIR);
+            if(tier == 1){
+                strcpy(new_name, CEPH_EMULATE_FIRST_TIER);
+            }else if (tier ==2){
+                strcpy(new_name, CEPH_EMULATE_SECOND_TIER);
+            }else{
+                strcpy(new_name, CEPH_EMULATE_THIRD_TIER);
+            }
+            //strcpy(new_name, CEPH_EMULATE_);
             strcat(new_name, name);
             FILE *f=fopen(new_name, "rb");
             if(f){

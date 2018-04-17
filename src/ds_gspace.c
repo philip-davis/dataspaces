@@ -1560,7 +1560,7 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
         obj_data_copy_to_ceph(od, cluster, DSG_ID, 1);
         #endif
         #ifndef DS_HAVE_CEPH
-        obj_data_copy_to_ceph_emulate(od, DSG_ID);
+        obj_data_copy_to_ceph_emulate(od, DSG_ID, 1);
         #endif
     }
     if(od->sl == in_memory_ceph_hdd){
@@ -1569,7 +1569,7 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
         obj_data_copy_to_ceph(od, cluster, DSG_ID, 2);
         #endif
         #ifndef DS_HAVE_CEPH
-        obj_data_copy_to_ceph_emulate(od, DSG_ID);
+        obj_data_copy_to_ceph_emulate(od, DSG_ID, 2);
         #endif
     }
     if(od->sl == in_memory_ceph_tape){
@@ -1578,7 +1578,7 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
         obj_data_copy_to_ceph(od, cluster, DSG_ID, 3);
         #endif
         #ifndef DS_HAVE_CEPH
-        obj_data_copy_to_ceph_emulate(od, DSG_ID);
+        obj_data_copy_to_ceph_emulate(od, DSG_ID, 3);
         #endif
     }
     free(msg);
