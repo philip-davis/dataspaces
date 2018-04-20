@@ -280,66 +280,102 @@ int common_dspaces_put(const char *var_name,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
-        void *data)
+        const void *data)
 {
-#if defined(DS_HAVE_DSPACES_LOCATION_AWARE_WRITE)
-        return common_dspaces_put_location_aware(var_name, ver, size, ndim,
-                    lb, ub, data);
-#else
         if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) {
             return -EINVAL;
         }
+        struct obj_descriptor odsc_big= {
+                    .version = ver, .owner = -1, 
+                    .st = st,
+                    .size = size,
+                    .bb = {.num_dims = ndim,}
+                };
+        memset(odsc_big.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+        memset(odsc_big.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
 
-        struct obj_descriptor odsc = {
-                .version = ver, .owner = -1, 
-                .st = st,
-                .size = size,
-                .bb = {.num_dims = ndim,}
-        };
-
-        memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
-        memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
-
-        memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
-        memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
-
-        struct obj_data *od;
-        int err = -ENOMEM;
-
-        strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
-        odsc.name[sizeof(odsc.name)-1] = '\0';
-
-        od = obj_data_alloc_with_data(&odsc, data);
-        if (!od) {
-            uloga("'%s()': failed, can not allocate data object.\n", 
-                __func__);
-                return -ENOMEM;
+        memcpy(odsc_big.bb.lb.c, lb, sizeof(uint64_t)*ndim);
+        memcpy(odsc_big.bb.ub.c, ub, sizeof(uint64_t)*ndim);
+        //create n object descriptors based on the number of splits
+        int block[5] = {8192,8192,8192,8192,8192};
+        int total_blocks = 1;
+        int *num_blocks = malloc(sizeof(int)*ndim);
+        int *curr_lb = malloc(sizeof(int) * ndim);
+        int **ndim_arry = malloc(sizeof(int) * ndim);
+        int i;
+        for (i = 0; i < ndim; ++i)
+        {
+            num_blocks[i] = ceil((float)(ub[i]-lb[i])/(float)block[i]);
+            if(num_blocks[i]==0)
+                num_blocks[i] = 1;
+            ndim_arry[i] = malloc(sizeof(int)*num_blocks[i]);
+            total_blocks = total_blocks*num_blocks[i];
+            int counter = 0;
+            while(counter < num_blocks[i]){
+                if(counter==0){
+                    ndim_arry[i][counter] = lb[i];
+                }else{
+                    ndim_arry[i][counter] = ndim_arry[i][counter-1]+block[i];
+                }
+                counter++;
+            }
         }
-
-        // set global dimension
-        set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
-                             &od->gdim); 
-        err = dcg_obj_put(od);
-        if (err < 0) {
-            obj_data_free(od);
-            uloga("'%s()': failed with %d, can not put data object.\n", 
-                __func__, err);
-            return err;
-        }
-        sync_op_id = err;
+        for (i = 0; i < total_blocks; ++i)
+            {
+                struct obj_descriptor odsc = {
+                    .version = ver, .owner = -1, 
+                    .st = st,
+                    .size = size,
+                    .bb = {.num_dims = ndim,}
+                };
+                memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+                memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+                int j;
+                for (j = ndim-1; j >= 0; j--)
+                {
+                    int indx = i;
+                    int last_dim = ndim-1;
+                    while(last_dim >j){
+                        int row = indx/num_blocks[last_dim];
+                        indx = row;
+                        if(indx<0){
+                            indx = 0;
+                            break;
+                        }
+                        last_dim--;
+                    }
+                    indx = indx%num_blocks[j];
+                    odsc.bb.lb.c[j] = ndim_arry[j][indx];
+                    odsc.bb.ub.c[j]=odsc.bb.lb.c[j]+block[j]-1;
+                    if(odsc.bb.ub.c[j]>ub[j])
+                        odsc.bb.ub.c[j] = ub[j];
+                }  
+                struct obj_data *od;
+                int err = -ENOMEM;
+                strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
+                odsc.name[sizeof(odsc.name)-1] = '\0';
+                od = obj_data_alloc_with_data_split(&odsc, data, &odsc_big);
+                if (!od) {
+                    uloga("'%s()': failed, can not allocate data object.\n", 
+                        __func__);
+                        return -ENOMEM;
+                }
+                set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
+                             &od->gdim);
+                err = dcg_obj_put(od);
+                if (err < 0) {
+                    obj_data_free(od);
+                    uloga("'%s()': failed with %d, can not put data object.\n", 
+                        __func__, err);
+                    return err;
+                }
+                sync_op_id = err;
+            }
 
         return 0;
-#endif
 }
 
-#define MAX_NUM_PEER_PER_NODE 64
-#if defined(DS_HAVE_DSPACES_LOCATION_AWARE_WRITE)
-int common_dspaces_put_location_aware(const char *var_name, 
-        unsigned int ver, int size,
-        int ndim,
-        uint64_t *lb,
-        uint64_t *ub,
-        void *data)
+int common_dspaces_remove (const char *var_name, unsigned int ver)
 {
         if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) {
             return -EINVAL;

@@ -1377,6 +1377,20 @@ struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *odsc, const voi
         return od;
 }
 
+struct obj_data *obj_data_alloc_with_data_split(struct obj_descriptor *odsc, const void *data, struct obj_descriptor *odsc_big)
+{
+        struct obj_data *od = obj_data_alloc(odsc);
+        if (!od)
+                return NULL;
+        struct matrix to_mat, from_mat;
+        struct bbox bbcom;
+        bbox_intersect(&od->obj_desc.bb, &odsc_big->bb, &bbcom);
+        matrix_init(&from_mat, odsc->st, &odsc_big->bb, &bbcom, data, odsc->size);
+        matrix_init(&to_mat, odsc->st,&od->obj_desc.bb, &bbcom, od->data, odsc->size);
+        matrix_copy(&to_mat, &from_mat);
+        return od;
+}
+
 void obj_data_free_with_data(struct obj_data *od)
 {
 	#ifdef SHMEM_OBJECTS
