@@ -35,8 +35,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <sys/mman.h>
-
 #include "debug.h"
 #include "dart.h"
 #include "ds_gspace.h"
@@ -1238,6 +1236,57 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 	ERROR_TRACE();
 }
 
+void create_shared_object(struct obj_data *od){
+    char name[1000];
+    char lb_name[100];
+    char *ap = lb_name;
+    char modified_name[100];
+    //char ub_name[50];
+    int i;
+    for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
+    {
+        ap+=sprintf(ap, "_%llu_%llu", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+    }
+    i =0;
+    sprintf(modified_name, "%s", &od->obj_desc.name);
+    while(modified_name[i] != '\0'){
+        if (modified_name[i] == '/'){
+            modified_name[i] = '_';
+        }
+        i++;
+    }
+    sprintf(name, "%d_%s_%d%s",DSG_ID, modified_name, (od->obj_desc).version, lb_name);
+
+    int shm_fd;
+    void *ptr;
+    int SIZE;
+
+    /* create the shared memory segment */
+    shm_fd = shm_open(name, O_CREAT | O_RDWR, 0666);
+
+    /* configure the size of the shared memory segment */
+    if(od->_data){
+        SIZE = obj_data_size(&od->obj_desc) + 7;
+    }else{
+        SIZE = obj_data_size(&od->obj_desc);
+    }
+    ftruncate(shm_fd,SIZE);
+
+    /* now map the shared memory segment in the address space of the process */
+    ptr = mmap(0,SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    if (ptr == MAP_FAILED) {
+        uloga("Map failed\n");
+        return -1;
+    }
+    //now memcpy
+    if(od->_data){
+        memcpy(ptr, od->_data, SIZE);
+    }else{
+        memcpy(ptr, od->data, SIZE);
+    }
+    uloga("Shared object created \n");
+}
+
 /*
 */
 static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
@@ -1250,6 +1299,10 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
     uloga("'%s()': server %d finished receiving  %s, version %d.\n",
         __func__, DSG_ID, od->obj_desc.name, od->obj_desc.version);
 #endif
+
+    //Pradeep
+    //Functionally create object name based on the server ID and likewise for ss_data in C
+    //create_shared_object(od);
 
     return 0;
 }
@@ -1269,7 +1322,9 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
         err = -ENOMEM;
         peer = ds_get_peer(dsg->ds, cmd->id);
-        od = obj_data_alloc(odsc);
+        //od = obj_data_alloc(odsc);
+        //Pradeep
+        od = shmem_obj_data_alloc(odsc, DSG_ID);
         if (!od)
                 goto err_out;
 
@@ -1667,6 +1722,8 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
 /*
   RPC  routine to  send the  object  descriptors that  match the  data
   object being queried.
+  //RPC request changed such that original request descriptor in server and intersection is 
+  //both sent to the client.
 */
 static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
@@ -1700,7 +1757,7 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         }
 
         err = -ENOMEM;
-        odsc_tab = malloc(sizeof(*odsc_tab) * num_odsc);
+        odsc_tab = malloc(sizeof(*odsc_tab) * num_odsc*2);
         if (!odsc_tab)
                 goto err_out;
 
@@ -1708,6 +1765,7 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             odsc = *podsc[i];
             /* Preserve storage type at the destination. */
             odsc.st = oh->u.o.odsc.st;
+            odsc_tab[i+num_odsc] = odsc;
             bbox_intersect(&oh->u.o.odsc.bb, &odsc.bb, &odsc.bb);
             odsc_tab[i] = odsc;
         }
@@ -1718,7 +1776,7 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
                 goto err_out;
         }
 
-        msg->size = sizeof(*odsc_tab) * num_odsc;
+        msg->size = sizeof(*odsc_tab) * num_odsc*2;
         msg->msg_data = odsc_tab;
         msg->cb = obj_get_desc_completion;
 
@@ -1727,7 +1785,7 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
         i = oh->qid;
         oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
-        oh->u.o.num_de = num_odsc;
+        oh->u.o.num_de = num_odsc*2;
         oh->qid = i;
 
         err = rpc_send(rpc_s, peer, msg);
