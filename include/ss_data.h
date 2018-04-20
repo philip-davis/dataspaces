@@ -36,6 +36,10 @@
 
 #include "bbox.h"
 #include "list.h"
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <sys/shm.h>
+#include <sys/stat.h>
 
 typedef struct {
 	void			*iov_base;
@@ -240,9 +244,11 @@ struct sspace* ssd_alloc(const struct bbox *, int, int, enum sspace_hash_version
 int ssd_init(struct sspace *, int);
 void ssd_free(struct sspace *);
 int ssd_copy(struct obj_data *, struct obj_data *);
+int ssd_copy_local(struct obj_data *, struct obj_data *);
 // TODO: ssd_copyv is not supported yet
 int ssd_copyv(struct obj_data *, struct obj_data *);
 int ssd_copy_list(struct obj_data *, struct list_head *);
+int ssd_copy_list_shmem(struct obj_data *, struct list_head *, int);
 int ssd_filter(struct obj_data *, struct obj_descriptor *, double *);
 int ssd_hash(struct sspace *, const struct bbox *, struct dht_entry *[]);
 
@@ -262,11 +268,13 @@ struct obj_data * ls_find(struct ss_storage *, const struct obj_descriptor *);
 struct obj_data * ls_find_no_version(struct ss_storage *, struct obj_descriptor *);
 
 struct obj_data *obj_data_alloc(struct obj_descriptor *);
+struct obj_data *shmem_obj_data_alloc(struct obj_descriptor *, int);
 struct obj_data *obj_data_allocv(struct obj_descriptor *);
 struct obj_data *obj_data_alloc_no_data(struct obj_descriptor *, void *);
 struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *, const void *);
 
 void obj_data_free(struct obj_data *od);
+void shmem_obj_data_free(struct obj_data *od);
 void obj_data_free_with_data(struct obj_data *);
 uint64_t obj_data_size(struct obj_descriptor *);
 uint64_t obj_data_sizev(struct obj_descriptor *);

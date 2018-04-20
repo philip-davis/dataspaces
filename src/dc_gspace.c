@@ -278,14 +278,36 @@ static void qt_free_obj_data(struct query_tran_entry *qte, int unlink)
 
         list_for_each_entry_safe(od, t, &qte->od_list, struct obj_data, obj_entry) {
 		/* TODO: free the object data withought iov. */
-                if (od->data)
-                        free(od->data);
-
+                if (od->data){
+                    free(od->data);
+                }
                 if (unlink)
 			qt_remove_obj(qte, od);
         }
 }
 
+/*
+  Unlink and release memory resources for obj_data objects in the 'od_list'.
+*/
+static void qt_free_obj_data_shmem(struct query_tran_entry *qte, int unlink)
+{
+        struct obj_data *od, *t;
+        int i =0;
+
+        list_for_each_entry_safe(od, t, &qte->od_list, struct obj_data, obj_entry) {
+        /* TODO: free the object data withought iov. */
+                if (od->data){
+                    if(i>=(qte->num_od)/2){
+                        free(od->data);
+                    }else{
+                        od->data = NULL;
+                    }
+                }
+                if (unlink)
+            qt_remove_obj(qte, od);
+            i++;
+        }
+}
 /*
   Allocate obj data storage for a given transaction, i.e., allocate
   space for all object pieces.
@@ -294,11 +316,36 @@ static int qt_alloc_obj_data(struct query_tran_entry *qte)
 {
         struct obj_data *od;
         int n = 0;
-
+        uloga("Received numbers of odsc in qte %d\n", qte->num_od);
         list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
                 od->data = malloc(obj_data_size(&od->obj_desc));
                 if (!od->data)
                         break;
+                n++;
+        }
+
+        if (n != qte->num_od) {
+                qt_free_obj_data(qte, 0);
+                return -ENOMEM;
+        }
+        return 0;
+}
+
+/*
+  Allocate obj data storage for a given transaction, i.e., allocate
+  space for all object pieces.
+*/
+static int qt_alloc_obj_data_shmem(struct query_tran_entry *qte)
+{
+        struct obj_data *od;
+        int n = 0;
+
+        list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
+                if(n >= (qte->num_od)/2){
+                    od->data = malloc(obj_data_size(&od->obj_desc));
+                    if (!od->data)
+                        break;
+                }
                 n++;
         }
 
@@ -908,7 +955,6 @@ static int get_obj_descriptors(struct query_tran_entry *qte)
                 }
                 peer_id++;
         }
-
         return 0;
  err_out:
         ERROR_TRACE();
@@ -1012,19 +1058,14 @@ static int dcgrpc_obj_get_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *cm
 
 static int obj_data_get_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-        struct query_tran_entry *qte = msg->private;
-        /*
-        qte->num_reply++;
-        if (qte->num_req == qte->num_od && qte->num_reply == qte->num_req)
-                qte->f_complete = 1;
-        */
+    struct query_tran_entry *qte = msg->private;
+    qte->size_od = qte->size_od/2;
+    if (++qte->num_parts_rec == qte->size_od) {
+        qte->f_complete = 1;
+    }
 
-        if (++qte->num_parts_rec == qte->size_od) {
-                qte->f_complete = 1;
-        }
-
-        free(msg);
-        return 0;
+    free(msg);
+    return 0;
 }
 
 /*
@@ -1033,25 +1074,104 @@ static int obj_data_get_completion(struct rpc_server *rpc_s, struct msg_buf *msg
 */
 static int dcg_obj_data_get(struct query_tran_entry *qte)
 {
-        struct msg_buf *msg;
-        struct node_id *peer;
-        struct hdr_obj_get *oh;
-        struct obj_data *od;
-        int err;
+    struct msg_buf *msg;
+    struct node_id *peer;
+    struct hdr_obj_get *oh;
+    struct obj_data *od;
+    int err;
+    int counter = qte->num_od;
+    int i, od_indx = 0;
+    int od_start_indx = 0;
 
-        err = qt_alloc_obj_data(qte);
-        if (err < 0)
-                goto err_out;
+    struct obj_data **od_tab;
 
-        list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
-                peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
+    char name[1000];
+    char lb_name[100];
+    char *ap;
+    char modified_name[100];
 
+    err = qt_alloc_obj_data_shmem(qte);
+    if (err < 0)
+        goto err_out;
+    od_tab = malloc(sizeof(*od_tab) * counter);
+    counter = counter/2;
+    int shmem_flag = 0;
+    list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
+        if(od_indx < counter){
+            od_tab[od_indx] = od;
+            od_start_indx--;
+        }else{
+                    //Pradeep
+            peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
+            if(peer->ptlmap.address.sin_addr.s_addr == dcg->dc->self->ptlmap.address.sin_addr.s_addr){
+                uloga("Doing local read \n");
+                ap = lb_name;
+                for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
+                {
+                    ap+=sprintf(ap, "_%llu_%llu", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+                }
+                i =0;
+                sprintf(modified_name, "%s", &od->obj_desc.name);
+                while(modified_name[i] != '\0'){
+                    if (modified_name[i] == '/'){
+                        modified_name[i] = '_';
+                    }
+                    i++;
+                }
+                sprintf(name, "%d_%s_%d%s",od->obj_desc.owner, modified_name, (od->obj_desc).version, lb_name);
+                int shm_fd;
+                void *ptr;
+                int SIZE;
+                shm_fd = shm_open(name, O_RDONLY, 0666);
+                if (shm_fd == -1) {
+                    ap = lb_name;
+                    for (i = 0; i < (od_tab[od_start_indx]->obj_desc).bb.num_dims; ++i)
+                    {
+                        ap+=sprintf(ap, "_%llu_%llu", (od_tab[od_start_indx]->obj_desc).bb.lb.c[i], (od_tab[od_start_indx]->obj_desc).bb.ub.c[i]);
+                    }
+                    i =0;
+                    sprintf(modified_name, "%s", &od_tab[od_start_indx]->obj_desc.name);
+                    while(modified_name[i] != '\0'){
+                        if (modified_name[i] == '/'){
+                            modified_name[i] = '_';
+                        }
+                        i++;
+                    }
+                    sprintf(name, "%d_%s_%d%s",od_tab[od_start_indx]->obj_desc.owner, modified_name, (od_tab[od_start_indx]->obj_desc).version, lb_name);
+
+                    shm_fd = shm_open(name, O_RDONLY, 0666);
+                    SIZE = obj_data_size(&od_tab[od_start_indx]->obj_desc);
+                    ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
+                    if (ptr == MAP_FAILED) {
+                        printf("Map failed\n");
+                        exit(-1);
+                    }
+
+                    od_tab[od_start_indx]->data = ptr;
+                    ssd_copy(od, od_tab[od_start_indx]);
+
+                }else{
+                            /* configure the size of the shared memory segment */
+                    SIZE = obj_data_size(&od->obj_desc);
+
+                            /* now map the shared memory segment in the address space of the process */
+                    ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
+                    if (ptr == MAP_FAILED) {
+                        printf("Map failed\n");
+                        exit(-1);
+                    }
+                    memcpy(od->data, ptr, SIZE);
+                }
+
+            }else{
+                uloga("Doing remote read \n");
+                shmem_flag = 1;
                 err = -ENOMEM;
                 msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
                 if (!msg) {
-                        free(od->data);
-                        od->data = NULL;
-                        goto err_out;
+                    free(od->data);
+                    od->data = NULL;
+                    goto err_out;
                 }
 
                 msg->msg_data = od->data;
@@ -1071,19 +1191,25 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
 
                 err = rpc_receive(dcg->dc->rpc_s, peer, msg);
                 if (err < 0) {
-                        free(msg);
-                        free(od->data);
-                        od->data = NULL;
-                        goto err_out;
+                    free(msg);
+                    free(od->data);
+                    od->data = NULL;
+                    goto err_out;
                 }
-                // TODO: uncomment next line ?!
-                // qte->num_req++;
-        }
+            }
 
-        return 0;
- err_out:
-        uloga("'%s()': failed with %d.\n", __func__, err);
-        return err;
+
+
+        }
+        od_indx++;
+        od_start_indx++;
+    }
+    if(shmem_flag==0)
+        qte->f_complete = 1;
+    return 0;
+    err_out:
+    uloga("'%s()': failed with %d.\n", __func__, err);
+    return err;
 }
 
 /*
@@ -1168,10 +1294,11 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
         if (!qte) {
 		uloga("can not find transaction ID = %d.\n", oh->qid);
                 goto err_out_free;
-	}
+	   }
 
         qte->qh->qh_num_rep_received++;
         qte->size_od += oh->u.o.num_de;
+        //uloga("Received num_odsc is %d\n", oh->u.o.num_de);
 
         for (i = 0; i < oh->u.o.num_de; i++) {
                 if (!qt_find_obj(qte, od_tab+i)) {
@@ -1192,7 +1319,6 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
                 /* Object descriptor receive completed. */
                 qte->f_odsc_recv = 1;
         }
-
         return 0;
  err_out_free:
         free(oh);
@@ -1276,13 +1402,13 @@ static int dcgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         rpc_mem_info_cache(peer, msg, cmd); 
         err = rpc_receive_direct(rpc_s, peer, msg);
         rpc_mem_info_reset(peer, msg, cmd);	
-
         if (err == 0)
                 return 0;
 
         free(od_tab);
         free(oht);
         free(msg);
+
  err_out:
         uloga("'%s()': failed with %d.\n", __func__, err);
         return err;
@@ -1295,7 +1421,9 @@ static int dcg_obj_assemble(struct query_tran_entry *qte, struct obj_data *od)
 {
         int err;
 
-        err = ssd_copy_list(od, &qte->od_list);
+        int nums = (qte->num_od)/2;
+
+        err = ssd_copy_list_shmem(od, &qte->od_list, nums);
         if (err == 0)
                 return 0;
 
@@ -1628,109 +1756,106 @@ int dcg_obj_sync(int sync_op_id)
 
 int dcg_obj_get(struct obj_data *od)
 {
-        struct query_tran_entry *qte;
-        const struct query_cache_entry *qce;
-        int err = -ENOMEM;
+    struct query_tran_entry *qte;
+    const struct query_cache_entry *qce;
+    int err = -ENOMEM;
 #ifdef TIMING_PERF
-        double tm_st, tm_end;
-        tm_st = timer_read(&tm_perf);
+    double tm_st, tm_end;
+    tm_st = timer_read(&tm_perf);
 #endif
 
-        qte = qte_alloc(od, 1);
-        if (!qte)
-                goto err_out;
+    qte = qte_alloc(od, 1);
+    if (!qte)
+        goto err_out;
 
-        qt_add(&dcg->qt, qte);
+    qt_add(&dcg->qt, qte);
 
-        versions_reset();
+    versions_reset();
 
         // TODO:  I have  intentionately  disabled the  cache here.  I
         // should reconsider.
         // qce = qc_find(&dcg->qc, &od->obj_desc);
-        qce = 0;
-        if (qce) {
-                err = qte_set_odsc_from_cache(qte, qce);
-                if (err < 0) {
-                        free(qte);
-                        goto err_out;
-                }
+    qce = 0;
+    if (qce) {
+        err = qte_set_odsc_from_cache(qte, qce);
+        if (err < 0) {
+            free(qte);
+            goto err_out;
         }
-        else {
-                err = get_dht_peers(qte);
-                if (err < 0)
-                        goto err_qt_free;
-                DC_WAIT_COMPLETION(qte->f_peer_received == 1);
+    }
+    else {
+        err = get_dht_peers(qte);
+        if (err < 0)
+            goto err_qt_free;
+        DC_WAIT_COMPLETION(qte->f_peer_received == 1);
 
-                err = get_obj_descriptors(qte);
-                if (err < 0) {
-                    if (err == -EAGAIN)
-                        goto out_no_data;
-                    else	goto err_qt_free;
-                }
-                DC_WAIT_COMPLETION(qte->f_odsc_recv == 1);
-        }
-
-        if (qte->f_err != 0) {
-                err = -EAGAIN;
+        err = get_obj_descriptors(qte);
+        if (err < 0) {
+            if (err == -EAGAIN)
                 goto out_no_data;
+            else	goto err_qt_free;
         }
+        DC_WAIT_COMPLETION(qte->f_odsc_recv == 1);
+    }
+
+    if (qte->f_err != 0) {
+        err = -EAGAIN;
+        goto out_no_data;
+    }
 
 #ifdef TIMING_PERF
-        tm_end = timer_read(&tm_perf);
-        uloga("TIMING_PERF locate_data ts %d peer %d time %lf %s\n",
-            od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
-        tm_st = tm_end;
+    tm_end = timer_read(&tm_perf);
+    uloga("TIMING_PERF locate_data ts %d peer %d time %lf %s\n",
+        od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
+    tm_st = tm_end;
 #endif
-
-        err = dcg_obj_data_get(qte);
-        if (err < 0) {
+        //now receive the data local copy might be here
+        //Pradeep
+    err = dcg_obj_data_get(qte);
+    if (err < 0) {
                 // FIXME: should I jump to err_qt_free ?
-                qt_free_obj_data(qte, 1);
-                goto err_data_free; // err_out;
-        }
-
+        qt_free_obj_data(qte, 1);
+        goto err_data_free; // err_out;
+    }
         /* The request send succeeds, we can post the transaction to
            the list. */
 
 
-        /* Wait for transaction to complete. */
-        while (! qte->f_complete) {
-                err = dc_process(dcg->dc);
-                if (err < 0) {
-                        uloga("'%s()': error %d.\n", __func__, err);
-                        break;
-                }
+    /* Wait for transaction to complete. */
+    while (! qte->f_complete) {
+        err = dc_process(dcg->dc);
+        if (err < 0) {
+            uloga("'%s()': error %d.\n", __func__, err);
+            break;
         }
+    }
+    if (!qte->f_complete) {
+        /* Object is not complete, not all parts
+           successful. */
+        err = -ENODATA;
+        goto out_no_data;
+    }
 
-        if (!qte->f_complete) {
-                // !qte->num_req || qte->num_reply != qte->num_od) {
-                /* Object is not complete, not all parts
-                   successfull. */
-                // qt_free_obj_data(qte, 1);
-                err = -ENODATA;
-                goto out_no_data;
-        }
-
-        err = dcg_obj_assemble(qte, od);
-
+    err = dcg_obj_assemble(qte, od);
 #ifdef TIMING_PERF
-        tm_end = timer_read(&tm_perf);
-        uloga("TIMING_PERF fetch_data ts %d peer %d time %lf %s\n",
-            od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
+            tm_end = timer_read(&tm_perf);
+            uloga("TIMING_PERF fetch_data ts %d peer %d time %lf %s\n",
+                od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
 #endif 
- out_no_data:
-        qt_free_obj_data(qte, 1);
-        qt_remove(&dcg->qt, qte);
-        free(qte);
+out_no_data:
+    qt_free_obj_data_shmem(qte, 1);
+    qt_remove(&dcg->qt, qte);
+    free(qte);
 
-        return err;
- err_data_free:
-        qt_free_obj_data(qte, 1);
- err_qt_free:
-        qt_remove(&dcg->qt, qte);
-        free(qte);
- err_out:
-        ERROR_TRACE();
+    return err;
+
+err_data_free:
+    qt_free_obj_data(qte, 1);
+err_qt_free:
+    qt_remove(&dcg->qt, qte);
+    free(qte);
+err_out:
+    ERROR_TRACE();
 }
 
 int dcg_get_versions(int **p_version)

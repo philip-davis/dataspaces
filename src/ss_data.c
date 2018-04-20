@@ -50,6 +50,10 @@
   A view in  the matrix allows to extract any subset  of values from a
   matrix.
 */
+
+#define SHMEM_OBJECTS 1
+
+
 struct matrix_view {
         uint64_t   lb[BBOX_MAX_NDIM];
         uint64_t   ub[BBOX_MAX_NDIM];	
@@ -181,7 +185,6 @@ static void matrix_init(struct matrix *mat, enum storage_type st,
 {
     int i;
     int ndims = bb_glb->num_dims;
-	
     memset(mat, 0, sizeof(struct matrix));
 
     for(i = 0; i < ndims; i++){
@@ -281,6 +284,7 @@ dim2:                for(a1 = a->mat_view.lb[1], b1 = b->mat_view.lb[1];
 dim1:               numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
                     aloc = aloc1 + a->mat_view.lb[0];
                     bloc = bloc1 + b->mat_view.lb[0];
+                    //uloga("Before matrix copy \n");
                     memcpy(&A[aloc*a->size_elem], &B[bloc*a->size_elem], (a->size_elem * numelem));     
             if(a->num_dims == 1)    return;
                 }
@@ -300,6 +304,7 @@ dim1:               numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
     }
     if(a->num_dims == 9)    return;
     }
+    //uloga("Finished matrix copy \n");
 }
 
 static void get_bbox_max_dim(const struct bbox *bb, uint64_t *out_max_dim,
@@ -870,6 +875,28 @@ int ssd_copy(struct obj_data *to_obj, struct obj_data *from_obj)
         return 0;
 }
 
+int ssd_copyv(struct obj_data *obj_dest, struct obj_data *obj_src)
+{
+	struct matrix mat_dest, mat_src;
+	struct bbox bbcom;
+
+	bbox_intersect(&obj_dest->obj_desc.bb, &obj_src->obj_desc.bb, &bbcom);
+
+	matrix_init(&mat_dest, obj_dest->obj_desc.st,
+			&obj_dest->obj_desc.bb, &bbcom,
+			obj_dest->data, obj_dest->obj_desc.size);
+
+	matrix_init(&mat_src, obj_src->obj_desc.st,
+			&obj_src->obj_desc.bb, &bbcom,
+			obj_src->data, obj_src->obj_desc.size);
+
+	matrix_copyv(&mat_dest, &mat_src);
+
+	return 0;
+}
+
+/*
+*/
 int ssd_copy_list(struct obj_data *to, struct list_head *od_list)
 {
         struct obj_data *from;
@@ -892,6 +919,33 @@ int ssd_copy_list(struct obj_data *to, struct list_head *od_list)
         }
 
         return 0;
+}
+
+int ssd_copy_list_shmem(struct obj_data *to, struct list_head *od_list, int nums)
+{
+    struct obj_data *from;
+    struct matrix to_mat, from_mat;
+    struct bbox bbcom;
+    int i = 0;
+
+    list_for_each_entry(from, od_list, struct obj_data, obj_entry) {
+    if(i>=nums){
+        bbox_intersect(&to->obj_desc.bb, &from->obj_desc.bb, &bbcom);
+
+        matrix_init(&from_mat, from->obj_desc.st,
+                    &from->obj_desc.bb, &bbcom, 
+                    from->data, from->obj_desc.size);
+
+        matrix_init(&to_mat, to->obj_desc.st, 
+                    &to->obj_desc.bb, &bbcom, 
+                    to->data, to->obj_desc.size);
+
+        matrix_copy(&to_mat, &from_mat);
+        }
+    i++;
+    }
+
+    return 0;
 }
 
 int ssd_filter(struct obj_data *from, struct obj_descriptor *odsc, double *dval)
@@ -938,8 +992,17 @@ void ls_free(struct ss_storage *ls)
     for (i = 0; i < ls->size_hash; i++) {
         list = &ls->obj_hash[i];
         list_for_each_entry_safe(od, t, list, struct obj_data, obj_entry ) {
+            
+            #ifdef SHMEM_OBJECTS
+            shmem_obj_data_free(od);
+            ls_remove(ls, od);
+            free(od);
+            #endif
+            #ifndef SHMEM_OBJECTS
             ls_remove(ls, od);
             obj_data_free(od);
+            #endif
+            
         }
     }
 
@@ -1198,6 +1261,91 @@ struct obj_data *obj_data_alloc(struct obj_descriptor *odsc)
     return od;
 }
 
+struct obj_data *shmem_obj_data_alloc(struct obj_descriptor *odsc, int id)
+{
+    struct obj_data *od = 0;
+
+    od = malloc(sizeof(*od));
+    if (!od)
+        return NULL;
+    memset(od, 0, sizeof(*od));
+
+    char name[1000];
+    char lb_name[100];
+    char *ap = lb_name;
+    char modified_name[100];
+    //char ub_name[50];
+    int i;
+    for (i = 0; i < (odsc->bb).num_dims; ++i)
+    {
+        ap+=sprintf(ap, "_%llu_%llu", (odsc->bb).lb.c[i], (odsc->bb).ub.c[i]);
+    }
+    i =0;
+    sprintf(modified_name, "%s", odsc->name);
+    while(modified_name[i] != '\0'){
+        if (modified_name[i] == '/'){
+            modified_name[i] = '_';
+        }
+        i++;
+    }
+    sprintf(name, "%d_%s_%d%s",id, modified_name, odsc->version, lb_name);
+
+    int shm_fd;
+    void *ptr;
+    int SIZE;
+
+    /* create the shared memory segment */
+    shm_fd = shm_open(name, O_CREAT | O_RDWR, 0666);
+
+    /* configure the size of the shared memory segment */
+    SIZE = obj_data_size(odsc) + 7;
+    ftruncate(shm_fd,SIZE);
+
+    /* now map the shared memory segment in the address space of the process */
+    ptr = mmap(0,SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    if (ptr == MAP_FAILED) {
+        uloga("Map failed\n");
+        return -1;
+    }
+    //now memcpy
+    uloga("Shared object created with name %s\n", name);
+
+    od->_data = od->data = ptr;
+
+    if (!od->_data) {
+        free(od);
+        return NULL;
+    }
+    //ALIGN_ADDR_QUAD_BYTES(od->data);
+    od->obj_desc = *odsc;
+
+    return od;
+}
+
+/*
+  Allocate  space  for obj_data  structure  and  references for  data.
+*/
+struct obj_data *obj_data_allocv(struct obj_descriptor *odsc)
+{
+	struct obj_data *od;
+
+	od = malloc(sizeof(*od));
+	if (!od)
+		return NULL;
+	memset(od, 0, sizeof(*od));
+
+	od->_data = od->data = malloc(obj_data_sizev(odsc) + 7);
+	if (!od->_data) {
+		free(od);
+		return NULL;
+	}
+	ALIGN_ADDR_QUAD_BYTES(od->data);
+	od->obj_desc = *odsc;
+
+	return od;
+}
+
+>>>>>>> d62d43a... Added shared memory objects for local readers
 /* 
   Allocate space for the obj_data struct only; space for data is
   externally allocated.
@@ -1231,20 +1379,67 @@ struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *odsc, const voi
 
 void obj_data_free_with_data(struct obj_data *od)
 {
-	if (od->_data) {
-		uloga("'%s()': explicit data free on descriptor %s.\n", 
-			__func__, od->obj_desc.name);
-		free(od->_data);
-	}
-	else    free(od->data);
+	#ifdef SHMEM_OBJECTS
+    shmem_obj_data_free(od);
+    #endif
+
+    #ifndef SHMEM_OBJECTS
+
+    if (od->_data) {
+        uloga("'%s()': explicit data free on descriptor %s.\n", 
+            __func__, od->obj_desc.name);
+        free(od->_data);
+    }
+    else    free(od->data);
+    #endif
         free(od);
+
+    
 }
 
 void obj_data_free(struct obj_data *od)
 {
-	if (od->_data)
+    #ifdef SHMEM_OBJECTS
+        od->_data = od->data = NULL;
+    #endif
+    if (od->_data){
 		free(od->_data);
+    }
 	free(od);
+}
+
+void shmem_obj_data_free(struct obj_data *od)
+{
+    char name[1000];
+    char lb_name[100];
+    char *ap = lb_name;
+    char modified_name[100];
+    int SIZE;
+    //char ub_name[50];
+    int i;
+    for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
+    {
+        ap+=sprintf(ap, "_%llu_%llu", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+    }
+    i =0;
+    sprintf(modified_name, "%s", &od->obj_desc.name);
+    while(modified_name[i] != '\0'){
+        if (modified_name[i] == '/'){
+            modified_name[i] = '_';
+        }
+        i++;
+    }
+    sprintf(name, "%d_%s_%d%s",od->obj_desc.owner, modified_name, (od->obj_desc).version, lb_name);
+    SIZE = obj_data_size(&od->obj_desc);
+    od->_data = od->data = NULL;
+
+    /* remove the shared memory segment from the file system */
+  if (shm_unlink(name) == -1) {
+    printf("cons: Error removing %s: %s\n", name, strerror(errno));
+    exit(1);
+  }else{
+    printf("Unlinked shared object\n");
+  }
 }
 
 uint64_t obj_data_size(struct obj_descriptor *obj_desc)
