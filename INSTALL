@@ -9,10 +9,59 @@ The following steps are needed to configure, build and install DataSpaces.
 
 1. Configure
 # Examples for the configure command on supported architectures and networks. Please customize it according to your specific system configurations and environments (If there is no 'configure' file, please run ./autogen.sh to generate it.).
-# Cray XE and XK series
+
+# Cray XE, XK, XC series
 $ ./configure CC=cc FC=ftn
-* For Aries based system, e.g. EOS at ORNL, please add:
-  --enable-aries
+
+## On Cray platforms, DataSpaces requires the use of Cray protection domains for uGNI network communication. 
+Protection domains are a Cray uGNI security feature that allow different applications to perform RDMA transfers 
+to one another on the uGNI network and consist of a ptag and cookie (or, for Aries, 2 cookie) pair. Please refer 
+to the documentation below for DataSpaces configuration options based on the Cray uGNI network of your system. 
+For more general information on protection domains, please see the Cray uGNI Documentation.
+
+If you are creating a user-level protection domain using apmgr -c, please note that you must also modify
+your run command to pass the credential as `aprun -p MY_PDOMAIN_NAME`.
+
+## Cray uGNI Gemini Systems
+
+If your system allows users to create user-level protection domains, `apmgr pdomain -c [YOUR-DOMAIN-NAME]` 
+will create it and generate a unique ptag/cookie pair. You can then obtain the ptag/cookie information by 
+running `apstat -P`. If your system does not allow user-level pdomains, you may see if any system-level domains 
+are available (as defined by the field *Type* in the output of the `apstat -P` command). If neither options are 
+available, please contact your system administrator for help creating and configuring protection domains.
+
+Once you have a protection domain, you may use ONE of the following options:
+
+1. If you do not expect your ptag or cookie to change, you may compile it directly into your coded 
+directly by using the configure options:
+$ ./configure CC=cc FC=ftn --with-gni-ptag=[GNI-PTAG-VALUE] --with-gni-cookie=[GNI-HEXA-COOKIE]
+
+2. If you wish to provide the name of your domain at runtime, you can add `export DSPACES_GNI_PDOMAIN=[YOUR-DOMAIN-NAME]` 
+to your job script. This method only works if the compute nodes are able to execute `apstat -P`.
+
+3. If you wish to provide the ptag and cookie directly at runtime (i.e., if the compute nodes do not have the ability to execute `apstat -P`), 
+you can add `export DSPACES_GNI_PTAG=[GNI-PTAG-VALUE]` and `export DSPACES_GNI_COOKIE=[GNI-HEXA-COOKIE]` to your job script.
+
+NOTE that on Gemini systems, you must provide BOTH the ptag AND cookie if using options 1 or 3. 
+
+## Cray uGNI Aries Systems
+
+On Aries systems, there are two possible network configurations as set by machine administrators: 
+(1) uGNI network has the Dynamic RDMA Credential (DRC) service enabled and (2) DRC service unavailable or not configured. 
+For specific instructions for each case, see below. 
+
+Note that regardless of the network configuration, the ptag is generated on-the-fly by the uGNI network on ALL Aries systems and should not be provided a priori. 
+
+### Where Dynamic RDMA Credentials (DRC) is Enabled
+
+DataSpaces is integrated wth DRC and manages the creation and exchange of credentials amongst all applications in a job. 
+Ensure that the rdma-credentials binaries and libraries are in your path when compiling.
+$ ./configure CC=cc FC=ftn --enable-drc
+
+### Where No DRC is Available
+
+Follow the instructions outlined in the Gemini section but note that you will not be providing the ptag in option 1 or 3.
+$ ./configure CC=cc FC=ftn --with-gni-cookie=[GNI-HEXA-COOKIE]
 
 # Infiniband cluster
 $ ./configure CC=mpicc FC=mpif90
@@ -51,6 +100,9 @@ $ ./configure CC=[C_COMPILER_OPTION] FC=[Fortran_COMPILER_OPTION] --enable-dart-
    other applications in a data coupling workflow. Currently this feature is only 
    supported on Cray Gemini networks, Infiniband cluster and on IBM BG/P and BG/Q systems.
 
+--enable-drc
+  Build DataSpaces for Cray uGNI systems with Dynamic RDMA Credential (DRC) support. Note that using this method, users should not provide a ptag or cookie a priori.
+
  --with-dimes-rdma-buffer-size=integer value for megabytes
    This option specifies the maximum amount of RDMA memory buffer that
    can be used by DIMES in each application process. DIMES RDMA memory buffer is used
@@ -62,12 +114,6 @@ $ ./configure CC=[C_COMPILER_OPTION] FC=[Fortran_COMPILER_OPTION] --enable-dart-
    This option will enable DataSpaces to build on ethernet using TCP/IP socket interfaces. 
    Since socket is available in most of the current clusters, this option will avoid the 
    conflict of selections between IP network and other advanced networks (e.g. IB, Gemini). 
-
- --enable-aries
-   With this option, it will get the right shared protection domain information for 
-   application access on Aries-based systems, such as EOS system at ORNL. Before adding 
-   this option, please run 'apstat -P' to check if your Aries based system support shared 
-   protection domain.
 
  --with-gni-ptag = PTAG DECIMAL VALUE
  --with-gni-cookie = COOKIE HEXA VALUE

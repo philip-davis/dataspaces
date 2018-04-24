@@ -8,7 +8,7 @@ AC_DEFUN([AC_GNI_PTAG],[
 
 have_gni_ptag=no
 have_gni_cookie=no
-cond_ptag=yes
+
 
 AC_ARG_WITH(gni-cookie,
 	[AS_HELP_STRING([--with-gni-cookie=cookie hexa value],
@@ -22,21 +22,28 @@ AC_ARG_WITH(gni-ptag,
 	[have_gni_ptag=yes;
 	 GNI_PTAG="$withval";])
 
-if test "x$have_gni_cookie" = "xno"; then
-    cond_ptag=no
+dnl ASSUME GEMINI SYSTEM IS TITAN (ORNL) and hardcode ptag/cookie to use ADIOS system-level domain
+dnl If we get a different Gemini system, we must not hardcode PTAG/COOKIE. 
+if test "${CRAYPE_NETWORK_TARGET}" = gemini -o "${XTPE_NETWORK_TARGET}" = gemini; then
+	dnl Ensure user-level ptag/cookie were not provided
+	if test "x$have_gni_cookie" = "xno" -o "x$have_gni_ptag" = "xno"; then
+		have_gni_ptag=yes
+		have_gni_cookie=yes
+		GNI_PTAG="250"
+		GNI_COOKIE="0x5420000"
+	fi
 fi
 
-if test "x$have_gni_ptag" = "xno"; then
-    cond_ptag=no
+if test "x$have_gni_cookie" = "xyes"; then
+    AC_DEFINE_UNQUOTED(GNI_COOKIE,$GNI_COOKIE,[User-provided cookie])
 fi
 
-if test "x$cond_ptag" = "xyes"; then
-    AC_DEFINE_UNQUOTED(GNI_PTAG,$GNI_PTAG,[Fixed Gemini ptag])
-    AC_DEFINE_UNQUOTED(GNI_COOKIE,$GNI_COOKIE,[Fixed Gemini cookie])
+if test "x$have_gni_ptag" = "xyes"; then
+    AC_DEFINE_UNQUOTED(GNI_PTAG,$GNI_PTAG,[User-provided ptag])
 fi
 
 # Finally, execute ACTION-IF-FOUND/ACTION-IF-NOT-FOUND:
-if test "x$cond_ptag" = "xyes"; then
+if test "x$have_gni_cookie" = "xyes"; then
         ifelse([$1],,,[$1])
         :
 else
@@ -44,4 +51,3 @@ else
         :
 fi
 ])
-
