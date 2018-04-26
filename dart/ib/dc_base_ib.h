@@ -54,5 +54,6 @@ int dc_barrier(struct dart_client *dc);
 struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *comm);	// //
 void dc_free(struct dart_client *dc);	// //
 int dc_process(struct dart_client *dc);	// //
+int on_same_node(struct node_id*, struct node_id*);
 
 #endif

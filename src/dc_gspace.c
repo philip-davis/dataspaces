@@ -1103,7 +1103,8 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
         }else{
                     //Pradeep
             peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
-            if(peer->ptlmap.address.sin_addr.s_addr == dcg->dc->self->ptlmap.address.sin_addr.s_addr){
+            //if(peer->ptlmap.address.sin_addr.s_addr == dcg->dc->self->ptlmap.address.sin_addr.s_addr){
+            if(on_same_node(peer, dcg->dc->self)){
                 uloga("Doing local read \n");
                 ap = lb_name;
                 for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
