@@ -359,8 +359,8 @@ int common_dspaces_put(const char *var_name,
         int i;
         for (i = 0; i < ndim; ++i)
         {
-            num_blocks[i] = ceil((float)(ub[i]-lb[i])/(float)block[i]);
-            if(num_blocks[i]==0)
+            num_blocks[i] = ceil((double)(ub[i]-lb[i])/block[i]);
+            if(num_blocks[i]<=0)
                 num_blocks[i] = 1;
             ndim_arry[i] = malloc(sizeof(int)*num_blocks[i]);
             total_blocks = total_blocks*num_blocks[i];
