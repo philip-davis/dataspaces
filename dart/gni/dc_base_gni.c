@@ -1046,3 +1046,9 @@ int dc_process(struct dart_client *dc)//done
 {
   return rpc_process_event(dc->rpc_s);
 }
+
+int on_same_node(struct node_id *local, struct node_id *remote){
+    if(local->ptlmap.nid == remote->ptlmap.nid)
+        return 1;
+    return 0;
+}

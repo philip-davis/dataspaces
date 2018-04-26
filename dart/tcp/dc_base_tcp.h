@@ -53,6 +53,8 @@ struct dart_client* dc_alloc(int,int,void*,void*);
 void dc_free(struct dart_client*);
 int dc_process(struct dart_client*);
 
+int on_same_node(struct node_id*, struct node_id*);
+
 #ifdef __cplusplus
 }
 #endif

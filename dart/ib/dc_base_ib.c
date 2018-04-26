@@ -648,6 +648,11 @@ int dc_process(struct dart_client *dc)
 	return rpc_process_event(dc->rpc_s);
 }
 
+int on_same_node(struct node_id *local, struct node_id *remote){
+    if(local->ptlmap.address.sin_addr.s_addr == remote->ptlmap.address.sin_addr.s_addr)
+        return 1;
+    return 0;
+}
 
 /*
 int dc_send(struct dart_client *dc, void *buf, size_t size)
