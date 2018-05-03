@@ -111,6 +111,7 @@ struct query_tran_entry {
                     f_odsc_recv:1,
                     f_complete:1,
                     f_err:1;
+        int num_peers;
 };
 
 /*
@@ -313,7 +314,7 @@ static int qt_alloc_obj_data(struct query_tran_entry *qte)
 {
         struct obj_data *od;
         int n = 0;
-        uloga("Received numbers of odsc in qte %d\n", qte->num_od);
+        //uloga("Received numbers of odsc in qte %d\n", qte->num_od);
         list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
                 od->data = malloc(obj_data_size(&od->obj_desc));
                 if (!od->data)
@@ -332,17 +333,18 @@ static int qt_alloc_obj_data(struct query_tran_entry *qte)
   Allocate obj data storage for a given transaction, i.e., allocate
   space for all object pieces.
 */
-static int qt_alloc_obj_data_shmem(struct query_tran_entry *qte)
+static int qt_alloc_obj_data_shmem(struct query_tran_entry *qte, int block_size)
 {
         struct obj_data *od;
         int n = 0;
 
         list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
-                if(n >= (qte->num_od)/2){
+                if( (n>=block_size) || ((n %(block_size*2)) >= block_size)){
                     od->data = malloc(obj_data_size(&od->obj_desc));
                     if (!od->data)
                         break;
                 }
+
                 n++;
         }
 
@@ -1038,7 +1040,7 @@ static int get_obj_descriptors(struct query_tran_entry *qte)
         peer_id = qte->qh->qh_peerid_tab;
         while (*peer_id != -1) {
                 peer = dc_get_peer(dcg->dc, *peer_id);
-
+                //uloga("Sending get obj_desc from %d reader to %d server\n", dcg->dc->self->ptlmap.id, peer->ptlmap.id);
                 err = -ENOMEM;
                 msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
                 if (!msg)
@@ -1187,32 +1189,30 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
     struct hdr_obj_get *oh;
     struct obj_data *od;
     int err;
-    int counter = qte->num_od;
     int i, od_indx = 0;
     int od_start_indx = 0;
-
     struct obj_data **od_tab;
-
     char name[1000];
     char lb_name[100];
     char *ap;
     char modified_name[100];
 
-    err = qt_alloc_obj_data_shmem(qte);
+    int block_size = qte->num_od/(qte->qh->qh_num_peer * 2);
+    err = qt_alloc_obj_data_shmem(qte, block_size);
     if (err < 0)
         goto err_out;
-    od_tab = malloc(sizeof(*od_tab) * counter);
-    counter = counter/2;
+    od_tab = malloc(sizeof(*od_tab) * qte->num_od);
     int shmem_flag = 0;
+    
+
     list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
-        if(od_indx < counter){
+        if( (od_indx<block_size) || ((od_indx %(block_size*2)) < block_size)){
             od_tab[od_indx] = od;
-            od_start_indx--;
-        }else{
-                    //Pradeep
+        }
+        else{
+            //Pradeep
             peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
             if(on_same_node(peer, dcg->dc->self)){
-                uloga("Doing local read \n");
                 ap = lb_name;
                 for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
                 {
@@ -1232,6 +1232,7 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                 int SIZE;
                 shm_fd = shm_open(name, O_RDONLY, 0666);
                 if (shm_fd == -1) {
+                    od_start_indx = od_indx - block_size;
                     ap = lb_name;
                     for (i = 0; i < (od_tab[od_start_indx]->obj_desc).bb.num_dims; ++i)
                     {
@@ -1246,7 +1247,6 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                         i++;
                     }
                     sprintf(name, "%d_%s_%d%s",od_tab[od_start_indx]->obj_desc.owner, modified_name, (od_tab[od_start_indx]->obj_desc).version, lb_name);
-
                     shm_fd = shm_open(name, O_RDONLY, 0666);
                     SIZE = obj_data_size(&od_tab[od_start_indx]->obj_desc);
                     ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
@@ -1254,14 +1254,12 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                         printf("Map failed\n");
                         exit(-1);
                     }
-
                     od_tab[od_start_indx]->data = ptr;
                     ssd_copy(od, od_tab[od_start_indx]);
 
                 }else{
                             /* configure the size of the shared memory segment */
                     SIZE = obj_data_size(&od->obj_desc);
-
                             /* now map the shared memory segment in the address space of the process */
                     ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
                     if (ptr == MAP_FAILED) {
@@ -1272,7 +1270,6 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                 }
 
             }else{
-                uloga("Doing remote read \n");
                 shmem_flag = 1;
                 err = -ENOMEM;
                 msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
@@ -1306,11 +1303,8 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                 }
             }
 
-
-
         }
         od_indx++;
-        od_start_indx++;
     }
     if(shmem_flag==0)
         qte->f_complete = 1;

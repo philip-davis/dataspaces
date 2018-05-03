@@ -1416,6 +1416,14 @@ static int obj_query_forward_obj_info(struct dht_entry *de_tab[], int num_de,
 
 static int obj_send_dht_peers_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
+        //here you can train the network to learn the patterns for prefetching from remote servers and prefetch from remote to local
+        //only do this if the clinet peer is on the same node as the current server.
+        //int *peer = msg->msg_data;
+        //while(*peer!=-1){
+        //    uloga("Asked for object descriptor from peer %d in server %d \n", ds_get_peer(dsg->ds, *peer)->ptlmap.id, dsg->ds->self->ptlmap.id);
+        //    peer++;
+        //}
+        //peer = NULL;
         free(msg->msg_data);
         free(msg);
 
@@ -1442,8 +1450,10 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
         peer_id_tab = malloc(sizeof(int) * (dsg->ds->size_sp+1));
         if (!peer_id_tab)
                 goto err_out;
-        for (i = 0; i < peer_num; i++)
+        for (i = 0; i < peer_num; i++){
                 peer_id_tab[i] = de_tab[i]->rank;
+                //uloga("Id in peer tab %d \n", peer_id_tab[i]);
+            }
         /* The -1 here  is a marker for the end of the array. */
         peer_id_tab[peer_num] = -1;
 
@@ -1713,6 +1723,11 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             odsc_tab[i+num_odsc] = odsc;
             bbox_intersect(&oh->u.o.odsc.bb, &odsc.bb, &odsc.bb);
             odsc_tab[i] = odsc;
+
+            //need to prefetch here based on obj_owner for prefetch staging
+
+            //uloga("Asked from obj from server %d in current server %d for object owner %d\n", ds_get_peer(dsg->ds, odsc.owner)->ptlmap.id, DSG_ID, odsc.owner);
+
         }
 
         msg = msg_buf_alloc(rpc_s, peer, 1);
@@ -1861,6 +1876,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	 free(str);
  }
 #endif
+        uloga("Received RPC in server %d\n", DSG_ID);
 
         // CRITICAL: use version here !!!
         from_obj = ls_find(dsg->ls, &oh->u.o.odsc);
