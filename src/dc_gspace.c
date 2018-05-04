@@ -1198,13 +1198,13 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
     char modified_name[100];
 
     int block_size = qte->num_od/(qte->qh->qh_num_peer * 2);
+    if(block_size < 1) block_size = 1;
     err = qt_alloc_obj_data_shmem(qte, block_size);
     if (err < 0)
         goto err_out;
     od_tab = malloc(sizeof(*od_tab) * qte->num_od);
     int shmem_flag = 0;
-    
-
+     
     list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
         if( (od_indx<block_size) || ((od_indx %(block_size*2)) < block_size)){
             od_tab[od_indx] = od;
@@ -1227,6 +1227,7 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                     i++;
                 }
                 sprintf(name, "%d_%s_%d%s",od->obj_desc.owner, modified_name, (od->obj_desc).version, lb_name);
+                //uloga("Name %s\n", name);
                 int shm_fd;
                 void *ptr;
                 int SIZE;
@@ -1247,6 +1248,7 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                         i++;
                     }
                     sprintf(name, "%d_%s_%d%s",od_tab[od_start_indx]->obj_desc.owner, modified_name, (od_tab[od_start_indx]->obj_desc).version, lb_name);
+                     //uloga("Not found Name %s\n", name);
                     shm_fd = shm_open(name, O_RDONLY, 0666);
                     SIZE = obj_data_size(&od_tab[od_start_indx]->obj_desc);
                     ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
@@ -1401,9 +1403,22 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
         qte->qh->qh_num_rep_received++;
         qte->size_od += oh->u.o.num_de;
         //uloga("Received num_odsc is %d\n", oh->u.o.num_de);
+        int j;
 
         for (i = 0; i < oh->u.o.num_de; i++) {
-                err = qt_add_obj(qte, od_tab+i);
+                if(i%2==0){
+                    if (!qt_find_obj(qte, od_tab+i)) {
+                        err = qt_add_obj(qte, od_tab+i);
+                        if (err < 0)
+                                goto err_out_free;
+                    }else{
+                        i++;
+                    }
+                }else{
+                    err = qt_add_obj(qte, od_tab+i);
+                    if (err < 0)
+                                goto err_out_free;
+                }
         }
 
         free(oh);
