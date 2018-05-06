@@ -238,7 +238,6 @@ static int dcrpc_barrier(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         int err;
 
         if (dc->self->ptlmap.id == dc->cp_min_rank) {
-                // uloga("'%s()': fuck, I got it.\n", __func__);
                 /* I am the master peer in this job. */
                 dc->cp_barrier_req++;
                 if (dc->cp_barrier_req < dc->cp_in_job)
