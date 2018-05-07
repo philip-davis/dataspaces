@@ -929,20 +929,20 @@ int ssd_copy_list_shmem(struct obj_data *to, struct list_head *od_list, int nums
     int i = 0;
 
     list_for_each_entry(from, od_list, struct obj_data, obj_entry) {
-    if(i>=nums){
-        bbox_intersect(&to->obj_desc.bb, &from->obj_desc.bb, &bbcom);
+        if((i%(nums*2))>= nums){
+            bbox_intersect(&to->obj_desc.bb, &from->obj_desc.bb, &bbcom);
 
-        matrix_init(&from_mat, from->obj_desc.st,
-                    &from->obj_desc.bb, &bbcom, 
-                    from->data, from->obj_desc.size);
+            matrix_init(&from_mat, from->obj_desc.st,
+                        &from->obj_desc.bb, &bbcom, 
+                        from->data, from->obj_desc.size);
 
-        matrix_init(&to_mat, to->obj_desc.st, 
-                    &to->obj_desc.bb, &bbcom, 
-                    to->data, to->obj_desc.size);
+            matrix_init(&to_mat, to->obj_desc.st, 
+                        &to->obj_desc.bb, &bbcom, 
+                        to->data, to->obj_desc.size);
 
-        matrix_copy(&to_mat, &from_mat);
+            matrix_copy(&to_mat, &from_mat);
         }
-    i++;
+        i++;
     }
 
     return 0;
@@ -1308,6 +1308,7 @@ struct obj_data *shmem_obj_data_alloc(struct obj_descriptor *odsc, int id)
         return -1;
     }
     //now memcpy
+    
     uloga("Shared object created with name %s\n", name);
 
     od->_data = od->data = ptr;

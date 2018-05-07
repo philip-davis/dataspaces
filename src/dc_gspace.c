@@ -294,18 +294,20 @@ static void qt_free_obj_data_shmem(struct query_tran_entry *qte, int unlink)
 {
         struct obj_data *od, *t;
         int i =0;
-
+        int nums = qte->num_od/(qte->qh->qh_num_peer * 2);
+        if(nums < 1) nums = 1;
         list_for_each_entry_safe(od, t, &qte->od_list, struct obj_data, obj_entry) {
         /* TODO: free the object data withought iov. */
                 if (od->data){
-                    if(i>=(qte->num_od)/2){
+                    if((i%(nums*2)) >= nums){
                         free(od->data);
                     }else{
                         od->data = NULL;
                     }
                 }
-                if (unlink)
-            qt_remove_obj(qte, od);
+                if (unlink){
+                    qt_remove_obj(qte, od);
+                }
             i++;
         }
 }
@@ -342,7 +344,7 @@ static int qt_alloc_obj_data_shmem(struct query_tran_entry *qte, int block_size)
         int n = 0;
 
         list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
-                if( (n>=block_size) || ((n %(block_size*2)) >= block_size)){
+                if((n %(block_size*2)) >= block_size){
                     od->data = malloc(obj_data_size(&od->obj_desc));
                     if (!od->data)
                         break;
@@ -1098,14 +1100,7 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
     int shmem_flag = 0;
      
     list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
-        /*
-        for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
-        {
-            uloga("_%llu_%llu", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
-        }
-        uloga("\n");
-        */
-        if( (od_indx<block_size) || ((od_indx %(block_size*2)) < block_size)){
+        if((od_indx %(block_size*2)) < block_size){
             od_tab[od_indx] = od;
         }
         else{
@@ -1126,7 +1121,6 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                     i++;
                 }
                 sprintf(name, "%d_%s_%d%s",od->obj_desc.owner, modified_name, (od->obj_desc).version, lb_name);
-                uloga("Outside Name %s\n", name);
                 int shm_fd;
                 void *ptr;
                 int SIZE;
@@ -1147,7 +1141,6 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                         i++;
                     }
                     sprintf(name, "%d_%s_%d%s",od_tab[od_start_indx]->obj_desc.owner, modified_name, (od_tab[od_start_indx]->obj_desc).version, lb_name);
-                     uloga("Not found Name %s\n", name);
                     shm_fd = shm_open(name, O_RDONLY, 0666);
                     SIZE = obj_data_size(&od_tab[od_start_indx]->obj_desc);
                     ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
@@ -1161,7 +1154,6 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                 }else{
                             /* configure the size of the shared memory segment */
                     SIZE = obj_data_size(&od->obj_desc);
-                    uloga("Size %d \n", SIZE);
                             /* now map the shared memory segment in the address space of the process */
                     ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
                     if (ptr == MAP_FAILED) {
@@ -1313,19 +1305,20 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
         }
 
         for (i = 0; i < oh->u.o.num_de; i++) {
-            if(i < half_sz) { 
-                if (!qt_find_obj(qte, od_tab+i)){ 
-                    err = qt_add_obj(qte, od_tab+i);
-                    if (err < 0)
-                        goto err_out_free;
+                if(i < half_sz) {
+                     if (!qt_find_obj(qte, od_tab+i)) { 
+                        err = qt_add_obj(qte, od_tab+i);
+                        if (err < 0)
+                                goto err_out_free;
+                    }else{
+                        dupli_odsc[i+half_sz] = i + half_sz;
+                    }
                 } else {
-                    dupli_odsc[i+half_sz] = i + half_sz;
-                }
-            } else {
-                if(i != dupli_odsc[i]) {
-                    err = qt_add_obj(qte, od_tab+i);
+                    if(i!=dupli_odsc[i]) {
+                        err = qt_add_obj(qte, od_tab+i);
                         if (err < 0)
                             goto err_out_free;
+                    }
                 }
             } else {
                 err = qt_add_obj(qte, od_tab+i);
@@ -1444,7 +1437,7 @@ static int dcg_obj_assemble(struct query_tran_entry *qte, struct obj_data *od)
 {
         int err;
 
-        int nums = (qte->num_od)/2;
+        int nums = qte->num_od/(qte->qh->qh_num_peer * 2);
 
         err = ssd_copy_list_shmem(od, &qte->od_list, nums);
         if (err == 0)
@@ -1858,7 +1851,6 @@ int dcg_obj_get(struct obj_data *od)
         err = -ENODATA;
         goto out_no_data;
     }
-
     err = dcg_obj_assemble(qte, od);
 #ifdef TIMING_PERF
             tm_end = timer_read(&tm_perf);
@@ -1869,7 +1861,6 @@ out_no_data:
     qt_free_obj_data_shmem(qte, 1);
     qt_remove(&dcg->qt, qte);
     free(qte);
-
     return err;
 
 err_data_free:
