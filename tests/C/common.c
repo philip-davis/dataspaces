@@ -278,7 +278,6 @@ void check_data(const char *var_name, double *buf, int num_elem, int rank, int t
         if (num_elem <= 0) {
                 return;
         }
-
         max = min = sum = buf[0];
         for (i = 1; i < num_elem; i++) {
                 if (max < buf[i])
