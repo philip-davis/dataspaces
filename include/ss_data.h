@@ -296,6 +296,7 @@ void update_gdim_list(struct list_head *gdim_list,
                 const char *var_name, int ndim, uint64_t *gdim);
 struct gdim_list_entry* lookup_gdim_list(struct list_head *gdim_list, const char *var_name);
 void free_gdim_list(struct list_head *gdim_list);
+void convert_to_string(struct obj_descriptor *odsc, char *name);
 void set_global_dimension(struct list_head *gdim_list, const char *var_name,
             const struct global_dimension *default_gdim, struct global_dimension *gdim);
 #endif /* __SS_DATA_H_ */
