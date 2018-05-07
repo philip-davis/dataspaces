@@ -1945,7 +1945,7 @@ void *evict_thread(void*attr){
                 obj_data_copy_to_ceph(in_ssd_head->curr_od, cluster, DSG_ID, 1);
                 #endif
                 #ifndef DS_HAVE_CEPH
-                obj_data_copy_to_ceph_emulate(in_ssd_head->curr_od, DSG_ID);
+                obj_data_copy_to_ceph_emulate(in_ssd_head->curr_od, DSG_ID, 1);
                 #endif
                 dsg->ls->ssd_used = dsg->ls->ssd_used - obj_data_size(&(in_ssd_head->curr_od->obj_desc));
                 del_node(0);
@@ -3061,7 +3061,7 @@ static int dsgrpc_obj_demote(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
     #ifndef DS_HAVE_CEPH
         if(from_obj->sl == in_ssd){
             obj_data_move_to_mem(from_obj, DSG_ID);
-            obj_data_copy_to_ceph_emulate(from_obj, DSG_ID);
+            obj_data_copy_to_ceph_emulate(from_obj, DSG_ID, 1);
         }
     #endif
 
