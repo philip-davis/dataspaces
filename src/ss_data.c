@@ -1370,26 +1370,8 @@ struct obj_data *shmem_obj_data_alloc(struct obj_descriptor *odsc, int id)
         return NULL;
     memset(od, 0, sizeof(*od));
 
-    char name[1000];
-    char lb_name[100];
-    char *ap = lb_name;
-    char modified_name[100];
-    //char ub_name[50];
-    int i;
-    for (i = 0; i < (odsc->bb).num_dims; ++i)
-    {
-        ap+=sprintf(ap, "_%llu_%llu", (odsc->bb).lb.c[i], (odsc->bb).ub.c[i]);
-    }
-    i =0;
-    sprintf(modified_name, "%s", odsc->name);
-    while(modified_name[i] != '\0'){
-        if (modified_name[i] == '/'){
-            modified_name[i] = '_';
-        }
-        i++;
-    }
-    sprintf(name, "%d_%s_%d%s",id, modified_name, odsc->version, lb_name);
-
+    char name[200];
+    convert_to_string(odsc, name);
     int shm_fd;
     void *ptr;
     int SIZE;
@@ -1521,28 +1503,34 @@ void obj_data_free(struct obj_data *od)
 	free(od);
 }
 
-void shmem_obj_data_free(struct obj_data *od)
-{
-    char name[1000];
+void convert_to_string(struct obj_descriptor *obj_desc, char *name){
     char lb_name[100];
     char *ap = lb_name;
     char modified_name[100];
     int SIZE;
     //char ub_name[50];
     int i;
-    for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
+    for (i = 0; i < obj_desc->bb.num_dims; ++i)
     {
-        ap+=sprintf(ap, "_%llu_%llu", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+        ap+=sprintf(ap, "_%llu_%llu", obj_desc->bb.lb.c[i], obj_desc->bb.ub.c[i]);
     }
     i =0;
-    sprintf(modified_name, "%s", &od->obj_desc.name);
+    sprintf(modified_name, "%s", obj_desc->name);
     while(modified_name[i] != '\0'){
         if (modified_name[i] == '/'){
             modified_name[i] = '_';
         }
         i++;
     }
-    sprintf(name, "%d_%s_%d%s",od->obj_desc.owner, modified_name, (od->obj_desc).version, lb_name);
+    sprintf(name, "%s_%d%s", modified_name, obj_desc->version, lb_name);
+
+}
+
+void shmem_obj_data_free(struct obj_data *od)
+{
+    int SIZE;
+    char name[200];
+    convert_to_string(od, name);
     SIZE = obj_data_size(&od->obj_desc);
     od->_data = od->data = NULL;
 

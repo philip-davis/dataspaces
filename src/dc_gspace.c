@@ -1194,10 +1194,7 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
     int i, od_indx = 0;
     int od_start_indx = 0;
     struct obj_data **od_tab;
-    char name[1000];
-    char lb_name[100];
-    char *ap;
-    char modified_name[100];
+    char name[200];
 
     int block_size = qte->num_od/(qte->qh->qh_num_peer * 2);
     if(block_size < 1) block_size = 1;
@@ -1215,40 +1212,14 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
             //Pradeep
             peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
             if(on_same_node(peer, dcg->dc->self)){
-                ap = lb_name;
-                for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
-                {
-                    ap+=sprintf(ap, "_%llu_%llu", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
-                }
-                i =0;
-                sprintf(modified_name, "%s", &od->obj_desc.name);
-                while(modified_name[i] != '\0'){
-                    if (modified_name[i] == '/'){
-                        modified_name[i] = '_';
-                    }
-                    i++;
-                }
-                sprintf(name, "%d_%s_%d%s",od->obj_desc.owner, modified_name, (od->obj_desc).version, lb_name);
+                convert_to_string(&od->obj_desc, name);
                 int shm_fd;
                 void *ptr;
                 int SIZE;
                 shm_fd = shm_open(name, O_RDONLY, 0666);
                 if (shm_fd == -1) {
                     od_start_indx = od_indx - block_size;
-                    ap = lb_name;
-                    for (i = 0; i < (od_tab[od_start_indx]->obj_desc).bb.num_dims; ++i)
-                    {
-                        ap+=sprintf(ap, "_%llu_%llu", (od_tab[od_start_indx]->obj_desc).bb.lb.c[i], (od_tab[od_start_indx]->obj_desc).bb.ub.c[i]);
-                    }
-                    i =0;
-                    sprintf(modified_name, "%s", &od_tab[od_start_indx]->obj_desc.name);
-                    while(modified_name[i] != '\0'){
-                        if (modified_name[i] == '/'){
-                            modified_name[i] = '_';
-                        }
-                        i++;
-                    }
-                    sprintf(name, "%d_%s_%d%s",od_tab[od_start_indx]->obj_desc.owner, modified_name, (od_tab[od_start_indx]->obj_desc).version, lb_name);
+                    convert_to_string(&od->obj_desc, name);
                     shm_fd = shm_open(name, O_RDONLY, 0666);
                     SIZE = obj_data_size(&od_tab[od_start_indx]->obj_desc);
                     ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
@@ -1865,6 +1836,27 @@ int dcg_obj_sync(int sync_op_id)
 */
 int dcg_obj_get(struct obj_data *od)
 {
+    
+char name[200];
+convert_to_string(&od->obj_desc, name);
+int shm_fd;
+void *ptr;
+int SIZE;
+shm_fd = shm_open(name, O_RDONLY, 0666);
+if (shm_fd != -1) {
+    //read the file locally without any rpc call
+    SIZE = obj_data_size(&od->obj_desc);
+    ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
+    if (ptr == MAP_FAILED) {
+        printf("Map failed\n");
+        exit(-1);
+    }
+    memcpy(od->data, ptr, SIZE);
+    uloga("No rpc calls\n");
+    return 0;
+}
+
+
     struct query_tran_entry *qte;
     const struct query_cache_entry *qce;
     int err = -ENOMEM;
