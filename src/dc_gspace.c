@@ -1206,6 +1206,13 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
     int shmem_flag = 0;
      
     list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
+        /*
+        for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
+        {
+            uloga("_%llu_%llu", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+        }
+        uloga("\n");
+        */
         if( (od_indx<block_size) || ((od_indx %(block_size*2)) < block_size)){
             od_tab[od_indx] = od;
         }
@@ -1227,7 +1234,7 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                     i++;
                 }
                 sprintf(name, "%d_%s_%d%s",od->obj_desc.owner, modified_name, (od->obj_desc).version, lb_name);
-                //uloga("Name %s\n", name);
+                uloga("Outside Name %s\n", name);
                 int shm_fd;
                 void *ptr;
                 int SIZE;
@@ -1248,7 +1255,7 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                         i++;
                     }
                     sprintf(name, "%d_%s_%d%s",od_tab[od_start_indx]->obj_desc.owner, modified_name, (od_tab[od_start_indx]->obj_desc).version, lb_name);
-                     //uloga("Not found Name %s\n", name);
+                     uloga("Not found Name %s\n", name);
                     shm_fd = shm_open(name, O_RDONLY, 0666);
                     SIZE = obj_data_size(&od_tab[od_start_indx]->obj_desc);
                     ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
@@ -1262,6 +1269,7 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                 }else{
                             /* configure the size of the shared memory segment */
                     SIZE = obj_data_size(&od->obj_desc);
+                    uloga("Size %d \n", SIZE);
                             /* now map the shared memory segment in the address space of the process */
                     ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
                     if (ptr == MAP_FAILED) {
@@ -1404,20 +1412,68 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
         qte->size_od += oh->u.o.num_de;
         //uloga("Received num_odsc is %d\n", oh->u.o.num_de);
         int j;
+        int half_sz = oh->u.o.num_de/2;
+        int *dupli_odsc;
+        dupli_odsc = malloc(sizeof(int) * half_sz);
+        //uloga("Half size is %d\n", half_sz);
+        for (i = 0; i < half_sz; i++){
+            dupli_odsc[i] = 0;
+        }
 
         for (i = 0; i < oh->u.o.num_de; i++) {
-                if(i%2==0){
-                    if (!qt_find_obj(qte, od_tab+i)) {
+            /*
+                for (j = 0; j < (od_tab+i)->bb.num_dims; ++j)
+                {
+                    uloga("_%llu_%llu", (od_tab+i)->bb.lb.c[j], (od_tab+i)->bb.ub.c[j]);
+                }
+                uloga("\n");
+                */
+                if(i<half_sz){
+                     if (!qt_find_obj(qte, od_tab+i)){ 
                         err = qt_add_obj(qte, od_tab+i);
+                        /*
+                        uloga ("Added ");
+                        for (j = 0; j < (od_tab+i)->bb.num_dims; ++j)
+                        {
+                            uloga("_%llu_%llu", (od_tab+i)->bb.lb.c[j], (od_tab+i)->bb.ub.c[j]);
+                        }
+                        uloga("\n");
+                        */
                         if (err < 0)
                                 goto err_out_free;
                     }else{
-                        i++;
+                        dupli_odsc[i+half_sz] = i+half_sz;
+                        /*
+                        uloga ("Not Added ");
+                        for (j = 0; j < (od_tab+i)->bb.num_dims; ++j)
+                        {
+                            uloga("_%llu_%llu", (od_tab+i)->bb.lb.c[j], (od_tab+i)->bb.ub.c[j]);
+                        }
+                        uloga("\n");
+                        */
                     }
                 }else{
-                    err = qt_add_obj(qte, od_tab+i);
-                    if (err < 0)
+                    if(i!=dupli_odsc[i]){
+                        err = qt_add_obj(qte, od_tab+i);/*
+                        uloga ("Added ");
+                        for (j = 0; j < (od_tab+i)->bb.num_dims; ++j)
+                        {
+                            uloga("_%llu_%llu", (od_tab+i)->bb.lb.c[j], (od_tab+i)->bb.ub.c[j]);
+                        }
+                        uloga("\n");
+                        */
+                        if (err < 0)
                                 goto err_out_free;
+                    }else{
+                        /*
+                        uloga ("Not Added ");
+                        for (j = 0; j < (od_tab+i)->bb.num_dims; ++j)
+                        {
+                            uloga("_%llu_%llu", (od_tab+i)->bb.lb.c[j], (od_tab+i)->bb.ub.c[j]);
+                        }
+                        uloga("\n");*/
+
+                    }
                 }
         }
 
