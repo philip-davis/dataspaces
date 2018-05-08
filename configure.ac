@@ -35,18 +35,23 @@ AC_CHECK_LIB([m], [cos])
 if test -n $LIBS; then
     MATH_LIBS=$LIBS
 fi
+LIBS=""
+AC_CHECK_LIB([rt], [shm_open])
+if test -n $LIBS; then
+    SHM_LIBS=$LIBS
+fi
 LIBS=$save_LIBS
 
 dnl Generate flags for dataspaces lib creation which depends on the particular network transport layer. DSPACESLIB_* is used for compiling the lib, and linking testing codes.
 DSPACESLIB_CFLAGS="${PTHREAD_CFLAGS}"
 DSPACESLIB_CPPFLAGS="${PTHREAD_CFLAGS}"
 DSPACESLIB_LDFLAGS="${PTHREAD_CFLAGS}"
-DSPACESLIB_LDADD="${PTHREAD_LIBS} ${MATH_LIBS}"
+DSPACESLIB_LDADD="${PTHREAD_LIBS} ${MATH_LIBS} ${SHM_LIBS}"
 dnl These flags will be present in the output of dspaces_config
 DSPACES_EXT_CFLAGS="${PTHREAD_CFLAGS}"
 DSPACES_EXT_CPPFLAGS="${PTHREAD_CFLAGS}"
 DSPACES_EXT_LDFLAGS="${PTHREAD_CFLAGS}"
-DSPACES_EXT_LDADD="${PTHREAD_LIBS} ${MATH_LIBS}"
+DSPACES_EXT_LDADD="${PTHREAD_LIBS} ${MATH_LIBS} S{SHM_LIBS}"
 dnl configure input arguments
 CONFIG_ARG="$ac_configure_args"
 
