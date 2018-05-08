@@ -1219,7 +1219,7 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                 shm_fd = shm_open(name, O_RDONLY, 0666);
                 if (shm_fd == -1) {
                     od_start_indx = od_indx - block_size;
-                    convert_to_string(&od->obj_desc, name);
+                    convert_to_string(&od_tab[od_start_indx]->obj_desc, name);
                     shm_fd = shm_open(name, O_RDONLY, 0666);
                     SIZE = obj_data_size(&od_tab[od_start_indx]->obj_desc);
                     ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);

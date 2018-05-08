@@ -1530,7 +1530,7 @@ void shmem_obj_data_free(struct obj_data *od)
 {
     int SIZE;
     char name[200];
-    convert_to_string(od, name);
+    convert_to_string(&od->obj_desc, name);
     SIZE = obj_data_size(&od->obj_desc);
     od->_data = od->data = NULL;
 
