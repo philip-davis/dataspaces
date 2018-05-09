@@ -1,15 +1,18 @@
-AM_CFLAGS = -DLINUX -g 
+AM_CFLAGS = -DLINUX -g
 AM_CPPFLAGS = -I../dart/ -I../include/ $(DSPACESLIB_CPPFLAGS)
 AM_LDFLAGS = -L../dart -ldart $(DSPACESLIB_LDFLAGS) $(DSPACESLIB_LDADD)
 
 lib_LIBRARIES =  libdscommon.a libdspaces.a libdspacesf.a
 
 libdscommon_a_SOURCES = bbox.c \
-			ss_data.c \
+			object_mover.cpp \
+			object_mover_c.cpp \
 			timer.c \
 			util.c \
 			CppWrapper.cc \
-			MapWrap.cc
+			MapWrap.cc \
+			ss_data.c
+
 
 libdspaces_a_SOURCES =  dataspaces.c \
 			common_dataspaces.c \

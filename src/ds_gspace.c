@@ -1557,7 +1557,7 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
     if(od->sl == in_memory_ceph_ssd){
         #ifdef DS_HAVE_CEPH
         //uloga("To ceph ssd\n");
-        obj_data_copy_to_ceph(od, cluster, DSG_ID, 1);
+        obj_data_copy_to_ceph(od, DSG_ID, 1);
         #endif
         #ifndef DS_HAVE_CEPH
         obj_data_copy_to_ceph_emulate(od, DSG_ID, 1);
@@ -1566,7 +1566,7 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
     if(od->sl == in_memory_ceph_hdd){
         #ifdef DS_HAVE_CEPH
         //uloga("To ceph hdd\n");
-        obj_data_copy_to_ceph(od, cluster, DSG_ID, 2);
+        obj_data_copy_to_ceph(od, DSG_ID, 2);
         #endif
         #ifndef DS_HAVE_CEPH
         obj_data_copy_to_ceph_emulate(od, DSG_ID, 2);
@@ -1575,7 +1575,7 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
     if(od->sl == in_memory_ceph_tape){
         #ifdef DS_HAVE_CEPH
         //uloga("To ceph tape\n");
-        obj_data_copy_to_ceph(od, cluster, DSG_ID, 3);
+        obj_data_copy_to_ceph(od, DSG_ID, 3);
         #endif
         #ifndef DS_HAVE_CEPH
         obj_data_copy_to_ceph_emulate(od, DSG_ID, 3);
@@ -1942,7 +1942,7 @@ void *evict_thread(void*attr){
                 obj_data_move_to_mem(in_ssd_head->curr_od, DSG_ID);
                 #ifdef DS_HAVE_CEPH
                 uloga("Evicting things from local SSD");
-                obj_data_copy_to_ceph(in_ssd_head->curr_od, cluster, DSG_ID, 1);
+                obj_data_copy_to_ceph(in_ssd_head->curr_od, DSG_ID, 1);
                 #endif
                 #ifndef DS_HAVE_CEPH
                 obj_data_copy_to_ceph_emulate(in_ssd_head->curr_od, DSG_ID, 1);
@@ -3054,7 +3054,7 @@ static int dsgrpc_obj_demote(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         if(from_obj->sl == in_ssd){
             obj_data_move_to_mem(from_obj, DSG_ID);
             uloga("Demote to ceph SSD \n");
-            obj_data_copy_to_ceph(from_obj, cluster, DSG_ID, 1);
+            obj_data_copy_to_ceph(from_obj, DSG_ID, 1);
         }
     #endif
 
@@ -3159,7 +3159,10 @@ static int dsgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 #ifdef DS_HAVE_CEPH
 void ceph_init(){
+    /*
 // Declare the cluster handle and required arguments. 
+
+
     char cluster_name[] = "ceph";
     char user_name[] = "client.admin";
     uint64_t flags;
@@ -3209,7 +3212,9 @@ void ceph_init(){
     }
 
 
-
+    */
+    const char* ceph_conf_file = "/share/ceph.conf";
+    sirius_ceph_initialize(ceph_conf_file);
 }
 
 #endif

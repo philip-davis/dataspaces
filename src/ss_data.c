@@ -581,6 +581,8 @@ static void matrix_copy_ceph(struct matrix *a, struct matrix *b, char* name, uin
         uint64_t b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
         uint64_t bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
         int numelem;
+        int ret;
+        /*
         rados_ioctx_t io;
         char *poolname = "dataspaces";
         int err = rados_ioctx_create(cluster, poolname, &io);
@@ -593,6 +595,7 @@ static void matrix_copy_ceph(struct matrix *a, struct matrix *b, char* name, uin
         }
         rados_completion_t *comp;
         comp = malloc(sizeof(rados_completion_t)*num_elems);
+        */
         int counter =0;
     switch(a->num_dims){
         case(1):    
@@ -668,6 +671,11 @@ dim2:                for(a1 = a->mat_view.lb[1], b1 = b->mat_view.lb[1];
 dim1:                   numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
                         aloc = aloc1 + a->mat_view.lb[0];
                         bloc = bloc1 + b->mat_view.lb[0];
+                        ret = 0;
+                        sirius_ceph_read_async(name, &A[aloc*a->size_elem], bloc*(a->size_elem), (a->size_elem) * numelem, &ret);
+                        while (ret == 0);
+                        assert(ret == (a->size_elem) * numelem);
+                        /*
                         //change this function for copy from ceph
                         int err = rados_aio_create_completion(NULL, NULL, NULL, &comp[counter]);
                         if (err < 0) {
@@ -684,6 +692,7 @@ dim1:                   numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
                         }
                         //memcpy(&A[aloc*a->size_elem], &B[bloc*a->size_elem], (a->size_elem * numelem));
                         counter++;
+                        */
             if(a->num_dims == 1)    goto wait_comp;
                 }
         if(a->num_dims == 2)    goto wait_comp;
@@ -702,7 +711,9 @@ dim1:                   numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
     }
     if(a->num_dims == 9)    goto wait_comp;
     }
+
     wait_comp:
+    /*
         for (i = 0; i < counter; ++i)
         {
             rados_aio_wait_for_complete(comp[i]);
@@ -711,6 +722,7 @@ dim1:                   numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
         rados_ioctx_destroy(io);
         //uloga("Before Free \n");
         free(comp);
+        */
         return;
 #endif
         
@@ -2008,9 +2020,9 @@ void obj_data_write_to_ssd(struct obj_data *od, int id){
 }
 
 #ifdef DS_HAVE_CEPH
-void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id, int tier)
+void obj_data_copy_to_ceph(struct obj_data *od, int id, int tier)
 {
-    
+    /*
     //create a rados ioctx
     rados_ioctx_t io;
     char *poolname = "dataspaces";
@@ -2105,7 +2117,93 @@ void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id, int tie
         }
     //od->sl = in_ceph;
     obj_data_free_in_mem(od);
+    */
+
+    int ret;
+            char name[1000];
+            char lb_name[100];
+            char *ap = lb_name;
+            char modified_name[100];
+            //char ub_name[50];
+            int i;
+            for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
+            {
+                ap+=sprintf(ap, "_%llu_%llu", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+            }
+            i =0;
+            sprintf(modified_name, "%s", &od->obj_desc.name);
+            while(modified_name[i] != '\0'){
+                if (modified_name[i] == '/'){
+                    modified_name[i] = '_';
+                }
+                i++;
+            }
+            sprintf(name, "%d_%s_%d%s",id, modified_name, (od->obj_desc).version, lb_name);
+            //uloga ("%s writing \n", name);
+        if(od->_data){
+            if(tier==3){
+                uloga("Writing to Ceph Tape \n");
+                //fill here
+                ret = 1;
+               sirius_ceph_create_async(SIRIUS_CEPH_TIER_TD, name, od->_data, obj_data_size(&od->obj_desc) + 7, &ret);
+               while (ret == 1);
+               assert(ret == 0);
+
+            }else if (tier==2){
+                uloga("Writing to Ceph HDD \n");
+                sirius_ceph_create_async(SIRIUS_CEPH_TIER_HDD, name, od->_data, obj_data_size(&od->obj_desc) + 7, &ret);
+                while (ret == 1);
+                assert(ret == 0);
+                //fill here
+            }else{
+                //tier ==1
+                uloga("Writing to Ceph SSD %s\n", name);
+                //rados_write_op_set_alloc_hint2(op, 0, 0, LIBRADOS_ALLOC_HINT_FLAG_FAST_TIER);
+                ret = 1;
+               sirius_ceph_create_async(SIRIUS_CEPH_TIER_SSD, name, od->_data, obj_data_size(&od->obj_desc) + 7, &ret);
+               while (ret == 1);
+               assert(ret == 0);
+               uloga("Finished writing %s to Ceph\n", name);
+            }
+        }else{
+            if(tier==3){
+                uloga("Writing to Ceph Tape \n");
+                ret = 1;
+               sirius_ceph_create_async(SIRIUS_CEPH_TIER_TD, name, od->data, obj_data_size(&od->obj_desc), &ret);
+               while (ret == 1);
+               assert(ret == 0);
+
+            }else if (tier==2){
+                uloga("Writing to Ceph HDD \n");
+                sirius_ceph_create_async(SIRIUS_CEPH_TIER_HDD, name, od->data, obj_data_size(&od->obj_desc), &ret);
+                while (ret == 1);
+                assert(ret == 0);
+            }else{
+                //tier ==1
+                uloga("Writing to Ceph SSD \n");
+                ret = 1;
+               sirius_ceph_create_async(SIRIUS_CEPH_TIER_SSD, name, od->data, obj_data_size(&od->obj_desc), &ret);
+               while (ret == 1);
+               assert(ret == 0);
+            }
+            
+        }
+    if(tier==3){
+            //uloga("Updating to Ceph Tape \n");
+            od->sl = in_ceph_tape;
+        }else if (tier==2){
+            //uloga("Updating to Ceph HDD \n");
+            od->sl = in_ceph_hdd;
+        }else{
+            //tier ==1
+            //uloga("Updating to Ceph SSD \n");
+            od->sl = in_ceph_ssd;
+        }
+    //od->sl = in_ceph;
+    obj_data_free_in_mem(od);
 }
+
+
 #endif
 
 #ifndef DS_HAVE_CEPH
@@ -2165,6 +2263,8 @@ void ceph_read(struct obj_data *od, int id, int move, int tier){
         //perform aio read
         od->_data = od->data = malloc(obj_data_size(odsc)+7);
        //create a rados ioctx
+
+        /*
         rados_ioctx_t io;
         char *poolname = "dataspaces";
         int err = rados_ioctx_create(cluster, poolname, &io);
@@ -2232,6 +2332,62 @@ void ceph_read(struct obj_data *od, int id, int move, int tier){
 
     //free the ioctx
         rados_ioctx_destroy(io);
+        if(move==1)
+            od->sl = in_memory;
+        else{
+            if(tier == 3){
+                od->sl = in_memory_ceph_tape;
+            }else if(tier ==2){
+                od->sl = in_memory_ceph_hdd;
+            }else{
+                od->sl = in_memory_ceph_ssd;
+            }
+        }
+        */
+
+        //uloga("sprintf start for %s ver %d\n", &od->obj_desc.name, (od->obj_desc).version);
+        int ret;
+            char name[1000];
+            char lb_name[100];
+            char *ap = lb_name;
+            char modified_name[100];
+            //char ub_name[50];
+            int i;
+            for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
+            {
+                ap+=sprintf(ap, "_%llu_%llu", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+            }
+            i =0;
+            sprintf(modified_name, "%s", &od->obj_desc.name);
+            while(modified_name[i] != '\0'){
+                if (modified_name[i] == '/'){
+                    modified_name[i] = '_';
+                }
+                i++;
+            }
+            sprintf(name, "%d_%s_%d%s",id, modified_name, (od->obj_desc).version, lb_name);
+        if(od->_data){
+            ret = 0;
+            sirius_ceph_read_async(name, od->_data, 0, obj_data_size(&od->obj_desc) + 7, &ret);
+            while (ret == 0);
+            uloga("read %s\n", name);
+            uloga("value of ret is %d and obj_data is %d", ret, obj_data_size(&od->obj_desc) + 7);
+            assert(ret == obj_data_size(&od->obj_desc) + 7);
+
+        }else{
+            ret = 0;
+            sirius_ceph_read_async(name, od->data, 0, obj_data_size(&od->obj_desc), &ret);
+            while (ret == 0);
+            uloga("read %s\n", name);
+            uloga("value of ret is %d and obj_data is %d", ret, obj_data_size(&od->obj_desc));
+            assert(ret == obj_data_size(&od->obj_desc));
+        }
+        if(move==1){
+            ret = 1;
+            sirius_ceph_delete_async(name, &ret);
+            while (ret == 1);
+            assert(ret == 0);
+        } 
         if(move==1)
             od->sl = in_memory;
         else{

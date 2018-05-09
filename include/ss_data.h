@@ -38,8 +38,10 @@
 #include "list.h"
 
 #ifdef DS_HAVE_CEPH
-#include <rados/librados.h>
-rados_t cluster;
+#include "object_mover.h"
+#include <assert.h>
+//#include <rados/librados.h>
+//rados_t cluster;
 #endif
 
 typedef struct {
@@ -316,8 +318,10 @@ void obj_data_move_to_mem_emulate(struct obj_data *od, int id);
 void obj_data_copy_to_mem_emulate(struct obj_data *od, int id);
 void obj_data_write_to_ssd_emulate(struct obj_data *od, int id);
 
+
 #ifdef DS_HAVE_CEPH
-void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id, int tier);
+//void obj_data_copy_to_ceph(struct obj_data *od, rados_t cluster, int id, int tier);
+void obj_data_copy_to_ceph(struct obj_data *od, int id, int tier);
 #endif
 
 #ifndef DS_HAVE_CEPH
