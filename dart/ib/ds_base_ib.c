@@ -746,7 +746,9 @@ int ds_boot_master(struct dart_server *ds)	//Done
 
 	err = ds_disseminate(ds);
 
-//      sleep(30);
+    if(ds->comm) {
+        MPI_Barrier(*ds->comm);
+    }
 
 	err = ds_disseminate_all(ds);
 
@@ -896,6 +898,9 @@ int ds_boot_slave(struct dart_server *ds)	//Done
 		exit(-1);
 	}
 
+    if(ds->comm) {
+        MPI_Barrier(*ds->comm);
+    }
 
 	err = ds_disseminate_all(ds);
 
@@ -1088,7 +1093,10 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 	if(err != 0)
 		goto err_free_dsrv;
 	ds->num_charge = (ds->num_cp / ds->num_sp) + (ds->rpc_s->ptlmap.id < ds->num_cp % ds->num_sp);
-	printf("'%s()': init ok.\n", __func__);
+	if(comm) {
+        MPI_Barrier(*ds->comm);
+    }
+    printf("'%s()': init ok.\n", __func__);
 	return ds;
       err_free_dsrv:free(ds);
       err_out:printf("'%s()': failed with %d.\n", __func__, err);
