@@ -244,7 +244,8 @@ enum cmd_type {
     ss_obj_put_ceph_tape,
     ss_obj_promote,
     ss_obj_demote,
-    ss_obj_put_ssd
+    ss_obj_put_ssd,
+    ds_put_completion  //for server notify client that data processing has completed
 };
 
 enum lock_type {

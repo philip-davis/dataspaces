@@ -5,13 +5,15 @@ AM_LDFLAGS = -L../dart -ldart $(DSPACESLIB_LDFLAGS) $(DSPACESLIB_LDADD)
 lib_LIBRARIES =  libdscommon.a libdspaces.a libdspacesf.a
 
 libdscommon_a_SOURCES = bbox.c \
-			object_mover.cpp \
-			object_mover_c.cpp \
 			timer.c \
 			util.c \
 			CppWrapper.cc \
 			MapWrap.cc \
 			ss_data.c
+if BUILD_CEPH
+		libdscommon_a_SOURCES += object_mover.cpp \
+			object_mover_c.cpp 
+endif BUILD_CEPH
 
 
 libdspaces_a_SOURCES =  dataspaces.c \

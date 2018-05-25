@@ -136,9 +136,12 @@ AM_CONDITIONAL([CEPH], [test "x$enable_ceph" == "xyes"])
 
 if test "x$enable_ceph" == "xyes"; then
             AC_DEFINE(DS_HAVE_CEPH, 1, [CEPH is enabled])
+            AM_CONDITIONAL(BUILD_CEPH, true)
             echo "CEPH enabled!"
             DSPACESLIB_LDADD+=" -lrados"
             DSPACES_EXT_LDADD+=" -lrados"
+else
+        AM_CONDITIONAL(BUILD_CEPH, false)
 fi
 
 dnl Check the max array dimension

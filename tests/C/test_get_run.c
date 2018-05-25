@@ -93,6 +93,7 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
 
 	//Test dspaces_barrier
 	//common_lock_on_read("mnd_lock", NULL);
+	//common_lock_on_read("mnd_lock", &gcomm_);
 
 	set_offset_nd(rank_, dims);
 	uint64_t dims_size = 1;
@@ -141,7 +142,7 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
 		//ts++;
 	}
 	tm_end = timer_read(&timer_);
-	common_unlock_on_read("mnd_lock", &gcomm_);
+	//common_unlock_on_read("mnd_lock", &gcomm_);
 	//common_unlock_on_read("mnd_lock", NULL);	//Test dspaces_barrier
 		
 	tm_diff = tm_end-tm_st;
@@ -203,10 +204,11 @@ int test_get_run(enum transport_type type, int npapp, int ndims, int* npdim, uin
 	uloga("TIMING_PERF init_dspaces peer %d time %lf\n", common_rank(), tm_end-tm_st);
 #endif
 	unsigned int ts;
+	common_lock_on_read("mnd_lock", &gcomm_);
 	for(ts = 1; ts <= timesteps_; ts++){
 		couple_read_nd(ts, num_vars, type, ndims);
 	}
-
+	common_unlock_on_read("mnd_lock", &gcomm_);
 	if(rank_ == 0){
 		uloga("%s(): done\n", __func__);
 	}

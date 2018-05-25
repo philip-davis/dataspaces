@@ -9,4 +9,8 @@ before_install:
 script:
     - ./autogen.sh
     - ./configure CC=mpicc FC=mpif90
+<<<<<<< HEAD
     - make
+=======
+    - make
+>>>>>>> origin/dataspaces-sync

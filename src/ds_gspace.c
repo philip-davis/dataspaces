@@ -1415,6 +1415,15 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 }
 
 /*
+    obj_put synchronization completion
+    Remove msg_ds buffer after obj_put_completion() send back rpc call
+*/
+static int obj_put_sync_completion(struct rpc_server *rpc_s, struct msg_buf *msg){
+    free(msg);
+    return 0;
+}
+
+/*
 */
 
 
@@ -1529,6 +1538,12 @@ void free_evict_list(){
 static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
     struct obj_data *od = msg->private;
+    struct msg_buf *msg_ds;
+    struct node_id *peer_ds;
+    struct hdr_obj_put *hdr_ds;
+    int err = -ENOMEM;
+
+
     ls_add_obj(dsg->ls, od);
     if(od->sl == in_memory){
         //dsg->ls->mem_used = dsg->ls->mem_used + obj_data_size(&(od->obj_desc));
@@ -1539,7 +1554,6 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
             pthread_cond_signal(&econd);
         }
         pthread_mutex_unlock(&emutex);
-
     }
     if(od->sl == in_memory_ssd){
         obj_data_write_to_ssd(od, DSG_ID);
@@ -1581,6 +1595,23 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
         obj_data_copy_to_ceph_emulate(od, DSG_ID, 3);
         #endif
     }
+    peer_ds = (struct node_id*)msg->peer;
+    msg_ds = msg_buf_alloc(rpc_s, peer_ds, 1);
+
+    msg_ds->msg_rpc->cmd = ds_put_completion;
+    msg_ds->msg_rpc->id = DSG_ID;
+    msg_ds->cb = obj_put_sync_completion;
+
+    hdr_ds = msg_ds->msg_rpc->pad;
+    hdr_ds->sync_op_id_ptr = msg->sync_op_id;
+
+    err = rpc_send(rpc_s, peer_ds, msg_ds);
+    if (err < 0){
+        free(msg_ds);
+        uloga("%s(): rpc_send fail from ds_put_completion\n",__func__);
+
+    }
+
     free(msg);
 #ifdef DEBUG
     uloga("'%s()': server %d finished receiving  %s, version %d.\n",
@@ -1989,6 +2020,9 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         msg->size = obj_data_size(&od->obj_desc);
         msg->private = od;
         msg->cb = obj_put_completion;
+        msg->sync_op_id = hdr->sync_op_id_ptr; //synchronization lock pointer passed from client
+        msg->peer = peer; 
+
 
 #ifdef DEBUG
         uloga("'%s()': server %d start receiving in memory %s, version %d.\n", 
@@ -2016,8 +2050,6 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         return err;
 }
 
-/*
-*/
 static int dsgrpc_obj_put_ssd(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
         struct hdr_obj_put *hdr = (struct hdr_obj_put *)cmd->pad;
@@ -2047,9 +2079,12 @@ static int dsgrpc_obj_put_ssd(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         msg->size = obj_data_size(&od->obj_desc);
         msg->private = od;
         msg->cb = obj_put_completion;
+        msg->sync_op_id = hdr->sync_op_id_ptr; //synchronization lock pointer passed from client
+        msg->peer = peer; 
+
 
 #ifdef DEBUG
-        uloga("'%s()': server %d start receiving in ssd%s, version %d.\n", 
+        uloga("'%s()': server %d start receiving in memory %s, version %d.\n", 
             __func__, DSG_ID, odsc->name, odsc->version);
 #endif
         rpc_mem_info_cache(peer, msg, cmd); 
@@ -2069,215 +2104,187 @@ static int dsgrpc_obj_put_ssd(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         free(msg);
  err_free_data:
         free(od);
-err_out:
+ err_out:
         uloga("'%s()': failed with %d.\n", __func__, err);
         return err;
-
 }
 
 static int dsgrpc_obj_put_ceph_ssd(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-    struct hdr_obj_put *hdr = (struct hdr_obj_put *)cmd->pad;
-    struct obj_descriptor *odsc = &(hdr->odsc);
-    struct obj_data *od;
-    struct node_id *peer;
-    struct msg_buf *msg;
-    int err;
+        struct hdr_obj_put *hdr = (struct hdr_obj_put *)cmd->pad;
+        struct obj_descriptor *odsc = &(hdr->odsc);
+        struct obj_data *od;
+        struct node_id *peer;
+        struct msg_buf *msg;
+        int err;
+
+        odsc->owner = DSG_ID;
+
+        err = -ENOMEM;
+        peer = ds_get_peer(dsg->ds, cmd->id);
+        od = obj_data_alloc(odsc);
+        od->sl = in_memory_ceph_ssd;
+        if (!od)
+                goto err_out;
+
+        od->obj_desc.owner = DSG_ID;
+        memcpy(&od->gdim, &hdr->gdim, sizeof(struct global_dimension));
+
+        msg = msg_buf_alloc(rpc_s, peer, 0);
+        if (!msg)
+                goto err_free_data;
+
+        msg->msg_data = od->data;
+        msg->size = obj_data_size(&od->obj_desc);
+        msg->private = od;
+        msg->cb = obj_put_completion;
+        msg->sync_op_id = hdr->sync_op_id_ptr; //synchronization lock pointer passed from client
+        msg->peer = peer; 
+
 
 #ifdef DEBUG
-    {
-        char *str;
-
-        asprintf(&str, "S%2d: request for dsgrpc_obj_put '%s' ver %d from C%2d for  ",
-            DSG_ID, odsc->name, odsc->version, cmd->id);
-        str = str_append(str, bbox_sprint(&odsc->bb));
-
-        uloga("'%s()': %s\n", __func__, str);
-        free(str);
-    }
+        uloga("'%s()': server %d start receiving in memory %s, version %d.\n", 
+            __func__, DSG_ID, odsc->name, odsc->version);
 #endif
-    odsc->owner = DSG_ID;
+        rpc_mem_info_cache(peer, msg, cmd); 
+        err = rpc_receive_direct(rpc_s, peer, msg);
+        rpc_mem_info_reset(peer, msg, cmd);
 
-    err = -ENOMEM;
-    peer = ds_get_peer(dsg->ds, cmd->id);
-    od = obj_data_alloc(odsc);
-    od->sl = in_memory_ceph_ssd;
-    if (!od)
-        goto err_out;
+        if (err < 0)
+                goto err_free_msg;
 
-    od->obj_desc.owner = DSG_ID;
-    memcpy(&od->gdim, &hdr->gdim, sizeof(struct global_dimension));
+    /* NOTE: This  early update, has  to be protected  by external
+       locks in the client code. */
 
-    msg = msg_buf_alloc(rpc_s, peer, 0);
-    if (!msg)
-        goto err_free_data;
-
-    msg->msg_data = od->data;
-    msg->size = obj_data_size(&od->obj_desc);
-    msg->private = od;
-    msg->cb = obj_put_completion;
-
-#ifdef DEBUG
-    uloga("'%s()': server %d start receiving in ceph ssd%s, version %d.\n", 
-        __func__, DSG_ID, odsc->name, odsc->version);
-#endif
-    rpc_mem_info_cache(peer, msg, cmd); 
-    err = rpc_receive_direct(rpc_s, peer, msg);
-    rpc_mem_info_reset(peer, msg, cmd);
-
-    if (err < 0)
-        goto err_free_msg;
-
-/* NOTE: This  early update, has  to be protected  by external
-locks in the client code. */
-
-    err = obj_put_update_dht(dsg, od);
-    if (err == 0)
-        return 0;
-    err_free_msg:
-    free(msg);
-    err_free_data:
-    free(od);
-    err_out:
-    uloga("'%s()': failed with %d.\n", __func__, err);
-    return err;
+        err = obj_put_update_dht(dsg, od);
+        if (err == 0)
+            return 0;
+ err_free_msg:
+        free(msg);
+ err_free_data:
+        free(od);
+ err_out:
+        uloga("'%s()': failed with %d.\n", __func__, err);
+        return err;
 }
 
 static int dsgrpc_obj_put_ceph_hdd(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-    struct hdr_obj_put *hdr = (struct hdr_obj_put *)cmd->pad;
-    struct obj_descriptor *odsc = &(hdr->odsc);
-    struct obj_data *od;
-    struct node_id *peer;
-    struct msg_buf *msg;
-    int err;
+        struct hdr_obj_put *hdr = (struct hdr_obj_put *)cmd->pad;
+        struct obj_descriptor *odsc = &(hdr->odsc);
+        struct obj_data *od;
+        struct node_id *peer;
+        struct msg_buf *msg;
+        int err;
+
+        odsc->owner = DSG_ID;
+
+        err = -ENOMEM;
+        peer = ds_get_peer(dsg->ds, cmd->id);
+        od = obj_data_alloc(odsc);
+        od->sl = in_memory_ceph_hdd;
+        if (!od)
+                goto err_out;
+
+        od->obj_desc.owner = DSG_ID;
+        memcpy(&od->gdim, &hdr->gdim, sizeof(struct global_dimension));
+
+        msg = msg_buf_alloc(rpc_s, peer, 0);
+        if (!msg)
+                goto err_free_data;
+
+        msg->msg_data = od->data;
+        msg->size = obj_data_size(&od->obj_desc);
+        msg->private = od;
+        msg->cb = obj_put_completion;
+        msg->sync_op_id = hdr->sync_op_id_ptr; //synchronization lock pointer passed from client
+        msg->peer = peer; 
+
 
 #ifdef DEBUG
-    {
-        char *str;
-
-        asprintf(&str, "S%2d: request for dsgrpc_obj_put '%s' ver %d from C%2d for  ",
-            DSG_ID, odsc->name, odsc->version, cmd->id);
-        str = str_append(str, bbox_sprint(&odsc->bb));
-
-        uloga("'%s()': %s\n", __func__, str);
-        free(str);
-    }
+        uloga("'%s()': server %d start receiving in memory %s, version %d.\n", 
+            __func__, DSG_ID, odsc->name, odsc->version);
 #endif
-    odsc->owner = DSG_ID;
+        rpc_mem_info_cache(peer, msg, cmd); 
+        err = rpc_receive_direct(rpc_s, peer, msg);
+        rpc_mem_info_reset(peer, msg, cmd);
 
-    err = -ENOMEM;
-    peer = ds_get_peer(dsg->ds, cmd->id);
-    od = obj_data_alloc(odsc);
-    od->sl = in_memory_ceph_hdd;
-    if (!od)
-        goto err_out;
+        if (err < 0)
+                goto err_free_msg;
 
-    od->obj_desc.owner = DSG_ID;
-    memcpy(&od->gdim, &hdr->gdim, sizeof(struct global_dimension));
+    /* NOTE: This  early update, has  to be protected  by external
+       locks in the client code. */
 
-    msg = msg_buf_alloc(rpc_s, peer, 0);
-    if (!msg)
-        goto err_free_data;
-
-    msg->msg_data = od->data;
-    msg->size = obj_data_size(&od->obj_desc);
-    msg->private = od;
-    msg->cb = obj_put_completion;
-
-#ifdef DEBUG
-    uloga("'%s()': server %d start receiving in ceph hdd%s, version %d.\n", 
-        __func__, DSG_ID, odsc->name, odsc->version);
-#endif
-    rpc_mem_info_cache(peer, msg, cmd); 
-    err = rpc_receive_direct(rpc_s, peer, msg);
-    rpc_mem_info_reset(peer, msg, cmd);
-
-    if (err < 0)
-        goto err_free_msg;
-
-/* NOTE: This  early update, has  to be protected  by external
-locks in the client code. */
-
-    err = obj_put_update_dht(dsg, od);
-    if (err == 0)
-        return 0;
-    err_free_msg:
-    free(msg);
-    err_free_data:
-    free(od);
-    err_out:
-    uloga("'%s()': failed with %d.\n", __func__, err);
-    return err;
+        err = obj_put_update_dht(dsg, od);
+        if (err == 0)
+            return 0;
+ err_free_msg:
+        free(msg);
+ err_free_data:
+        free(od);
+ err_out:
+        uloga("'%s()': failed with %d.\n", __func__, err);
+        return err;
 }
-
 static int dsgrpc_obj_put_ceph_tape(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-    struct hdr_obj_put *hdr = (struct hdr_obj_put *)cmd->pad;
-    struct obj_descriptor *odsc = &(hdr->odsc);
-    struct obj_data *od;
-    struct node_id *peer;
-    struct msg_buf *msg;
-    int err;
+        struct hdr_obj_put *hdr = (struct hdr_obj_put *)cmd->pad;
+        struct obj_descriptor *odsc = &(hdr->odsc);
+        struct obj_data *od;
+        struct node_id *peer;
+        struct msg_buf *msg;
+        int err;
+
+        odsc->owner = DSG_ID;
+
+        err = -ENOMEM;
+        peer = ds_get_peer(dsg->ds, cmd->id);
+        od = obj_data_alloc(odsc);
+        od->sl = in_memory_ceph_tape;
+        if (!od)
+                goto err_out;
+
+        od->obj_desc.owner = DSG_ID;
+        memcpy(&od->gdim, &hdr->gdim, sizeof(struct global_dimension));
+
+        msg = msg_buf_alloc(rpc_s, peer, 0);
+        if (!msg)
+                goto err_free_data;
+
+        msg->msg_data = od->data;
+        msg->size = obj_data_size(&od->obj_desc);
+        msg->private = od;
+        msg->cb = obj_put_completion;
+        msg->sync_op_id = hdr->sync_op_id_ptr; //synchronization lock pointer passed from client
+        msg->peer = peer; 
+
 
 #ifdef DEBUG
-    {
-        char *str;
-
-        asprintf(&str, "S%2d: request for dsgrpc_obj_put '%s' ver %d from C%2d for  ",
-            DSG_ID, odsc->name, odsc->version, cmd->id);
-        str = str_append(str, bbox_sprint(&odsc->bb));
-
-        uloga("'%s()': %s\n", __func__, str);
-        free(str);
-    }
+        uloga("'%s()': server %d start receiving in memory %s, version %d.\n", 
+            __func__, DSG_ID, odsc->name, odsc->version);
 #endif
-    odsc->owner = DSG_ID;
+        rpc_mem_info_cache(peer, msg, cmd); 
+        err = rpc_receive_direct(rpc_s, peer, msg);
+        rpc_mem_info_reset(peer, msg, cmd);
 
-    err = -ENOMEM;
-    peer = ds_get_peer(dsg->ds, cmd->id);
-    od = obj_data_alloc(odsc);
-    od->sl = in_memory_ceph_tape;
-    if (!od)
-        goto err_out;
+        if (err < 0)
+                goto err_free_msg;
 
-    od->obj_desc.owner = DSG_ID;
-    memcpy(&od->gdim, &hdr->gdim, sizeof(struct global_dimension));
+    /* NOTE: This  early update, has  to be protected  by external
+       locks in the client code. */
 
-    msg = msg_buf_alloc(rpc_s, peer, 0);
-    if (!msg)
-        goto err_free_data;
-
-    msg->msg_data = od->data;
-    msg->size = obj_data_size(&od->obj_desc);
-    msg->private = od;
-    msg->cb = obj_put_completion;
-
-#ifdef DEBUG
-    uloga("'%s()': server %d start receiving in ceph tape%s, version %d.\n", 
-        __func__, DSG_ID, odsc->name, odsc->version);
-#endif
-    rpc_mem_info_cache(peer, msg, cmd); 
-    err = rpc_receive_direct(rpc_s, peer, msg);
-    rpc_mem_info_reset(peer, msg, cmd);
-
-    if (err < 0)
-        goto err_free_msg;
-
-/* NOTE: This  early update, has  to be protected  by external
-locks in the client code. */
-
-    err = obj_put_update_dht(dsg, od);
-    if (err == 0)
-        return 0;
-    err_free_msg:
-    free(msg);
-    err_free_data:
-    free(od);
-    err_out:
-    uloga("'%s()': failed with %d.\n", __func__, err);
-    return err;
+        err = obj_put_update_dht(dsg, od);
+        if (err == 0)
+            return 0;
+ err_free_msg:
+        free(msg);
+ err_free_data:
+        free(od);
+ err_out:
+        uloga("'%s()': failed with %d.\n", __func__, err);
+        return err;
 }
+
 
 static int obj_info_reply_descriptor(
         struct node_id *q_peer,
@@ -3430,4 +3437,5 @@ int dsghlp_get_rank(struct ds_gspace *dsg)
 int dsghlp_all_sp_joined(struct ds_gspace *dsg)
 {
     return (dsg->ds->num_sp == dsg->ds->size_sp);
+
 }
