@@ -1922,7 +1922,7 @@ void *prefetch_thread(void*attr){
                 pthread_mutex_lock(&odscmutex);
                 obj_data_move_to_mem(pod_list.pref_od[local_cond_index], DSG_ID);
                 //uloga("Prefetched data to mem");
-
+                pthread_mutex_unlock(&emutex);
                 pthread_mutex_lock(&emutex);
                 node_insert(pod_list.pref_od[local_cond_index], 1);
                 if(dsg->ls->mem_used > dsg->ls->mem_size){
@@ -1930,11 +1930,7 @@ void *prefetch_thread(void*attr){
                     //pthread_cond_signal(&econd);
                     pthread_cond_signal(&econd);
                 }
-                pthread_mutex_unlock(&emutex);
-
-                //obj_data_move_to_mem(pod_list.pref_od[local_cond_index], DSG_ID);
                 pthread_mutex_unlock(&odscmutex);
-                pod_list.pref_od[local_cond_index]->so = prefetching;
                 local_cond_index = get_prev(local_cond_index, MAX_PREFETCH);
             } while (pod_list.pref_od[local_cond_index] !=NULL && pod_list.pref_od[local_cond_index]->so == prefetching && (pod_list.pref_od[local_cond_index]->sl == in_ssd || pod_list.pref_od[local_cond_index]->sl == in_ceph_ssd
                 || pod_list.pref_od[local_cond_index]->sl == in_ceph_hdd || pod_list.pref_od[local_cond_index]->sl == in_ceph_tape));
@@ -2914,7 +2910,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         local_obj_get_desc(oh->u.o.odsc.name, new_lb, new_ub, (int)oh->u.o.odsc.version); 
     #endif
 
-        pthread_mutex_lock(&odscmutex);
+        //pthread_mutex_lock(&odscmutex);
         from_obj = ls_find(dsg->ls, &oh->u.o.odsc);
         if (!from_obj) {
             char *str;
@@ -2923,7 +2919,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             free(str);
             goto err_out;
         }
-        pthread_mutex_unlock(&odscmutex);
+        //pthread_mutex_unlock(&odscmutex);
 
 
         //TODO:  if required  object is  not  found, I  should send  a

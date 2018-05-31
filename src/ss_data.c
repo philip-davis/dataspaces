@@ -50,8 +50,8 @@
 #define CEPH_EMULATE_FIRST_TIER "/home/pradsubedi/ceph/tier1/"
 #define CEPH_EMULATE_SECOND_TIER "/home/pradsubedi/ceph/tier2/"
 #define CEPH_EMULATE_THIRD_TIER "/home/pradsubedi/ceph/tier3/"
-#define MEM_LIMIT 1073741824     //memory limit for staging in bytes
-#define SSD_LIMIT 1073741824     //ssd size for staging in bytes
+#define MEM_LIMIT 107374182400000000     //memory limit for staging in bytes
+#define SSD_LIMIT 107374182400000000     //ssd size for staging in bytes
 // TODO: I should  import the header file with  the definition for the
 // iovec_t data type.
 
@@ -2016,6 +2016,7 @@ void obj_data_write_to_ssd(struct obj_data *od, int id){
             fwrite(od->data, obj_data_size(&od->obj_desc), 1, f);
         }
         fclose(f);
+        od->so = normal;
 
 }
 
@@ -2201,6 +2202,7 @@ void obj_data_copy_to_ceph(struct obj_data *od, int id, int tier)
         }
     //od->sl = in_ceph;
     obj_data_free_in_mem(od);
+    od->so = normal;
 }
 
 
