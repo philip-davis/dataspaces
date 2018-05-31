@@ -2262,92 +2262,7 @@ void obj_data_copy_to_ceph_emulate(struct obj_data *od, int id, int tier)
 void ceph_read(struct obj_data *od, int id, int move, int tier){
     #ifdef DS_HAVE_CEPH
         struct obj_descriptor *odsc = &od->obj_desc;
-        //perform aio read
         od->_data = od->data = malloc(obj_data_size(odsc)+7);
-       //create a rados ioctx
-
-        /*
-        rados_ioctx_t io;
-        char *poolname = "dataspaces";
-        int err = rados_ioctx_create(cluster, poolname, &io);
-        if (err < 0) {
-                uloga( "%s: cannot open rados pool %s: %s\n", __func__, poolname, strerror(-err));
-                rados_shutdown(cluster);
-                exit(EXIT_FAILURE);
-        } else {
-            //    uloga("\nCreated I/O context.\n");
-        }
-
-        //uloga("sprintf start for %s ver %d\n", &od->obj_desc.name, (od->obj_desc).version);
-            char name[1000];
-            char lb_name[100];
-            char *ap = lb_name;
-            char modified_name[100];
-            //char ub_name[50];
-            int i;
-            for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
-            {
-                ap+=sprintf(ap, "_%llu_%llu", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
-            }
-            i =0;
-            sprintf(modified_name, "%s", &od->obj_desc.name);
-            while(modified_name[i] != '\0'){
-                if (modified_name[i] == '/'){
-                    modified_name[i] = '_';
-                }
-                i++;
-            }
-            sprintf(name, "%d_%s_%d%s",id, modified_name, (od->obj_desc).version, lb_name);
-        if(od->_data){
-            err = rados_read(io, name, od->_data, obj_data_size(&od->obj_desc) + 7, 0);
-            if (err < 0) {
-                uloga("%s: Cannot read object from pool %s: %s\n", __func__, poolname, strerror(-err));
-                rados_ioctx_destroy(io);
-                rados_shutdown(cluster);
-                exit(1);
-            }
-            else{
-             //  uloga("Finished ceph to mem %s \n", name);
-            }
-        }else{
-            err = rados_read(io, name, od->data, obj_data_size(&od->obj_desc), 0);
-            if (err < 0) { 
-                uloga("%s: Cannot read object from pool %s: %s\n", __func__, poolname, strerror(-err));
-                rados_ioctx_destroy(io);
-                rados_shutdown(cluster);
-                exit(1);
-            }else{
-             //   uloga("Finished ceph to mem %s\n", name);
-            }
-        }
-        if(move==1){
-            err = rados_remove(io, name);
-        } 
-        if (err < 0) {
-                uloga("%s: Cannot remove object. %s %s\n", __func__, poolname, strerror(-err));
-                rados_ioctx_destroy(io);
-                rados_shutdown(cluster);
-                exit(1);
-        } else {
-                //printf("\nRemoved object \"hw\".\n");
-        }
-
-    //free the ioctx
-        rados_ioctx_destroy(io);
-        if(move==1)
-            od->sl = in_memory;
-        else{
-            if(tier == 3){
-                od->sl = in_memory_ceph_tape;
-            }else if(tier ==2){
-                od->sl = in_memory_ceph_hdd;
-            }else{
-                od->sl = in_memory_ceph_ssd;
-            }
-        }
-        */
-
-        //uloga("sprintf start for %s ver %d\n", &od->obj_desc.name, (od->obj_desc).version);
         int ret;
             char name[1000];
             char lb_name[100];
@@ -2404,57 +2319,57 @@ void ceph_read(struct obj_data *od, int id, int move, int tier){
         
     #endif
 
-        #ifndef DS_HAVE_CEPH
+    #ifndef DS_HAVE_CEPH
         struct obj_descriptor *odsc = &od->obj_desc;
         //perform aio read
         od->_data = od->data = malloc(obj_data_size(odsc)+7);
-            char name[100];
-            char lb_name[100];
-            char *ap = lb_name;
-            int i;
-            for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
-            {
-                ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
-            }
-            sprintf(name, "%2d_%s_%d%s",id, &od->obj_desc.name, (od->obj_desc).version, lb_name);
-            char *new_name = (char *)malloc(sizeof(char)*1000);
-            memset(new_name, '\0', sizeof(new_name));
-            if(tier == 1){
-                strcpy(new_name, CEPH_EMULATE_FIRST_TIER);
-            }else if (tier ==2){
-                strcpy(new_name, CEPH_EMULATE_SECOND_TIER);
+        char name[100];
+        char lb_name[100];
+        char *ap = lb_name;
+        int i;
+        for (i = 0; i < (od->obj_desc).bb.num_dims; ++i)
+        {
+            ap+=sprintf(ap, "_%d_%d", (od->obj_desc).bb.lb.c[i], (od->obj_desc).bb.ub.c[i]);
+        }
+        sprintf(name, "%2d_%s_%d%s",id, &od->obj_desc.name, (od->obj_desc).version, lb_name);
+        char *new_name = (char *)malloc(sizeof(char)*1000);
+        memset(new_name, '\0', sizeof(new_name));
+        if(tier == 1){
+            strcpy(new_name, CEPH_EMULATE_FIRST_TIER);
+        }else if (tier ==2){
+            strcpy(new_name, CEPH_EMULATE_SECOND_TIER);
+        }else{
+            strcpy(new_name, CEPH_EMULATE_THIRD_TIER);
+        }
+        //strcpy(new_name, CEPH_EMULATE_);
+        strcat(new_name, name);
+        FILE *f=fopen(new_name, "rb");
+        if(f){
+            if(od->_data){
+                fread(od->_data, obj_data_size(&od->obj_desc) + 7, 1, f);
             }else{
-                strcpy(new_name, CEPH_EMULATE_THIRD_TIER);
+                fread(od->_data, obj_data_size(&od->obj_desc), 1, f);
             }
-            //strcpy(new_name, CEPH_EMULATE_);
-            strcat(new_name, name);
-            FILE *f=fopen(new_name, "rb");
-            if(f){
-                if(od->_data){
-                    fread(od->_data, obj_data_size(&od->obj_desc) + 7, 1, f);
-                }else{
-                    fread(od->_data, obj_data_size(&od->obj_desc), 1, f);
-                }
-                //uloga("Moved %s to memory \n", name);
-                fclose(f);
-               // uloga("Going to remove file %s as its moved to memory", new_name);
-                if(move==1){
-                    od->sl = in_memory;
-                    remove(new_name);
-                }else{
-                    if(tier == 3){
-                        od->sl = in_memory_ceph_tape;
-                    }else if(tier ==2){
-                        od->sl = in_memory_ceph_hdd;
-                    }else{
-                        od->sl = in_memory_ceph_ssd;
-                    }
-                }
-                
+            //uloga("Moved %s to memory \n", name);
+            fclose(f);
+           // uloga("Going to remove file %s as its moved to memory", new_name);
+            if(move==1){
+                od->sl = in_memory;
+                remove(new_name);
             }else{
-                uloga("File could not be found \n");
+                if(tier == 3){
+                    od->sl = in_memory_ceph_tape;
+                }else if(tier ==2){
+                    od->sl = in_memory_ceph_hdd;
+                }else{
+                    od->sl = in_memory_ceph_ssd;
+                }
             }
-        #endif
+            
+        }else{
+            uloga("File could not be found \n");
+        }
+    #endif
 }
 
 void ssd_read(struct obj_data *od, int id, int move){
@@ -2514,7 +2429,6 @@ void obj_data_copy_to_mem(struct obj_data *od, int id)
         ssd_read(od, id, 0);
 
     }
-    #ifdef DS_HAVE_CEPH
     if(od->sl == in_ceph_ssd){
         ceph_read(od, id, 0, 1);
     }
@@ -2524,7 +2438,6 @@ void obj_data_copy_to_mem(struct obj_data *od, int id)
     if(od->sl == in_ceph_tape){
         ceph_read(od, id, 0, 3);
     }
-    #endif 
 
 }
 

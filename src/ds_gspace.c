@@ -2882,7 +2882,6 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             }
             int same_obj = 0;
             int pred_version = insert_n_predict_version((int)oh->u.o.odsc.version, var_idx);
-            //uloga("Current_version %d, Predicted version %d \n", (int)oh->u.o.odsc.version, pred_version);
             local_obj_get_desc(oh->u.o.odsc.name, lb, ub, pred_version);
         }
         
@@ -2943,12 +2942,8 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         if (!od)
                 goto err_out;
         if(from_obj->sl == in_ceph_ssd || from_obj->sl == in_ceph_hdd || from_obj->sl == in_ceph_tape){
-            #ifdef DS_HAVE_CEPH
-            //ssd_copy_ceph(od, from_obj, DSG_ID);
-            //uloga("Copy to Memory from ceph\n");
             obj_data_copy_to_mem(from_obj, DSG_ID);
             (fast_v)? ssd_copyv(od, from_obj) : ssd_copy(od, from_obj);
-            #endif
         }else if(from_obj->sl == in_ssd){
             //uloga("Copy to Memory from local ssd\n");
             obj_data_copy_to_mem(from_obj, DSG_ID);
