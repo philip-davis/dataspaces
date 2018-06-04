@@ -747,69 +747,49 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 }
 
-#if 1
-static char* ip_search(void)
+static char *ip_search(void)
 {
 
     /* 1. get my GNI IP address */
     struct ifaddrs *ifaddr, *ifa;
     int s;
-    char host[NI_MAXHOST], *ibip = NULL;
+    char host[NI_MAXHOST];
+    char *ibip = NULL;
 
     if (getifaddrs(&ifaddr) == -1) {
-        return NULL;
-    }
-
-    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next)
-    {
-        if(ifa->ifa_addr == NULL)
-            continue;
-
-        if (ifa->ifa_addr->sa_family == AF_INET)
+        uloga("%s: getifaddrs failed.\n", __func__);
+       
+    } else {
+        ibip = malloc(NI_MAXHOST * sizeof(*ibip));
+        for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next)
         {
+            if(ifa->ifa_addr == NULL)
+                continue;
 
-            s = getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in),
-                    host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
-            // fprintf(stderr, "%s: %s\n", ifa->ifa_name, host);
-            if (s != 0)
+            if (ifa->ifa_addr->sa_family == AF_INET)
             {
-                perror("getnameinfo");
-            }
-            else{
-                if (!strncmp(ifa->ifa_name,"ipogif", 6)) {
-                    ibip = host;
-                    break;
+
+                s = getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in),
+                        host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+                if (s != 0)
+                {   
+                    perror("getnameinfo");
+                } else{
+                    if (!strncmp(ifa->ifa_name,"ipogif", 6)) {
+                        ibip = strdup(host);
+                        break;
+                    }
                 }
             }
         }
     }
 
+    if(!ibip) {
+        uloga("%s: couldn't find an ipogif interface.\n", __func__);
+    }
+
     return ibip;
 }
-
-#else 
-static char *ip_search(void)
-{
-	int sfd, intr;
-	struct ifreq buf[16];
-	struct ifconf ifc;
-	sfd = socket (AF_INET, SOCK_DGRAM, 0); 
-	if (sfd < 0){
-	  uloga("CANNOT FIND HOST IP\n");
-		return "cannot find ip";
-	}
-	ifc.ifc_len = sizeof(buf);
-	ifc.ifc_buf = (caddr_t)buf;
-	if (ioctl(sfd, SIOCGIFCONF, (char *)&ifc)){
-	  uloga("CANNOT FIND HOST IP\n");
-		return "cannot find ip";
-	}
-	intr = ifc.ifc_len / sizeof(struct ifreq);
-	while (intr-- > 0 && ioctl(sfd, SIOCGIFADDR, (char *)&buf[intr]));
-	close(sfd);
-	return inet_ntoa(((struct sockaddr_in*)(&buf[intr].ifr_addr))-> sin_addr);
-}
-#endif
 
 int listen_sock_init(int option, const char *ip, int port, int *SocketPri)
 {
@@ -1078,6 +1058,7 @@ static void *ds_master_listen(void *ds_v)
 	err = listen_sock_init(0, localip, ds->rpc_s->address.address.sin_port, &ds->rpc_s->address.sockfd);
 	if(err != 0 || ds->rpc_s->address.sockfd < 0)
 		goto err_out;
+    free(localip);
 
 	err = port_search(ds->rpc_s->address.sockfd);
 	if(err<0)
