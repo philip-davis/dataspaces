@@ -564,13 +564,13 @@ void bbox_print(struct bbox *bb)
 
 char * bbox_sprint(const struct bbox *bb)
 {
-        char *str;
+    char *str = malloc(sizeof(*str * 7)); // "{lb = " (with terminator)
 
-        asprintf(&str, "{lb = ");
-        str = str_append(str, coord_sprint(&bb->lb, bb->num_dims));
-        str = str_append_const(str, ", ub = ");
-        str = str_append(str, coord_sprint(&bb->ub, bb->num_dims));
-        str = str_append_const(str, "}\n");
+    strcpy(str, "{lb = ");
+    str = str_append(str, coord_sprint(&bb->lb, bb->num_dims));
+    str = str_append_const(str, ", ub = ");
+    str = str_append(str, coord_sprint(&bb->ub, bb->num_dims));
+    str = str_append_const(str, "}\n");
 
-        return str;
+    return str;
 }
