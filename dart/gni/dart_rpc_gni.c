@@ -1067,22 +1067,22 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
             goto err_status;
         }
 
-        rdma_data_desc.type = GNI_POST_RDMA_GET;
-        rdma_data_desc.cq_mode = GNI_CQMODE_GLOBAL_EVENT | GNI_CQMODE_REMOTE_EVENT; //?reconsider, need some tests.
-        rdma_data_desc.dlvr_mode = GNI_DLVMODE_PERFORMANCE;
-        rdma_data_desc.local_addr = (uint64_t) rr->msg->msg_data;
-        rdma_data_desc.local_mem_hndl = rr->mdh_data;
-        rdma_data_desc.remote_addr = peer->mdh_addr.address;
-        rdma_data_desc.remote_mem_hndl = peer->mdh_addr.mdh;
-        rdma_data_desc.length = rr->msg->size;//Must be a multiple of 4-bytes for GETs
-        rdma_data_desc.rdma_mode = 0;
-        rdma_data_desc.src_cq_hndl = rpc_s->src_cq_hndl;
-        status = GNI_PostRdma(peer->ep_hndl, &rdma_data_desc);
-        if (status != GNI_RC_SUCCESS)
-        {
-              if(status == 7)
+        rdma_data_desc = calloc(1, sizeof(*rdma_data_desc));
+        rdma_data_desc->type = GNI_POST_RDMA_GET;
+        rdma_data_desc->cq_mode = GNI_CQMODE_GLOBAL_EVENT | GNI_CQMODE_REMOTE_EVENT; //?reconsider, need some tests.
+        rdma_data_desc->dlvr_mode = GNI_DLVMODE_PERFORMANCE;
+        rdma_data_desc->local_addr = (uint64_t) rr->msg->msg_data;
+        rdma_data_desc->local_mem_hndl = rr->mdh_data;
+        rdma_data_desc->remote_addr = peer->mdh_addr.address;
+        rdma_data_desc->remote_mem_hndl = peer->mdh_addr.mdh;
+        rdma_data_desc->length = rr->msg->size;//Must be a multiple of 4-bytes for GETs
+        rdma_data_desc->rdma_mode = 0;
+        rdma_data_desc->src_cq_hndl = rpc_s->src_cq_hndl;
+        status = GNI_PostRdma(peer->ep_hndl, rdma_data_desc);
+        if (status != GNI_RC_SUCCESS) {
+              if(status == GNI_RC_ALIGNMENT_ERROR)
               {
-                 printf("status == 7.\n");
+                 printf("Alignment error for RDMA transfer.\n");
 
               }
               printf("Fail: GNI_PostRdma returned error with %d.\n", status);
