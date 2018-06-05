@@ -529,20 +529,29 @@ void coord_print(struct coord *c, int num_dims)
   Routine to return a string representation of the 'coord' object.
 */
 
-char * coord_sprint(const struct coord *c, int num_dims)
+char *coord_sprint(const struct coord *c, int num_dims)
 {
-        char *str;
-        int i;
-        asprintf(&str, "{%d", c->c[0]);
-        for(i = 1; i < num_dims; i++){
-                char *tmp;
-                asprintf(&tmp, ", %llu", c->c[i]);
-                str = str_append(str, tmp);
-        }
-        str = str_append_const(str, "}");
-        return str;
-}
+    char *str;
+    int i;
+    int size = 2; // count the curly braces
 
+    for(i = 0; i < num_dims; i++) {
+        size += snprintf(NULL, 0, "%llu", c->c[i]);
+        if(i > 0) {
+        }
+        size += i ? 2 : 0; // account for ", " 
+    }
+    str = malloc(sizeof(*str) * (size + 1)); // add null terminator
+    strcpy(str, "{");
+    for(i = 0; i < num_dims; i++) {
+        char *tmp;
+        sprintf(tmp, i?", %llu":"%llu", c->c[i]);
+        str = str_append(str, tmp);
+    }
+    str = str_append_const(str, "}");
+    
+    return str;    
+}
 
 void bbox_print(struct bbox *bb)
 {
