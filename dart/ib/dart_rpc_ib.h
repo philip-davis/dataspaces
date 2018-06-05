@@ -408,11 +408,13 @@ enum cmd_type {
 	dimes_locate_data_msg,
 	dimes_put_msg,
 #endif
+#ifdef DS_SYNC_MSG
+    ds_put_completion,  //for server notify client that data processing has completed
+#endif
 	//Added for CCGrid Demo
 	CN_TIMING_AVG,
 	_CMD_COUNT,
-	cn_s_unregister,
-    ds_put_completion  //for server notify client that data processing has completed
+	cn_s_unregister
 };
 
 enum lock_type {

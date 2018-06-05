@@ -128,6 +128,15 @@ else
         AM_CONDITIONAL(BUILD_DIMES, false)
 fi
 
+dnl Check if we are syncing with rpc messages
+AC_ARG_ENABLE(sync-msg,
+    [AS_HELP_STRING([--enable-sync-msg],
+        [Enable syncing writes using confirmation messages from the servers])])
+
+if test "x$enable_sync_msg" == "xyes"; then
+    AC_DEFINE(DS_SYNC_MSG, 1, [sync messages enabled.])
+fi  
+
 dnl Check the max array dimension
 
 if test -z "${HAVE_UGNI_TRUE}"; then

@@ -132,7 +132,9 @@ struct dcg_lock {
 static struct {
         int next;
         int opid[4095];
+#ifdef DS_SYNC_MSG
         int ds_comp[4095]; //receive server notification
+#endif
 } sync_op;
 
 static struct dcg_space *dcg;
@@ -667,10 +669,12 @@ static int * syncop_ref(int opid)
         return &sync_op.opid[opid];
 }
 
+#ifdef DS_SYNC_MSG
 static int * syncds_ref(int opid)
 {
         return &sync_op.ds_comp[opid];
 }
+#endif
 
 static inline struct node_id * dcg_which_peer(void)
 {
@@ -1440,6 +1444,10 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
         struct obj_data *od = msg->private;
 
+#ifndef DS_SYNC_MSG
+        (*msg->sync_op_id) = 1;
+#endif
+
         obj_data_free(od);
         free(msg);
 
@@ -1447,9 +1455,11 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
         return 0;
 }
 
+
 /*
     Server has completed processing data, release client sync 
 */
+#ifdef DS_SYNC_MSG
 static int dcgrpc_server_completion(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     
@@ -1459,6 +1469,8 @@ static int dcgrpc_server_completion(struct rpc_server *rpc_s, struct rpc_cmd *cm
 
     return 0;
 }
+#endif
+
 
 /*
   Routine to receive space info.
@@ -1535,8 +1547,11 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
         rpc_add_service(cp_lock, dcgrpc_lock_service);
         rpc_add_service(cn_timing, dcgrpc_time_log);
         rpc_add_service(ss_info, dcgrpc_ss_info);
+#ifdef DS_SYNC_MSG
         //server notify client 
         rpc_add_service(ds_put_completion, dcgrpc_server_completion);
+#endif
+
 #ifdef DS_HAVE_ACTIVESPACE
         rpc_add_service(ss_code_reply, dcgrpc_code_reply);
 #endif
@@ -1619,7 +1634,9 @@ int dcg_obj_put(struct obj_data *od)
         msg->cb = obj_put_completion;
         msg->private = od;
 
-        //msg->sync_op_id = syncop_ref(sync_op_id);
+#ifndef DS_SYNC_MSG //not define
+        msg->sync_op_id = syncop_ref(sync_op_id);
+#endif
 
 
         msg->msg_rpc->cmd = ss_obj_put;
@@ -1627,7 +1644,9 @@ int dcg_obj_put(struct obj_data *od)
 
         hdr = msg->msg_rpc->pad;
         hdr->odsc = od->obj_desc;
+#ifdef DS_SYNC_MSG
         hdr->sync_op_id_ptr = syncop_ref(sync_op_id); //passing the synchronization pointer to server
+#endif
         memcpy(&hdr->gdim, &od->gdim, sizeof(struct global_dimension));
 
         err = rpc_send(dcg->dc->rpc_s, peer, msg);
@@ -1734,7 +1753,9 @@ int dcg_obj_cq_update(int cq_id)
 int dcg_obj_sync(int sync_op_id)
 {
         int *sync_op_ref = syncop_ref(sync_op_id);
-        int *sync_comp_ptr_ref = syncds_ref(sync_op_id); 
+#ifdef DS_SYNC_MSG
+        int *sync_comp_ptr_ref = syncds_ref(sync_op_id);
+#endif
         int err;
 
             while (sync_op_ref[0] != 1){
