@@ -612,9 +612,9 @@ static int dc_master_init(struct dart_client *dc) //working
 	}
 
 	// 4. allgather APP smsg_attr[rpc+sys]
-        gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(dc->num_cp * sizeof(gni_smsg_attr_t));
-	allgather(&dc->rpc_s->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t), dc->comm);
-	if(dc->comm) {
+    gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(dc->num_cp * sizeof(gni_smsg_attr_t));
+	allgather(&dc->rpc_s->attr_info_start->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t), dc->comm);
+    if(dc->comm) {
 	    err = MPI_Barrier(*dc->comm);
 	    assert(err == MPI_SUCCESS);
 	} else {
@@ -985,13 +985,18 @@ static int dc_boot_slave(struct dart_client *dc, int appid)
 	// #SCA end
 
 	// 4. allgather APP smsg_attr[rpc+sys]
-        gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(dc->num_cp * sizeof(gni_smsg_attr_t));
+    gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(dc->num_cp * sizeof(gni_smsg_attr_t));
 
-	allgather(&dc->rpc_s->attr_info_start->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t));
+	allgather(&dc->rpc_s->attr_info_start->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t), dc->comm);
+    if(dc->comm) {
+        err = MPI_Barrier(*dc->comm);
+        assert(err == MPI_SUCCESS);
+    } else {
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);
+    }
 
-        free(remote_smsg_rpc_array);
+    free(remote_smsg_rpc_array);
 
 	// recv APP smsg_attr[rpc] of servers from master client
         recv_buffer = (gni_smsg_attr_t *)malloc(dc->num_sp * sizeof(gni_smsg_attr_t));
