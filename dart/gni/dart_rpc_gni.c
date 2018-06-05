@@ -363,51 +363,6 @@ err_out:
 	return err;	
 }
 
-int sys_smsg_init (struct rpc_server *rpc_s, int num)//done
-{
-	int i, j, err = -ENOMEM;
-	unsigned int responding_remote_addr;
-	int responding_remote_id;
-
-	gni_mem_handle_t sys_local_memory_handle;
-	gni_return_t status;
-	gni_post_state_t post_state;	
-
-	// Allocate memory for system message
-	rpc_s->sys_mem = calloc(SYSNUM * num, sizeof(struct hdr_sys)+SYSPAD);
-	if(!rpc_s->sys_mem)
-	{
-		uloga("Fail: SYS MSG MAILBOX calloc error.\n");
-		err =  -ENOMEM;
-		goto err_free;
-	}
-
-	status = GNI_MemRegister(rpc_s->nic_hndl, (uint64_t)rpc_s->sys_mem, (uint64_t)(SYSNUM * num * (sizeof(struct hdr_sys)+SYSPAD)), rpc_s->sys_cq_hndl, GNI_MEM_READWRITE, -1, &sys_local_memory_handle);
-	if (status != GNI_RC_SUCCESS) 
-	{
-		uloga("Fail: GNI_MemRegister SYS returned error. %d.\n", status);
-		goto err_out;
-	}
-
-	//sys_msg attributes init
-	rpc_s->sys_local_smsg_attr.msg_type = GNI_SMSG_TYPE_MBOX_AUTO_RETRANSMIT;
-	rpc_s->sys_local_smsg_attr.mbox_maxcredit = SYSNUM;
-	rpc_s->sys_local_smsg_attr.msg_maxsize = sizeof(struct hdr_sys)+SYSPAD;
-	rpc_s->sys_local_smsg_attr.msg_buffer = rpc_s->sys_mem;
-	rpc_s->sys_local_smsg_attr.buff_size = SYSNUM * (sizeof(struct hdr_sys)+SYSPAD);
-	rpc_s->sys_local_smsg_attr.mem_hndl = sys_local_memory_handle;
-	rpc_s->sys_local_smsg_attr.mbox_offset = 0;
-
-	return 0;
-
-err_free:
-	uloga("'%s()': failed with %d.\n", __func__, err);
-        return err;
-err_out:
-	uloga("'%s()': failed with %d.\n", __func__, status);
-        return status;
-}
-
 int sys_smsg_config(struct rpc_server *rpc_s, struct node_id *peer)
 {
 	int err = -ENOMEM;
