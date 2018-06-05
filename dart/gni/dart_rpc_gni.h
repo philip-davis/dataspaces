@@ -501,6 +501,8 @@ int rpc_server_get_id(void);
 int rpc_process_event(struct rpc_server *rpc_s);
 int rpc_process_event_with_timeout(struct rpc_server *rpc_s, int timeout);
 
+int rpc_process_msg_resend(struct rpc_server *rpc_s, struct node_id *peer_tab, int num_peer);
+
 void rpc_add_service(enum cmd_type rpc_cmd, rpc_service rpc_func);
 int rpc_barrier(struct rpc_server *rpc_s);
 
@@ -520,7 +522,6 @@ void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cm
 
 void rpc_server_find_local_peer(struct rpc_server *rpc_s, struct node_id **peer_tab, int *num_local_peer, int peer_tab_size);
 uint32_t rpc_server_get_nid(struct rpc_server *rpc_s);
-
 
 int rpc_peer_cleanup(struct rpc_server *rpc_s, struct node_id *peer);
 int rpc_attr_cleanup(struct rpc_server *rpc_s, struct gni_smsg_attr_info *cur_attr_info);
