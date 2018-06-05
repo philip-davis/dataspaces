@@ -478,13 +478,6 @@ static int default_completion_with_data_callback(struct rpc_server *rpc_s, struc
 //------------------
 int rpc_smsg_init(struct rpc_server *rpc_s, struct gni_smsg_attr_info *attr_info, int num);
 int rpc_smsg_config(struct rpc_server *rpc_s, struct gni_smsg_attr_info *attr_info, struct node_id *peer);
-//int rpc_ep_smsg_init(struct rpc_server *rpc_s, struct node_id *peer);
-//void rpc_smsg_check(struct rpc_server *rpc_s);
-
-//int sys_smsg_init(struct rpc_server *rpc_s, int num);
-//int sys_smsg_config(struct rpc_server *rpc_s, struct node_id *peer);
-//int sys_ep_smsg_init(struct rpc_server *rpc_s, struct node_id *peer);
-//void sys_smsg_check(struct rpc_server *rpc_s);
 
 void peer_smsg_check(struct rpc_server *rpc_s, struct node_id *peer, gni_smsg_attr_t *smsg_attr);
 //------------------
