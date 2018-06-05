@@ -1267,9 +1267,14 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
         err = -ENOMEM;
         peer = ds_get_peer(dsg->ds, cmd->id);
-        //od = obj_data_alloc(odsc);
-        //Pradeep
-        od = shmem_obj_data_alloc(odsc, DSG_ID);
+        
+        #ifdef SHMEM_OBJECTS
+            od = shmem_obj_data_alloc(odsc, DSG_ID);
+        #endif
+
+        #ifndef SHMEM_OBJECTS
+            od = obj_data_alloc(odsc);
+        #endif
         if (!od)
                 goto err_out;
 
@@ -1416,14 +1421,6 @@ static int obj_query_forward_obj_info(struct dht_entry *de_tab[], int num_de,
 
 static int obj_send_dht_peers_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-        //here you can train the network to learn the patterns for prefetching from remote servers and prefetch from remote to local
-        //only do this if the clinet peer is on the same node as the current server.
-        //int *peer = msg->msg_data;
-        //while(*peer!=-1){
-        //    uloga("Asked for object descriptor from peer %d in server %d \n", ds_get_peer(dsg->ds, *peer)->ptlmap.id, dsg->ds->self->ptlmap.id);
-        //    peer++;
-        //}
-        //peer = NULL;
         free(msg->msg_data);
         free(msg);
 
@@ -1712,7 +1709,13 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         }
 
         err = -ENOMEM;
-        odsc_tab = malloc(sizeof(*odsc_tab) * num_odsc*2);
+        #ifdef SHMEM_OBJECTS
+            odsc_tab = malloc(sizeof(*odsc_tab) * num_odsc*2);
+        #endif
+
+        #ifndef SHMEM_OBJECTS
+            odsc_tab = malloc(sizeof(*odsc_tab) * num_odsc);
+        #endif
         if (!odsc_tab)
                 goto err_out;
 
@@ -1720,7 +1723,9 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             odsc = *podsc[i];
             /* Preserve storage type at the destination. */
             odsc.st = oh->u.o.odsc.st;
-            odsc_tab[i+num_odsc] = odsc;
+            #ifdef SHMEM_OBJECTS
+                odsc_tab[i+num_odsc] = odsc;
+            #endif
             bbox_intersect(&oh->u.o.odsc.bb, &odsc.bb, &odsc.bb);
             odsc_tab[i] = odsc;
 
@@ -1735,8 +1740,12 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
                 free(odsc_tab);
                 goto err_out;
         }
-
+        #ifdef SHMEM_OBJECTS
         msg->size = sizeof(*odsc_tab) * num_odsc*2;
+        #endif
+        #ifndef SHMEM_OBJECTS
+        msg->size = sizeof(*odsc_tab) * num_odsc;
+        #endif
         msg->msg_data = odsc_tab;
         msg->cb = obj_get_desc_completion;
 
@@ -1745,7 +1754,12 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
         i = oh->qid;
         oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
+        #ifdef SHMEM_OBJECTS
         oh->u.o.num_de = num_odsc*2;
+        #endif
+        #ifndef SHMEM_OBJECTS
+        oh->u.o.num_de = num_odsc;
+        #endif
         oh->qid = i;
 
         err = rpc_send(rpc_s, peer, msg);

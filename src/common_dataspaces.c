@@ -275,7 +275,7 @@ int common_dspaces_get(const char *var_name,
     return err;
 }
 
-/*
+#ifndef SHMEM_OBJECTS
 int common_dspaces_put(const char *var_name, 
         unsigned int ver, int size,
         int ndim,
@@ -328,7 +328,9 @@ int common_dspaces_put(const char *var_name,
         return 0;
 }
 
-*/
+#endif
+
+#ifdef SHMEM_OBJECTS
 int common_dspaces_put(const char *var_name, 
         unsigned int ver, int size,
         int ndim,
@@ -428,6 +430,7 @@ int common_dspaces_put(const char *var_name,
 
         return 0;
 }
+#endif
 
 int common_dspaces_remove (const char *var_name, unsigned int ver)
 {
