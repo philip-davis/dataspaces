@@ -516,7 +516,7 @@ static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
         return err;
 }
 
-static struct sspace *ssd_alloc_v1(struct bbox *bb_domain, int num_nodes, int max_versions)
+static struct sspace *ssd_alloc_v1(const struct bbox *bb_domain, int num_nodes, int max_versions)
 {
         struct sspace *ssd;
         uint64_t max_dim;
@@ -752,7 +752,7 @@ int ssd_hash_v2(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_t
 /*
   Allocate the shared space structure.
 */
-struct sspace *ssd_alloc(struct bbox *bb_domain, int num_nodes, int max_versions,
+struct sspace *ssd_alloc(const struct bbox *bb_domain, int num_nodes, int max_versions,
     enum sspace_hash_version hash_version)
 {
     struct sspace *ss = NULL;
