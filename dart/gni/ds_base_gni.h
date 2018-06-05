@@ -85,9 +85,10 @@ struct dart_server {
 	/* MPI Communicator (can be null) */
 	MPI_Comm		*comm;
 	
-    // DSaaS
 	pthread_t		comm_thread;
 	int 			thread_alive;
+    //* comm_thread return code */
+    int ct_rc;     
 
 };
 

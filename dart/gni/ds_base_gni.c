@@ -1025,8 +1025,9 @@ err_out:
 
 */
 
-static int ds_master_listen(struct dart_server *ds)
+static void *ds_master_listen(void *ds_v)
 {
+    struct dart_server *ds = (struct dart_server *)ds_v;
 	int i, j, err, p, count = 0;// count is number of total cp (all registered apps)
 	int cur_cp = 0; //DSaaS: number of cp in one particular app.
 	char *localip;
@@ -1402,17 +1403,17 @@ static int ds_master_listen(struct dart_server *ds)
 
 	}
 
-    pthread_exit(0);
+    ds->ct_rc = 0;
+    pthread_exit(NULL);
 
-	return 0;
+	return NULL;
 
 err_free:
-	uloga("'%s()': failed with %d.\n", __func__, status);
-	return status;
+    err = status;
 err_out:
 	uloga("'%s()': failed with %d.\n", __func__, err);
-	pthread_exit(0);
-	return err;
+	ds->ct_rc = err;
+    return (void *)(&ds->ct_rc);
 }
 
 // end of DSaaS ds init
@@ -1591,32 +1592,13 @@ static int ds_boot(struct dart_server *ds)
 	//mark it to registered
 	ds->f_reg = 1;
 
-
-	//fill in the app_list ////DSaaS ToDo: dynamically changed when new apps join in
-	/*	for (i=ds->num_sp; i < ds->peer_size; i++)////DSaaS
-	{
-		current_app = app_find(ds, ds->peer_tab[i].ptlmap.appid);
-		if( current_app == NULL )
-		{
-			app = app_alloc();
-			if (!app)
-				goto err_out;
-			app->app_id = ds->peer_tab[i].ptlmap.appid;
-			app->app_num_peers = 1;
-			app->app_cnt_peers = 1;
-			app->app_peer_tab = ds->peer_tab + ds->peer_tab[i].ptlmap.id;
-			list_add(&app->app_entry, &ds->app_list);
-		}
-		else{
-			current_app->app_num_peers++;
-			current_app->app_cnt_peers++;		
-		}
-	}
-
-	*/
-
+    if(ds->comm) {
+        err = MPI_Barrier(*ds->comm);
+        assert(err == MPI_SUCCESS);
+    } else {
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);
+    }
 
 	if(ds->rpc_s->ptlmap.id == 0){
 	  ds->thread_alive = 1;
