@@ -943,28 +943,6 @@ int ssd_copy(struct obj_data *to_obj, struct obj_data *from_obj)
         return 0;
 }
 
-int ssd_copyv(struct obj_data *obj_dest, struct obj_data *obj_src)
-{
-	struct matrix mat_dest, mat_src;
-	struct bbox bbcom;
-
-	bbox_intersect(&obj_dest->obj_desc.bb, &obj_src->obj_desc.bb, &bbcom);
-
-	matrix_init(&mat_dest, obj_dest->obj_desc.st,
-			&obj_dest->obj_desc.bb, &bbcom,
-			obj_dest->data, obj_dest->obj_desc.size);
-
-	matrix_init(&mat_src, obj_src->obj_desc.st,
-			&obj_src->obj_desc.bb, &bbcom,
-			obj_src->data, obj_src->obj_desc.size);
-
-	matrix_copyv(&mat_dest, &mat_src);
-
-	return 0;
-}
-
-/*
-*/
 int ssd_copy_list(struct obj_data *to, struct list_head *od_list)
 {
         struct obj_data *from;
@@ -1291,29 +1269,6 @@ struct obj_data *obj_data_alloc(struct obj_descriptor *odsc)
 	od->obj_desc = *odsc;
 
     return od;
-}
-
-/*
-  Allocate  space  for obj_data  structure  and  references for  data.
-*/
-struct obj_data *obj_data_allocv(struct obj_descriptor *odsc)
-{
-	struct obj_data *od;
-
-	od = malloc(sizeof(*od));
-	if (!od)
-		return NULL;
-	memset(od, 0, sizeof(*od));
-
-	od->_data = od->data = malloc(obj_data_sizev(odsc) + 7);
-	if (!od->_data) {
-		free(od);
-		return NULL;
-	}
-	ALIGN_ADDR_QUAD_BYTES(od->data);
-	od->obj_desc = *odsc;
-
-	return od;
 }
 
 /* 

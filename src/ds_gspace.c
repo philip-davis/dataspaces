@@ -1841,7 +1841,6 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         struct node_id *peer;
         struct msg_buf *msg;
         struct obj_data *od, *from_obj;
-        int fast_v;
         int err = -ENOENT; 
 
         peer = ds_get_peer(dsg->ds, cmd->id);
@@ -1878,18 +1877,17 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
           RPC in response to a transfer.
         */
 
-        fast_v = 0; // ERROR: iovec operation fails after Cray Portals
         // Update (oh->odsc.st == from_obj->obj_desc.st);
 
         err = -ENOMEM;
         // CRITICAL:     experimental    stuff,     assumption    data
         // representation is the same on both ends.
         // od = obj_data_alloc(&oh->odsc);
-        od = (fast_v)? obj_data_allocv(&oh->u.o.odsc) : obj_data_alloc(&oh->u.o.odsc);
+        od = obj_data_alloc(&oh->u.o.odsc);
         if (!od)
                 goto err_out;
 
-        (fast_v)? ssd_copyv(od, from_obj) : ssd_copy(od, from_obj);
+        ssd_copy(od, from_obj);
         od->obj_ref = from_obj;
 
         msg = msg_buf_alloc(rpc_s, peer, 0);
@@ -1899,13 +1897,13 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         }
 
         msg->msg_data = od->data;
-        msg->size = (fast_v)? obj_data_sizev(&od->obj_desc) / sizeof(iovec_t) : obj_data_size(&od->obj_desc);
+        msg->size = obj_data_size(&od->obj_desc);
         msg->cb = obj_get_completion;
         msg->private = od;
 
 
         rpc_mem_info_cache(peer, msg, cmd); 
-        err = (fast_v)? rpc_send_directv(rpc_s, peer, msg) : rpc_send_direct(rpc_s, peer, msg);
+        err = rpc_send_direct(rpc_s, peer, msg);
         rpc_mem_info_reset(peer, msg, cmd);
         if (err == 0)
                 return 0;
