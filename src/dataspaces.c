@@ -56,6 +56,8 @@
 #endif
 
 #if defined(HAVE_UGNI)
+
+/* TODO: This needs to be updated to use MPI, when available so that MPMD will work. */
 int get_topology_info(int *out_pmi_rank, int *out_nid, 
     rca_mesh_coord_t *out_xyz)
 {
@@ -83,37 +85,7 @@ int get_topology_info(int *out_pmi_rank, int *out_nid,
     return 0;
 }
 #endif
-/* 
-   C interface for DataSpaces.
-*/
 
-int get_topology_info(int *out_pmi_rank, int *out_nid, 
-    rca_mesh_coord_t *out_xyz)
-{
-    int rc;
-    int rank, size;
-
-    rc = PMI_Get_rank(&rank);
-    if (rc!=PMI_SUCCESS)
-        PMI_Abort(rc,"PMI_Get_rank failed");
-
-    rc = PMI_Get_size(&size);
-    if (rc!=PMI_SUCCESS)
-        PMI_Abort(rc,"PMI_Get_size failed");
-
-    int nid;
-    rc = PMI_Get_nid(rank, &nid);
-    if (rc!=PMI_SUCCESS)
-        PMI_Abort(rc,"PMI_Get_nid failed");
-
-    rca_get_meshcoord( (uint16_t) nid, out_xyz);
-    *out_pmi_rank = rank;
-    *out_nid = nid; 
-
-    fflush(stdout);
-    return 0;
-}
-#endif
 /* 
    C interface for DataSpaces.
 */
