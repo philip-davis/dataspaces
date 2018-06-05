@@ -1748,23 +1748,19 @@ for(i=0; i<ds->num_sp;i++)
 }
 
 
-void ds_free(struct dart_server *ds)//not done
+void ds_free(struct dart_server *ds)
 {
 	struct app_info *app, *t;
 	int err;
 
-	int track = ds->self->ptlmap.id;//debug
-
-	err = rpc_server_free(ds->rpc_s, ds->comm);//not done
+	err = rpc_server_free(ds->rpc_s, ds->comm);
 	if(err!=0)
 		uloga("(%s): rpc server free failed.\n", __func__);
-	//uloga("Rank(%d): step2.1.\n",track);//debug
 	list_for_each_entry_safe(app, t, &ds->app_list, struct app_info, app_entry) 
 	{
 		list_del(&app->app_entry);
 		free(app);
-        }
-	//uloga("Rank(%d): step2.2.\n",track);//debug
+    }
 	if(ds->comm) {
 	    MPI_Comm_free(ds->comm);
 	    free(ds->comm);
@@ -1779,4 +1775,3 @@ int ds_process(struct dart_server *ds)
     }
 	return rpc_process_event(ds->rpc_s);
 }
-
