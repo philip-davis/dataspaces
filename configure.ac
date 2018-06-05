@@ -141,6 +141,15 @@ if test "x$enable_dataspaces_location_aware_write" == "xyes"; then
     AC_DEFINE(DS_HAVE_DSPACES_LOCATION_AWARE_WRITE, 1, [DATASPACES location-aware write is enabled])
 fi 
 
+dnl Check if we are syncing with rpc messages
+AC_ARG_ENABLE(sync-msg,
+    [AS_HELP_STRING([--enable-sync-msg],
+        [Enable syncing writes using confirmation messages from the servers])])
+
+if test "x$enable_sync_msg" == "xyes"; then
+    AC_DEFINE(DS_SYNC_MSG, 1, [sync messages enabled.])
+fi  
+
 if test -z "${HAVE_UGNI_TRUE}"; then
   DSPACESLIB_CPPFLAGS+=" ${PMI_CPPFLAGS}"
   DSPACESLIB_CFLAGS+=""
