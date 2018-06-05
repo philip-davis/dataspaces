@@ -2040,11 +2040,9 @@ struct rpc_server *rpc_server_init(int num_buff, int num_rpc_per_buff, void *dar
 	if (err != 0)
 		goto err_free;
 
-	//DSaaS: inital gni_smsg_attr_info list for smsg
 	rpc_s->attr_info_start=NULL;
 
-
-	rpc_s->peer_tab = gather_node_id(appid);////DSaaS (num of peer in self-app)
+	rpc_s->peer_tab = gather_node_id(appid, comm);
 	if(rpc_s->peer_tab == NULL)
 		goto err_free;
 
@@ -2252,7 +2250,6 @@ err_out:
 	return status;
 }
 
->>>>>>> 05e7a80... Merged from r1834@svn://cac.rutgers.edu/DataIO/DataSpaces/branches/dataspaces-service-gni-beta
 struct rpc_server *rpc_server_get_instance(void)
 {
 	/* Blindly  get  the  rpc_server   reference;  if  it  is  not
@@ -2612,5 +2609,4 @@ void rpc_peer_check(struct rpc_server *rpc_s){
     peer = tmp_peer->next;
   }
 
->>>>>>> 05e7a80... Merged from r1834@svn://cac.rutgers.edu/DataIO/DataSpaces/branches/dataspaces-service-gni-beta
 }
