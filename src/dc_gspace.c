@@ -1063,7 +1063,9 @@ static int dcgrpc_obj_get_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *cm
 static int obj_data_get_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
     struct query_tran_entry *qte = msg->private;
+    #ifdef SHMEM_OBJECTS
     qte->size_od = qte->size_od/2;
+    #endif
     if (++qte->num_parts_rec == qte->size_od) {
         qte->f_complete = 1;
     }
@@ -1076,6 +1078,7 @@ static int obj_data_get_completion(struct rpc_server *rpc_s, struct msg_buf *msg
   Fetch a data object from the distributed storage. We call this
   routine when we have all object descriptors for all parts.
 */
+#ifdef SHMEM_OBJECTS
 static int dcg_obj_data_get(struct query_tran_entry *qte)
 {
     struct msg_buf *msg;
@@ -1178,6 +1181,66 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
     uloga("'%s()': failed with %d.\n", __func__, err);
     return err;
 }
+#endif
+
+#ifndef SHMEM_OBJECTS
+static int dcg_obj_data_get(struct query_tran_entry *qte)
+{
+        struct msg_buf *msg;
+        struct node_id *peer;
+        struct hdr_obj_get *oh;
+        struct obj_data *od;
+        int err;
+
+        err = qt_alloc_obj_data(qte);
+        if (err < 0)
+                goto err_out;
+
+        list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
+                peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
+
+                err = -ENOMEM;
+                msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+                if (!msg) {
+                        free(od->data);
+                        od->data = NULL;
+                        goto err_out;
+                }
+
+                msg->msg_data = od->data;
+                msg->size = obj_data_size(&od->obj_desc);
+                msg->cb = obj_data_get_completion;
+                msg->private = qte;
+
+                msg->msg_rpc->cmd = ss_obj_get;
+                msg->msg_rpc->id = DCG_ID;
+
+                oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
+                oh->qid = qte->q_id;
+                oh->u.o.odsc = od->obj_desc;
+                oh->u.o.odsc.version = qte->q_obj.version;
+                memcpy(&oh->gdim, &qte->gdim,
+                    sizeof(struct global_dimension));
+
+                err = rpc_receive(dcg->dc->rpc_s, peer, msg);
+                if (err < 0) {
+                        free(msg);
+                        free(od->data);
+                        od->data = NULL;
+                        goto err_out;
+                }
+                // TODO: uncomment next line ?!
+                // qte->num_req++;
+                //uloga("Found object descriptor in obj_get \n");
+        }
+
+        return 0;
+ err_out:
+        uloga("'%s()': failed with %d.\n", __func__, err);
+        return err;
+}
+
+#endif
 
 /*
   Initiate a custom filter retrieve operation.
@@ -1250,6 +1313,7 @@ static int obj_filter_reduce(struct query_tran_entry *qte, struct obj_data *od)
         return 0;
 }
 
+#ifdef SHMEM_OBJECTS
 static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
         struct hdr_obj_get *oh = msg->private;
@@ -1314,6 +1378,72 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
 
 	ERROR_TRACE();
 }
+#endif
+
+#ifndef SHMEM_OBJECTS
+
+static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+        struct hdr_obj_get *oh = msg->private;
+        struct obj_descriptor *od_tab = msg->msg_data;
+        struct query_tran_entry *qte;
+        int i, err = -ENOENT;
+
+        qte = qt_find(&dcg->qt, oh->qid);
+        if (!qte) {
+        uloga("can not find transaction ID = %d.\n", oh->qid);
+                goto err_out_free;
+    }
+
+        qte->qh->qh_num_rep_received++;
+        qte->size_od += oh->u.o.num_de;
+
+        for (i = 0; i < oh->u.o.num_de; i++) {
+                if (!qt_find_obj(qte, od_tab+i)) {
+                        err = qt_add_obj(qte, od_tab+i);
+            // err = qt_add_objv(qte, od_tab+i);
+                        if (err < 0)
+                                goto err_out_free;
+                }
+                else {
+            /* DEBUG:
+                        uloga("'%s()': duplicate obj descriptor detected, "
+                              "keep only one copy.\n", __func__);
+            */
+                        qte->size_od--;
+                }
+        }
+
+        free(oh);
+        free(od_tab);
+        free(msg);
+
+        if (qte->qh->qh_num_rep_received == qte->qh->qh_num_peer) {
+                /* Object descriptor receive completed. */
+                qte->f_odsc_recv = 1;
+
+        /* NOTE: disabled the cache for object descriptors.
+                if (qte->f_err == 0) {
+                        struct query_cache_entry *qce;
+                        qce = qce_alloc(qte->num_od);
+                        if (qce) {
+                                qce_set_obj_desc(qce, &qte->q_obj, &qte->od_list);
+                                qc_add_entry(&dcg->qc, qce);
+                        }
+                }
+        */
+        }
+
+        return 0;
+ err_out_free:
+        free(oh);
+        free(od_tab);
+        free(msg);
+
+    ERROR_TRACE();
+}
+
+#endif
 
 static void versions_reset(void)
 {
@@ -1407,10 +1537,14 @@ static int dcgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 static int dcg_obj_assemble(struct query_tran_entry *qte, struct obj_data *od)
 {
         int err;
+        #ifdef SHMEM_OBJECTS
+            int nums = qte->num_od/(qte->qh->qh_num_peer * 2);
 
-        int nums = qte->num_od/(qte->qh->qh_num_peer * 2);
-
-        err = ssd_copy_list_shmem(od, &qte->od_list, nums);
+            err = ssd_copy_list_shmem(od, &qte->od_list, nums);
+        #endif
+        #ifndef SHMEM_OBJECTS
+            err = ssd_copy_list(od, &qte->od_list);
+        #endif
         if (err == 0)
                 return 0;
 
@@ -1743,26 +1877,28 @@ int dcg_obj_sync(int sync_op_id)
 
 int dcg_obj_get(struct obj_data *od)
 {
-    
-char name[200];
-convert_to_string(&od->obj_desc, name);
-int shm_fd;
-void *ptr;
-int SIZE;
-shm_fd = shm_open(name, O_RDONLY, 0666);
-if (shm_fd != -1) {
-    //read the file locally without any rpc call
-    SIZE = obj_data_size(&od->obj_desc);
-    ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
-    if (ptr == MAP_FAILED) {
-        printf("Map failed\n");
-        exit(-1);
-    }
-    memcpy(od->data, ptr, SIZE);
-    uloga("No rpc calls\n");
-    return 0;
-}
 
+#ifdef SHMEM_OBJECTS    
+    char name[200];
+    convert_to_string(&od->obj_desc, name);
+    int shm_fd;
+    void *ptr;
+    int SIZE;
+    shm_fd = shm_open(name, O_RDONLY, 0666);
+    if (shm_fd != -1) {
+        //read the file locally without any rpc call
+        SIZE = obj_data_size(&od->obj_desc);
+        ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
+        if (ptr == MAP_FAILED) {
+            printf("Map failed\n");
+            exit(-1);
+        }
+        memcpy(od->data, ptr, SIZE);
+        uloga("No rpc calls\n");
+        return 0;
+    }
+
+#endif
 
     struct query_tran_entry *qte;
     const struct query_cache_entry *qce;
@@ -1817,8 +1953,7 @@ if (shm_fd != -1) {
         od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
     tm_st = tm_end;
 #endif
-        //now receive the data local copy might be here
-        //Pradeep
+
     err = dcg_obj_data_get(qte);
     if (err < 0) {
                 // FIXME: should I jump to err_qt_free ?
@@ -1850,11 +1985,15 @@ if (shm_fd != -1) {
                 od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
 #endif 
 out_no_data:
+#ifdef SHMEM_OBJECTS
     qt_free_obj_data_shmem(qte, 1);
+#endif
+#ifndef SHMEM_OBJECTS
+    qt_free_obj_data(qte, 1);
+#endif
     qt_remove(&dcg->qt, qte);
     free(qte);
     return err;
-
 err_data_free:
     qt_free_obj_data(qte, 1);
 err_qt_free:

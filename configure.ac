@@ -155,6 +155,22 @@ if test "x$enable_sync_msg" == "xyes"; then
     AC_DEFINE(DS_SYNC_MSG, 1, [sync messages enabled.])
 fi  
 
+dnl Check if SHARED_MEMORY is enabled
+AC_ARG_ENABLE(shmem,
+    [AS_HELP_STRING([--enable-shmem],
+        [Include hybrid staging. By default this is not included])])
+AM_CONDITIONAL([SHMEM], [test "x$enable_shmem" == "xyes"])
+
+if test "x$enable_shmem" == "xyes"; then
+            AC_DEFINE(SHMEM_OBJECTS, 1, [Hybrid Staging is enabled])
+            AM_CONDITIONAL(BUILD_HYBRID, true)
+            echo "HYBRID STAGING enabled!"
+            DSPACESLIB_LDADD+=" -lrt"
+            DSPACES_EXT_LDADD+=" -lrt"
+else
+        AM_CONDITIONAL(BUILD_HYBRID, falSE)
+fi
+
 if test -z "${HAVE_UGNI_TRUE}"; then
   DSPACESLIB_CPPFLAGS+=" ${PMI_CPPFLAGS}"
   DSPACESLIB_CFLAGS+=""

@@ -51,9 +51,6 @@
   matrix.
 */
 
-#define SHMEM_OBJECTS 1
-
-
 struct matrix_view {
         uint64_t   lb[BBOX_MAX_NDIM];
         uint64_t   ub[BBOX_MAX_NDIM];	
@@ -304,7 +301,6 @@ dim1:               numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
     }
     if(a->num_dims == 9)    return;
     }
-    //uloga("Finished matrix copy \n");
 }
 
 static void get_bbox_max_dim(const struct bbox *bb, uint64_t *out_max_dim,
