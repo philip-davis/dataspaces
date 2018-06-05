@@ -86,6 +86,11 @@ static int sys_process_event(struct rpc_server *rpc_s);
 static int sys_send(struct rpc_server *rpc_s, struct node_id *to, struct hdr_sys *hs);
 static struct node_id *rpc_get_peer(struct rpc_server *rpc_s, int peer_id);
 
+#ifdef DS_HAVE_DRC
+int rpc_read_drc(uint32_t *rdma_credential);
+int rpc_write_drc(uint32_t rdma_credential);
+#endif /* DS_HAVE_DRC */
+
 static struct list_head index_list;
 
 static struct {
@@ -1428,7 +1433,7 @@ int rpc_write_drc(uint32_t rdma_credential)
         return -EIO;
 }
 
-int rpc_read_drc(uint32_t *rdma_credential){
+int rpc_read_drc(uint32_t *rdma_credential) {
         FILE *f = NULL;
         int err;
         uint32_t temp_cred;
