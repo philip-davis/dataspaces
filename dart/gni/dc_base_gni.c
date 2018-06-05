@@ -775,7 +775,7 @@ static int register_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
         if(err != MPI_SUCCESS) {
             uloga("Rank %d: MPI_Barrier failed. (%d)\n", dc->rpc_s->ptlmap.id, err);
         }
-        err = MPI_Bcast(msg->msg_data, msg-size, MPI_BYTE, 0, *dc->comm);
+        err = MPI_Bcast(msg->msg_data, msg->size, MPI_BYTE, 0, *dc->comm);
         if(err != MPI_SUCCESS) {
             uloga("Rank %d: MPI_Bcast failed. (%d)\n", dc->rpc_s->ptlmap.id, err);
         }
@@ -808,6 +808,39 @@ err_out:
 	uloga("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
+
+static int dcrpc_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+        struct dart_client *dc = dc_ref_from_rpc(rpc_s);
+
+    struct node_id *peer;
+    struct msg_buf *msg;
+        int i, num, err = -ENOMEM;
+
+
+    peer = &dc->peer_tab[0];
+
+    msg = msg_buf_alloc(dc->rpc_s, peer, 0);
+    msg->size = dc->num_sp * sizeof(gni_smsg_attr_t);
+    msg->msg_data = (gni_smsg_attr_t *)malloc(msg->size);
+    memset(msg->msg_data, 0, msg->size);
+    msg->cb = register_completion;
+
+    rpc_mem_info_cache(peer, msg, cmd); 
+    err = rpc_receive_direct(rpc_s, peer, msg);
+        if (err != 0){
+        free(msg);
+                goto err_out;
+    }
+    rpc_mem_info_reset(peer, msg, cmd);
+
+    return 0;
+
+err_out:
+        printf("'%s()': failed with %d.\n", __func__, err);
+        return err;
+}
+
 
 static int dc_boot_master(struct dart_client *dc, int appid)
 {
@@ -1080,10 +1113,6 @@ static int dc_boot(struct dart_client *dc, int appid)
 			goto err_out;
 	}
 
-
-	while(counter < dc->rpc_s->num_rpc_per_buff)
-	{
-
 	//dc->self value
 	dc->self = (struct node_id *)malloc(sizeof(struct node_id));
 	memset(dc->self, 0, sizeof(struct node_id));
@@ -1094,8 +1123,6 @@ static int dc_boot(struct dart_client *dc, int appid)
 	dc->self->peer_rank = dc->rpc_s->ptlmap.id - dc->cp_min_rank;
 	dc->self->peer_num = dc->num_cp;
 
-	//free(dc->rpc_s->peer_tab);// ?? DSaaS should I do it? It contained peer_id for the same app. Now, I am freeing them ...
-	
 	dc->peer_size = dc->rpc_s->num_rpc_per_buff + dc->num_cp;
 	dc->rpc_s->app_minid = dc->cp_min_rank;
 
@@ -1103,12 +1130,14 @@ static int dc_boot(struct dart_client *dc, int appid)
 	rpc_server_set_rpc_per_buff(dc->rpc_s, dc->rpc_s->num_rpc_per_buff);
 
 	dc->f_reg = 1;
+
 	return 0;
 
  err_out:
 	uloga("'%s()': failed.\n", __func__);
 	return -1;
 }
+
 /*
   Public API starts here.
 */
@@ -1143,16 +1172,16 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 	dc->rpc_s->app_minid = appid;//DSaaS?
 	dc->rpc_s->app_num_peers = num_peers;
 
-        rpc_add_service(cn_register, dcrpc_register);
-        rpc_add_service(cp_barrier, dcrpc_barrier);
+    rpc_add_service(cn_register, dcrpc_register);
+    rpc_add_service(cp_barrier, dcrpc_barrier);
 	rpc_add_service(cn_unregister, dcrpc_unregister);
 
-        err = dc_boot(dc, appid);
-        if (err < 0) {
+    err = dc_boot(dc, appid);
+    if (err < 0) {
 	  	rpc_server_free(dc->rpc_s, dc->comm);
-                free(dc);
-                return NULL;
-        }
+        free(dc);
+        return NULL;
+    }
 
 	peer = dc->peer_tab;
 	for (i = 0; i < dc->peer_size - dc->num_cp; i++) ////DSaaS ToDo
@@ -1218,12 +1247,15 @@ void dc_free(struct dart_client *dc)
 	    }
 	}
 
-	
+    if(dc->comm) {
+        err = MPI_Barrier(*dc->comm);
+        assert(err == MPI_SUCCESS);
+    } else {
         err = PMI_Barrier();
         assert(err == PMI_SUCCESS);
+    }
 		
 	if(dc->cp_min_rank == dc->rpc_s->ptlmap.id){
-
 		err = dc_unregister(dc);
 		if(err!=0)
 		    printf("Rank %d: dc_unregister failed with err %d.\n", dc->self->ptlmap.id, err);
@@ -1233,10 +1265,8 @@ void dc_free(struct dart_client *dc)
 		  if (err < 0){
 		    printf("'%s()': failed with %d.\n", __func__, err);
 	      	}
+	    }
 	}
-
-	}
-
 
     if(dc->comm) {
         err = MPI_Barrier(*dc->comm);
@@ -1258,11 +1288,10 @@ void dc_free(struct dart_client *dc)
 		free(dc->comm);
 	}
 
-
 	free(dc);
 }
 
-int dc_process(struct dart_client *dc)//done
+int dc_process(struct dart_client *dc)
 {
   return rpc_process_event(dc->rpc_s);
 }
