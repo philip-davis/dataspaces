@@ -76,6 +76,7 @@ struct msg_buf;
 struct rpc_server;
 struct rpc_cmd;
 struct node_id;
+struct rpc_request;
 
 // Rpc prototype function, should be called in response to a remote rpc request. 
 typedef int (*rpc_service)(struct rpc_server *rpc_s, struct rpc_cmd *cmd);
