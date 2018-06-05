@@ -1946,6 +1946,8 @@ err_status:
   return status;
 }
 
+#endif /* DS_HAVE_ARIES */
+
 int rpc_process_msg_resend(struct rpc_server *rpc_s, struct node_id *peer_tab, int num_peer)
 {
     struct node_id *peer;
