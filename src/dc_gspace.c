@@ -1210,71 +1210,93 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
         }
         else{
             //Pradeep
-            peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
-            if(on_same_node(peer, dcg->dc->self)){
-                convert_to_string(&od->obj_desc, name);
-                int shm_fd;
-                void *ptr;
-                int SIZE;
-                shm_fd = shm_open(name, O_RDONLY, 0666);
-                if (shm_fd == -1) {
-                    od_start_indx = od_indx - block_size;
-                    convert_to_string(&od_tab[od_start_indx]->obj_desc, name);
-                    shm_fd = shm_open(name, O_RDONLY, 0666);
-                    SIZE = obj_data_size(&od_tab[od_start_indx]->obj_desc);
-                    ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
-                    if (ptr == MAP_FAILED) {
-                        printf("Map failed\n");
-                        exit(-1);
-                    }
-                    od_tab[od_start_indx]->data = ptr;
-                    ssd_copy(od, od_tab[od_start_indx]);
+            //before asking for object descriptors to owners, check on the local node
+            //if prefetched before checking with obj_desc_owner or there is.
+            //
 
-                }else{
-                            /* configure the size of the shared memory segment */
-                    SIZE = obj_data_size(&od->obj_desc);
+            convert_to_string(&od->obj_desc, name);
+            int shm_fd;
+            void *ptr;
+            int SIZE;
+            shm_fd = shm_open(name, O_RDONLY, 0666);
+            if(shm_fd != -1){
+                //the data has been already prefetched on the local node
+                SIZE = obj_data_size(&od->obj_desc);
                             /* now map the shared memory segment in the address space of the process */
-                    ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
-                    if (ptr == MAP_FAILED) {
-                        printf("Map failed\n");
-                        exit(-1);
-                    }
-                    memcpy(od->data, ptr, SIZE);
+                ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
+                if (ptr == MAP_FAILED) {
+                    printf("Map failed\n");
+                    exit(-1);
                 }
+                memcpy(od->data, ptr, SIZE);
 
             }else{
-                shmem_flag = 1;
-                err = -ENOMEM;
-                msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
-                if (!msg) {
-                    free(od->data);
-                    od->data = NULL;
-                    goto err_out;
+                peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
+                if(on_same_node(peer, dcg->dc->self)){
+        
+                    shm_fd = shm_open(name, O_RDONLY, 0666);
+                    if (shm_fd == -1) {
+                        od_start_indx = od_indx - block_size;
+                        convert_to_string(&od_tab[od_start_indx]->obj_desc, name);
+                        shm_fd = shm_open(name, O_RDONLY, 0666);
+                        SIZE = obj_data_size(&od_tab[od_start_indx]->obj_desc);
+                        ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
+                        if (ptr == MAP_FAILED) {
+                            printf("Map failed\n");
+                            exit(-1);
+                        }
+                        od_tab[od_start_indx]->data = ptr;
+                        ssd_copy(od, od_tab[od_start_indx]);
+
+                    }else{
+                                /* configure the size of the shared memory segment */
+                        SIZE = obj_data_size(&od->obj_desc);
+                                /* now map the shared memory segment in the address space of the process */
+                        ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
+                        if (ptr == MAP_FAILED) {
+                            printf("Map failed\n");
+                            exit(-1);
+                        }
+                        memcpy(od->data, ptr, SIZE);
+                    }
+
+                }else{
+                    shmem_flag = 1;
+                    err = -ENOMEM;
+                    msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+                    if (!msg) {
+                        free(od->data);
+                        od->data = NULL;
+                        goto err_out;
+                    }
+
+                    msg->msg_data = od->data;
+                    msg->size = obj_data_size(&od->obj_desc);
+                    msg->cb = obj_data_get_completion;
+                    msg->private = qte;
+
+                    msg->msg_rpc->cmd = ss_obj_get;
+                    msg->msg_rpc->id = DCG_ID;
+
+                    oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
+                    oh->qid = qte->q_id;
+                    oh->u.o.odsc = od->obj_desc;
+                    oh->u.o.odsc.version = qte->q_obj.version;
+                    memcpy(&oh->gdim, &qte->gdim,
+                        sizeof(struct global_dimension));
+
+                    err = rpc_receive(dcg->dc->rpc_s, peer, msg);
+                    if (err < 0) {
+                        free(msg);
+                        free(od->data);
+                        od->data = NULL;
+                        goto err_out;
+                    }
                 }
 
-                msg->msg_data = od->data;
-                msg->size = obj_data_size(&od->obj_desc);
-                msg->cb = obj_data_get_completion;
-                msg->private = qte;
 
-                msg->msg_rpc->cmd = ss_obj_get;
-                msg->msg_rpc->id = DCG_ID;
-
-                oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
-                oh->qid = qte->q_id;
-                oh->u.o.odsc = od->obj_desc;
-                oh->u.o.odsc.version = qte->q_obj.version;
-                memcpy(&oh->gdim, &qte->gdim,
-                    sizeof(struct global_dimension));
-
-                err = rpc_receive(dcg->dc->rpc_s, peer, msg);
-                if (err < 0) {
-                    free(msg);
-                    free(od->data);
-                    od->data = NULL;
-                    goto err_out;
-                }
             }
+            
 
         }
         od_indx++;
@@ -1836,7 +1858,8 @@ int dcg_obj_sync(int sync_op_id)
 */
 int dcg_obj_get(struct obj_data *od)
 {
-    
+
+/*    
 char name[200];
 convert_to_string(&od->obj_desc, name);
 int shm_fd;
@@ -1856,6 +1879,7 @@ if (shm_fd != -1) {
     return 0;
 }
 
+*/
 
     struct query_tran_entry *qte;
     const struct query_cache_entry *qce;

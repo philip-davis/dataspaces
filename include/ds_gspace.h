@@ -37,13 +37,20 @@
 #include "dart.h"
 #include "ss_data.h"
 
+struct query_tran {
+        struct list_head        q_list;
+        int                     num_ent;
+};
+
 struct ds_gspace {
         struct dart_server      *ds;
-
+        struct query_tran       qt;
         /* Shared space data structure. */
         struct sspace           *ssd;
         /* Local in-memory storage. */
         struct ss_storage       *ls;
+        /* Local in-memory storage. */
+        struct ss_storage       *ls_prefetch;
         /* Default global data domain dimension */
         struct global_dimension default_gdim;
 

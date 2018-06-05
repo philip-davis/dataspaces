@@ -1123,6 +1123,8 @@ void ls_add_obj(struct ss_storage *ls, struct obj_data *od)
 
         od_existing = ls_find_no_version(ls, &od->obj_desc);
         if (od_existing) {
+
+            //update here to send rpc requests to inititate rpc call to update local object descriptor
                 od_existing->f_free = 1;
                 if (od_existing->refcnt == 0) {
                         ls_remove(ls, od_existing);
@@ -1131,6 +1133,8 @@ void ls_add_obj(struct ss_storage *ls, struct obj_data *od)
                 else {
                         uloga("'%s()': object eviction delayed.\n", __func__);
                 }
+        }else{
+            od->peer_list[0] = -1; //indicates that no copies of the object exist
         }
 
         index = od->obj_desc.version % ls->size_hash;
@@ -1390,8 +1394,6 @@ struct obj_data *shmem_obj_data_alloc(struct obj_descriptor *odsc, int id)
         return -1;
     }
     //now memcpy
-    
-    uloga("Shared object created with name %s\n", name);
 
     od->_data = od->data = ptr;
 
@@ -1401,7 +1403,7 @@ struct obj_data *shmem_obj_data_alloc(struct obj_descriptor *odsc, int id)
     }
     //ALIGN_ADDR_QUAD_BYTES(od->data);
     od->obj_desc = *odsc;
-
+    uloga("Shared object created with name %s\n", name);
     return od;
 }
 /*
@@ -1522,10 +1524,32 @@ void convert_to_string(struct obj_descriptor *obj_desc, char *name){
         }
         i++;
     }
-    sprintf(name, "%s_%d%s", modified_name, obj_desc->version, lb_name);
+    sprintf(name, "%s%s_%d", modified_name, lb_name, obj_desc->version);
 
 }
 
+void convert_to_string_no_version(struct obj_descriptor *obj_desc, char *name){
+    char lb_name[100];
+    char *ap = lb_name;
+    char modified_name[100];
+    int SIZE;
+    //char ub_name[50];
+    int i;
+    for (i = 0; i < obj_desc->bb.num_dims; ++i)
+    {
+        ap+=sprintf(ap, "_%llu_%llu", obj_desc->bb.lb.c[i], obj_desc->bb.ub.c[i]);
+    }
+    i =0;
+    sprintf(modified_name, "%s", obj_desc->name);
+    while(modified_name[i] != '\0'){
+        if (modified_name[i] == '/'){
+            modified_name[i] = '_';
+        }
+        i++;
+    }
+    sprintf(name, "%s%s", modified_name, lb_name);
+
+}
 void shmem_obj_data_free(struct obj_data *od)
 {
     int SIZE;
