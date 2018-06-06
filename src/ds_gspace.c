@@ -127,7 +127,7 @@ static struct {
         int             *pval;
 } options[] = {
         {"ndim",                &ds_conf.ndim},
-        {"dims",                &ds_conf.dims},
+        {"dims",                (int *)&ds_conf.dims},
         {"max_versions",        &ds_conf.max_versions},
         {"max_readers",         &ds_conf.max_readers},
         {"lock_type",           &ds_conf.lock_type},
@@ -1098,16 +1098,22 @@ static int cq_check_match(struct obj_descriptor *odsc)
         ERROR_TRACE();
 }
 
-static char * obj_desc_sprint(const struct obj_descriptor *odsc)
+static char *obj_desc_sprint(const struct obj_descriptor *odsc)
 {
 	char *str;
 	int nb;
-
-        nb = asprintf(&str, "obj_descriptor = {\n"
+    int size;
+    const char *fmt_str = "obj_descriptor = {\n"
                 "\t.name = %s,\n"
                 "\t.owner = %d,\n"
                 "\t.version = %d\n"
-                "\t.bb = ", odsc->name, odsc->owner, odsc->version);
+                "\t.bb = ";
+
+    size = snprintf(NULL, 0, fmt_str,
+                odsc->name, odsc->owner, odsc->version);
+    str = malloc(sizeof(*str) * (size + 1));
+    nb = sprintf(str, fmt_str,
+                odsc->name, odsc->owner, odsc->version);
 	str = str_append_const(str_append(str, bbox_sprint(&odsc->bb)), "}\n");
 
 	return str;
@@ -1125,16 +1131,19 @@ static int dsgrpc_obj_update(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         int err;
 
 #ifdef DEBUG
- {
-	 char *str;
+    char *str;
+    int size;
+    const char *fmt_str = "S%2d: update obj_desc '%s' ver %d from S%2d for  ";
 
-	 asprintf(&str, "S%2d: update obj_desc '%s' ver %d from S%2d for  ",
+    size = snprintf(NULL, 0, fmt_str, DSG_ID, 
+                    oh->u.o.odsc.name, oh->u.o.odsc.version, cmd->id);
+	str = malloc(sizeof(*str) * (size + 1));
+    sprintf(str, fmt_str,
                 DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version, cmd->id);
-	 str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
+	str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
 
-	 uloga("'%s()': %s\n", __func__, str);
-	 free(str);
- }
+	uloga("'%s()': %s\n", __func__, str);
+	free(str);
 #endif
         oh->u.o.odsc.owner = cmd->id;
         err = dht_add_entry(de, &oh->u.o.odsc);
