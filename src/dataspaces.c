@@ -112,7 +112,7 @@ int dspaces_servers(void)
 
 int dspaces_get_num_space_server(void)
 {
-	return common_dspaces_get_num_space_server();
+	return common_dspaces_get_num_space_peers();
 }
 
 void dspaces_barrier(void)

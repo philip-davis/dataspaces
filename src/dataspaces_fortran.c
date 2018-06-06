@@ -89,7 +89,7 @@ void FC_FUNC(dspaces_peers, DSPACES_PEERS)(int *peers)
 
 void FC_FUNC(dspaces_get_num_space_server, DSPACES_GET_NUM_SPACE_SERVER)(int *peers)
 {
-	*peers = common_dspaces_get_num_space_server();
+	*peers = common_dspaces_get_num_space_peers();
 }
 
 void FC_FUNC(dspaces_barrier, DSPACES_BARRIER)(void)
