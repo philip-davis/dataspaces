@@ -1603,7 +1603,7 @@ int dcg_obj_put(struct obj_data *od)
         msg->msg_rpc->cmd = ss_obj_put;
         msg->msg_rpc->id = DCG_ID; // dcg->dc->self->id;
 
-        hdr = msg->msg_rpc->pad;
+        hdr = (struct hdr_obj_put *)msg->msg_rpc->pad;
         hdr->odsc = od->obj_desc;
         memcpy(&hdr->gdim, &od->gdim, sizeof(struct global_dimension));
 
@@ -1652,7 +1652,7 @@ int dcg_obj_put_to_server(struct obj_data *od, int server_id)
         msg->msg_rpc->cmd = ss_obj_put;
         msg->msg_rpc->id = DCG_ID;
 
-        hdr = msg->msg_rpc->pad;
+        hdr = (struct hdr_obj_put *)msg->msg_rpc->pad;
         hdr->odsc = od->obj_desc;
         memcpy(&hdr->gdim, &od->gdim, sizeof(struct global_dimension));
 

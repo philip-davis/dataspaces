@@ -1588,11 +1588,8 @@ static int dsgrpc_obj_query(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 }
 
 static int dsgrpc_obj_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
-// __attribute__((__unused__))
 {
         struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
-        // const struct obj_descriptor *odsc;
-        // struct obj_descriptor odsc1;
         struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
         int err = -ENOENT;
 
@@ -1600,19 +1597,6 @@ static int dsgrpc_obj_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         err = obj_info_reply_descriptor(peer, &oh->u.o.odsc);
         if (err < 0)
                 goto err_out;
-        /*
-        odsc = dht_find_entry(dsg->ssd->ent_self, &oh->odsc);
-        if (!odsc)
-                goto err_out;
-
-        odsc1 = *odsc;
-        bbox_intersect(&oh->odsc.bb, &odsc1.bb, &odsc1.bb);
-
-        peer = ds_get_peer(dsg->ds, oh->rank);
-        err = obj_info_reply_descriptor(&odsc1, peer);
-        if (err < 0)
-                goto err_out;
-        */
         return 0;
  err_out:
         uloga("'%s()': failed with %d.\n", __func__, err);
