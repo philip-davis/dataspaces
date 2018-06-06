@@ -347,46 +347,6 @@ static int qt_add_obj(struct query_tran_entry *qte, struct obj_descriptor *odsc)
         return 0;
 }
 
-static int qt_add_objv(struct query_tran_entry *qte, struct obj_descriptor *odsc)
-{
-	struct obj_data qod, *od;
-	int err = -ENOMEM;
-
-	if (qte->f_alloc_data)
-		od = obj_data_allocv(odsc);
-	else	
-		/* No need to allocate/setup data for rexec transactions. */
-		od = obj_data_alloc_no_data(odsc, NULL);
-	if (!od)
-		return err;
-
-	od->obj_desc.st = qte->q_obj.st;
-
-	memset(&qod, 0, sizeof(qod));
-	qod.obj_desc = qte->q_obj;
-	qod.data = qte->data_ref;
-
-	/* Setup pointers into the storage of the query object. */
-	if (qte->f_alloc_data)
-		ssd_copyv(od, &qod);
-
-	list_add(&od->obj_entry, &qte->od_list);
-	qte->num_od++;
-
-	return 0;
-}
-
-
-/*
-  Fill a new transaction entry for a data object.
-static void qt_set(struct query_tran_entry *qte, struct obj_data *od)
-{
-        qte->q_id = qt_gen_qid();
-        qte->q_obj = od->obj_desc;
-        qte->data_ref = od->data;
-}
-*/
-
 static int qte_set_odsc_from_cache(struct query_tran_entry *qte, 
         const struct query_cache_entry *qce)
 {
@@ -843,84 +803,6 @@ static int cq_received_all_parts(struct query_tran_entry *qte)
 /* Forward definition. */
 static int dcg_obj_data_get(struct query_tran_entry *);
 
-/*
-  RPC routine to receive notifications  when the region of interest is
-  updated.
-*/
-static int dcgrpc_obj_cq_update(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
-{
-        struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
-        struct obj_descriptor *odsc;
-        struct query_tran_entry *qte;
-        int err = -ENOENT;
-
-        /* NOTE: if data is not  consumed between two updates, i.e., a
-           call  to dcg_obj_cq_update(), there  are problems  ... most
-           likely  app  will  block   or  sckip  one  version  of  the
-           object. */
-        qte = qt_find(&dcg->qt, oh->qid);
-        if (!qte)
-                goto err_out;
-
-        /* Early discard; we are receiving an update for an old part
-           of an object. */
-        if (oh->u.o.odsc.version < qte->q_obj.version) {
-                // uloga("'%s()': discard descriptor version %d, from %d, for %d.\n",
-                //        __func__, oh->odsc.version, peer->id, oh->odsc.owner);
-                uloga("'%s()': this should not happen: CASE I\n", __func__);
-                return 0;
-        }
-
-        odsc = qt_find_obj(qte, &oh->u.o.odsc);
-        // if (!qt_find_obj(qte, &oh->odsc)) {
-        if (!odsc) {
-                if ((err = qt_add_objv(qte, &oh->u.o.odsc)) < 0)
-                        goto err_out;
-
-                /* NOTE: we take the  latest object part arrived to be
-                   the latest version, should ensure all the parts are
-                   at the same version. */
-
-                /* We assume  this is the latest obj  version; this is
-                   to be  used in  obj_data_get() routine, and  has to
-                   match the version on the server. */
-                qte->q_obj.version = oh->u.o.odsc.version;
-
-                qte->size_od++;
-                // uloga("'%s()': accepted descriptor version %d, from %d for %d.\n",
-                //        __func__, oh->odsc.version, peer->id, oh->odsc.owner);
-        }
-        else {
-                uloga("'%s()': this should not happen: CASE II.\n", __func__);
-                if (odsc->version <= oh->u.o.odsc.version) {
-                        *odsc = oh->u.o.odsc;
-                        /* Update the version on the query as well. */
-                        qte->q_obj.version = odsc->version;
-
-                        // uloga("'%s()': updated descriptor version %d, from %d"
-                        //      " for %d.\n", 
-                        //      __func__, oh->odsc.version, peer->id, oh->odsc.owner);
-                }
-                else {
-                        // uloga("'%s()': duplicate descriptor from %d, original from %d.\n",
-                        // __func__, peer->id, oh->odsc.owner);
-                        // uloga("'%s()': new version is %d, local version is %d.\n",
-                        //      __func__, oh->odsc.version, odsc->version);
-                        return 0;
-                }
-        }
-
-        if (cq_received_all_parts(qte)) {
-                qte->num_parts_rec = 0;
-                if ((err = dcg_obj_data_get(qte)) < 0)
-                        goto err_out;
-        }
-
-        return 0;
- err_out:
-        ERROR_TRACE();
-}
-
 static int get_dht_peers_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
         struct query_tran_entry *qte = msg->private;
@@ -1284,15 +1166,10 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
         for (i = 0; i < oh->u.o.num_de; i++) {
                 if (!qt_find_obj(qte, od_tab+i)) {
                         err = qt_add_obj(qte, od_tab+i);
-			// err = qt_add_objv(qte, od_tab+i);
                         if (err < 0)
                                 goto err_out_free;
                 }
                 else {
-			/* DEBUG:
-                        uloga("'%s()': duplicate obj descriptor detected, "
-                              "keep only one copy.\n", __func__);
-			*/
                         qte->size_od--;
                 }
         }
@@ -1304,17 +1181,6 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
         if (qte->qh->qh_num_rep_received == qte->qh->qh_num_peer) {
                 /* Object descriptor receive completed. */
                 qte->f_odsc_recv = 1;
-
-		/* NOTE: disabled the cache for object descriptors.
-                if (qte->f_err == 0) {
-                        struct query_cache_entry *qce;
-                        qce = qce_alloc(qte->num_od);
-                        if (qce) {
-                                qce_set_obj_desc(qce, &qte->q_obj, &qte->od_list);
-                                qc_add_entry(&dcg->qc, qce);
-                        }
-                }
-		*/
         }
 
         return 0;
@@ -1514,15 +1380,10 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
 
         dcg_l->num_pending = 0;
         qt_init(&dcg_l->qt);
-        // rpc_add_service(ss_obj_get_dht_peers, dcgrpc_obj_get_dht_peers);
         rpc_add_service(ss_obj_get_desc, dcgrpc_obj_get_desc);
-        rpc_add_service(ss_obj_cq_notify, dcgrpc_obj_cq_update);
         rpc_add_service(cp_lock, dcgrpc_lock_service);
         rpc_add_service(cn_timing, dcgrpc_time_log);
         rpc_add_service(ss_info, dcgrpc_ss_info);
-#ifdef DS_HAVE_ACTIVESPACE
-        rpc_add_service(ss_code_reply, dcgrpc_code_reply);
-#endif
         rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);	
 	
         dcg_l->dc = dc_alloc(num_nodes, appid, dcg_l, comm);
@@ -1670,93 +1531,6 @@ int dcg_obj_put_to_server(struct obj_data *od, int server_id)
         return err;
 }
 
-/* 
-   Register a region for continuous queries and return the transaction
-   id; it will be used for transaction completion checks.
-*/
-int dcg_obj_cq_register(struct obj_data *od)
-{
-        struct query_tran_entry *qte;
-        struct msg_buf *msg;
-        struct node_id *peer;
-        struct hdr_obj_get *oh;
-        int err = -ENOMEM;
-
-        qte = qte_alloc(od, 1);
-        if (!qte)
-                goto err_out;
-
-        peer = dcg_which_peer();
-
-        msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
-        if (!msg)
-                goto err_out;
-
-        qt_add(&dcg->qt, qte);
-
-        msg->msg_rpc->cmd = ss_obj_cq_register;
-        msg->msg_rpc->id = DCG_ID; // dcg->dc->self->id;
-
-        oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
-        oh->rank = DCG_ID; // dcg->dc->self->id;
-        oh->qid = qte->q_id;
-        oh->u.o.odsc = od->obj_desc;
-
-        err = rpc_send(dcg->dc->rpc_s, peer, msg);
-        if (err == 0)
-                return qte->q_id;
-
-        qt_remove(&dcg->qt, qte);
- err_out:
-        ERROR_TRACE();
-}
-
-int dcg_obj_cq_update(int cq_id)
-{
-        struct query_tran_entry *qte;
-	// struct obj_data od;
-        int err = 0;
-
-        qte = qt_find(&dcg->qt, cq_id);
-        if (!qte) {
-		uloga("'%s()': looking for qte id %d.\n", __func__, cq_id);
-		err = -ENOENT;
-		goto err_out;
-	}
-
-        while (!qte->f_complete) {
-                err = dc_process(dcg->dc);
-                if (err < 0)
-                        goto err_out;
-        }
-        qte->f_complete = 0;
-
-	/*
-        // TODO: do I need more fields here ?!
-        od.data = qte->data_ref;
-        od.obj_desc = qte->q_obj;
-
-        err = dcg_obj_assemble(qte, &od);
-	*/
-        qt_free_obj_data(qte, 1);
-
-        if (!list_empty(&qte->od_list)) {
-                uloga("'%s()': ALERT something went wrong !!!\n", __func__);
-        }
-
-        // TODO: need some clean on qte values here.
-        // qte->num_od = 0;
-        // qte->size_od = 0;
-        qte->num_parts_rec = 0;
-
-	// TODO: where do I free the qte ?!
-
-        if (err == 0)
-                return 0;
- err_out:
-        ERROR_TRACE();
-}
-
 int dcg_obj_sync(int sync_op_id)
 {
         int *sync_op_ref = syncop_ref(sync_op_id);
@@ -1775,8 +1549,6 @@ int dcg_obj_sync(int sync_op_id)
         return err;
 }
 
-/*
-*/
 int dcg_obj_get(struct obj_data *od)
 {
         struct query_tran_entry *qte;

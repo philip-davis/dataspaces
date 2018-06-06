@@ -1188,10 +1188,6 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 		peer = ds_get_peer(dsg->ds, dht_tab[i]->rank);
 		if (peer == dsg->ds->self) {
 			// TODO: check if owner is set properly here.
-			/*
-			uloga("Obj desc version %d, for myself ... owner is %d\n",
-				od->obj_desc.version, od->obj_desc.owner);
-			*/
 #ifdef DEBUG
 			char *str;
 
@@ -1478,74 +1474,14 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
         ERROR_TRACE();
 }
 
-
-/*
-  RPC routine to return the peer ids for the DHT entries that have
-  descriptors for data objects.
-*/
-/*
-static int __dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
-{
-        struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
-        struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
-        struct dht_entry *de_tab[dsg->ssd->dht->num_entries];
-        struct msg_buf *msg;
-        int *peer_id_tab, peer_num, i;
-        int err = -ENOMEM;
-
-        double tm_start, tm_end;
-        static int num = 1;
-
-        peer_num = ssd_hash(dsg->ssd, &oh->u.o.odsc.bb, de_tab);
-        peer_id_tab = malloc(sizeof(int) * peer_num);
-        if (!peer_id_tab)
-                goto err_out;
-
-        for (i = 0; i < peer_num; i++)
-                peer_id_tab[i] = de_tab[i]->rank;
-
-        msg = msg_buf_alloc(rpc_s, peer, 1);
-        if (!msg) {
-                free(peer_id_tab);
-                goto err_out;
-        }
-
-        msg->size = sizeof(int) * peer_num;
-        msg->msg_data = peer_id_tab;
-        msg->cb = obj_send_dht_peers_completion;
-
-        msg->msg_rpc->cmd = ss_obj_get_dht_peers;
-        msg->msg_rpc->id = DSG_ID; // dsg->ds->self->id;
-
-        //TODO: do I need any other fields from the query transaction ?
-        i = oh->qid;
-        oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
-        oh->u.o.num_de = peer_num;
-        oh->qid = i;
-
-        err = rpc_send(rpc_s, peer, msg);
-        if (err == 0)
-                return 0;
-
-        free(peer_id_tab);
-        free(msg);
- err_out:
-        uloga("'%s()': failed with %d.\n", __func__, err);
-        return err;
-}
-*/
-
 /*
   Rpc routine to  locate the servers that may  have object descriptors
   that overlap the descriptor in the query.
 */
 static int dsgrpc_obj_query(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
-// __attribute__((__unused__))
 {
         struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
         struct dht_entry *de_tab[dsg->ssd->dht->num_entries];
-	//        struct obj_descriptor odsc1;
-	//        struct obj_descriptor const *odsc;
         struct node_id *peer;
         int num_de, err = -ENOMEM;
 
@@ -1566,19 +1502,6 @@ static int dsgrpc_obj_query(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
                 err = obj_info_reply_descriptor(peer, &oh->u.o.odsc);
                 if (err < 0)
                         goto err_out;
-                /*
-                odsc = dht_find_entry(dsg->ssd->ent_self, &oh->odsc);
-                err = -ENOENT;
-                if (!odsc)
-                        // goto err_out;
-
-                odsc1 = *odsc;
-                bbox_intersect(&odsc1.bb, &oh->odsc.bb, &odsc1.bb);
-                peer = ds_get_peer(dsg->ds, oh->rank);
-                err = obj_info_reply_descriptor(peer, &odsc1, err);
-                if (err < 0)
-                        goto err_out;
-                */
         }
 
         return 0;
@@ -1732,86 +1655,6 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
  err_out:
         uloga("'%s()': failed with %d.\n", __func__, err);
         return err;
-}
-
-static int obj_cq_local_register(struct hdr_obj_get *oh)
-{
-        struct cont_query *cq;
-        int err = -ENOMEM;
-
-        cq = cq_alloc(oh);
-        if (!cq)
-                goto err_out;
-
-        cq_add_to_list(cq);
-
-        return 0;
- err_out:
-        ERROR_TRACE();
-}
-
-static int obj_cq_forward_register(struct hdr_obj_get *oh)
-{
-        struct msg_buf *msg;
-        struct dht_entry *de_tab[dsg->ssd->dht->num_entries];
-        struct node_id *peer;
-        int num_de, i, err;
-
-        oh->rc = 1;
-        num_de = ssd_hash(dsg->ssd, &oh->u.o.odsc.bb, de_tab);
-
-        for (i = 0; i < num_de; i++) {
-                peer = ds_get_peer(dsg->ds, de_tab[i]->rank);
-                if (peer == dsg->ds->self) {
-                        err = obj_cq_local_register(oh);
-                        if (err < 0)
-                                goto err_out;
-                        continue;
-                }
-
-                err = -ENOMEM;
-                msg = msg_buf_alloc(dsg->ds->rpc_s, peer, 1);
-                if (!msg)
-                        goto err_out;
-
-                msg->msg_rpc->cmd = ss_obj_cq_register;
-                msg->msg_rpc->id = DSG_ID; // dsg->ds->self->id;
-
-                memcpy(msg->msg_rpc->pad, oh, sizeof(*oh));
-
-                err = rpc_send(dsg->ds->rpc_s, peer, msg);
-                if (err < 0) {
-                        free(msg);
-                        goto err_out;
-                }
-        }
-
-        return 0;
- err_out:
-        ERROR_TRACE();
-}
-
-/*
-  RPC routine  to register a  CQ (continuous query);  possible callers
-  are (1) compute  peer to directly register a CQ,  or (2) server peer
-  to forward a CQ registration to proper DHT entries.
-*/
-static int dsgrpc_obj_cq_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
-{
-        struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
-        int err;
-
-        if (oh->rc == 0) {
-                err = obj_cq_forward_register(oh);
-        }
-        else {
-                err = obj_cq_local_register(oh);
-        }
-
-        if (err == 0)
-                return 0;
-// err_out:
-        ERROR_TRACE();
 }
 
 static int obj_get_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
@@ -2053,7 +1896,6 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name, void *comm)
         rpc_add_service(ss_obj_put, dsgrpc_obj_put);
         rpc_add_service(ss_obj_update, dsgrpc_obj_update);
         rpc_add_service(ss_obj_filter, dsgrpc_obj_filter);
-        rpc_add_service(ss_obj_cq_register, dsgrpc_obj_cq_register);
         rpc_add_service(cp_lock, dsgrpc_lock_service);
         rpc_add_service(cp_remove, dsgrpc_remove_service);
         rpc_add_service(ss_info, dsgrpc_ss_info);
