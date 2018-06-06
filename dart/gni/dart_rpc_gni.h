@@ -521,6 +521,7 @@ void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cm
 
 
 void rpc_server_find_local_peer(struct rpc_server *rpc_s, struct node_id **peer_tab, int *num_local_peer, int peer_tab_size);
+void rpc_server_find_local_peers(struct rpc_server *rpc_s, struct node_id **peer_tab, int *num_local_peer, int peer_tab_size);
 uint32_t rpc_server_get_nid(struct rpc_server *rpc_s);
 
 int rpc_peer_cleanup(struct rpc_server *rpc_s, struct node_id *peer);
