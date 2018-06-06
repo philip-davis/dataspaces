@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, NSF Cloud and Autonomic Computing Center, Rutgers University
+ * Copyright (c) 2009-2018, NSF Cloud and Autonomic Computing Center, Rutgers University
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided
@@ -29,46 +29,27 @@
 *  zhangfan@cac.rutgers.edu
 *  Qian Sun (2014)  TASSL Rutgers University
 *  qiansun@cac.rutgers.edu
+*  Philip Davis (2018) RDI2 Rutgers University
+*  philip.e.davis@rutgers.edu
 */
-#ifndef __TEST_DS_COMMON_H_
-#define __TEST_DS_COMMON_H_
+#ifndef __TEST_COMMON_H_
+#define __TEST_COMMON_H_
 
+#include "common.h"
 #include "debug.h"
 #include "timer.h"
-#include "dataspaces.h"
-#include "ds_gspace.h"
-#ifdef DS_HAVE_DIMES
-#include "dimes_interface.h"
-#include "dimes_server.h"
-#endif
 
-enum transport_type {
-	USE_DSPACES = 0,
-	USE_DIMES
-};
+#include <stdint.h>
 
+void check_data(const char *var_name, double *buf, int num_elem, int rank, int ts);
 
-// wrapper functions of DataSpaces/DIMES APIs
-int common_init(int num_peers, int appid, void* comm, const char* parameters);
-int common_rank(); 
-int common_peers();
-void common_barrier();
-void common_finalize(); 
-void common_lock_on_read(const char *lock_name, void *gcomm);
-void common_unlock_on_read(const char *lock_name, void *gcomm);
-void common_lock_on_write(const char *lock_name, void *gcomm); 
-void common_unlock_on_write(const char *lock_name, void *gcomm); 
-int common_put (const char *var_name,
-        unsigned int ver, int size,
-	int ndim,
-        uint64_t *lb, uint64_t *ub,
-	void *data, enum transport_type type);
-int common_get (const char *var_name,
-        unsigned int ver, int size,
-	int ndim,
-	uint64_t *lb, uint64_t *ub,
-        void *data, enum transport_type type); 
-int common_put_sync(enum transport_type type); 
-int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gcomm);
+int write_data_file(const char* fname, void *data, size_t size);
+int read_data_file(const char* fname);
 
-#endif /* __TEST_DS_COMMON_H_ */
+int common_get_transport_type_str(enum transport_type type, char* str);
+
+int parse_args(int argc, char** argv, enum transport_type *type, int *npapp,
+    int *dims, int* npdim, uint64_t* spdim, int *timestep, int *appid,
+    size_t *elem_size, int *num_vars);
+
+#endif /* __TEST_COMMON_H_ */

@@ -36,6 +36,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "common.h"
+#include "test_common.h"
 #include "debug.h"
 #include "mpi.h"
 

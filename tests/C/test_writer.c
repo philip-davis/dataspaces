@@ -35,6 +35,7 @@
 
 #include "debug.h"
 #include "common.h"
+#include "test_common.h"
 
 #include "mpi.h"
 
