@@ -1635,14 +1635,12 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 	int i, err;
 	int node_size;
 
-	//DSaaS num_cp == 0, useless
-
-	size = sizeof(struct dart_server) + num_sp * sizeof(struct node_id);////DsaaS
+	size = sizeof(struct dart_server) + num_sp * sizeof(struct node_id);
 	ds = calloc(1, size);
 	if (!ds)
 		goto err_out;
 	ds->dart_ref = dart_ref;
-	ds->peer_tab = (struct node_id *) (ds+1);////DsaaS
+	ds->peer_tab = (struct node_id *) (ds+1);
 
 	ds->peer_size = num_sp;////DsaaS: peer_size represents current number of peers in total
 
