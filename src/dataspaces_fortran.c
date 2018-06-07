@@ -498,13 +498,3 @@ void FC_FUNC(dimes_shmem_get_local, DIMES_SHMEM_GET_LOCAL) (const char *var_name
 #endif
 
 #endif
-
-void FC_FUNC(dspaces_set_mpi_rank_hint, DSPACES_SET_MPI_RANK_HINT)(int *rank)
-{
-    common_dspaces_set_mpi_rank_hint(*rank);
-}
-
-void FC_FUNC(dspaces_unset_mpi_rank_hint, DSPACES_UNSET_MPI_RANK_HINT)()
-{
-    common_dspaces_unset_mpi_rank_hint();
-}

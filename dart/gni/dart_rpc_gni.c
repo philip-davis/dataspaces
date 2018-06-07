@@ -921,7 +921,7 @@ static int rpc_prepare_buffers(struct rpc_server *rpc_s, const struct node_id *p
 
     rr->f_data = 1;
     rr->mdh_data = rr->msg->msg_rpc->mdh_addr.mdh = mdh;
-    rr->msg->msg_rpc->mdh_addr.address = (uint64_t)rr->msg->msg_data;
+    rr->msg->msg_rpc->mdh_addr.address = rr->msg->msg_data;
     rr->msg->msg_rpc->mdh_addr.length = rr->msg->size;
     rr->msg->msg_rpc->mdh_addr.index = rr->index;
     rr->refcont++;
@@ -1015,7 +1015,7 @@ RESEND:
 		rdma_data_desc->dlvr_mode = GNI_DLVMODE_PERFORMANCE;
 		rdma_data_desc->local_addr = (uint64_t) rr->msg->msg_data;
 		rdma_data_desc->local_mem_hndl = rr->mdh_data;
-		rdma_data_desc->remote_addr = peer->mdh_addr.address;
+		rdma_data_desc->remote_addr = (uint64_t)peer->mdh_addr.address;
 		rdma_data_desc->remote_mem_hndl = peer->mdh_addr.mdh;
 		rdma_data_desc->length = rr->msg->size;
 		rdma_data_desc->rdma_mode = 0;
@@ -1071,9 +1071,9 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
         rdma_data_desc->type = GNI_POST_RDMA_GET;
         rdma_data_desc->cq_mode = GNI_CQMODE_GLOBAL_EVENT | GNI_CQMODE_REMOTE_EVENT; //?reconsider, need some tests.
         rdma_data_desc->dlvr_mode = GNI_DLVMODE_PERFORMANCE;
-        rdma_data_desc->local_addr = (uint64_t) rr->msg->msg_data;
+        rdma_data_desc->local_addr = (uint64_t)rr->msg->msg_data;
         rdma_data_desc->local_mem_hndl = rr->mdh_data;
-        rdma_data_desc->remote_addr = peer->mdh_addr.address;
+        rdma_data_desc->remote_addr = (uint64_t)peer->mdh_addr.address;
         rdma_data_desc->remote_mem_hndl = peer->mdh_addr.mdh;
         rdma_data_desc->length = rr->msg->size;//Must be a multiple of 4-bytes for GETs
         rdma_data_desc->rdma_mode = 0;

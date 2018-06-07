@@ -359,7 +359,7 @@ int dimes_ls_count_obj_no_version(struct ss_storage *ls, int query_tran_id)
 
 size_t dimes_buffer_size = 0;
 //Starting pointer to the memory buffer
-uint64_t dimes_buffer_ptr = 0;
+void *dimes_buffer_ptr = NULL;
 
 /*linked list for free dimes_buf_block. And the blocks in the list
 are sorted by block_size in ascending order.
@@ -380,7 +380,7 @@ enum mem_block_status {
 struct dimes_buf_block {
     struct list_head mem_block_entry;
     size_t block_size;
-    uint64_t block_ptr;
+    void *block_ptr;
     enum mem_block_status block_status;
 };
 
@@ -477,7 +477,7 @@ static void dimes_buf_insert_block_to_freelist(
 //
 // Initialize DART Buffer
 //
-int dimes_buffer_init(uint64_t base_addr, size_t size)
+int dimes_buffer_init(void *base_addr, size_t size)
 {
     INIT_LIST_HEAD(&free_blocks_list);
     INIT_LIST_HEAD(&used_blocks_list);
@@ -497,8 +497,8 @@ int dimes_buffer_init(uint64_t base_addr, size_t size)
         dimes_buf_insert_block(block, &free_blocks_list);
 
         return 0;
-    }
-    else    return -1;
+    } else    
+        return -1;
 }
 
 //
@@ -520,7 +520,7 @@ size_t dimes_buffer_total_size()
     return dimes_buffer_size;
 }
 
-void dimes_buffer_alloc(size_t size, uint64_t *ptr)
+void dimes_buffer_alloc(size_t size, void **ptr)
 {
     //If requested buffer size exceeds the total available
     if (size > dimes_buffer_size) {
@@ -560,8 +560,8 @@ void dimes_buffer_alloc(size_t size, uint64_t *ptr)
         if(mb->block_size > size){
             new_free_mb = (struct dimes_buf_block*)malloc(SIZE_DART_MEM_BLOCK);
             new_free_mb->block_status = free_block;
-            new_free_mb->block_ptr = mb->block_ptr + size;
-            new_free_mb->block_size = mb->block_size - size;
+            new_free_mb->block_ptr = (void *)((char *)mb->block_ptr + size);
+            new_free_mb->block_size = (size_t)((char *)mb->block_size - (char *)size);
             new_used_mb = mb;
             new_used_mb->block_status = used_block;
             new_used_mb->block_size = size;
@@ -574,7 +574,7 @@ void dimes_buffer_alloc(size_t size, uint64_t *ptr)
         if(new_used_mb != NULL)
             dimes_buf_insert_block(new_used_mb, &used_blocks_list);
 
-        *ptr = (uint64_t)new_used_mb->block_ptr;
+        *ptr = new_used_mb->block_ptr;
         return;
     }
     else {
@@ -584,18 +584,18 @@ void dimes_buffer_alloc(size_t size, uint64_t *ptr)
     }
 
  err_out:
-    *ptr = (uint64_t)0;
+    *ptr = NULL;
     return;
 }
 
-void dimes_buffer_free(uint64_t ptr)
+void dimes_buffer_free(void *ptr)
 {
     /*test if the value of ptr is valid*/
-    if (ptr == 0 || dimes_buffer_ptr == 0)
+    if (!ptr || !dimes_buffer_ptr)
         return;
 
-    uint64_t start_ptr = dimes_buffer_ptr;
-    uint64_t end_ptr = dimes_buffer_ptr + dimes_buffer_size - 1;
+    void *start_ptr = dimes_buffer_ptr;
+    void *end_ptr = dimes_buffer_ptr + dimes_buffer_size - 1;
     if ( ptr < start_ptr || ptr > end_ptr) {
         fprintf(stderr, "%s(): error invalid address! start_ptr %llx end_ptr %llx ptr %llx\n", __func__, start_ptr, end_ptr, ptr);
         return;

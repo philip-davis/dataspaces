@@ -219,15 +219,15 @@ int dimes_ls_count_obj(struct ss_storage *ls, int query_tran_id);
 
 
 // Init DIMES Buffer
-int dimes_buffer_init(uint64_t base_addr, size_t size);
+int dimes_buffer_init(void *base_addr, size_t size);
 // Finalize DIMES Buffer
 int dimes_buffer_finalize(void);
 size_t dimes_buffer_total_size(void);
 // Allocates a block of memory from DIMES Buffer, returning a pointer to
 // the beginning of the block.
-void dimes_buffer_alloc(size_t , uint64_t *);
+void dimes_buffer_alloc(size_t, void **);
 // Free a memory block previously allocated from DIMES Buffer 
-void dimes_buffer_free(uint64_t addr);
+void dimes_buffer_free(void *addr);
 
 #ifdef DS_HAVE_DIMES_SHMEM
 size_t estimate_allocator_restart_buf_size(int dart_id);
