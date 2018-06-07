@@ -1171,9 +1171,9 @@ static int dcgrpc_obj_get_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *cm
 static int obj_data_get_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
     struct query_tran_entry *qte = msg->private;
-    #ifdef SHMEM_OBJECTS
-    qte->size_od = qte->size_od/2;
-    #endif
+    //#ifdef SHMEM_OBJECTS
+    //qte->size_od = qte->size_od/2;
+    //#endif
     if (++qte->num_parts_rec == qte->size_od) {
         qte->f_complete = 1;
     }
@@ -1198,7 +1198,7 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
     int od_start_indx = 0;
     struct obj_data **od_tab;
     char name[200];
-
+    qte->size_od = qte->size_od/2;
     int block_size = qte->num_od/(qte->qh->qh_num_peer * 2);
     if(block_size < 1) block_size = 1;
     err = qt_alloc_obj_data_shmem(qte, block_size);
@@ -1244,6 +1244,7 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                     }
                     memcpy(od->data, ptr, SIZE);
                 }
+                ++qte->num_parts_rec;
 
             }else{
                 shmem_flag = 1;
