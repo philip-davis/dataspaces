@@ -24,5 +24,6 @@ struct name_value_pair {
 
 struct name_value_pair* text_to_nv_pairs (const char * text);
 void free_nv_pairs (struct name_value_pair* pairs);
+char *alloc_sprintf(const char *fmt_str, ...);
 
 #endif
