@@ -31,6 +31,7 @@
 *  tjin@cac.rutgers.edu
 */
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -66,6 +67,25 @@ char *str_append(char *str, char *msg)
 
 	free(msg);
 	return str;
+}
+
+/*
+ *  Our own implementation of the asprintf functionality 
+ */
+char *alloc_sprintf(const char *fmt_str, ...)
+{
+    va_list va_args;
+    int size;
+    char *str;
+   
+    va_start(va_args, fmt_str);
+    size = vsnprintf(NULL, 0, fmt_str, va_args);
+    str = malloc(sizeof(*str) * (size + 1));
+    vsprintf(str, fmt_str, va_args); 
+    va_end(va_args);
+
+    return(str);
+
 }
 
 /*******************************************************
