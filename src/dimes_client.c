@@ -227,14 +227,8 @@ static size_t get_available_rdma_buffer_size()
     else return options.rdma_buffer_size-options.rdma_buffer_usage;
 }
 
-// Lookup shared space dht by global dimension.
-static struct sspace* lookup_sspace_dimes(struct dimes_client *d, const struct global_dimension* gd)
+static void print_rdma_buffer_usage()
 {
-    // If global domain gdim equals to the one specified 
-    // in dataspaces.conf, then return the default shared space dht.
-    if (global_dimension_equal(gd, &d->dcg->default_gdim)) {
-        return d->default_ssd;
-    }
 #ifdef DEBUG_DIMES_BUFFER_USAGE
     uloga("DIMES rdma buffer usage: peer #%d "
           "rdma_buffer_size= %u bytes "
@@ -245,9 +239,9 @@ static struct sspace* lookup_sspace_dimes(struct dimes_client *d, const struct g
 #endif
 }
 
-static uint32_t local_obj_index_seed = 0;
 static uint32_t next_local_obj_index()
 {
+    static uint32_t local_obj_index_seed = 0;
     return local_obj_index_seed++;
 }
 
