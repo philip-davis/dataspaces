@@ -667,7 +667,7 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl,
 {
     int err;
     unsigned char use_rdma_memory = 0;
-    uint64_t buf;
+    void *buf;
     rdma_hndl->mem_type = type;
 
     if (rdma_hndl->mem_type == dart_memory_rdma) use_rdma_memory = 1;
@@ -686,7 +686,7 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl,
 
     switch (rdma_hndl->mem_type) {
     case dart_memory_non_rdma:
-        buf = (uint64_t)malloc(size);
+        buf = malloc(size);
         if (!buf) goto err_out_malloc;
 
         rdma_hndl->base_addr = buf;
@@ -707,7 +707,7 @@ static int dimes_memory_alloc(struct dart_rdma_mem_handle *rdma_hndl,
             rdma_hndl->base_addr = buf;
             rdma_hndl->size = size;
         } else {
-            buf = (uint64_t)malloc(size);
+            buf = malloc(size);
             if (!buf) goto err_out_malloc;
 
             err = dart_rdma_register_mem(rdma_hndl, (void*)buf, size);
@@ -1737,30 +1737,6 @@ static int dimes_fetch_data(struct query_tran_entry_d *qte)
     // require sub-array reading, OR (2) resides on local core
     list_for_each_entry(fetch, &qte->fetch_list, struct fetch_entry, entry)
     {
-        if (is_peer_on_same_core(fetch->read_tran->remote_peer)) {
-            // Data on local peer (itself), fetch directly
-            struct dimes_memory_obj *mem_obj =
-                                    storage_lookup_obj(fetch->remote_sync_id);
-            if (mem_obj == NULL) {
-                uloga("%s(): ERROR failed to find data object in local memory.\n", __func__);
-                goto err_out;
-            }
-
-            // Update source memory region
-            fetch->read_tran->src.base_addr = mem_obj->rdma_handle.base_addr;
-            fetch->read_tran->src.size = mem_obj->rdma_handle.size;
-
-            // Alloc receive buffer, schedle reads, perform reads
-            dimes_memory_alloc(&fetch->read_tran->dst,
-                               obj_data_size(&fetch->dst_odsc),
-                               dart_memory_non_rdma);
-            schedule_rdma_reads(fetch->read_tran->tran_id,
-                                &fetch->src_odsc, &fetch->dst_odsc);
-            dart_rdma_perform_reads(fetch->read_tran->tran_id);
-            // Copy fetched data
-            obj_assemble(fetch, qte->data_ref);
-            dimes_memory_free(&fetch->read_tran->dst, dimes_memory_non_rdma);
-        } 
 #ifdef DS_HAVE_DIMES_SHMEM 
         if (options.enable_shmem_buffer &&
                  is_peer_on_same_node(fetch->read_tran->remote_peer)) {
@@ -2130,8 +2106,9 @@ int dimes_client_put(const char *var_name,
         if (shmem_obj) {
             mem_obj->shmem_desc.size = data_size;
             mem_obj->shmem_desc.offset =
-                mem_obj->rdma_handle.base_addr -
-                (uint64_t)shmem_obj->ptr;
+                (uint64_t)((char *)mem_obj->rdma_handle.base_addr -
+
+                (char *)shmem_obj->ptr);
             mem_obj->shmem_desc.shmem_obj_id = shmem_obj->id;
             mem_obj->shmem_desc.owner_node_rank = shmem_obj->owner_node_rank;
         } else {
@@ -2420,8 +2397,8 @@ int dimes_client_shmem_put_local(const char *var_name,
     if (shmem_obj) {
         mem_obj->shmem_desc.size = data_size;
         mem_obj->shmem_desc.offset =
-            mem_obj->rdma_handle.base_addr -
-            (uint64_t)shmem_obj->ptr;
+            (uint64_t)((char *)mem_obj->rdma_handle.base_addr -
+            (char *)shmem_obj->ptr);
         mem_obj->shmem_desc.shmem_obj_id = shmem_obj->id;
         mem_obj->shmem_desc.owner_node_rank = shmem_obj->owner_node_rank;
     } else {
@@ -2990,7 +2967,7 @@ static int restart_storage_insert_mem_obj(const char *group_name,
             __func__, shmem_obj_id);
         goto err_out_free;
     }
-    uint64_t buf = (uint64_t)shmem_obj->ptr + obj_info->offset; 
+    void *buf = (void *)((char *)shmem_obj->ptr + obj_info->offset); 
     mem_obj->rdma_handle.mem_type = obj_info->mem_type;
     if (mem_obj->rdma_handle.mem_type == dart_memory_shmem_rdma) {
         int err = dart_rdma_register_mem(&mem_obj->rdma_handle, buf,
@@ -3073,7 +3050,7 @@ static int node_local_obj_index_insert_mem_obj(const char *group_name,
 
     // TODO: check if the code below works on all systems.
     // set mem_obj->rdma_handle
-    uint64_t buf = (uint64_t)shmem_obj->ptr + obj_info->offset;
+    void *buf = (void *)((char *)shmem_obj->ptr + obj_info->offset);
     mem_obj->rdma_handle.base_addr = buf;
     mem_obj->rdma_handle.size = obj_info->size;
 

@@ -189,10 +189,10 @@ static int dart_rdma_get(struct dart_rdma_tran *read_tran,
 	read_op->post_desc.type = GNI_POST_RDMA_GET;
 	read_op->post_desc.cq_mode = GNI_CQMODE_GLOBAL_EVENT;
 	read_op->post_desc.dlvr_mode = GNI_DLVMODE_PERFORMANCE;
-	read_op->post_desc.local_addr = read_tran->dst.base_addr +
+	read_op->post_desc.local_addr = (uint64_t)read_tran->dst.base_addr +
                                     read_op->dst_offset;
 	read_op->post_desc.local_mem_hndl = read_tran->dst.mdh;
-	read_op->post_desc.remote_addr = read_tran->src.base_addr +
+	read_op->post_desc.remote_addr = (uint64_t)read_tran->src.base_addr +
                                      read_op->src_offset;
 	read_op->post_desc.remote_mem_hndl = read_tran->src.mdh;
 	read_op->post_desc.length = read_op->bytes;
@@ -221,10 +221,10 @@ static int dart_rdma_put(struct dart_rdma_tran *write_tran,
     write_op->post_desc.type = GNI_POST_RDMA_PUT;
     write_op->post_desc.cq_mode = GNI_CQMODE_GLOBAL_EVENT;
     write_op->post_desc.dlvr_mode = GNI_DLVMODE_PERFORMANCE;
-    write_op->post_desc.local_addr = write_tran->src.base_addr +
+    write_op->post_desc.local_addr = (uint64_t)write_tran->src.base_addr +
                                      write_op->src_offset;
     write_op->post_desc.local_mem_hndl = write_tran->src.mdh;
-    write_op->post_desc.remote_addr = write_tran->dst.base_addr +
+    write_op->post_desc.remote_addr = (uint64_t)write_tran->dst.base_addr +
                                       write_op->dst_offset;
     write_op->post_desc.remote_mem_hndl = write_tran->dst.mdh;
     write_op->post_desc.length = write_op->bytes;
@@ -357,7 +357,7 @@ int dart_rdma_register_mem(struct dart_rdma_mem_handle *mem_hndl,
 	}
 
 	mem_hndl->size = bytes;
-	mem_hndl->base_addr = (uint64_t)data;
+	mem_hndl->base_addr = data;
 
 	return 0;
 err_out:

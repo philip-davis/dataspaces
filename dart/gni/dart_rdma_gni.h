@@ -52,7 +52,7 @@ enum dart_rdma_tran_type {
 
 struct dart_rdma_mem_handle {
 	gni_mem_handle_t mdh;
-	uint64_t base_addr;
+	void *base_addr;
 	size_t size;
     enum dart_memory_type mem_type;
 };

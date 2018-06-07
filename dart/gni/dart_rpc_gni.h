@@ -95,7 +95,7 @@ typedef enum {
 
 struct mdh_addr_t {
 	gni_mem_handle_t mdh;
-	uint64_t address;
+	void *address;
 	size_t	length;
 	uint32_t index;
 };
