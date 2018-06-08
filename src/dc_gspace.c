@@ -319,7 +319,6 @@ static int qt_alloc_obj_data(struct query_tran_entry *qte)
 {
         struct obj_data *od;
         int n = 0;
-        //uloga("Received numbers of odsc in qte %d\n", qte->num_od);
         list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
                 od->data = malloc(obj_data_size(&od->obj_desc));
                 if (!od->data)
@@ -934,7 +933,6 @@ static int get_obj_descriptors(struct query_tran_entry *qte)
         peer_id = qte->qh->qh_peerid_tab;
         while (*peer_id != -1) {
                 peer = dc_get_peer(dcg->dc, *peer_id);
-                //uloga("Sending get obj_desc from %d reader to %d server\n", dcg->dc->self->ptlmap.id, peer->ptlmap.id);
                 err = -ENOMEM;
                 msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
                 if (!msg)
@@ -1330,12 +1328,10 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
 
         qte->qh->qh_num_rep_received++;
         qte->size_od += oh->u.o.num_de;
-        //uloga("Received num_odsc is %d\n", oh->u.o.num_de);
         int j;
         int half_sz = oh->u.o.num_de/2;
         int *dupli_odsc;
         dupli_odsc = malloc(sizeof(int) * half_sz);
-        //uloga("Half size is %d\n", half_sz);
         for (i = 0; i < half_sz; i++){
             dupli_odsc[i] = 0;
         }
@@ -1895,7 +1891,6 @@ int dcg_obj_get(struct obj_data *od)
             exit(-1);
         }
         memcpy(od->data, ptr, SIZE);
-        uloga("No rpc calls\n");
         return 0;
     }
 
