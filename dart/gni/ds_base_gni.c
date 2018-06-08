@@ -957,10 +957,8 @@ static int ds_master_init(struct dart_server *ds)//testing
 		goto err_out;
 	}
 
-
 	// allgather APP smsg_attr[rpc+sys]
-        gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(ds->size_sp * sizeof(gni_smsg_attr_t));
-
+    gni_smsg_attr_t *remote_smsg_rpc_array = (gni_smsg_attr_t *)malloc(ds->size_sp * sizeof(gni_smsg_attr_t));
 
 	allgather(&cur_attr_info->local_smsg_attr, remote_smsg_rpc_array, sizeof(gni_smsg_attr_t), ds->comm);
     if(ds->comm) {
