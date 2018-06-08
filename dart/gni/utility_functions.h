@@ -71,9 +71,6 @@ allgather(void *in, void *out, int len, void *comm)
     static int     *ivec_ptr = NULL;
     static int      job_size = 0;
     static int      my_rank;
-    int		    my_app_rank;
-    int		    app_job_size;
-    int		    appnum;
     char           *out_ptr;
     int             rc;
     char           *tmp_buf;
@@ -82,28 +79,28 @@ allgather(void *in, void *out, int len, void *comm)
 	    if(comm) {
 	        rc = MPI_Comm_size(*((MPI_Comm *)comm), &job_size);
             assert(rc == MPI_SUCCESS);
-
+            
             rc = MPI_Comm_rank(*((MPI_Comm *)comm), &my_rank);
             assert(rc == MPI_SUCCESS);
 
-	        ivec_ptr = (int *) malloc(sizeof(int) * job_size);
+	        ivec_ptr = malloc(sizeof(*ivec_ptr) * job_size);
             assert(ivec_ptr != NULL);
 	        rc = MPI_Allgather(&my_rank, 1, MPI_INT, ivec_ptr, 1, MPI_INT, *((MPI_Comm *)comm));
 	        assert(rc == MPI_SUCCESS);
 
-	} else {
+	    } else {
             rc = PMI_Get_size(&job_size);
             assert(rc == PMI_SUCCESS);
 
             rc = PMI_Get_rank(&my_rank);
             assert(rc == PMI_SUCCESS);
 
-            ivec_ptr = (int *) malloc(sizeof(int) * job_size);
+            ivec_ptr = malloc(sizeof(*ivec_ptr) * job_size);
             assert(ivec_ptr != NULL);
 
             rc = PMI_Allgather(&my_rank, ivec_ptr, sizeof(int));
             assert(rc == PMI_SUCCESS);
-	}
+	    }
         already_called = 1;
     }
 

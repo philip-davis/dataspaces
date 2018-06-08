@@ -544,8 +544,7 @@ char *coord_sprint(const struct coord *c, int num_dims)
     str = malloc(sizeof(*str) * (size + 1)); // add null terminator
     strcpy(str, "{");
     for(i = 0; i < num_dims; i++) {
-        char *tmp;
-        sprintf(tmp, i?", %llu":"%llu", c->c[i]);
+        char *tmp  = alloc_sprintf(i?", %llu":"%llu", c->c[i]);
         str = str_append(str, tmp);
     }
     str = str_append_const(str, "}");
