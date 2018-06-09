@@ -82,7 +82,6 @@ int main(int argc, char **argv)
 	
 	MPI_Barrier(gcomm);
 	MPI_Finalize();
-
 	return 0;
 err_out:
 	uloga("error out!\n");

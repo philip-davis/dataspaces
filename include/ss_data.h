@@ -208,6 +208,11 @@ struct hdr_obj_filter {
         struct obj_descriptor   odsc;
 } __attribute__((__packed__));
 
+/* Header structure for killing dataspace server. */
+struct hdr_dsg_kill {
+        int				kill_flag;
+} __attribute__((__packed__));
+
 /*  Header structure for sending binary codes. */
 struct hdr_bin_code {
 	/* Offset from the start of the code to the first loading
