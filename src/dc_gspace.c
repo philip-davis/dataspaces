@@ -405,7 +405,7 @@ static int qt_add_objv(struct query_tran_entry *qte, struct obj_descriptor *odsc
 
 	if (qte->f_alloc_data)
 		od = obj_data_allocv(odsc);
-	else	
+	else
 		/* No need to allocate/setup data for rexec transactions. */
 		od = obj_data_alloc_no_data(odsc, NULL);
 	if (!od)
@@ -438,7 +438,7 @@ static void qt_set(struct query_tran_entry *qte, struct obj_data *od)
 }
 */
 
-static int qte_set_odsc_from_cache(struct query_tran_entry *qte, 
+static int qte_set_odsc_from_cache(struct query_tran_entry *qte,
         const struct query_cache_entry *qce)
 {
         int err, i;
@@ -477,7 +477,7 @@ static void qce_free(struct query_cache_entry *qce)
         free(qce);
 }
 
-static void qce_set_obj_desc(struct query_cache_entry *qce, 
+static void qce_set_obj_desc(struct query_cache_entry *qce,
         struct obj_descriptor *q_obj, const struct list_head *obj_list)
 {
         struct obj_data *od;
@@ -551,26 +551,26 @@ static void qc_free(struct query_cache *qc)
   Initial code: http://www.devmaster.net/codespotlight/show.php?id=25
 */
 int instructionCount(const _u8 *func, int *size, int *off)
-{ 
+{
 	const _u8 *pfn = func;
 	int twoByte, operandSize, FPU;
 	int found_off = 0;
 
-	while (*func != 0xC3 && *func != 0xC9) { 
+	while (*func != 0xC3 && *func != 0xC9) {
 		// Skip prefixes F0h, F2h, F3h, 66h, 67h, D8h-DFh, 2Eh, 36h, 3Eh, 26h, 64h and 65h
-		operandSize = 4; 
-		FPU = 0; 
+		operandSize = 4;
+		FPU = 0;
 
-		while (*func == 0xF0 || 
-		       *func == 0xF2 || 
+		while (*func == 0xF0 ||
+		       *func == 0xF2 ||
 		       *func == 0xF3 ||
 		       *func == 0x48 ||
-		       (*func & 0xFC) == 0x64 || 
+		       (*func & 0xFC) == 0x64 ||
 		       (*func & 0xF8) == 0xD8 ||
-		       (*func & 0x7E) == 0x64) { 
+		       (*func & 0x7E) == 0x64) {
 
-			if (*func == 0x66) { 
-				operandSize = 2; 
+			if (*func == 0x66) {
+				operandSize = 2;
 			}
 			else if ((*func & 0xF8) == 0xD8) {
 				FPU = *func++;
@@ -580,50 +580,50 @@ int instructionCount(const _u8 *func, int *size, int *off)
 			func++;
 		}
 
-		// Skip two-byte opcode byte 
-		twoByte = 0; 
-		if (*func == 0x0F) { 
-			twoByte = 1; 
-			func++; 
-		} 
+		// Skip two-byte opcode byte
+		twoByte = 0;
+		if (*func == 0x0F) {
+			twoByte = 1;
+			func++;
+		}
 
-		// Skip opcode byte 
-		_u8 opcode = *func++; 
+		// Skip opcode byte
+		_u8 opcode = *func++;
 		if (!found_off && opcode == 0xC7) {
 			found_off = 1;
 			*off = func - pfn - 2;
 		}
 
-		// Skip mod R/M byte 
-		_u8 modRM = 0xFF; 
-		if (FPU) { 
-			if ((opcode & 0xC0) != 0xC0) { 
-				modRM = opcode; 
+		// Skip mod R/M byte
+		_u8 modRM = 0xFF;
+		if (FPU) {
+			if ((opcode & 0xC0) != 0xC0) {
+				modRM = opcode;
 			}
-		} 
-		else if (!twoByte) { 
-			if ((opcode & 0xC4) == 0x00 || 
-			    ((opcode & 0xF4) == 0x60 && ((opcode & 0x0A) == 0x02 || (opcode & 0x09) == 0x09)) || 
-			    (opcode & 0xF0) == 0x80 || 
-			    ((opcode & 0xF8) == 0xC0 && (opcode & 0x0E) != 0x02) || 
-			    (opcode & 0xFC) == 0xD0 || 
-			    (opcode & 0xF6) == 0xF6)  { 
-				modRM = *func++; 
-			} 
-		} 
-		else { 
-			if (((opcode & 0xF0) == 0x00 && (opcode & 0x0F) >= 0x04 && (opcode & 0x0D) != 0x0D) || 
-			    (opcode & 0xF0) == 0x30 || 
-			    opcode == 0x77 || 
-			    (opcode & 0xF0) == 0x80 || 
-			    ((opcode & 0xF0) == 0xA0 && (opcode & 0x07) <= 0x02) || 
-			    (opcode & 0xF8) == 0xC8) { 
-				// No mod R/M byte 
-			} 
-			else { 
-				modRM = *func++; 
-			} 
-		} 
+		}
+		else if (!twoByte) {
+			if ((opcode & 0xC4) == 0x00 ||
+			    ((opcode & 0xF4) == 0x60 && ((opcode & 0x0A) == 0x02 || (opcode & 0x09) == 0x09)) ||
+			    (opcode & 0xF0) == 0x80 ||
+			    ((opcode & 0xF8) == 0xC0 && (opcode & 0x0E) != 0x02) ||
+			    (opcode & 0xFC) == 0xD0 ||
+			    (opcode & 0xF6) == 0xF6)  {
+				modRM = *func++;
+			}
+		}
+		else {
+			if (((opcode & 0xF0) == 0x00 && (opcode & 0x0F) >= 0x04 && (opcode & 0x0D) != 0x0D) ||
+			    (opcode & 0xF0) == 0x30 ||
+			    opcode == 0x77 ||
+			    (opcode & 0xF0) == 0x80 ||
+			    ((opcode & 0xF0) == 0xA0 && (opcode & 0x07) <= 0x02) ||
+			    (opcode & 0xF8) == 0xC8) {
+				// No mod R/M byte
+			}
+			else {
+				modRM = *func++;
+			}
+		}
 		// Skip SIB
 		if ((modRM & 0x07) == 0x04 &&
 		    (modRM & 0xC0) != 0xC0) {
@@ -631,58 +631,58 @@ int instructionCount(const _u8 *func, int *size, int *off)
 		}
 
 		// Skip displacement
-		if ((modRM & 0xC5) == 0x05) func += 4;   // Dword displacement, no base 
-		if ((modRM & 0xC0) == 0x40) func += 1;   // Byte displacement 
-		if ((modRM & 0xC0) == 0x80) func += 4;   // Dword displacement 
+		if ((modRM & 0xC5) == 0x05) func += 4;   // Dword displacement, no base
+		if ((modRM & 0xC0) == 0x40) func += 1;   // Byte displacement
+		if ((modRM & 0xC0) == 0x80) func += 4;   // Dword displacement
 
-		// Skip immediate 
-		if (FPU) { 
-			// Can't have immediate operand 
-		} 
-		else if(!twoByte) { 
-			if ((opcode & 0xC7) == 0x04 || 
-			    (opcode & 0xFE) == 0x6A ||   // PUSH/POP/IMUL 
-			    (opcode & 0xF0) == 0x70 ||   // Jcc 
-			    opcode == 0x80 || 
-			    opcode == 0x83 || 
-			    (opcode & 0xFD) == 0xA0 ||   // MOV 
-			    opcode == 0xA8 ||            // TEST 
+		// Skip immediate
+		if (FPU) {
+			// Can't have immediate operand
+		}
+		else if(!twoByte) {
+			if ((opcode & 0xC7) == 0x04 ||
+			    (opcode & 0xFE) == 0x6A ||   // PUSH/POP/IMUL
+			    (opcode & 0xF0) == 0x70 ||   // Jcc
+			    opcode == 0x80 ||
+			    opcode == 0x83 ||
+			    (opcode & 0xFD) == 0xA0 ||   // MOV
+			    opcode == 0xA8 ||            // TEST
 			    (opcode & 0xF8) == 0xB0 ||   // MOV
-			    (opcode & 0xFE) == 0xC0 ||   // RCL 
-			    opcode == 0xC6 ||            // MOV 
-			    opcode == 0xCD ||            // INT 
-			    (opcode & 0xFE) == 0xD4 ||   // AAD/AAM 
-			    (opcode & 0xF8) == 0xE0 ||   // LOOP/JCXZ 
-			    opcode == 0xEB || 
+			    (opcode & 0xFE) == 0xC0 ||   // RCL
+			    opcode == 0xC6 ||            // MOV
+			    opcode == 0xCD ||            // INT
+			    (opcode & 0xFE) == 0xD4 ||   // AAD/AAM
+			    (opcode & 0xF8) == 0xE0 ||   // LOOP/JCXZ
+			    opcode == 0xEB ||
 			    (opcode == 0xF6 && (modRM & 0x30) == 0x00)) {  // TEST
-				func += 1; 
-			} 
-			else if((opcode & 0xF7) == 0xC2) { 
-				func += 2;   // RET 
-			} 
-			else if ((opcode & 0xFC) == 0x80 || 
-				 (opcode & 0xC7) == 0x05 || 
+				func += 1;
+			}
+			else if((opcode & 0xF7) == 0xC2) {
+				func += 2;   // RET
+			}
+			else if ((opcode & 0xFC) == 0x80 ||
+				 (opcode & 0xC7) == 0x05 ||
 				 (opcode & 0xF8) == 0xB8 ||
-				 (opcode & 0xFE) == 0xE8 ||      // CALL/Jcc 
-				 (opcode & 0xFE) == 0x68 || 
-				 (opcode & 0xFC) == 0xA0 || 
-				 (opcode & 0xEE) == 0xA8 || 
-				 opcode == 0xC7 || 
-				 (opcode == 0xF7 && (modRM & 0x30) == 0x00)) { 
-				func += operandSize; 
-			} 
-		} 
-		else { 
-			if (opcode == 0xBA ||            // BT 
-			    opcode == 0x0F ||            // 3DNow! 
-			    (opcode & 0xFC) == 0x70 ||   // PSLLW 
-			    (opcode & 0xF7) == 0xA4 ||   // SHLD 
-			    opcode == 0xC2 || 
-			    opcode == 0xC4 || 
-			    opcode == 0xC5 || 
-			    opcode == 0xC6) { 
-				func += 1; 
-			} 
+				 (opcode & 0xFE) == 0xE8 ||      // CALL/Jcc
+				 (opcode & 0xFE) == 0x68 ||
+				 (opcode & 0xFC) == 0xA0 ||
+				 (opcode & 0xEE) == 0xA8 ||
+				 opcode == 0xC7 ||
+				 (opcode == 0xF7 && (modRM & 0x30) == 0x00)) {
+				func += operandSize;
+			}
+		}
+		else {
+			if (opcode == 0xBA ||            // BT
+			    opcode == 0x0F ||            // 3DNow!
+			    (opcode & 0xFC) == 0x70 ||   // PSLLW
+			    (opcode & 0xF7) == 0xA4 ||   // SHLD
+			    opcode == 0xC2 ||
+			    opcode == 0xC4 ||
+			    opcode == 0xC5 ||
+			    opcode == 0xC6) {
+				func += 1;
+			}
 			else if((opcode & 0xF0) == 0x80) {
 				func += operandSize;   // Jcc -i
 			}
@@ -739,13 +739,13 @@ static int dcgrpc_code_reply(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	int err = -ENOENT;
 
 	qte = qt_find(&dcg->qt, hr->qid);
-	if (!qte) 
+	if (!qte)
 		goto err_out;
 
 	/* Copy  the   code  execution  result  back   on  the  result
 	   reference.  There  can be  more  than  one partial  result,
 	   depending on the object distribution in the space. */
-	memcpy((char *) qte->data_ref + qte->num_parts_rec * qte->q_obj.size, 
+	memcpy((char *) qte->data_ref + qte->num_parts_rec * qte->q_obj.size,
 		hr->pad, qte->q_obj.size);
 
 	if (++qte->num_parts_rec == qte->size_od)
@@ -787,7 +787,7 @@ static struct dcg_lock *lock_get(const char *lock_name, int should_alloc)
 		return NULL;
 
 	lock = malloc(sizeof(*lock));
-	if (!lock) 
+	if (!lock)
 		return NULL;
 	memset(lock, 0, sizeof(*lock));
 
@@ -825,7 +825,7 @@ static int dcg_lock_request(struct dcg_lock *lock, enum lock_type type)
                 goto err_out;
 
         msg->msg_rpc->cmd = cp_lock;
-        msg->msg_rpc->id = DCG_ID;      
+        msg->msg_rpc->id = DCG_ID;
 
 	lh = (struct lockhdr *) msg->msg_rpc->pad;
 	strcpy(lh->name, lock->name);
@@ -846,7 +846,7 @@ static int dcg_lock_request(struct dcg_lock *lock, enum lock_type type)
 	ERROR_TRACE();
 }
 
-/* 
+/*
    RPC routine to implement a locking service. This receives only lock
    acks.
 */
@@ -949,7 +949,7 @@ static int dcgrpc_obj_cq_update(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
                         qte->q_obj.version = odsc->version;
 
                         // uloga("'%s()': updated descriptor version %d, from %d"
-                        //      " for %d.\n", 
+                        //      " for %d.\n",
                         //      __func__, oh->odsc.version, peer->id, oh->odsc.owner);
                 }
                 else {
@@ -987,7 +987,7 @@ static int get_dht_peers_completion(struct rpc_server *rpc_s, struct msg_buf *ms
         return 0;
 }
 
-/* 
+/*
    Util function to retrieve the DHT peer ids for an object descriptor
    from the server peer. The object descriptor should be embedded in a
    query transaction entry structure.
@@ -1001,7 +1001,7 @@ static int get_dht_peers(struct query_tran_entry *qte)
 
         peer = dcg_which_peer();
         msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
-        if (!msg) 
+        if (!msg)
                 goto err_out;
 
         msg->msg_rpc->cmd = ss_obj_get_dht_peers;
@@ -1054,9 +1054,9 @@ static int get_obj_descriptors(struct query_tran_entry *qte)
                 oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
                 oh->qid = qte->q_id;
                 oh->u.o.odsc = qte->q_obj;
-                oh->rank = DCG_ID; 
+                oh->rank = DCG_ID;
                 memcpy(&oh->gdim, &qte->gdim,
-                    sizeof(struct global_dimension)); 
+                    sizeof(struct global_dimension));
 
                 qte->qh->qh_num_req_posted++;
                 err = rpc_send(dcg->dc->rpc_s, peer, msg);
@@ -1171,7 +1171,6 @@ static int dcgrpc_obj_get_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *cm
 static int obj_data_get_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
     struct query_tran_entry *qte = msg->private;
-    qte->size_od = qte->size_od/2;
     if (++qte->num_parts_rec == qte->size_od) {
         qte->f_complete = 1;
     }
@@ -1201,9 +1200,10 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
     err = qt_alloc_obj_data_shmem(qte, block_size);
     if (err < 0)
         goto err_out;
+    qte->size_od = qte->size_od/2;
     od_tab = malloc(sizeof(*od_tab) * qte->num_od);
     int shmem_flag = 0;
-     
+
     list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
         if((od_indx %(block_size*2)) < block_size){
             od_tab[od_indx] = od;
@@ -1229,11 +1229,12 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                     exit(-1);
                 }
                 memcpy(od->data, ptr, SIZE);
+                ++qte->num_parts_rec;
 
             }else{
                 peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
                 if(on_same_node(peer, dcg->dc->self)){
-        
+
                     shm_fd = shm_open(name, O_RDONLY, 0666);
                     if (shm_fd == -1) {
                         od_start_indx = od_indx - block_size;
@@ -1259,6 +1260,7 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                         }
                         memcpy(od->data, ptr, SIZE);
                     }
+                    ++qte->num_parts_rec;
 
                 }else{
                     shmem_flag = 1;
@@ -1296,7 +1298,7 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
 
 
             }
-            
+
 
         }
         od_indx++;
@@ -1407,7 +1409,7 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
 
         for (i = 0; i < oh->u.o.num_de; i++) {
                 if(i<half_sz){
-                     if (!qt_find_obj(qte, od_tab+i)){ 
+                     if (!qt_find_obj(qte, od_tab+i)){
                         err = qt_add_obj(qte, od_tab+i);
                         if (err < 0)
                                 goto err_out_free;
@@ -1465,7 +1467,7 @@ static void versions_add(int n, int versions[])
 		for (j = 0; j < dcg->num_vers; j++)
 			if (dcg->versions[j] == versions[i])
 				break;
-		if (j == dcg->num_vers) 
+		if (j == dcg->num_vers)
 			dcg->versions[dcg->num_vers++] = versions[i];
 	}
 }
@@ -1489,7 +1491,7 @@ static int dcgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
                         err = -ENOENT;
                         goto err_out;
                 }
-                qte->qh->qh_num_rep_received++; 
+                qte->qh->qh_num_rep_received++;
                 if (qte->qh->qh_num_rep_received == qte->qh->qh_num_peer)
                         qte->f_odsc_recv = 1;
                 qte->f_err = 1;
@@ -1522,9 +1524,9 @@ static int dcgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         msg->cb = obj_get_desc_completion;
         msg->private = oht;
 
-        rpc_mem_info_cache(peer, msg, cmd); 
+        rpc_mem_info_cache(peer, msg, cmd);
         err = rpc_receive_direct(rpc_s, peer, msg);
-        rpc_mem_info_reset(peer, msg, cmd);	
+        rpc_mem_info_reset(peer, msg, cmd);
         if (err == 0)
                 return 0;
 
@@ -1608,7 +1610,7 @@ static void time_log(int id, double time_tab[], int n)
         // fflush(stdout);
 }
 
-/* 
+/*
    Routine to log remote timing information. 
 */
 static int dcgrpc_time_log(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
@@ -1651,8 +1653,8 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
         rpc_add_service(ss_code_reply, dcgrpc_code_reply);
 #endif
         /* Added for ccgrid demo. */
-        rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);	
-	
+        rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);
+
         dcg_l->dc = dc_alloc(num_nodes, appid, dcg_l, comm);
         if (!dcg_l->dc) {
                 free(dcg_l);
@@ -1660,7 +1662,7 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
         }
 
         INIT_LIST_HEAD(&dcg_l->locks_list);
-        init_gdim_list(&dcg_l->gdim_list);    
+        init_gdim_list(&dcg_l->gdim_list);
         qc_init(&dcg_l->qc);
         dcg_l->hash_version = ssd_hash_version_v1; // set default hash version
 
@@ -1704,7 +1706,7 @@ int dcg_obj_put(struct obj_data *od)
 {
         struct msg_buf *msg;
         struct node_id *peer;
-        struct hdr_obj_put *hdr; 
+        struct hdr_obj_put *hdr;
         int sync_op_id;
         int err = -ENOMEM;
 
@@ -1749,7 +1751,7 @@ int dcg_obj_put(struct obj_data *od)
         return err;
 }
 
-/* 
+/*
    Register a region for continuous queries and return the transaction
    id; it will be used for transaction completion checks.
 */
@@ -1859,7 +1861,7 @@ int dcg_obj_sync(int sync_op_id)
 int dcg_obj_get(struct obj_data *od)
 {
 
-/*    
+/*
 char name[200];
 convert_to_string(&od->obj_desc, name);
 int shm_fd;
@@ -2093,7 +2095,7 @@ int dcg_get_num_peers(struct dcg_space *dcg)
 }
 
 int dcg_get_num_servers(struct dcg_space *dcg)
-{  
+{
    return dcg->dc->num_sp;
 }
 
@@ -2102,7 +2104,7 @@ int dcg_get_num_space_peers(struct dcg_space *dcg)
 	return dcg->dc->num_sp;
 }
 
-/* 
+/*
    Routine     to    log    the     timer    values.      Format    is
    "node_id,timer1[,timer2,...]"   the  sequence  and the  values  are
    arranged by the application and have the purpose of post-processing
@@ -2188,7 +2190,7 @@ int dcg_lock_on_read(const char *lock_name, void *comm)
 	int myid, app_minid;
 
 	lock = lock_get(lock_name, 1);
-	if (!lock) 
+	if (!lock)
 		goto err_out;
 
 	if (comm == NULL) {
@@ -2358,8 +2360,8 @@ int dcg_unlock_on_write(const char *lock_name, void *comm)
 
 #ifdef DS_HAVE_ACTIVESPACE
 // TODO: move this to the non public API area !
-static int 
-dcg_code_rexec_at_peers(const void *fn_addr, int size, int off, 
+static int
+dcg_code_rexec_at_peers(const void *fn_addr, int size, int off,
 			struct query_tran_entry *qte)
 {
 	struct node_id *peer;
@@ -2463,7 +2465,7 @@ int dcg_rexe_voidfunc_exec(const void *addr)
 	int size, off;
 
 	instructionCount(addr, &size, &off);
-	// TODO : continue from here ... 
+	// TODO : continue from here ...
 	return 0;
 }
 #endif // end of #ifdef DS_HAVE_ACTIVESPACE
@@ -2478,7 +2480,7 @@ int dcg_collect_timing(double time, double *sum_ptr)
 	struct msg_buf *msg;
 	struct hdr_timing *ht;
 	int i, err;
-	
+
 	if (dcg->dc->cp_min_rank == DCG_ID) {
 		DC_WAIT_COMPLETION(
 			demo_num_timing_recv == dcg->dc->cp_in_job-1);
@@ -2486,14 +2488,14 @@ int dcg_collect_timing(double time, double *sum_ptr)
 		demo_sum_timing += time;
 
 		if (sum_ptr)
-			*sum_ptr = demo_sum_timing;	
+			*sum_ptr = demo_sum_timing;
 
 		demo_num_timing_recv = 0;
-		demo_sum_timing = 0;		
+		demo_sum_timing = 0;
 
 		return 0;
 	}
-	
+
 	peer = dc_get_peer(dcg->dc, dcg->dc->cp_min_rank);
 	msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
 	if (!msg) {
@@ -2502,7 +2504,7 @@ int dcg_collect_timing(double time, double *sum_ptr)
 	}
 
 	msg->msg_rpc->cmd = CN_TIMING_AVG;
-	msg->msg_rpc->id = DCG_ID;	
+	msg->msg_rpc->id = DCG_ID;
 
 	ht = (struct hdr_timing *) msg->msg_rpc->pad;
 	ht->time_tab[0] = time;
