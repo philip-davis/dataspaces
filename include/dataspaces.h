@@ -75,6 +75,13 @@ int dspaces_init(int num_peers, int appid, void *comm, const char *parameters);
  */
 void dspaces_finalize (void);
 
+
+/**
+ * @brief Kill dataspaces servers.
+ *
+ * @return  Void.
+ */
+void dspaces_kill (void);
 /**
  * @brief Return the rank for current process.
  *

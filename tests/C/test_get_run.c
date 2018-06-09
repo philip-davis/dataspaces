@@ -203,7 +203,10 @@ int test_get_run(enum transport_type type, int npapp, int ndims, int* npdim, uin
 	}
 
 	MPI_Barrier(gcomm_);
-
+    if(rank_== 0){
+    	common_kill();
+    	uloga("Kill Request Sent\n");
+    }
 	int ds_rank = common_rank();
 	tm_st = timer_read(&timer_);
 	common_finalize();

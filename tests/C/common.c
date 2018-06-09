@@ -148,6 +148,9 @@ void common_finalize() {
         dspaces_finalize();
 }
 
+void common_kill() {
+        dspaces_kill();
+}
 void common_lock_on_read(const char *lock_name, void *gcomm) {
         dspaces_lock_on_read(lock_name, gcomm);
 }

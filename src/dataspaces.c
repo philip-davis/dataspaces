@@ -170,6 +170,11 @@ void dspaces_finalize(void)
 	common_dspaces_finalize();
 }
 
+void dspaces_kill(void)
+{
+	common_dspaces_kill();
+}
+
 #ifdef DS_HAVE_DIMES
 int dimes_put_sync_all(void)
 {

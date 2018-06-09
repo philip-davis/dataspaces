@@ -617,6 +617,11 @@ void common_dspaces_finalize(void)
     dcg = 0;
 }
 
+void common_dspaces_kill(void)
+{
+	dcgrpc_kill(dcg);
+}
+
 #ifdef DS_HAVE_DIMES
 void common_dimes_define_gdim(const char *var_name, int ndim, uint64_t *gdim)
 {

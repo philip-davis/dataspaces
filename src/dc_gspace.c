@@ -1571,6 +1571,38 @@ void dcg_free(struct dcg_space *dcg)
     free(dcg);
 }
 
+void dcgrpc_kill(struct dcg_space *dcg)
+{
+
+	int peer_id;
+	struct node_id *peer;
+	struct hdr_dsg_kill *hdr;
+	struct msg_buf *msg;
+	int err;
+	for(peer_id = 0; peer_id < dcg->dc->num_sp; peer_id++){
+	            peer = dc_get_peer(dcg->dc, peer_id);
+	            int sync_op_id = syncop_next();
+				msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+				if (!msg)
+						exit(-1);
+				msg->sync_op_id = syncop_ref(sync_op_id);
+
+				msg->msg_rpc->cmd = ss_kill;
+				msg->msg_rpc->id = DCG_ID; // dcg->dc->self->id;
+
+				hdr = msg->msg_rpc->pad;
+				hdr->kill_flag = 1;
+				err = rpc_send(dcg->dc->rpc_s, peer, msg);
+				if (err < 0) {
+						free(msg);
+						uloga("RPC for kill failed with %d\n", err);
+						exit(-1);
+				}
+				//dcg_inc_pending();
+
+	}
+}
+
 /*
 */
 int dcg_obj_put(struct obj_data *od)

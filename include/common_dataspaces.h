@@ -78,6 +78,7 @@ int common_dspaces_remove (const char *var_name, unsigned int ver);
 
 int common_dspaces_put_sync(void);
 void common_dspaces_finalize (void);
+void common_dspaces_kill (void);
 int common_dspaces_get_num_space_server(void);
 
 #ifdef DS_HAVE_DIMES
