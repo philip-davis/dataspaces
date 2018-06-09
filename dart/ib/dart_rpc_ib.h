@@ -412,7 +412,8 @@ enum cmd_type {
     //Added for CCGrid Demo
 	CN_TIMING_AVG,
 	_CMD_COUNT,
-	cn_s_unregister
+	cn_s_unregister,
+	ss_kill
 };
 
 enum lock_type {
