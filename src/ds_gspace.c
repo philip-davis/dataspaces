@@ -1087,8 +1087,7 @@ static int sem_process_wait_list(struct dsg_lock *dl)
 
                 case la_notify:
                         uloga("'%s()': error unexpected notify rquest "
-                              "from wait list.\n", __func__);
-
+                              "from wait list.\n", __func__); // @suppress("No break at end of case")
                 case la_wait:
                 case la_none:
                         break;
@@ -1775,7 +1774,7 @@ static void request_lbub_predict(int var_id, char *request_name, char *predicted
             while(inner_head->next!= NULL){
                 traverser = inner_head;
                 cntr++;
-                char *local_string = (char *)malloc(sizeof(char)*1000);
+                char  local_string[1000];
                 memset(local_string, '\0', sizeof(local_string));
                 strcpy(local_string, traverser->var_name);
                 while(traverser->next->next !=NULL){
@@ -2039,7 +2038,6 @@ static int dsg_internal_rpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cm
 static int obj_data_get_completion_internal(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
     struct query_tran_entry *qte = msg->private;
-    qte->size_od = qte->size_od/2;
     if (++qte->num_parts_rec == qte->size_od) {
         qte->f_complete = 1;
     }
@@ -2065,6 +2063,7 @@ static int dsg_internal_obj_data_get(struct query_tran_entry *qte)
     err = qt_alloc_obj_data_shmem(qte, block_size);
     if (err < 0)
         goto err_out;
+    qte->size_od = qte->size_od/2;
     od_tab = malloc(sizeof(*od_tab) * qte->num_od);
     int shmem_flag = 0;
      
@@ -2073,22 +2072,21 @@ static int dsg_internal_obj_data_get(struct query_tran_entry *qte)
             od_tab[od_indx] = od;
         }
         else{
-
             convert_to_string(&od->obj_desc, name);
             int shm_fd;
             void *ptr;
             int SIZE;
             shm_fd = shm_open(name, O_RDONLY, 0666);
             if(shm_fd != -1){
-                //the data has been already prefetched on the local node
                 SIZE = obj_data_size(&od->obj_desc);
-                            /* now map the shared memory segment in the address space of the process */
+                /* now map the shared memory segment in the address space of the process */
                 ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
                 if (ptr == MAP_FAILED) {
                     printf("Map failed\n");
                     exit(-1);
                 }
                 memcpy(od->data, ptr, SIZE);
+                qte->qh->qh_num_rep_received++;
 
             }else{
                 peer = ds_get_peer(dsg->ds, od->obj_desc.owner);
@@ -2119,8 +2117,10 @@ static int dsg_internal_obj_data_get(struct query_tran_entry *qte)
                         }
                         memcpy(od->data, ptr, SIZE);
                     }
+                    qte->qh->qh_num_rep_received++;
 
                 }else{
+                	uloga("Sending rpc calls to prefetch object data\n");
                     shmem_flag = 1;
                     err = -ENOMEM;
                     msg = msg_buf_alloc(dsg->ds->rpc_s, peer, 1);
@@ -2198,7 +2198,7 @@ static int server_prefetch_dht_peers( const struct obj_descriptor *odsc_pref, co
         uloga("Checking shared memory for object %s\n", name);
         shm_fd = shm_open(name, O_RDONLY, 0666);
         uloga("shmfd_value %d\n", shm_fd);
-        if(shm_fd == -1 && (odsc_pref->version < 6)){
+        if(shm_fd == -1){
             od = shmem_obj_data_alloc(odsc_pref, DSG_ID);
             if (!od) {
                 uloga("'%s()': failed, can not allocate data object.\n", 
@@ -2206,16 +2206,16 @@ static int server_prefetch_dht_peers( const struct obj_descriptor *odsc_pref, co
                 return -ENOMEM;
             }
              memcpy(&od->gdim, gd, sizeof(struct global_dimension));
-             uloga("Before qte alloc\n");
             qte = qte_alloc(od, 1);
             if (!qte)
                     goto err_out;
             qt_add(&dsg->qt, qte);
             qte->qh->qh_num_peer = peer_num;
             for (i = 0; i < peer_num; i++){
+            	uloga("Checking with peer %d\n", i);
                 struct node_id *peer = ds_get_peer(dsg->ds, de_tab[i]->rank);
                 if (peer == dsg->ds->self) {
-                        uloga("Self server, no rpc needed for obj_desc, search for obj_descriptor\n");
+                        uloga("Self server, no rpc needed for obj_desc, search for obj_descriptor to assemble\n");
                         const struct obj_descriptor *podsc[ssd->ent_self->odsc_num];
                         int obj_versions[ssd->ent_self->odsc_size];
                         struct obj_descriptor odsc, *odsc_tab;
@@ -2236,7 +2236,7 @@ static int server_prefetch_dht_peers( const struct obj_descriptor *odsc_pref, co
                             odsc_tab[j+num_odsc] = odsc;
                             bbox_intersect(&(odsc_pref->bb), &odsc.bb, &odsc.bb);
                             odsc_tab[j] = odsc;
-                            uloga("Now send rpc request for these object descriptors\n");
+                            //uloga("Now send rpc request for these object descriptors\n");
                         }
                         qte->qh->qh_num_rep_received++;
                         qte->size_od += num_odsc*2;
@@ -2281,11 +2281,8 @@ static int server_prefetch_dht_peers( const struct obj_descriptor *odsc_pref, co
                     goto out_no_data;
                 else    goto err_qt_free;
             }
-            uloga("Before DSG Wait completion\n");
             DS_WAIT_COMPLETION(qte->f_odsc_recv == 1);
-            uloga("Before internal obj_data_get\n");
             err = dsg_internal_obj_data_get(qte);
-            uloga("After internal data get\n");
             if (err < 0) {
                     // FIXME: should I jump to err_qt_free ?
                     qt_free_obj_data(qte, 1);
@@ -2297,7 +2294,7 @@ static int server_prefetch_dht_peers( const struct obj_descriptor *odsc_pref, co
 
 
             /* Wait for transaction to complete. */
-            uloga("Before qte_fcomplete\n");
+            //uloga("Before qte_fcomplete\n");
             while (! qte->f_complete) {
                     err = ds_process(dsg->ds);
                     if (err < 0) {
@@ -2310,16 +2307,11 @@ static int server_prefetch_dht_peers( const struct obj_descriptor *odsc_pref, co
                     err = -ENODATA;
                     goto out_no_data;
             }
-            uloga("Before internal assemble\n");
              err = internal_obj_assemble(qte, od);
-            uloga("After internal assemble\n");
          out_no_data:
                 qt_free_obj_data_shmem(qte, 1);
-                uloga("After free\n");
                 qt_remove(&dsg->qt, qte);
-                uloga("After remove\n");
                 free(qte);
-                uloga("After internal qte\n");
 
                 return err;
          err_data_free:
@@ -2338,6 +2330,7 @@ static int server_prefetch_dht_peers( const struct obj_descriptor *odsc_pref, co
 /*
   RPC routine to return the peer ids corresponding to DHT entries that
   have object descriptors for the data object being queried.
+  Learning of the read pattern happens here
 */
 static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
@@ -2357,22 +2350,14 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
                 goto err_out;
         for (i = 0; i < peer_num; i++){
                 peer_id_tab[i] = de_tab[i]->rank;
-                //uloga("Id in peer tab %d \n", peer_id_tab[i]);
             }
-            //Pradeep
-            //Learn the object descriptor here and push it down to another thread for prefetching from other servers as replicas
-            //each peer has its own n-gram. This n-gram uses the object's name and then breaks down into the version and lower and upper bounds
         char curr_name[200];
         char pred_name[200];
         char curr_peer[200];
         sprintf(curr_peer,"%d", peer->ptlmap.id);
         convert_to_string_no_version(&oh->u.o.odsc, curr_name);
         request_lbub_predict(peer->ptlmap.id, curr_name, pred_name);
-        //uloga("Predicted request for peer %d is %s in server ID %d\n", peer->ptlmap.id, pred_name, dsg->ds->self->ptlmap.id);
-        //peer_predict(curr_peer, pred_peer);
-        //uloga("Predicted peer is %s\n", pred_peer);
-
-        //prefetch here
+        //prefetch the predicted object and assemble
         if(strcmp(pred_name, "0000")!=0){
             struct obj_descriptor pref_odsc = {
                 .version = (oh->u.o.odsc.version)+1,
@@ -2404,18 +2389,24 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
                 i++;
                 pch = strtok (NULL, "_");
             }
-            convert_to_string(&oh->u.o.odsc, curr_peer);
-            uloga("Curr_obj is %s ", curr_peer);
-            convert_to_string(&pref_odsc, curr_peer);
-            uloga(" Predicted odsc is %s with version %d\n", curr_peer, pref_odsc.version);
+            //convert_to_string(&oh->u.o.odsc, curr_peer);
+            //uloga("Curr_obj is %s ", curr_peer);
+            //convert_to_string(&pref_odsc, curr_peer);
+            //uloga(" Predicted odsc is %s with version %d\n", curr_peer, pref_odsc.version);
             server_prefetch_dht_peers(&pref_odsc, &oh->gdim);
-                //Another thread also listens to updating or invalidating any of the prefetched objects
+                //Another thread also listens to updating or invalidating any of the pre-fetched objects
 
         }
-        uloga("After prefetching\n");
+        //uloga("After prefetching\n");
+        int shm_fd;
+        shm_fd = shm_open(curr_name, O_RDONLY, 0666);
+        if (shm_fd !=-1){
+        	//uloga("Current Object is already prefetched\n");
+        	//this is indicate that client should directly copy data from current server
+        	peer_id_tab[0]=-2;
+        }
         /* The -1 here  is a marker for the end of the array. */
         peer_id_tab[peer_num] = -1;
-
         msg = msg_buf_alloc(rpc_s, peer, 1);
         if (!msg) {
                 free(peer_id_tab);
@@ -2920,7 +2911,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	 free(str);
  }
 #endif
-        uloga("Received RPC in server %d\n", DSG_ID);
+        //uloga("Received RPC in server %d\n", DSG_ID);
 
         // CRITICAL: use version here !!!
         from_obj = ls_find(dsg->ls, &oh->u.o.odsc);
@@ -2978,6 +2969,52 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
  err_out:
         uloga("'%s()': failed with %d.\n", __func__, err);
         return err;
+}
+
+static int obj_prefetch_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+        free(msg);
+        return 0;
+}
+
+static int dsgrpc_obj_copy(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+		struct hdr_obj_prefetch *oh = (struct hdr_obj_prefetch *) cmd->pad;
+		struct node_id *peer;
+		struct msg_buf *msg;
+		int shm_fd;
+		void *ptr;
+		int SIZE;
+		char name[200];
+		int err = -ENOMEM;
+		peer = ds_get_peer(dsg->ds, cmd->id);
+		msg = msg_buf_alloc(rpc_s, peer, 0);
+		if (!msg) {
+				goto err_out;
+		}
+		convert_to_string(&oh->odsc, name);
+		shm_fd = shm_open(name, O_RDONLY, 0666);
+		if(shm_fd != -1){
+			SIZE = obj_data_size(&oh->odsc);
+			ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
+			if (ptr == MAP_FAILED) {
+				printf("Map failed\n");
+				exit(-1);
+			}
+			msg->msg_data = ptr;
+			msg->size = SIZE;
+			msg->cb = obj_prefetch_completion;
+			rpc_mem_info_cache(peer, msg, cmd);
+			err = rpc_send_direct(rpc_s, peer, msg);
+			rpc_mem_info_reset(peer, msg, cmd);
+			if (err == 0)
+			       return 0;
+		}
+		uloga("Failed to open object_descriptor\n");
+
+err_out:
+		uloga("'%s()': failed with %d.\n", __func__, err);
+		return err;
 }
 
 /*
@@ -3118,8 +3155,9 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name, void *comm)
         dsg = dsg_l = malloc(sizeof(*dsg_l));
         if (!dsg_l)
                 goto err_out;
-
+        qt_init(&dsg_l->qt);
         rpc_add_service(ss_obj_get_dht_peers, dsgrpc_obj_send_dht_peers);
+		rpc_add_service(get_prefetched_data, dsgrpc_obj_copy);
         rpc_add_service(ss_obj_get_desc, dsgrpc_obj_get_desc);
         rpc_add_service(ss_obj_send_desc, dsg_internal_rpc_obj_get_desc);
         rpc_add_service(ss_obj_get_desc_internal, dsgrpc_server_obj_get_desc);
@@ -3149,7 +3187,7 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name, void *comm)
         }
 
         dsg_l->ls = ls_alloc(ds_conf.max_versions);
-        dsg_l->ls_prefetch = ls_alloc(ds_conf.max_versions);
+        //dsg_l->ls_prefetch = ls_alloc(ds_conf.max_versions);
         if (!dsg_l->ls) {
             uloga("%s(): ERROR ls_alloc() failed\n", __func__);
             goto err_free;

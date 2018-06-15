@@ -1379,7 +1379,8 @@ struct obj_data *shmem_obj_data_alloc(struct obj_descriptor *odsc, int id)
     int shm_fd;
     void *ptr;
     int SIZE;
-
+    //unlink any existing object
+    shm_unlink(name);
     /* create the shared memory segment */
     shm_fd = shm_open(name, O_CREAT | O_RDWR, 0666);
 

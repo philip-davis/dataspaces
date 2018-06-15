@@ -413,7 +413,8 @@ enum cmd_type {
 	_CMD_COUNT,
 	cn_s_unregister,
 	ss_obj_get_desc_internal,
-    ss_obj_send_desc
+    ss_obj_send_desc,
+	get_prefetched_data
 };
 
 enum lock_type {

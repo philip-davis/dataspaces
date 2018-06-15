@@ -110,7 +110,11 @@ struct query_tran_entry {
                     f_peer_received:1,
                     f_odsc_recv:1,
                     f_complete:1,
-                    f_err:1;
+                    f_err:1,
+					f_node_local:1, //this indicates that the whole object descriptor that you asked
+        			//is available on the server that you are connected to
+					f_data_received:1;
+
         int num_peers;
 };
 
@@ -981,6 +985,10 @@ static int get_dht_peers_completion(struct rpc_server *rpc_s, struct msg_buf *ms
                 i++;
         qte->qh->qh_num_peer = i;
         qte->f_peer_received = 1;
+        //check if the data is local to the attached server
+        if(qte->qh->qh_peerid_tab[0]==-2){
+        	qte->f_node_local = 1;
+        }
 
         free(msg);
 
@@ -1026,6 +1034,44 @@ static int get_dht_peers(struct query_tran_entry *qte)
         ERROR_TRACE();
 }
 
+static int obj_prefetch_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+		uloga("Finished receiving the prefetched data\n");
+		struct query_tran_entry *qte = msg->private;
+		qte->f_data_received = 1;
+        free(msg);
+        return 0;
+}
+
+static int get_node_local_data(struct obj_data *od, struct query_tran_entry *qte)
+{
+        struct hdr_obj_prefetch *oh;
+        struct msg_buf *msg;
+        struct node_id *peer;
+        int err = -ENOMEM;
+
+        peer = dcg_which_peer();
+        msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+        if (!msg)
+                goto err_out;
+
+        msg->msg_rpc->cmd = get_prefetched_data;
+        msg->msg_rpc->id = DCG_ID;
+        msg->msg_data = od->data;
+        msg->size = obj_data_size(&od->obj_desc);
+        msg->cb = obj_prefetch_completion;
+        msg->private = qte;
+
+        oh = (struct hdr_obj_prefetch *) msg->msg_rpc->pad;
+        oh->odsc = od->obj_desc;
+        err = rpc_receive(dcg->dc->rpc_s, peer, msg);
+        if (err == 0)
+                return 0;
+
+        free(msg);
+ err_out:
+        ERROR_TRACE();
+}
 /*
   Util function to retrieve the object descriptors from DHT peers for
   the object parts that intersect with the object descriptor in the
@@ -1860,29 +1906,6 @@ int dcg_obj_sync(int sync_op_id)
 */
 int dcg_obj_get(struct obj_data *od)
 {
-
-/*
-char name[200];
-convert_to_string(&od->obj_desc, name);
-int shm_fd;
-void *ptr;
-int SIZE;
-shm_fd = shm_open(name, O_RDONLY, 0666);
-if (shm_fd != -1) {
-    //read the file locally without any rpc call
-    SIZE = obj_data_size(&od->obj_desc);
-    ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
-    if (ptr == MAP_FAILED) {
-        printf("Map failed\n");
-        exit(-1);
-    }
-    memcpy(od->data, ptr, SIZE);
-    uloga("No rpc calls\n");
-    return 0;
-}
-
-*/
-
     struct query_tran_entry *qte;
     const struct query_cache_entry *qce;
     int err = -ENOMEM;
@@ -1915,6 +1938,42 @@ if (shm_fd != -1) {
         if (err < 0)
             goto err_qt_free;
         DC_WAIT_COMPLETION(qte->f_peer_received == 1);
+        //now check if past read request had prefetched the current request
+        //we do this after get_dht_peers because every request has to be sent to server
+        //to prefetch next request.
+        char name[200];
+        convert_to_string(&od->obj_desc, name);
+        int shm_fd;
+        void *ptr;
+        int SIZE;
+        shm_fd = shm_open(name, O_RDONLY, 0666);
+        if (shm_fd != -1) {
+            //read the file locally without any rpc call
+            SIZE = obj_data_size(&od->obj_desc);
+            ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
+            if (ptr == MAP_FAILED) {
+                printf("Map failed\n");
+                exit(-1);
+            }
+            memcpy(od->data, ptr, SIZE);
+            uloga("Finished with 1 rpc call\n");
+            qt_remove(&dcg->qt, qte);
+			free(qte);
+			return 0;
+
+        }
+        if(qte->f_node_local == 1){
+        	//the data was prefetched, but current client is in separate node than server
+        	err=get_node_local_data(od, qte);
+        	if(err<0){
+        		goto err_qt_free;
+        	}
+        	uloga("Finished with 2 rpc calls\n");
+        	DC_WAIT_COMPLETION(qte->f_data_received == 1);
+        	qt_remove(&dcg->qt, qte);
+        	free(qte);
+        	return 0;
+        }
 
         err = get_obj_descriptors(qte);
         if (err < 0) {

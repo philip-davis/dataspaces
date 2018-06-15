@@ -204,6 +204,11 @@ struct hdr_obj_put {
     struct global_dimension gdim;
 } __attribute__((__packed__));
 
+
+/* Header structure for obj_prefetch requests. */
+struct hdr_obj_prefetch {
+    struct obj_descriptor odsc;
+} __attribute__((__packed__));
 /* Header structure for obj_filter requests. */
 struct hdr_obj_filter {
         int                     qid;
