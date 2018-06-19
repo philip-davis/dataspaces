@@ -81,6 +81,7 @@ char *alloc_sprintf(const char *fmt_str, ...)
     va_start(va_args, fmt_str);
     size = vsnprintf(NULL, 0, fmt_str, va_args);
     str = malloc(sizeof(*str) * (size + 1));
+    va_start(va_args, fmt_str);
     vsprintf(str, fmt_str, va_args); 
     va_end(va_args);
 
