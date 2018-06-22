@@ -1,7 +1,10 @@
 #include "MapWrap.hh"
 #include <stdio.h>
 #include<string.h>
+#include <pthread.h>
 using namespace std;
+
+pthread_mutex_t map_lock = PTHREAD_MUTEX_INITIALIZER;
 
 template <typename A, typename B>
 multimap<B, A> flip_map(map<A,B> & src) {
@@ -92,30 +95,40 @@ MapOnly::MapOnly(int i){
 }
 
 int MapOnly::ml_insert(const char *var, int arr_index){
-
+	pthread_mutex_lock(&map_lock);
 	string var_name(var);
-	
 	map <string, int>::iterator it;
 	it=cMap.find(var_name);
 	if(it == cMap.end()){
 		//variable doesn't exist
 		cMap.insert(pair<string, int> (var_name, arr_index));
+		pthread_mutex_unlock(&map_lock);
 		return 0;
 	}
+	pthread_mutex_unlock(&map_lock);
 	return 1;
 		
 }
 
-int MapOnly::ml_update(const char *var, int arr_index){
+void MapOnly::ml_delete(const char *var){
+	pthread_mutex_lock(&map_lock);
+	string var_name(var);
+	cMap.erase(var_name);
+	pthread_mutex_unlock(&map_lock);
+}
 
+int MapOnly::ml_update(const char *var, int arr_index){
+	pthread_mutex_lock(&map_lock);
 	string var_name(var);
 	cMap[var_name]++;
+	pthread_mutex_unlock(&map_lock);
 	return 1;
 
 }
 
 
 int MapOnly::ml_get_id(const char *var){
+	pthread_mutex_lock(&map_lock);
 	int arr_index = 0;
 	string var_name(var);
 	map <string, int>::iterator it;
@@ -123,7 +136,8 @@ int MapOnly::ml_get_id(const char *var){
 	if(it != cMap.end()){
 		arr_index = it->second;
 	}
-	return arr_index;
+	pthread_mutex_unlock(&map_lock);
+		return arr_index;
 }
 
 PredictOnly::PredictOnly(int i){

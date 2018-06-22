@@ -16,6 +16,7 @@ class MapWrap {
 class MapOnly {
         public:
                 int ml_insert(const char *pred, int i);
+                void ml_delete(const char *pred);
                 int ml_update(const char *pred, int i);
                 int ml_get_id(const char *pred);
                 MapOnly(int i);

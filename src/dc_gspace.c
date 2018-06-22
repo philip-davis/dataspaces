@@ -1946,7 +1946,9 @@ int dcg_obj_get(struct obj_data *od)
         int shm_fd;
         void *ptr;
         int SIZE;
+        //uloga("Opening shared memory %s\n", name);
         shm_fd = shm_open(name, O_RDONLY, 0666);
+        //uloga("Shm_fd %d\n", shm_fd);
         if (shm_fd != -1) {
             //read the file locally without any rpc call
             SIZE = obj_data_size(&od->obj_desc);
@@ -1956,7 +1958,7 @@ int dcg_obj_get(struct obj_data *od)
                 exit(-1);
             }
             memcpy(od->data, ptr, SIZE);
-            uloga("Finished with 1 rpc call\n");
+            uloga("Finished with 1 rpc call %s\n", name);
             qt_remove(&dcg->qt, qte);
 			free(qte);
 			return 0;
@@ -1968,7 +1970,7 @@ int dcg_obj_get(struct obj_data *od)
         	if(err<0){
         		goto err_qt_free;
         	}
-        	uloga("Finished with 2 rpc calls\n");
+        	uloga("Finished with 2 rpc calls %s\n", name);
         	DC_WAIT_COMPLETION(qte->f_data_received == 1);
         	qt_remove(&dcg->qt, qte);
         	free(qte);

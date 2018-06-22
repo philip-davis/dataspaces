@@ -33,12 +33,17 @@ extern "C" {
 
 	int arr_insert( const OnlyMap *test, const char *pred, int arr){
 		MapOnly *t = (MapOnly*)test;
-		t->ml_insert(pred, arr);
+		return t->ml_insert(pred, arr);
 	}
+
+	void arr_delete_item( const OnlyMap *test, const char *pred){
+			MapOnly *t = (MapOnly*)test;
+			t->ml_delete(pred);
+		}
 
 	int arr_update( const OnlyMap *test, const char *pred, int arr){
 		MapOnly *t = (MapOnly*)test;
-		t->ml_update(pred, arr);
+		return t->ml_update(pred, arr);
 	}
 
 	int arr_value(const OnlyMap *test, const char *pred){

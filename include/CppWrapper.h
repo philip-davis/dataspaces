@@ -12,6 +12,7 @@ extern "C" {
 
 	OnlyMap * map_only(int i);
 	int arr_insert( const OnlyMap *t, const char *pred, int arr);
+	void arr_delete_item( const OnlyMap *t, const char *pred);
 	int arr_update( const OnlyMap *t, const char *pred, int arr);
 	int arr_value(const OnlyMap *t, const char *pred);
 	void arr_delete(OnlyMap *t);

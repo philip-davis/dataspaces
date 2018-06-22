@@ -37,6 +37,8 @@
 #include "dart.h"
 #include "ss_data.h"
 
+#define MAX_PREFETCH 48
+
 struct query_tran {
         struct list_head        q_list;
         int                     num_ent;
@@ -81,5 +83,7 @@ int dsghlp_get_rank(struct ds_gspace *);
 int dsghlp_all_sp_joined(struct ds_gspace *);
 
 int dsg_barrier(struct ds_gspace *);
+
+void *prefetch_thread(void*);
 
 #endif /* __DS_GSPACE_H_ */

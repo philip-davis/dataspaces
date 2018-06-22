@@ -1379,8 +1379,6 @@ struct obj_data *shmem_obj_data_alloc(struct obj_descriptor *odsc, int id)
     int shm_fd;
     void *ptr;
     int SIZE;
-    //unlink any existing object
-    shm_unlink(name);
     /* create the shared memory segment */
     shm_fd = shm_open(name, O_CREAT | O_RDWR, 0666);
 
@@ -1559,13 +1557,14 @@ void shmem_obj_data_free(struct obj_data *od)
     SIZE = obj_data_size(&od->obj_desc);
     od->_data = od->data = NULL;
 
-    /* remove the shared memory segment from the file system */
+    /* remove the shared memory segment from the file system
   if (shm_unlink(name) == -1) {
     printf("cons: Error removing %s: %s\n", name, strerror(errno));
     exit(1);
   }else{
     printf("Unlinked shared object\n");
   }
+  */
 }
 
 uint64_t obj_data_size(struct obj_descriptor *obj_desc)

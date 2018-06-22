@@ -304,6 +304,7 @@ int rpc_write_config(struct rpc_server *rpc_s, const char *filename);
 int rpc_read_config(struct sockaddr_in *address, const char *filename);
 int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer);
 int rpc_process_event(struct rpc_server *rpc_s);
+int rpc_process_event_peer(struct rpc_server *rpc_s, struct node_id *peer);
 int rpc_barrier(struct rpc_server *rpc_s, void *comm);
 int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg);
 int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg);
