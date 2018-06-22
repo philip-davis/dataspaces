@@ -51,12 +51,6 @@
 pthread_mutex_t pmutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  pcond = PTHREAD_COND_INITIALIZER;
 
-pthread_mutex_t prefetch_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t  prefetch_cond = PTHREAD_COND_INITIALIZER;
-
-pthread_mutex_t process_rpc = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t rpc_lock = PTHREAD_MUTEX_INITIALIZER;
-
 #define DS_WAIT_COMPLETION(x)                                   \
 		while (!(x)) {                                          \
 				uloga("Entering ds_process in marco\n");		\
@@ -2409,45 +2403,67 @@ insert a node into the tail of prefetch circle array list.
 
 int prefetch_odesc_insert_tail(struct obj_descriptor * pod, const struct global_dimension* gd){
 
-    prefetch_list *curr_node;
+	char name [200];
+	prefetch_list *curr_node;
     curr_node = (prefetch_list *) malloc(sizeof(prefetch_list));
     curr_node->gd = gd;
     curr_node->pref_od = pod;
     curr_node->next = NULL;
-    if(prefetch_head==NULL){
+    convert_to_string(curr_node->pref_od, name);
+    uloga("Inserting %s\n", name);
+    if(prefetch_head == NULL){
     	prefetch_head = curr_node;
+    	convert_to_string(prefetch_head->pref_od, name);
+    	uloga("Head is NULL %s\n", name);
     }else{
-    	prefetch_head->next=curr_node;
+    	prefetch_list *temp;
+    	convert_to_string(prefetch_head->pref_od, name);
+    	uloga("Head is not NULL %s ", name);
+    	temp = prefetch_head;
+    	while (temp->next != NULL) {
+    		    temp = temp->next;
+    		    convert_to_string(temp->pref_od, name);
+    		    uloga("%s ", name);
+    	}
+    	temp->next = curr_node;
+    	convert_to_string(curr_node->pref_od, name);
+    	    		    uloga("%s \n", name);
     }
-    char name [200];
-        convert_to_string(pod, name);
-        uloga("Inserted in prefetch list %s\n", name);
+    uloga("In prefetch list ");
+    prefetch_list *temp_traverse;
+    temp_traverse = prefetch_head;
+    while(temp_traverse!=NULL){
+    	convert_to_string(temp_traverse->pref_od, name);
+    	uloga("%s ", name);
+    	temp_traverse=temp_traverse->next;
+    }
+    uloga("\n");
+    strcpy(name, "abscjahsdc");
     return 0;
 }
 //thread to move data between servers
 void *prefetch_thread(void*attr)
 {
-	int j = 0;
-	int local_cond_index = 0;
+	char name [200];
 	uloga("Prefetch thread starting\n");
-	while (j == 0)
+	while (1)
     {
 		pthread_mutex_lock(&pmutex);
-		if (cond_num == 0){/*sleep */
-			uloga("Waiting for condition\n");
+		while(cond_num==0)
 			pthread_cond_wait(&pcond, &pmutex); //wait
-		}else{ /*cond_num > 0 */
-			while(prefetch_head!=NULL){
-				server_prefetch_dht_peers(prefetch_head->pref_od, prefetch_head->gd);
-				prefetch_list * tmp_del;
-				tmp_del = prefetch_head;
-				prefetch_head = prefetch_head->next;
-				free(tmp_del);
-			}
-			cond_num = 0;
+		uloga("Prefetching ");
+		while(prefetch_head!=NULL){
+			convert_to_string(prefetch_head->pref_od, name);
+			uloga("%s\n", name);
+			server_prefetch_dht_peers(prefetch_head->pref_od, prefetch_head->gd);
+			prefetch_list * tmp_del;
+			tmp_del = prefetch_head;
+			prefetch_head = prefetch_head->next;
+			free(tmp_del);
 		}
-		//sleep(1);
-		pthread_mutex_unlock(&pmutex);
+		cond_num = 0;
+	//sleep(1);
+	pthread_mutex_unlock(&pmutex);
     }
     return NULL;
 }
@@ -2490,7 +2506,7 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
         uloga("Prefetch predict after reading %s\n", curr_name);
         request_lbub_predict(peer->ptlmap.id, curr_name, pred_name);
         //prefetch the predicted object and assemble
-        if(strcmp(pred_name, "0000")!=0){
+        if(strcmp(pred_name, "0000")!=0 && (oh->u.o.odsc.version < 5)){
 
         	struct obj_descriptor pref_odsc = {
                 .version = (oh->u.o.odsc.version)+1,
@@ -2531,11 +2547,12 @@ static int dsgrpc_obj_send_dht_peers(struct rpc_server *rpc_s, struct rpc_cmd *c
             	uloga("Waiting for pmutex\n");
 				pthread_mutex_lock(&pmutex);
 				uloga("pmutex locked\n");
-				cond_num = 1;
 				prefetch_odesc_insert_tail(&pref_odsc, &oh->gdim);
-				pthread_cond_signal(&pcond);
+				cond_num = 1;
+				pthread_cond_broadcast(&pcond);
 				pthread_mutex_unlock(&pmutex);
 				uloga("pmutex unlocked\n");
+				//usleep(1000);
             }
         }
         convert_to_string(&oh->u.o.odsc, curr_name);

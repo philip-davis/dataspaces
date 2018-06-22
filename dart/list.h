@@ -10,7 +10,7 @@
 #define __LIST_H_
 
 #include <stddef.h>
-	
+
 /* New list implementation 10/31/2008. */
 /* Ref: see the list.h implementation in the Linux kernel. */
 
