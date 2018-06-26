@@ -2309,17 +2309,19 @@ static int server_prefetch_dht_peers( struct obj_descriptor *odsc_pref, struct g
             //while(qte->f_odsc_recv !=1);
             //uloga("Qte address %p, QID:%d, Name: %s\n", qte, qte->q_id, name);
             //DS_WAIT_COMPLETION(qte->f_odsc_recv == 1);
-            int flag = 0;
+            int flag = qte->f_odsc_recv;
             while(flag==0){
-            	flag = qte->f_odsc_recv;
-            	//ds_process(dsg->ds);
-            	for (i = 0; i < peer_num; i++){
-            		struct node_id *peer = ds_get_peer(dsg->ds, de_tab[i]->rank);
-            		rpc_process_event_peer(dsg->ds->rpc_s, peer);
-            	}
-
-            };
-            //uloga("Finished query transaction completion for obj_descriptor list %s\n", name);
+					#if HAVE_TCP_SOCKET
+					for (i = 0; i < peer_num; i++){
+						struct node_id *peer = ds_get_peer(dsg->ds, de_tab[i]->rank);
+						rpc_process_event_peer(dsg->ds->rpc_s, peer);
+					}
+					#else
+					rpc_process_event(dsg->ds->rpc_s);
+					#endif
+					flag = qte->f_odsc_recv;
+            }
+            uloga("Finished query transaction completion for obj_descriptor list %s\n", name);
             err = dsg_internal_obj_data_get(qte);
             if (err < 0) {
                     // FIXME: should I jump to err_qt_free ?
@@ -2335,10 +2337,14 @@ static int server_prefetch_dht_peers( struct obj_descriptor *odsc_pref, struct g
             //uloga("Before qte_fcomplete\n");
             while (! qte->f_complete) {
             		//uloga("qte is not complete\n");
-            		for (i = 0; i < peer_num; i++){
+					#if HAVE_TCP_SOCKET
+					for (i = 0; i < peer_num; i++){
 						struct node_id *peer = ds_get_peer(dsg->ds, de_tab[i]->rank);
 						rpc_process_event_peer(dsg->ds->rpc_s, peer);
 					}
+					#else
+					rpc_process_event(dsg->ds->rpc_s);
+					#endif
                     if (err < 0) {
                             uloga("'%s()': error %d.\n", __func__, err);
                             break;
