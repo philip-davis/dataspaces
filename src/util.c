@@ -74,14 +74,15 @@ char *str_append(char *str, char *msg)
  */
 char *alloc_sprintf(const char *fmt_str, ...)
 {
-    va_list va_args;
+    va_list va_args_tmp, va_args;
     int size;
     char *str;
-   
-    va_start(va_args, fmt_str);
-    size = vsnprintf(NULL, 0, fmt_str, va_args);
+  
+    va_start(va_args_tmp, fmt_str);
+    va_copy(va_args, va_args_tmp);
+    size = vsnprintf(NULL, 0, fmt_str, va_args_tmp);
+    va_end(va_args_tmp);
     str = malloc(sizeof(*str) * (size + 1));
-    va_start(va_args, fmt_str);
     vsprintf(str, fmt_str, va_args); 
     va_end(va_args);
 
