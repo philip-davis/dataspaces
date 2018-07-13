@@ -36,54 +36,6 @@
 #include "test_common.h"
 #include "mpi.h"
 
-int read_config_file(const char* fname,
-	int *num_sp, int *num_cp, int *iter,
-	int *num_writer, int *w,
-	int *num_reader, int *r,
-	int *dims, int *dim)
-{
-	FILE *f = NULL;
-        f = fopen(fname,"rt");
-        if(!f){
-                goto err_out;
-        }
-
-        int num_items = 0;
-        num_items = fscanf(f, "num_sp=%d;num_cp=%d;iter=%d\n",
-                        num_sp, num_cp, iter);
-        if(num_items != 3)
-                goto err_out;
-
-        int i = 0;
-        num_items = fscanf(f, "dims=%d\n",dims);
-        if(num_items != 1)
-                goto err_out;
-        for(i = 0; i < *dims; i++)
-                fscanf(f, "%d", &dim[i]);
-        fscanf(f, "\n");
-
-        num_items = fscanf(f, "num_writer=%d\n", num_writer);
-        if(num_items != 1)
-                goto err_out;
-        for(i = 0; i < *dims; i++)
-                fscanf(f, "%d", &w[i]);
-        fscanf(f, "\n");
-
-        num_items = fscanf(f, "num_reader=%d\n", num_reader);
-        if(num_items != 1)
-                goto err_out;
-        for(i = 0; i < *dims; i++)
-                fscanf(f, "%d", &r[i]);
-
-        fclose(f);
-        return 0;
-err_out:
-        if (f) {
-                fclose(f);
-        }
-        return -1;
-}
-
 int parse_args(int argc, char** argv, enum transport_type *type, int *npapp, 
 	int *dims, int* npdim, uint64_t* spdim, int *timestep, int *appid, 
 	size_t *elem_size, int *num_vars)
@@ -186,25 +138,6 @@ int write_data_file(const char* fname, void *data, size_t size)
                 offset += bytes;
         }
 
-        fclose(f);
-        return 0;
-}
-
-int read_data_file(const char* fname)
-{
-        FILE *f = fopen(fname, "r");
-        if (f == NULL) {
-                uloga("%s(): failed to open %s\n", __func__, fname);
-                return -1;
-        }
-
-        size_t block_size = 512*1024; // 512KB
-        void *data = malloc(block_size);
-        do {
-                fread(data, 1, block_size, f);
-        } while (!feof(f));
-
-        free(data);
         fclose(f);
         return 0;
 }

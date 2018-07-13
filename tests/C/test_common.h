@@ -44,7 +44,6 @@
 void check_data(const char *var_name, double *buf, int num_elem, int rank, int ts);
 
 int write_data_file(const char* fname, void *data, size_t size);
-int read_data_file(const char* fname);
 
 int common_get_transport_type_str(enum transport_type type, char* str);
 
