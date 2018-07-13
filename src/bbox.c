@@ -564,9 +564,8 @@ void bbox_print(struct bbox *bb)
 
 char * bbox_sprint(const struct bbox *bb)
 {
-    char *str = malloc(sizeof(*str * 7)); // "{lb = " (with terminator)
-
-    strcpy(str, "{lb = ");
+    char *str = strdup("{lb = ");
+    
     str = str_append(str, coord_sprint(&bb->lb, bb->num_dims));
     str = str_append_const(str, ", ub = ");
     str = str_append(str, coord_sprint(&bb->ub, bb->num_dims));
