@@ -1673,9 +1673,9 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
  {
 	 char *str;
 	 
-	 alloc_sprintf("S%2d: request for obj_desc '%s' ver %d from C%2d for  ",
-		  DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version, cmd->id);
-	 str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
+	 str = alloc_sprintf("S%2d: request for obj_desc '%s' ver %d from C%2d for  ",
+    	  DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version, cmd->id);
+     str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
 
  	 uloga("'%s()': %s\n", __func__, str);
 	 free(str);
