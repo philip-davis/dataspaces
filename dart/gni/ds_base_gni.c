@@ -153,7 +153,7 @@ static int dsrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 static int ds_register_cp(struct dart_server *ds, struct app_info *app)
 {
 	struct msg_buf *msg;
-	struct node_id *peer;
+	struct node_id *peer = ds->peer_tab;
         //struct app_info *app;
 	int err = -ENOMEM;
 	int i, j;
@@ -163,7 +163,6 @@ static int ds_register_cp(struct dart_server *ds, struct app_info *app)
 	gni_smsg_attr_t	*smsg_attr;
 
 	int info_size;	
-
 
 	msg = msg_buf_alloc(ds->rpc_s, peer, 1);
 	if (!msg) 
@@ -182,8 +181,6 @@ static int ds_register_cp(struct dart_server *ds, struct app_info *app)
 	}
 
 	cur_attr_info->local_smsg_attr = attr_info->local_smsg_attr;
-
-	peer = ds->peer_tab;
 
 	err = rpc_send(ds->rpc_s, peer, msg);
 	if (err != 0){
