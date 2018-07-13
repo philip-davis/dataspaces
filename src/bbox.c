@@ -32,6 +32,7 @@
 */
 
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -515,13 +516,13 @@ void coord_print(struct coord *c, int num_dims)
 {
         switch (num_dims) {
         case 3:
-                printf("{%llu, %llu, %llu}", c->c[0], c->c[1], c->c[2]);
+                printf("{%" PRIu64 ", %" PRIu64  ", %" PRIu64 "}", c->c[0], c->c[1], c->c[2]);
                 break;
         case 2:
-                printf("{%llu, %llu}", c->c[0], c->c[1]);
+                printf("{%" PRIu64 ", %" PRIu64 "}", c->c[0], c->c[1]);
                 break;
         case 1:
-                printf("{%llu}", c->c[0]);
+                printf("{%" PRIu64 "}", c->c[0]);
         }
 }
 
@@ -536,7 +537,7 @@ char *coord_sprint(const struct coord *c, int num_dims)
     int size = 2; // count the curly braces
 
     for(i = 0; i < num_dims; i++) {
-        size += snprintf(NULL, 0, "%llu", c->c[i]);
+        size += snprintf(NULL, 0, "%" PRIu64, c->c[i]);
         if(i > 0) {
         }
         size += i ? 2 : 0; // account for ", " 
@@ -544,7 +545,7 @@ char *coord_sprint(const struct coord *c, int num_dims)
     str = malloc(sizeof(*str) * (size + 1)); // add null terminator
     strcpy(str, "{");
     for(i = 0; i < num_dims; i++) {
-        char *tmp  = alloc_sprintf(i?", %llu":"%llu", c->c[i]);
+        char *tmp  = alloc_sprintf(i?", %" PRIu64 :"%" PRIu64, c->c[i]);
         str = str_append(str, tmp);
     }
     str = str_append_const(str, "}");
