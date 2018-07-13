@@ -1,4 +1,5 @@
 #include <fcntl.h>
+#include <pthread.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include "ds_base_tcp.h"

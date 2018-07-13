@@ -1,3 +1,6 @@
+#include <pthread.h>
+#include <unistd.h>
+
 #include "mpi.h"
 #include "dc_base_tcp.h"
 #include "debug.h"
