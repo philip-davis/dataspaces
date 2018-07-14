@@ -405,7 +405,8 @@ enum cmd_type {
 	sp_announce_app,
 	sp_announce_cp_all,
 	cp_disseminate_cs,
-	sp_annouce_app,
+    cn_unregister_cp,
+    cn_unregister_app,
 	cn_timing,
 	/* Synchronization primitives. */
 	cp_barrier,
