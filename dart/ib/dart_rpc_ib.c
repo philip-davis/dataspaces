@@ -829,10 +829,6 @@ char *ip_search(void)
 	close(sfd);
 
 	return inet_ntoa(((struct sockaddr_in *) (&buf[intr].ifr_addr))->sin_addr);
-	if(BUILD_FOR_STAMPEDE)
-		return inet_ntoa(((struct sockaddr_in *) (&buf[intr - 1].ifr_addr))->sin_addr);
-	else
-		return inet_ntoa(((struct sockaddr_in *) (&buf[intr].ifr_addr))->sin_addr);
 
 }
 
