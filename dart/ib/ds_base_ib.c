@@ -1306,25 +1306,11 @@ static int dsrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Do
 
 static void *ds_master_listen(void *server)
 {
-/*        struct dart_server *ds = (struct dart_server *) server;
-        struct node_id *peer = ds_get_peer(ds, 0);
-        struct rdma_conn_param cm_params;
-        str	ct con_param conpara;
-        struct connection *conn;
-        struct rdma_cm_event *event = NULL;
-        int j, err, check, connected, connect_count = 0;
-        check = 0;
-        connected = 0;
-        peer = NULL;
-*/
-
-        struct rdma_cm_event *event = NULL;
-        int connect_count = 0, err;
-//        int connected = 0;
-        struct rdma_conn_param cm_params;
-        struct hdr_register hdr;
-       // struct node_id *peer;
-        struct connection *conn;
+    struct rdma_cm_event *event = NULL;
+    int connect_count = 0, err;
+    struct rdma_conn_param cm_params;
+    struct hdr_register hdr;
+    struct connection *conn;
 	struct dart_server *ds = (struct dart_server *) server;
 
         struct node_id *peer = ds_get_peer(ds, 0);
@@ -1338,138 +1324,101 @@ static void *ds_master_listen(void *server)
 		memcpy(&event_copy, event, sizeof(*event));
 		rdma_ack_cm_event(event);
 		if(event_copy.event == RDMA_CM_EVENT_CONNECT_REQUEST) {
-
-                        conpara = *(struct con_param *) event_copy.param.conn.private_data;
-                        if(conpara.type == 0) {
-                                peer = ds_get_peer(ds, conpara.pm_cp.id);
-                                conn = &peer->sys_conn;
+            conpara = *(struct con_param *) event_copy.param.conn.private_data;
+            if(conpara.type == 0) {
+                peer = ds_get_peer(ds, conpara.pm_cp.id);
+                conn = &peer->sys_conn;
 				ds->s_connected++;
-                        }
-
-			else {
-//				printf("connection request from %d appid %d\n", conpara.pm_cp.id, conpara.pm_cp.appid);
-				if(conpara.pm_cp.appid == 0) {
+            } else {
+	            if(conpara.pm_cp.appid == 0) {
 					ds->s_connected++;
 					struct node_id *temp_peer = peer_alloc();
 					list_add(&temp_peer->peer_entry, &ds->rpc_s->peer_list);
 					temp_peer->ptlmap = conpara.pm_cp;
-                                        temp_peer->ptlmap.id = sp_rank_cnt;
+                    temp_peer->ptlmap.id = sp_rank_cnt;
 
-				        INIT_LIST_HEAD(&temp_peer->req_list);
-				        temp_peer->num_msg_at_peer = ds->rpc_s->max_num_msg;
-				        temp_peer->num_msg_ret = 0;
-
-
+				    INIT_LIST_HEAD(&temp_peer->req_list);
+				    temp_peer->num_msg_at_peer = ds->rpc_s->max_num_msg;
+				    temp_peer->num_msg_ret = 0;
 					peer = temp_peer;
-
-                                        sp_rank_cnt++;
-                                }
-
-                                else {  
-                                        hdr.pm_cp = conpara.pm_cp;
-                                        hdr.pm_sp = conpara.pm_sp;
-                                        hdr.num_cp = conpara.num_cp;
+                    sp_rank_cnt++;
+                } else {  
+                    hdr.pm_cp = conpara.pm_cp;
+                    hdr.pm_sp = conpara.pm_sp;
+                    hdr.num_cp = conpara.num_cp;
 
 					struct app_info *app = app_find(ds, hdr.pm_cp.appid);
 					if(!app){
-                                        	dsrpc_cn_register(ds->rpc_s, &hdr);
+                        dsrpc_cn_register(ds->rpc_s, &hdr);
 					}
 
 					peer = ds_get_peer(ds, hdr.pm_cp.id);
 					conpara.pm_cp.id = peer->ptlmap.id;
-                                }
-                                conn = &peer->rpc_conn;
-                        }
-                        build_context(event_copy.id->verbs, conn);
-                        build_qp_attr(&conn->qp_attr, conn, ds->rpc_s);
-                        err = rdma_create_qp(event_copy.id, conn->pd, &conn->qp_attr);
-                        if(err != 0) {
-                                printf("Peer %d couldnot connect to peer %d. Current number of qp is  %d\n rdma_create_qp %d in %s %s.\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id, ds->rpc_s->num_qp, err, __func__, strerror(errno));
-                                goto err_out;
-                        }
-                        ds->rpc_s->num_qp++;
-                        event_copy.id->context = conn;  //diff
-                        conn->id = event_copy.id;       //diff
-                        conn->qp = event_copy.id->qp;
-
-                        if(conpara.type == 0) {
-                                err = sys_post_recv(ds->rpc_s, peer);
-                                if(err != 0)
-                                        goto err_out;
-                        }
-
-				}
-				conn = &peer->rpc_conn;
-			}
-			build_context(event_copy.id->verbs, conn);
-			build_qp_attr(&conn->qp_attr, conn, ds->rpc_s);
-			err = rdma_create_qp(event_copy.id, conn->pd, &conn->qp_attr);
-			if(err != 0) {
-				printf("Peer %d couldnot connect to peer %d. Current number of qp is  %d\n rdma_create_qp %d in %s %s.\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id, ds->rpc_s->num_qp, err, __func__, strerror(errno));
-				goto err_out;
-			}
-			ds->rpc_s->num_qp++;
-			event_copy.id->context = conn;	//diff
-			conn->id = event_copy.id;	//diff
-			conn->qp = event_copy.id->qp;
-
-			if(conpara.type == 0) {
-				err = sys_post_recv(ds->rpc_s, peer);
-				if(err != 0)
-					goto err_out;
-			}
-
-			else {
-				err = rpc_post_recv(ds->rpc_s, peer);
-				if(err != 0)
-					goto err_out;
-			}
-			memset(&cm_params, 0, sizeof(struct rdma_conn_param));
-			if(conpara.pm_cp.appid != 0 && conpara.type == 1) {
-				memset(&conpara, 0, sizeof(struct con_param));
-				conpara.pm_sp = peer->ptlmap;
-				conpara.pm_cp = ds->rpc_s->ptlmap;
-				conpara.num_cp = ds->num_sp + ds->current_client_size - 1;
-				conpara.type = hdr.id_min;
-
-				cm_params.private_data = &conpara;
-				cm_params.private_data_len = sizeof(conpara);
-			}
-
-			else {
-				cm_params.private_data = &peer->ptlmap.id;
-				cm_params.private_data_len = sizeof(int);
-			} cm_params.initiator_depth = cm_params.responder_resources = 1;
-			cm_params.retry_count = 7;	//diff
-			cm_params.rnr_retry_count = 7;	//infinite retry
-			err = rdma_accept(event_copy.id, &cm_params);
-			if(err != 0) {
-				printf("rdma_accept %d in %s.\n", err, __func__);
-				goto err_out;
-			}
-			connect_count++;
-			conn->f_connected = 1;
-		}
-
-		else if(event_copy.event == RDMA_CM_EVENT_ESTABLISHED) {
-			ds->connected++;
-		
-                } else if(event_copy.event == RDMA_CM_EVENT_DISCONNECTED) {
                 }
-
-		    else if(event_copy.event == RDMA_CM_EVENT_ESTABLISHED) {
-			    ds->connected++;
-	        } else if(event_copy.event != RDMA_CM_EVENT_DISCONNECTED) {
-                err = event_copy.status;
+                conn = &peer->rpc_conn;
             }
-        }
-	
-        pthread_exit(0);
-        return 0;
-      err_out:printf("'%s()': failed with %d.\n", __func__, err);
-        pthread_exit(0);
-        return 0;
+            build_context(event_copy.id->verbs, conn);
+            build_qp_attr(&conn->qp_attr, conn, ds->rpc_s);
+            err = rdma_create_qp(event_copy.id, conn->pd, &conn->qp_attr);
+            if(err != 0) {
+                printf("Peer %d couldnot connect to peer %d. Current number of qp is  %d\n rdma_create_qp %d in %s %s.\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id, ds->rpc_s->num_qp, err, __func__, strerror(errno));
+                goto err_out;
+            }
+            ds->rpc_s->num_qp++;
+            event_copy.id->context = conn;  //diff
+            conn->id = event_copy.id;       //diff
+            conn->qp = event_copy.id->qp;
 
+            if(conpara.type == 0) {
+                err = sys_post_recv(ds->rpc_s, peer);
+                if(err != 0)
+                    goto err_out;
+	        } else {
+	            err = rpc_post_recv(ds->rpc_s, peer);
+		        if(err != 0)
+			    goto err_out;
+	        }
+	        memset(&cm_params, 0, sizeof(struct rdma_conn_param));
+	        if(conpara.pm_cp.appid != 0 && conpara.type == 1) {
+		        memset(&conpara, 0, sizeof(struct con_param));
+		        conpara.pm_sp = peer->ptlmap;
+		        conpara.pm_cp = ds->rpc_s->ptlmap;
+		        conpara.num_cp = ds->num_sp + ds->current_client_size - 1;
+		        conpara.type = hdr.id_min;
+
+		        cm_params.private_data = &conpara;
+		        cm_params.private_data_len = sizeof(conpara);
+	        } else {
+		        cm_params.private_data = &peer->ptlmap.id;
+		        cm_params.private_data_len = sizeof(int);
+	        } 
+            cm_params.initiator_depth = cm_params.responder_resources = 1;
+	        cm_params.retry_count = 7;	//diff
+	        cm_params.rnr_retry_count = 7;	//infinite retry
+	        err = rdma_accept(event_copy.id, &cm_params);
+	        if(err != 0) {
+	            printf("rdma_accept %d in %s.\n", err, __func__);
+		        goto err_out;
+	        }
+	        connect_count++;
+	        conn->f_connected = 1;
+        } else if(event_copy.event == RDMA_CM_EVENT_ESTABLISHED) {
+			ds->connected++;
+		} else if(event_copy.event == RDMA_CM_EVENT_DISCONNECTED) {
+            //placeholder
+        } else if(event_copy.event == RDMA_CM_EVENT_ESTABLISHED) {
+	        ds->connected++;
+	    } else if(event_copy.event != RDMA_CM_EVENT_DISCONNECTED) {
+            err = event_copy.status;
+        }
+    }
+	
+    pthread_exit(0);
+    return 0;
+err_out:
+    printf("'%s()': failed with %d.\n", __func__, err);
+    pthread_exit(0);
+    return 0;
 }
 
 int ds_boot_master(struct dart_server *ds)	//Done
