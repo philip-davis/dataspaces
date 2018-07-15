@@ -18,6 +18,8 @@
 #include <net/if.h>
 #include <ifaddrs.h>
 #include <netdb.h>
+#include <pthread.h>
+#include <sched.h>
 #include <unistd.h>
 #include <rdma/rdma_cma.h>
 #include <sys/time.h>
@@ -164,7 +166,7 @@ static int sys_send(struct rpc_server *rpc_s, struct node_id *peer, struct hdr_s
 {
 
 	while(peer->sys_conn.f_connected != 1) {
-		 pthread_yield();
+		 sched_yield();
 	}
 
 	int err;
@@ -827,10 +829,6 @@ char *ip_search(void)
 	close(sfd);
 
 	return inet_ntoa(((struct sockaddr_in *) (&buf[intr].ifr_addr))->sin_addr);
-	if(BUILD_FOR_STAMPEDE)
-		return inet_ntoa(((struct sockaddr_in *) (&buf[intr - 1].ifr_addr))->sin_addr);
-	else
-		return inet_ntoa(((struct sockaddr_in *) (&buf[intr].ifr_addr))->sin_addr);
 
 }
 
