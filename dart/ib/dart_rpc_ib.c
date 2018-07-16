@@ -108,12 +108,12 @@ static int sys_bar_arrive(struct rpc_server *rpc_s, struct hdr_sys *hs)	//Done
 
 struct node_id *rpc_server_find(struct rpc_server *rpc_s, int nodeid)
 {
-         struct node_id *temp_peer;
-          list_for_each_entry(temp_peer, &rpc_s->peer_list, struct node_id, peer_entry) {
-                if(temp_peer->ptlmap.id == nodeid)
-                         return temp_peer;
-         }
-        return 0;
+    struct node_id *temp_peer;
+    list_for_each_entry(temp_peer, &rpc_s->peer_list, struct node_id, peer_entry) {
+        if(temp_peer->ptlmap.id == nodeid)
+            return temp_peer;
+    }
+    return 0;
 }
 
 void rpc_server_find_local_peers(struct rpc_server *rpc_s,
