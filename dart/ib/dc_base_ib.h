@@ -17,9 +17,7 @@ struct dart_client {
 
 	struct node_id *self;
 
-
-        //struct list_head peer_list; //list of peers(servers and clients)
-
+    int num_unreg;
 	int connected;
 	/* Number of compute peers in the app job. */
 
