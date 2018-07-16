@@ -23,12 +23,6 @@ extern "C" {
         unsigned long _a = (unsigned long) (a);                 \
         _a = (_a + 7) & ~7;                                     \
         (a) = (void *) _a;
-/*
-typedef unsigned char   __u8;
-typedef unsigned int    __u32;
-typedef int             __s32;
-typedef uint64_t    __u64;
-*/
 
 struct msg_buf;
 struct rpc_server;
@@ -312,10 +306,10 @@ struct msg_buf* msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *pe
 
 int rpc_send_directv(struct rpc_server *, struct node_id *, struct msg_buf *); //uncommented by Tong.
 
-// void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
-// void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
+void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
+void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 
-// void rpc_report_md_usage(struct rpc_server *);
+void rpc_report_md_usage(struct rpc_server *);
 
 #ifdef __cplusplus
 }
