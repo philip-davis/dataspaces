@@ -392,69 +392,38 @@ static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
 	struct dart_server *ds = ds_ref_from_rpc(rpc_s);
 	struct app_info *app;
-//	struct node_id *peer;
-
 	struct ptlid_map *pm;
 	int i, err = 0;
 	int appid = 0;
-//	peer = (struct node_id *) (ds + 1);
-//	peer++;
 	pm = msg->msg_data;
-//	pm = pm + 1;
 
-
-//printf("In '%s()'.\n", __func__);
 	for(i = 0; i < ds->num_sp; i++) {
+        struct node_id *temp_peer = peer_alloc();
+        temp_peer->ptlmap = *pm;
+        if(temp_peer->ptlmap.id == 0) {
+            pm++;
+            continue;
+        }
 
-                struct node_id *temp_peer =peer_alloc();
+        if(temp_peer->ptlmap.address.sin_addr.s_addr == ds->rpc_s->ptlmap.address.sin_addr.s_addr 
+                && temp_peer->ptlmap.address.sin_port == ds->rpc_s->ptlmap.address.sin_port) {
+             ds->self = temp_peer;
+        }
 
-                temp_peer->ptlmap = *pm;
-
-              // printf("Client %d peer %d:  %s %d \n",rpc_s->ptlmap.id, temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
-                if(temp_peer->ptlmap.id == 0){
-			pm = pm+1;
-                        continue;
-		}
-
-                if(temp_peer->ptlmap.address.sin_addr.s_addr == ds->rpc_s->ptlmap.address.sin_addr.s_addr && temp_peer->ptlmap.address.sin_port == ds->rpc_s->ptlmap.address.sin_port)
-                        ds->self = temp_peer;
-
-                list_add(&temp_peer->peer_entry, &ds->rpc_s->peer_list);
-
-
-                INIT_LIST_HEAD(&temp_peer->req_list);
-                temp_peer->num_msg_at_peer = rpc_s->max_num_msg;
-                temp_peer->num_msg_ret = 0;
-
-
-                pm = pm + 1;
-
-/*
-//printf("In '%s()'.\n", __func__);
-		if(pm->appid != appid) {
-			appid = pm->appid;
-			app = app_alloc();
-			if(!app)
-				goto err_out;
-			app->app_id = pm->appid;
-			app->app_num_peers = app->app_cnt_peers = 1;
-		//	app->app_peer_tab = temp_peer;
-			list_add(&app->app_entry, &ds->app_list);
-		}
-
-		else if(pm->appid != 0) {
-			app->app_cnt_peers++;
-			app->app_num_peers = app->app_cnt_peers;
-		}
-*/
+        list_add(&temp_peer->peer_entry, &ds->rpc_s->peer_list);
+        INIT_LIST_HEAD(&temp_peer->req_list);
+        temp_peer->num_msg_at_peer = rpc_s->max_num_msg;
+        temp_peer->num_msg_ret = 0;
+        pm = pm++;
 	}
-
-//printf("In '%s()'.\n", __func__);
-	ds->f_reg = 1;
+	
+    ds->f_reg = 1;
 	free(msg->msg_data);
 	free(msg);
 	return 0;
-      err_out:printf("(%s): err (%d).\n", __func__, err);
+
+err_out:
+    printf("(%s): err (%d).\n", __func__, err);
 	return err;
 }
 
@@ -462,58 +431,57 @@ static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 
 static int ds_disseminate_app(struct dart_server *ds, struct node_id *peer, int appid)
 {
-        struct msg_buf *msg;
-        struct hdr_register *hreg;
-        struct ptlid_map *pptlmap;
-        struct app_info *app;
-        int i, k, err;
+    struct msg_buf *msg;
+    struct hdr_register *hreg;
+    struct ptlid_map *pptlmap;
+    struct app_info *app;
+    int i, k, err;
 
+    app = app_find(ds,appid);
+    if(!app) {
+        goto err_out;
+    }
 
-        app = app_find(ds,appid);
-        if(!app) {
-                goto err_out;
-        }
+    err = -ENOMEM;
+    msg = msg_buf_alloc(ds->rpc_s, peer, 1);
+    if(!msg) {
+        goto err_out;
+    }
+    msg->cb = default_completion_with_data_callback;
+    msg->size = sizeof(struct ptlid_map) * app->app_num_peers;
+    pptlmap = msg->msg_data = malloc(msg->size);
+    if(!msg->msg_data) {
+        goto err_out_free;
+    }
+    struct node_id *temp_peer;
+    list_for_each_entry(temp_peer, &ds->rpc_s->peer_list, struct node_id, peer_entry) {
+        if(temp_peer->ptlmap.appid == app->app_id) {
+            *pptlmap++ = temp_peer->ptlmap;
+        } 
+    }         
+    msg->msg_rpc->cmd = sp_announce_app;
+    msg->msg_rpc->id = ds->self->ptlmap.id;
+    hreg = (struct hdr_register *) msg->msg_rpc->pad;
+    hreg->pm_cp = ds->self->ptlmap;
+    hreg->num_cp = app->app_num_peers;
+    hreg->num_sp = appid;
 
+    err = rpc_send(ds->rpc_s, peer, msg);
+    if(err < 0) {
+        free(msg->msg_data);
+        goto err_out_free;
+    }
+    err = rpc_process_event(ds->rpc_s);
+    if(err != 0)
+        goto err_out_free;
 
-
-                err = -ENOMEM;
-                msg = msg_buf_alloc(ds->rpc_s, peer, 1);
-                if(!msg)
-                        goto err_out;
-                msg->cb = default_completion_with_data_callback;
-                msg->size = sizeof(struct ptlid_map) * app->app_num_peers;
-                pptlmap = msg->msg_data = malloc(msg->size);
-                if(!msg->msg_data)
-                        goto err_out_free;
-                struct node_id *temp_peer;
-                list_for_each_entry(temp_peer, &ds->rpc_s->peer_list, struct node_id, peer_entry) {
-                    if(temp_peer->ptlmap.appid == app->app_id) {
-                        *pptlmap++ = temp_peer->ptlmap;
-                    }
-                }
-
-                msg->msg_rpc->cmd = sp_announce_app;
-                msg->msg_rpc->id = ds->self->ptlmap.id;
-                hreg = (struct hdr_register *) msg->msg_rpc->pad;
-                hreg->pm_cp = ds->self->ptlmap;
-                hreg->num_cp = app->app_num_peers;
-                hreg->num_sp = appid;
-
-                err = rpc_send(ds->rpc_s, peer, msg);
-                if(err < 0) {
-                        free(msg->msg_data);
-                        goto err_out_free;
-                }
-                err = rpc_process_event(ds->rpc_s);
-                if(err != 0)
-                        goto err_out_free;
-
-
-        return 0;
-      err_out_free:free(msg);
-      err_out:printf("'%s()' failed with %d.\n", __func__, err);
-        return err;
-
+    return 0;
+      
+err_out_free:
+    free(msg);
+err_out:
+    printf("'%s()' failed with %d.\n", __func__, err);
+    return err;
 }
 	
 
@@ -659,58 +627,45 @@ static int dsrpc_cp_disseminate_cs(struct rpc_server *rpc_s, struct rpc_cmd *cmd
 err_out:
     printf("'%s()' failed with %d.\n", __func__, err);
     return err;
-
 }
 
 
-static int dsrpc_announce_app(struct rpc_server *rpc_s, struct rpc_cmd *cmd){
-
-        struct dart_server *ds = ds_ref_from_rpc(rpc_s);
-
-
-
-        struct hdr_register *hreg = (struct hdr_register *) cmd->pad;
-
-
+static int dsrpc_announce_app(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+    struct dart_server *ds = ds_ref_from_rpc(rpc_s);
+    struct hdr_register *hreg = (struct hdr_register *) cmd->pad;
 	int appid = hreg->num_sp;
-
-
-//	printf("ADD app %d with %d peers\n",hreg->num_sp, hreg->num_cp);	
 	struct app_info *app = app_alloc();
-        app->app_id = appid;
-        app->app_num_peers = app->app_cnt_peers = hreg->num_cp;
-        //app->app_peer_tab = temp_peer;
-        list_add(&app->app_entry, &ds->app_list);
-
-
-
-        //struct hdr_register *hreg = (struct hdr_register *) cmd->pad;
-        struct node_id *peer;
-        struct msg_buf *msg;
-        int err = -ENOMEM;
-        peer = ds_get_peer(ds, 0);
-        msg = msg_buf_alloc(rpc_s, peer, 0);
-        if(!msg)
-                goto err_out;
-        msg->size = sizeof(struct ptlid_map) * (hreg->num_cp);
-        msg->msg_data = malloc(msg->size);
-        if(!msg->msg_data) {
-                free(msg);
-                goto err_out;
-        }
-        msg->cb = announce_app_completion;       //
-
-        msg->id = cmd->wr_id;
-        msg->mr = cmd->mr;
-
-
-        err = rpc_receive_direct(rpc_s, peer, msg);
-        if(err < 0) {
-                free(msg);
-                goto err_out;
-        }
         
-        return 0;
+    app->app_id = appid;
+    app->app_num_peers = app->app_cnt_peers = hreg->num_cp;
+    list_add(&app->app_entry, &ds->app_list);
+
+    struct node_id *peer;
+    struct msg_buf *msg;
+    int err = -ENOMEM;
+    peer = ds_get_peer(ds, 0);
+    msg = msg_buf_alloc(rpc_s, peer, 0);
+    if(!msg)
+        goto err_out;
+    msg->size = sizeof(struct ptlid_map) * (hreg->num_cp);
+    msg->msg_data = malloc(msg->size);
+    if(!msg->msg_data) {
+        free(msg);
+        goto err_out;
+    }
+    msg->cb = announce_app_completion;       //
+
+    msg->id = cmd->wr_id;
+    msg->mr = cmd->mr;
+
+    err = rpc_receive_direct(rpc_s, peer, msg);
+    if(err < 0) {
+        free(msg);
+        goto err_out;
+    }
+        
+    return 0;
       
 err_out:    
     printf("'%s()' failed with %d.\n", __func__, err);
@@ -722,12 +677,11 @@ err_out:
 static int dsrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Done
 {
 	struct dart_server *ds = ds_ref_from_rpc(rpc_s);
-
-	//struct hdr_register *hreg = (struct hdr_register *) cmd->pad;
 	struct node_id *peer;
 	struct msg_buf *msg;
 	int err = -ENOMEM;
-	peer = ds_get_peer(ds, 0);
+	
+    peer = ds_get_peer(ds, 0);
 	msg = msg_buf_alloc(rpc_s, peer, 0);
 	if(!msg)
 		goto err_out;

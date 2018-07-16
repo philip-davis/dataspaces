@@ -171,8 +171,6 @@ static int dcrpc_announce_cp_all(struct rpc_server *rpc_s, struct rpc_cmd *cmd) 
         dc->num_sp = hreg->num_sp;
         dc->num_cp = hreg->num_cp;
 
-//        printf("Me is %d about to get peers from client master %d, #server %d # of clients # %d of my peer size %d\n", rpc_s->ptlmap.id,hreg->pm_cp.id, hreg->num_sp , hreg->num_cp , dc->peer_size);
-//      peer = rpc_s->peer_tab;
         peer = dc_get_peer(dc, 0);
 
 
@@ -258,7 +256,6 @@ static int dcrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Do
 static int dcrpc_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Done
 {
 	struct dart_client *dc = dc_ref_from_rpc(rpc_s);
-//	printf("ok to unreg %d\n", rpc_s->ptlmap.id);
 	dc->f_reg = 0;
 	return 0;
 }
@@ -289,14 +286,12 @@ static int dcrpc_unregister_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//
 		goto err_out;
 	}
 
-//	printf("got unreg msg from client %d total %d\n", cmd->id, dc->num_unreg);
 	return 0;
       err_out:printf("(%s): failed. (%d)\n", __func__, err);
 	return err;
 
 
 }
-
 
 static int dc_unregister(struct dart_client *dc)	//Done
 {
@@ -508,10 +503,10 @@ static void *dc_listen(void *client)
 			dc->connected++;
 			connected++;
 		} else if(event_copy.event == RDMA_CM_EVENT_DISCONNECTED) {
-		} else {
+		    //placeholder
+        } else {
 			peer->sys_conn.f_connected = 0;
 			dc->s_connected--;
-
 			err = event_copy.status;
 		}
 
@@ -767,7 +762,6 @@ static int dc_disseminate_dc(struct dart_client *dc)       //Done
         return err;
 }
 
-
 int dc_boot_master(struct dart_client *dc)
 {
 	struct rdma_cm_event *event = NULL;
@@ -900,9 +894,6 @@ int dc_boot_slave(struct dart_client *dc)
         printf("'%s()': failed with %d.\n", __func__, err);
         return err;
 }
-
-
-
 
 static int dc_boot(struct dart_client *dc, int appid)
 {
