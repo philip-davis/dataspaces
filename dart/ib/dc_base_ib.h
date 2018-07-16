@@ -37,8 +37,8 @@ struct dart_client {
 	void *dart_ref;
 
 	int num_posted;
-	MPI_Comm comm;
-};				// //
+	MPI_Comm *comm;
+};		
 
 
 static inline struct node_id *dc_get_peer(struct dart_client *dc, int n)

@@ -20,6 +20,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <sched.h>
 #include <sys/stat.h>
 
 #include "debug.h"
@@ -869,25 +870,23 @@ static int dc_disseminate_dc(struct dart_client *dc)       //Done
 int dc_boot_master(struct dart_client *dc)
 {
 	struct rdma_cm_event *event = NULL;
-        int connect_count = 0, err;
-        int connected = 0;
-        struct rdma_conn_param cm_params;
-        struct hdr_register hdr;
-        struct node_id *peer;
-        struct connection *conn;
-
-
-
-       int rc;
-        dc->rpc_s->thread_alive = 1;
-        rc = pthread_create(&(dc->rpc_s->comm_thread), NULL, dc_master_listen, (void *) dc);
-        if(rc) {
-                printf("ERROR; return code from pthread_create() is %d\n", rc);
-                exit(-1);
-        }
+    int connect_count = 0, err;
+    int connected = 0;
+    struct rdma_conn_param cm_params;
+    struct hdr_register hdr;
+    struct node_id *peer;
+    struct connection *conn;
+    int rc;
+        
+    dc->rpc_s->thread_alive = 1;
+    rc = pthread_create(&(dc->rpc_s->comm_thread), NULL, dc_master_listen, (void *) dc);
+    if(rc) {
+        printf("ERROR; return code from pthread_create() is %d\n", rc);
+        exit(-1);
+    }
 
 	while(dc->connected != dc->peer_size - 1) {
-		pthread_yield();
+		sched_yield();
 	}
 
 	dc->rpc_s->ptlmap.id = 0;
@@ -902,13 +901,14 @@ int dc_boot_master(struct dart_client *dc)
 	err = rpc_read_config(0, &master_peer->ptlmap.address);
 	if(err < 0)
 		goto err_out;
+
 	//Connect to master server, build rpc channel and sys channel;
-	
 	do{
 		err = rpc_connect(dc->rpc_s, master_peer);
 	}while(err!=0);
 	dc->cp_min_rank = dc->rpc_s->app_minid;
 
+    struct node_id *temp_peer;
 	list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, struct node_id, peer_entry) {
 			temp_peer->ptlmap.id = temp_peer->ptlmap.id + dc->cp_min_rank;
 	}
@@ -1128,7 +1128,7 @@ static int dc_boot(struct dart_client *dc, int appid)
 int dc_barrier(struct dart_client *dc)
 {
 	if(dc->comm != NULL)
-		MPI_Barrier(dc->comm);
+		MPI_Barrier(*(dc->comm));
 	else
 		rpc_barrier(dc->rpc_s);
 }
@@ -1156,9 +1156,9 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
         rpc_add_service(cp_announce_cp, dcrpc_announce_cp_all);
 
 
-	if(comm!=NULL){
-		MPI_Comm dup_comm;
-		err = MPI_Comm_dup(*(MPI_Comm *) comm, &dc->comm);
+	if(comm != NULL){
+        dc->comm = malloc(sizeof(*dc->comm));
+		err = MPI_Comm_dup(*(MPI_Comm *) comm, dc->comm);
 		if(err < 0) {
 			printf("MPI_Comm_dup failed\n");
 			goto err_out;
@@ -1207,6 +1207,9 @@ void dc_free(struct dart_client *dc)
 	dc_unregister(dc);
 	dc_barrier(dc);
 	err = rpc_server_free(dc->rpc_s);
+    if(dc->comm) {
+        free(dc->comm);
+    }
 	if(err != 0)
 		printf("rpc_server_free err in %s.\n", __func__);
 	free(dc);
