@@ -51,6 +51,7 @@ static inline struct dart_client *dc_ref_from_rpc(struct rpc_server *rpc_s)
 	return rpc_s->dart_ref;
 }				// //
 
+int dc_barrier(struct dart_client *dc);
 struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *comm);	// //
 void dc_free(struct dart_client *dc);	// //
 int dc_process(struct dart_client *dc);	// //
