@@ -1037,6 +1037,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 
 	rpc_add_service(cp_barrier, dcrpc_barrier);
 	rpc_add_service(cn_unregister, dcrpc_unregister);
+    rpc_add_service(cn_unregister_cp, dcrpc_unregister_cp);
 	rpc_add_service(sp_announce_cp, dcrpc_announce_cp);
 
         rpc_add_service(cp_announce_cp, dcrpc_announce_cp_all);
