@@ -30,18 +30,6 @@ static int sp_rank_cnt = 1;
 static int cp_rank_cnt = 0;
 extern void rpc_server_dec_reply(struct rpc_server *);
 
-/*
-static struct node_id *peer_alloc()
-{
-         struct node_id *peer = 0;
-         peer = malloc(sizeof(*peer));
-         if(!peer)
-                return 0;
-         memset(peer, 0, sizeof(*peer));
-         return peer;
-}
-*/
-
 static struct app_info *app_alloc()
 {
 	struct app_info *app = 0;
@@ -61,108 +49,6 @@ static struct app_info *app_find(struct dart_server *ds, int appid)
 	}
 	return 0;
 }
-
-
-/* 
-   Routine to reject a registration request from a compute node which
-   exceed the number of peers announced by an application. This is a
-   protection routine for error cases.
-static int ds_register_cp_reject(struct rpc_server *rpc_s, struct hdr_register *hreg)
-{
-	struct dart_server *ds = ds_ref_from_rpc(rpc_s);
-	struct msg_buf *msg;
-	struct node_id peer;
-	int err = -ENOMEM;
-
-	msg = msg_buf_alloc(rpc_s, &peer, 1);
-	if (!msg)
-		goto err_out;
-
-	memset(&peer, 0, sizeof(peer));
-	INIT_LIST_HEAD(&peer.req_list);
-	peer.ptlmap = hreg->pm_cp;
-	peer.mb = MB_RPC_MSG;
-	peer.num_msg_at_peer = 1;
-
-	msg->msg_rpc->cmd = cn_register;
-	msg->msg_rpc->id = ds->self->ptlmap.id;
-
-	hreg = (struct hdr_register *) msg->msg_rpc->pad;
-	hreg->id_min = -1;
-
-	err = rpc_send(rpc_s, &peer, msg);
-	if (err == 0)
-		return 0;
-
-	free(msg);
- err_out:
-       	printf("'%s()' failed with %d.\n", __func__, err);
-        return err;
-}
-*/
-
-/*
-//RPC routine to unregister a compute peer.
-static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)//Working
-{
-        struct dart_server *ds = ds_ref_from_rpc(rpc_s);
-        struct hdr_register *hreg = (struct hdr_register *) cmd->pad;
-        struct msg_buf *msg;
-        struct node_id *peer;
-        int err = -ENOMEM;
-
-        static int num_unreg = 0;
-	// num_unreg++;
-        if ((++num_unreg) == ds->num_cp)
-                ds->f_stop = 1;
-
-        ds->f_nacc = 1;
-
-	if (hreg->num_cp) {
-		hreg->num_cp = 0;
-		peer = ds_get_peer(ds, cmd->id);
-
-		msg = msg_buf_alloc(rpc_s, peer, 1);
-		if (!msg)
-			goto err_out;
-
-		msg->msg_rpc->id = ds->self->ptlmap.id;
-		msg->msg_rpc->cmd = cn_unregister;
-
-		err = rpc_send(rpc_s, peer, msg);
-		if (err < 0) {
-			free(msg);
-			goto err_out;
-		}
-
-	}
-
-        hreg->num_sp--;
-        if (hreg->num_sp) {
-                peer = ds_get_peer(ds, (ds->self->ptlmap.id+1)%ds->num_sp);
-//printf("%d send unreg to %d.\n", ds->rpc_s->ptlmap.id, peer->ptlmap.id);
-                msg = msg_buf_alloc(rpc_s, peer, 1);
-                if (!msg)
-			goto err_out;
-
-                memcpy(msg->msg_rpc, cmd, sizeof(*cmd));
-                msg->msg_rpc->id = ds->self->ptlmap.id;
-
-                err = rpc_send(rpc_s, peer, msg);
-                if (err < 0) {
-                        free(msg);
-			goto err_out;
-                }
-        }
-
-//printf("%d get %d num_unreg with ds->stop %d.\n", ds->rpc_s->ptlmap.id, num_unreg, ds->f_stop);
-	return 0;
- err_out:
-       	printf("'%s()' failed with %d.\n", __func__, err);
-        return err;
-}
-*/
-
 
 static int dsrpc_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Done
 {
@@ -288,22 +174,11 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		if(temp_peer == NULL)
 			continue;
 
-/*		if(temp_peer->ptlmap.appid == peer->ptlmap.appid) {
-			list_del(&temp_peer->peer_entry);
-			ds->peer_size--;
-			ds->num_cp--;
-			ds->size_cp--;
-			ds->current_client_size--;
-
-
-		}*/
-
 		if(temp_peer->ptlmap.id != 0 && temp_peer->ptlmap.appid == 0)
 			ds_remove_app(ds, temp_peer, peer->ptlmap.appid);
 
 
                 if(temp_peer->ptlmap.appid == peer->ptlmap.appid) {
-//                        list_del(&temp_peer->peer_entry);
                         ds->peer_size--;
                         ds->num_cp--;
                         ds->size_cp--;
@@ -327,172 +202,12 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		list_del(&app->app_entry);
 	}
 
-//	if(ds->num_cp == 0)
-//		ds->f_stop = 1;
-
 	return 0;
       err_out:printf("(%s): failed. (%d) %d\n", __func__, err, appid);
 	return err;
 
 
 }
-
-/*
-static int dsrpc_cn_unregister2(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
-{
-	struct dart_server *ds = ds_ref_from_rpc(rpc_s);
-	struct hdr_register *hreg = (struct hdr_register *) (cmd->pad);
-	struct msg_buf *msg;
-	struct node_id *peer;
-
-	int err = -ENOMEM;
-	int i;
-	int in_charge = (ds->num_cp / ds->num_sp) + (ds->rpc_s->ptlmap.id < ds->num_cp % ds->num_sp);
-	static int num_unreg = 0;
-	if(ds->f_stop != 1) {
-		num_unreg = num_unreg + hreg->num_cp;
-//              printf("%d %d %d\n",num_unreg, hreg->num_cp, ds->num_cp);
-		if(num_unreg == ds->num_cp)
-			ds->f_stop = 1;
-
-		// All compute peers  have unregistered. I should send one RPC but not respond to any.
-
-//printf("Rank %d: num_unreg is %d from %d, ds->num_cp is %d,  has %d left.\n", ds->rpc_s->ptlmap.id, num_unreg, cmd->id , ds->num_cp,ds->num_charge);//debug
-		//After  the first  compute peer  'unregister'  request, stop accepting new requests and terminate pending ones.
-		ds->f_nacc = 1;
-		if(cmd->id < ds->num_sp && ds->num_charge == 0) {
-			rpc_s->no_more = 1;
-		}
-
-		if(hreg->num_cp && cmd->id < ds->num_sp) {
-			hreg->num_cp = 0;
-			peer = ds_get_peer(ds, cmd->id);
-			msg = msg_buf_alloc(rpc_s, peer, 1);
-			if(!msg)
-				goto err_out;
-			msg->msg_rpc->id = ds->self->ptlmap.id;
-			msg->msg_rpc->cmd = cn_s_unregister;
-
-			err = rpc_send(rpc_s, peer, msg);
-			if(err < 0) {
-				free(msg);
-				goto err_out;
-			}
-		}
-
-
-		if(hreg->num_cp && cmd->id >= ds->num_sp) {
-			hreg->num_cp = 0;
-			peer = ds_get_peer(ds, cmd->id);
-			if(peer->f_unreg != 1) {
-				msg = msg_buf_alloc(rpc_s, peer, 1);
-				if(!msg)
-					goto err_out;
-				msg->msg_rpc->id = ds->self->ptlmap.id;
-				msg->msg_rpc->cmd = cn_unregister;
-				peer->f_unreg = 1;
-
-				err = rpc_send(rpc_s, peer, msg);
-				if(err < 0) {
-					free(msg);
-					goto err_out;
-				}
-			}
-			ds->num_charge--;
-		}
-		if(ds->num_charge == 0 && rpc_s->no_more == 0) {
-			rpc_s->no_more = 1;
-			for(i = 0; i < ds->num_sp; i++) {
-				if(ds->self->ptlmap.id == i)
-					continue;
-				hreg->num_cp = in_charge;
-				peer = ds_get_peer(ds, i);
-				if(peer->f_unreg != 1) {
-					msg = msg_buf_alloc(rpc_s, peer, 1);
-					if(!msg)
-						goto err_out;
-					memcpy(msg->msg_rpc, cmd, sizeof(*cmd));
-					msg->msg_rpc->id = ds->self->ptlmap.id;
-					peer->f_unreg = 1;
-
-					//printf("%d passing %d to  %d that %d is unreg %ld\n",ds->self->ptlmap.id,msg->msg_rpc->cmd,peer->ptlmap.id,cmd->id,msg);
-					err = rpc_send(rpc_s, peer, msg);
-
-					ds->f_s_unreg = 1;
-
-					while(ds->f_s_unreg) {
-						err = rpc_process_event(ds->rpc_s);
-						if(err < 0)
-							goto err_out;
-					}
-
-					if(err < 0) {
-						free(msg);
-						goto err_out;
-					}
-				}
-			}
-		}
-	}
-//      printf("rank %d: %s ends.\n\n", ds->self->ptlmap.id, __func__);//debug
-	return 0;
-      err_out:printf("(%s): failed. (%d)\n", __func__, err);
-	return err;
-}
-*/
-
-/*
-static int file_lock(int fd, int op)
-{
-	if(op) {
-		while(lockf(fd, F_TLOCK, (off_t) 1) != 0) {
-		}
-		return 0;
-	} else
-		return lockf(fd, F_ULOCK, (off_t) 1);
-}
-*/
-/*
-
-static int file_lock(int fd, int op)
-{
-    int result;
-    errno = 0;
-
-    if(op)  
-        result =  lockf(fd, F_TLOCK, (off_t)1);
-    else
-        result =  lockf(fd, F_ULOCK, (off_t)1);
-
-    if(result!=0)
-        ulog_err("'%s()' failed: %s", __func__, strerror (errno));
-
-    return result;
-}
-
-
-
-static int file_lock(int fd, int op)
-{
-	int err;
-	struct flock fl = {.l_type = (op != 0) ? F_WRLCK : F_UNLCK,.l_whence = SEEK_SET,.l_start = 0,.l_len = 0,.l_pid = getpid()
-	};
-	err = fcntl(fd, F_SETLKW, &fl);
-	if(err == 0)
-		return 0;
-	printf("'%s()' failed\n", __func__);
-	return err;
-}
-*/
-
-//-----------------------------------------------------------------------------------------------------
-//TODO:  After getting rpc reg msg, check the qp num, change corresponding peer->conn->f_connected to 1 after get this
-/*
-	process the CQ to get the peer registration information.
-	1. fetch one CQ event (the 1st one must be the registration event) 
-	2. call ds_register_peer 			
-	3. Move the tmp_peer to the right position of peer_tab based on the registration info
-*/
 
 /* 
   RPC routine to serve a compute node registration request.
@@ -503,25 +218,9 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct hdr_register *hdr)
 	struct app_info *app;
 	struct node_id *peer;
 	int err = -ENOMEM;
-
-/*
-	app = app_find(ds, hdr->pm_cp.appid);
-	if(!app) {
-		app = app_alloc();
-		if(!app)
-			goto err_out;
-		app->app_id = hdr->pm_cp.appid;
-		app->app_num_peers = hdr->num_cp;
-		hdr->id_min = hdr->pm_cp.id = cp_rank_cnt;
-		app->app_peer_tab = ds_get_peer(ds, hdr->pm_cp.id);
-		app->app_peer_tab[0].ptlmap = hdr->pm_cp;
-		app->app_peer_tab[0].ptlmap.id = hdr->pm_cp.id;
-		list_add(&app->app_entry, &ds->app_list);
-		cp_rank_cnt = cp_rank_cnt + app->app_num_peers;
-	}
-*/
 	struct node_id *temp_peer = peer_alloc();
-	list_add(&temp_peer->peer_entry, &ds->rpc_s->peer_list);
+	
+    list_add(&temp_peer->peer_entry, &ds->rpc_s->peer_list);
 	
         temp_peer->ptlmap = hdr->pm_cp;
 
@@ -948,20 +647,10 @@ static int cp_disseminate_cs_completion(struct rpc_server *rpc_s, struct msg_buf
         return err;
 }
 
-
-
-
-
-
-
-
-
-
 static int dsrpc_cp_disseminate_cs(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
 	 struct dart_server *ds = ds_ref_from_rpc(rpc_s);
 
-        //struct hdr_register *hreg = (struct hdr_register *) cmd->pad;
         struct node_id *peer;
         struct msg_buf *msg;
         int err = -ENOMEM;
@@ -971,14 +660,11 @@ static int dsrpc_cp_disseminate_cs(struct rpc_server *rpc_s, struct rpc_cmd *cmd
                 goto err_out;
 	struct app_info *app;
 
-//      printf("peer %d app id %d\n",peer->ptlmap.id, peer->ptlmap.appid);
 	app = app_find(ds, peer->ptlmap.appid);
 	if(!app) {
 		goto err_out;
 	}
 	
-	
-
         msg->size = sizeof(struct ptlid_map) * app->app_num_peers;
         msg->msg_data = malloc(msg->size);
         if(!msg->msg_data) {

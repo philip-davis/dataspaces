@@ -88,22 +88,7 @@ static inline struct node_id *ds_get_peer(struct dart_server *ds, int n)
 {
 	return rpc_server_find(ds->rpc_s, n);
 
-	//	return (ds->peer_tab + n);
-}				// //
-
-/*
-static inline struct node_id *ds_node_find(struct dart_server *ds, int nodeid)
-{
-         struct node_id *temp_peer;
-         list_for_each_entry(temp_peer, &ds->peer_list, struct node_id, peer_entry) {
-                if(temp_peer->ptlmap.id == nodeid)
-                         return temp_peer;
-         }
-         return 0;
-}
-*/
-
-
+}	
 
 static inline int ds_stop(struct dart_server *ds)
 {
