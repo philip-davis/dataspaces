@@ -153,8 +153,6 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	hreg->num_cp = 0;
 	peer = ds_get_peer(ds, cmd->id);
 
-	printf("unreg msg from %d appid %d\n", cmd->id, peer->ptlmap.appid);
-
 	int appid = peer->ptlmap.appid;
 	msg = msg_buf_alloc(rpc_s, peer, 1);
 	if(!msg)
@@ -198,7 +196,6 @@ static int dsrpc_cn_unregister(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 	struct app_info *app = app_find(ds, appid);
 	if(app){
-		printf("remove appid %d\n", appid);
 		list_del(&app->app_entry);
 	}
 
@@ -490,11 +487,9 @@ static int ds_disseminate_app(struct dart_server *ds, struct node_id *peer, int 
                         goto err_out_free;
                 struct node_id *temp_peer;
                 list_for_each_entry(temp_peer, &ds->rpc_s->peer_list, struct node_id, peer_entry) {
-                        if(temp_peer->ptlmap.appid == app->app_id)
-                        {
-//                                         printf("SendingAPP %d peer %d:  %s %d \n",appid, temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
-                                        *pptlmap++ = temp_peer->ptlmap;
-                        }
+                    if(temp_peer->ptlmap.appid == app->app_id) {
+                        *pptlmap++ = temp_peer->ptlmap;
+                    }
                 }
 
                 msg->msg_rpc->cmd = sp_announce_app;
@@ -503,10 +498,6 @@ static int ds_disseminate_app(struct dart_server *ds, struct node_id *peer, int 
                 hreg->pm_cp = ds->self->ptlmap;
                 hreg->num_cp = app->app_num_peers;
                 hreg->num_sp = appid;
-
-
-//                printf("master send app %d peers to peer# %d\n",app->app_num_peers, peer->ptlmap.id);
-
 
                 err = rpc_send(ds->rpc_s, peer, msg);
                 if(err < 0) {
@@ -552,13 +543,7 @@ static int cs_disseminate_cp(struct dart_server *ds, struct node_id *peer)
 	struct node_id *temp_peer;
 	list_for_each_entry(temp_peer, &ds->rpc_s->peer_list, struct node_id, peer_entry) {
         if(temp_peer->ptlmap.id != 0 && temp_peer->ptlmap.appid != app->app_id) {
-            printf("Sendin %d peer %d:  %s %d size: %d\n",ds->rpc_s->ptlmap.id, 
-                temp_peer->ptlmap.id, 
-                inet_ntoa(temp_peer->ptlmap.address.sin_addr),
-                ntohs(temp_peer->ptlmap.address.sin_port),
-                (ds->num_sp + ds->current_client_size 
-                    - app->app_num_peers));
-			    *pptlmap++ = temp_peer->ptlmap;
+	        *pptlmap++ = temp_peer->ptlmap;
 		}
 	}
 
@@ -1338,7 +1323,8 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 	ds->rpc_s->app_num_peers = num_sp;
 	
     rpc_add_service(cn_unregister, dsrpc_cn_unregister);
-	rpc_add_service(cn_s_unregister, dsrpc_unregister);
+	rpc_add_service(cn_unregister_app, dsrpc_cn_unregister_app);
+    rpc_add_service(cn_s_unregister, dsrpc_unregister);
     rpc_add_service(cp_disseminate_cs, dsrpc_cp_disseminate_cs);
 	rpc_add_service(sp_announce_cp, dsrpc_announce_cp);
     rpc_add_service(sp_announce_app, dsrpc_announce_app);
