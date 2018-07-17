@@ -33,10 +33,10 @@ static int dart_rdma_get(struct dart_rdma_tran *read_tran, struct dart_rdma_op *
 	read_op->wr.sg_list = &read_op->sge;
 	read_op->wr.num_sge = 1;
 	read_op->wr.send_flags = IBV_SEND_SIGNALED;
-	read_op->wr.wr.rdma.remote_addr = read_tran->src.mr.addr + read_op->src_offset;
+	read_op->wr.wr.rdma.remote_addr = (uint64_t)read_tran->src.mr.addr + read_op->src_offset;
 	read_op->wr.wr.rdma.rkey = read_tran->src.mr.rkey;
 
-	read_op->sge.addr = read_tran->dst.mr.addr + read_op->dst_offset;
+	read_op->sge.addr = (uint64_t)read_tran->dst.mr.addr + read_op->dst_offset;
 	read_op->sge.length = read_op->bytes;
 	read_op->sge.lkey = read_tran->dst.mr.lkey;
 
@@ -127,8 +127,8 @@ static int dart_perform_local_copy(struct dart_rdma_tran *tran)
     struct dart_rdma_op *op, *t;
     list_for_each_entry_safe(op, t, &tran->read_ops_list,
                 struct dart_rdma_op, entry) {
-        memcpy(tran->dst.base_addr + op->dst_offset,
-               tran->src.base_addr + op->src_offset,
+        memcpy((void *)((uint64_t)tran->dst.base_addr + op->dst_offset),
+               (void *)((uint64_t)tran->src.base_addr + op->src_offset),
                op->bytes);
         list_del(&op->entry);
         free(op);
@@ -183,7 +183,7 @@ int dart_rdma_register_mem(struct dart_rdma_mem_handle *mem_hndl, void *data, si
 
 	mem_hndl->mr = *mem_hndl->mr_ref;
 	mem_hndl->size = bytes;
-	mem_hndl->base_addr = (uint64_t) data;
+	mem_hndl->base_addr = data;
 
 	return 0;
       err_out:

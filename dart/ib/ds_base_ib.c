@@ -218,16 +218,13 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct hdr_register *hdr)
 	struct node_id *temp_peer = peer_alloc();
 	
     list_add(&temp_peer->peer_entry, &ds->rpc_s->peer_list);
-	
-        temp_peer->ptlmap = hdr->pm_cp;
 
-        INIT_LIST_HEAD(&temp_peer->req_list);
-        temp_peer->num_msg_at_peer = rpc_s->max_num_msg;
-        temp_peer->num_msg_ret = 0;
-
+    temp_peer->ptlmap = hdr->pm_cp;
+    INIT_LIST_HEAD(&temp_peer->req_list);
+    temp_peer->num_msg_at_peer = rpc_s->max_num_msg;
+    temp_peer->num_msg_ret = 0;
 
 	ds->current_client_size++;
-
 	ds->peer_size = ds->peer_size + hdr->num_cp;
 	ds->num_cp = ds->num_cp + hdr->num_cp;
 	ds->size_cp = ds->size_cp + hdr->num_cp;
@@ -258,7 +255,9 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct hdr_register *hdr)
 	app->app_cnt_peers++;
 
 	return 0;
-      err_out:printf("'%s()' failed with %d.\n", __func__, err);
+    
+err_out:
+    printf("'%s()' failed with %d.\n", __func__, err);
 	return err;
 }
 
@@ -310,81 +309,44 @@ static int ds_disseminate2(struct dart_server *ds, struct node_id *peer)       /
 static int announce_app_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
 
-        struct dart_server *ds = ds_ref_from_rpc(rpc_s);
-        struct app_info *app;
+    struct dart_server *ds = ds_ref_from_rpc(rpc_s);
+    struct app_info *app;
+    struct ptlid_map *pm = msg->msg_data;
+    int i, err = 0;
+    int appid = 0;
+    struct node_id *temp_peer = peer_alloc();
 
-        struct ptlid_map *pm;
-        int i, err = 0;
-        int appid = 0;
-        pm = msg->msg_data;
+    temp_peer->ptlmap = *pm;
 
+    app = app_find(ds,temp_peer->ptlmap.appid);
+    if(!app) {
+        goto err_out;
+    }
 
-        struct node_id *temp_peer =peer_alloc();
-
-
-
-	temp_peer =peer_alloc();
-
-
-        temp_peer->ptlmap = *pm;
-
-
-        app = app_find(ds,temp_peer->ptlmap.appid);
-        if(!app) {
-                goto err_out;
-        }
-
-
-        ds->peer_size = ds->peer_size + app->app_num_peers;
-        ds->num_cp = ds->num_cp + app->app_num_peers;
-        ds->size_cp = ds->size_cp + app->app_num_peers;
+    ds->peer_size = ds->peer_size + app->app_num_peers;
+    ds->num_cp = ds->num_cp + app->app_num_peers;
+    ds->size_cp = ds->size_cp + app->app_num_peers;
 	ds->rpc_s->num_peers = ds->rpc_s->num_peers + app->app_num_peers;
  
-//printf("In '%s()'.\n", __func__);
-        for(i = 0; i < app->app_num_peers; i++) {
+    for(i = 0; i < app->app_num_peers; i++) {
+	    temp_peer =peer_alloc();
+        temp_peer->ptlmap = *pm;
+        list_add(&temp_peer->peer_entry, &ds->rpc_s->peer_list);
+        INIT_LIST_HEAD(&temp_peer->req_list);
+        temp_peer->num_msg_at_peer = rpc_s->max_num_msg;
+        temp_peer->num_msg_ret = 0;
+                
+        pm++;
+    }
 
-	        temp_peer =peer_alloc();
-                temp_peer->ptlmap = *pm;
-
-              // printf("Client %d peer %d:  %s %d \n",rpc_s->ptlmap.id, temp_peer->ptlmap.id, inet_ntoa(temp_peer->ptlmap.address.sin_addr),ntohs(temp_peer->ptlmap.address.sin_port));
-
-                list_add(&temp_peer->peer_entry, &ds->rpc_s->peer_list);
-
-
-                INIT_LIST_HEAD(&temp_peer->req_list);
-                temp_peer->num_msg_at_peer = rpc_s->max_num_msg;
-                temp_peer->num_msg_ret = 0;
-
-
-                pm = pm + 1;
- 
-/*
-//printf("In '%s()'.\n", __func__);
-                if(pm->appid != appid) {
-                        appid = pm->appid;
-                        app = app_alloc();
-                        if(!app)
-                                goto err_out;
-                        app->app_id = pm->appid;
-                        app->app_num_peers = app->app_cnt_peers = 1;
-                //      app->app_peer_tab = temp_peer;
-                        list_add(&app->app_entry, &ds->app_list);
-                }
-
-                else if(pm->appid != 0) {
-                        app->app_cnt_peers++;
-                        app->app_num_peers = app->app_cnt_peers;
-                }
-*/
-        }
-
-
-//printf("In '%s()'.\n", __func__);
-        free(msg->msg_data);
-        free(msg);
-        return 0;
-      err_out:printf("(%s): err (%d).\n", __func__, err);
-        return err;
+    free(msg->msg_data);
+    free(msg);
+        
+    return 0;
+      
+err_out:
+    printf("(%s): err (%d).\n", __func__, err);
+    return err;
 }
 
 
@@ -414,7 +376,7 @@ static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
         INIT_LIST_HEAD(&temp_peer->req_list);
         temp_peer->num_msg_at_peer = rpc_s->max_num_msg;
         temp_peer->num_msg_ret = 0;
-        pm = pm++;
+        pm++;
 	}
 	
     ds->f_reg = 1;
@@ -574,8 +536,8 @@ static int cp_disseminate_cs_completion(struct rpc_server *rpc_s, struct msg_buf
     free(msg);
 
     list_for_each_entry(temp_peer, &ds->rpc_s->peer_list, struct node_id, peer_entry) { 
-    if(temp_peer->ptlmap.id !=0 && temp_peer->ptlmap.appid ==0)
-	    ds_disseminate_app(ds,temp_peer,app->app_id);
+        if(temp_peer->ptlmap.id != 0 && temp_peer->ptlmap.appid == 0)
+	        ds_disseminate_app(ds,temp_peer,app->app_id);
     }
 
 	temp_peer = ds_get_peer(ds, app->app_min_id);
@@ -728,10 +690,7 @@ static void *ds_master_listen(void *server)
     struct hdr_register hdr;
     struct connection *conn;
 	struct dart_server *ds = (struct dart_server *) server;
-
-        struct node_id *peer = ds_get_peer(ds, 0);
-
-	peer = NULL;
+    struct node_id *peer = NULL;
 	time_t tm_st, tm_end;
 
 	while(ds->rpc_s->thread_alive && (rdma_get_cm_event(ds->rpc_s->rpc_ec, &event) == 0)) {
@@ -976,40 +935,29 @@ static void *ds_listen(void *server)
 */
 int ds_boot_slave(struct dart_server *ds)	//Done
 {
-//	struct node_id *peer = ds_get_peer(ds, 0);
 	struct rdma_conn_param cm_params;
 	struct con_param conpara;
 	struct connection *con;
 	struct rdma_cm_event *event = NULL;
 	int i, err, check, connected, connect_count = 0;
+    struct node_id *peer = peer_alloc();
+
 	check = 0;
 	connected = 0;
 
-
-        struct node_id *peer = peer_alloc();
-//        list_add(&peer->peer_entry, &ds->rpc_s->peer_list);
-
- //       err = rpc_read_config(&temp_peer->ptlmap.address);   ////
-//        peer->ptlmap.id = 0;
-
-
-        INIT_LIST_HEAD(&peer->req_list);
-        peer->num_msg_at_peer = ds->rpc_s->max_num_msg;
-        peer->num_msg_ret = 0;
-
-
-
+    INIT_LIST_HEAD(&peer->req_list);
+    peer->num_msg_at_peer = ds->rpc_s->max_num_msg;
+    peer->num_msg_ret = 0;
 
 	err = rpc_read_config(0,&peer->ptlmap.address);
-        peer->ptlmap.id = 0;
+    peer->ptlmap.id = 0;
 
 	list_add(&peer->peer_entry, &ds->rpc_s->peer_list);
 
-
-
 	if(err < 0)
 		goto err_out;
-	if(peer->ptlmap.address.sin_addr.s_addr == ds->rpc_s->ptlmap.address.sin_addr.s_addr && peer->ptlmap.address.sin_port == ds->rpc_s->ptlmap.address.sin_port) {
+	if(peer->ptlmap.address.sin_addr.s_addr == ds->rpc_s->ptlmap.address.sin_addr.s_addr 
+        && peer->ptlmap.address.sin_port == ds->rpc_s->ptlmap.address.sin_port) {
 
 		// This is the master server! the config file may be
 		// around from a previous run 
@@ -1035,15 +983,14 @@ int ds_boot_slave(struct dart_server *ds)	//Done
 		goto err_out;
 	}
 
-        int rc;
-        ds->rpc_s->thread_alive = 1;
+    int rc;
+    ds->rpc_s->thread_alive = 1;
 
-        rc = pthread_create(&(ds->rpc_s->comm_thread), NULL, ds_listen, (void *) ds);
-        if(rc) {
-                printf("ERROR; return code from pthread_create() is %d\n", rc);
-                exit(-1);
-        }
-
+    rc = pthread_create(&(ds->rpc_s->comm_thread), NULL, ds_listen, (void *) ds);
+    if(rc) {
+        printf("ERROR; return code from pthread_create() is %d\n", rc);
+        exit(-1);
+    }
 
 	//Waiting for dissemination msg from master server;
 	while(ds->f_reg == 0) {
@@ -1056,22 +1003,17 @@ int ds_boot_slave(struct dart_server *ds)	//Done
 	// id will connect actively to 1 ~ id-1; get connect request from id+1 ~ id[MAX]
 	int n = log2_ceil(ds->num_sp);
 	int *check_sp = malloc(sizeof(int) * (ds->num_sp));
-
 	int j;
 
 	for(j = 0; j < ds->num_sp; j++)
 		check_sp[j] = 0;
 
 	int *a = malloc(sizeof(int) * n);
-
-
-
 	int k;
 	int smaller_cid = 0;
 	int greater_cid = 0;
 
 	for(k = 0; k < ds->num_sp; k++) {
-
 		a[0] = 1;
 		for(j = 1; j < n; j++) {
 			a[j] = a[j - 1] * 2;
@@ -1126,18 +1068,16 @@ int ds_boot_slave(struct dart_server *ds)	//Done
 		}
 	}
 
-
-
 	return 0;
-      err_out:
+
+err_out:
 	printf("'%s()': failed with %d.\n", __func__, err);
 	return err;
 }
 
-
 /* Function to automatically decide if this instance should
    run as 'master' or 'slave'. */
-static int ds_boot(struct dart_server *ds)	//Done
+static int ds_boot(struct dart_server *ds)
 {
 	struct stat st_buff;
 	const char fil_lock[] = "srv.lck.0";

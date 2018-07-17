@@ -140,13 +140,9 @@ uint32_t rpc_server_get_nid(struct rpc_server *rpc_s)
 
 static int sys_bar_send(struct rpc_server *rpc_s, int peerid)	//Done
 {
-	//struct node_id *peer = &rpc_s->peer_tab[peerid];
 	struct node_id *peer = rpc_get_peer(rpc_s, peerid);
 	struct hdr_sys hs;
 	int err;
-
-//printf("inside %s\n", __func__);
-
 
 	memset(&hs, 0, sizeof(struct hdr_sys));
 	hs.sys_cmd = sys_bar_enter;
@@ -1406,8 +1402,7 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 	}
 	freeaddrinfo(addr);
 
-        struct node_id *temp_peer;
-
+    struct node_id *temp_peer;
 
 	while(rdma_get_cm_event(peer->rpc_ec, &event) == 0) {
 		struct rdma_cm_event event_copy;
@@ -1415,14 +1410,15 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 		rdma_ack_cm_event(event);
 
 		if(event_copy.event == RDMA_CM_EVENT_ADDR_RESOLVED) {
-
-
 			build_context(event_copy.id->verbs, &peer->rpc_conn);
 			build_qp_attr(&peer->rpc_conn.qp_attr, &peer->rpc_conn, rpc_s);
 
 			err = rdma_create_qp(event_copy.id, peer->rpc_conn.pd, &peer->rpc_conn.qp_attr);
 			if(err != 0) {
-				printf("Peer %d could not connect to peer %d. Current number of qp is  %d\n rdma_create_qp %d in %s %s.\n", rpc_s->ptlmap.id, peer->ptlmap.id, rpc_s->num_qp, err, __func__, strerror(errno));
+				printf("Peer %d could not connect to peer %d. Current number of qp is "
+                       "%d\n rdma_create_qp %d in %s %s.\n", rpc_s->ptlmap.id, 
+                        peer->ptlmap.id, rpc_s->num_qp, err, __func__, 
+                        strerror(errno));
 				goto err_out;
 			}
 			rpc_s->num_qp++;
@@ -1451,7 +1447,7 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 			cm_params.private_data = &conpara;
 			cm_params.private_data_len = sizeof(conpara);
 			cm_params.initiator_depth = cm_params.responder_resources = 1;
-			cm_params.retry_count = 7;	//diff
+			cm_params.retry_count = 7;	
 			cm_params.rnr_retry_count = 7;	/* infinite retry */
 
 			err = rdma_connect(event_copy.id, &cm_params);
@@ -1476,8 +1472,6 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 			peer->rpc_conn.f_connected = 1;
 			check = 1;
 		} else {
-//			rpc_print_connection_err(rpc_s, peer, event_copy);
-//			printf("event is %d with status %d.\n", event_copy.event, event_copy.status);
 			err = event_copy.status;
 			goto err_out;
 		}
@@ -1486,11 +1480,9 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 			break;
 	}
 
-
-
 	return 0;
-      err_out:
-//	printf("'%s()': failed with %d.\n", __func__, err);
+
+err_out:
 	return err;
 }
 
@@ -1539,7 +1531,6 @@ int sys_connect(struct rpc_server *rpc_s, struct node_id *peer)
 		rdma_ack_cm_event(event);
 
 		if(event_copy.event == RDMA_CM_EVENT_ADDR_RESOLVED) {
-//			printf("SYS connect %d %d ADDRESOLVED\n", rpc_s->ptlmap.id, peer->ptlmap.id);
 			build_context(event_copy.id->verbs, &peer->sys_conn);
 			build_qp_attr(&peer->sys_conn.qp_attr, &peer->sys_conn, rpc_s);
 
@@ -1554,12 +1545,9 @@ int sys_connect(struct rpc_server *rpc_s, struct node_id *peer)
 			peer->sys_conn.id = event_copy.id;
 			peer->sys_conn.qp = event_copy.id->qp;
 
-//                      for(i=0;i<SYS_NUM;i++){
-//printf("SYS_NUM is %d, i is %d\n", SYS_NUM, i);
 			err = sys_post_recv(rpc_s, peer);
 			if(err != 0)
 				goto err_out;
-//                      }
 
 			err = rdma_resolve_route(event_copy.id, INFINIBAND_TIMEOUT);
 			if(err != 0) {
@@ -1567,9 +1555,6 @@ int sys_connect(struct rpc_server *rpc_s, struct node_id *peer)
 				goto err_out;
 			}
 		} else if(event_copy.event == RDMA_CM_EVENT_ROUTE_RESOLVED) {
-  //                      printf("SYS connect %d %d ROUTERESOLVED\n", rpc_s->ptlmap.id, peer->ptlmap.id);
-
-			//printf("route resolved.\n");
 			memset(&cm_params, 0, sizeof(struct rdma_conn_param));
 
 			conpara.pm_cp = rpc_s->ptlmap;
@@ -1589,27 +1574,12 @@ int sys_connect(struct rpc_server *rpc_s, struct node_id *peer)
 				goto err_out;
 			}
 		} else if(event_copy.event == RDMA_CM_EVENT_ESTABLISHED) {
-//                        printf("SYS connect %d %d ESTABLISH\n", rpc_s->ptlmap.id, peer->ptlmap.id);
-
-			//printf("Connection Established.\n");
-//			if(peer->ptlmap.id == 0)
-//				rpc_s->ptlmap.id = *((int *) event_copy.param.conn.private_data);
-	
-//			printf("I am %d connected to %d\n",rpc_s->ptlmap.id, peer->ptlmap.id);
 			peer->sys_conn.f_connected = 1;
 			check = 1;
 		} else {
-//                        printf("SYS connect %d %d ERROR\n", rpc_s->ptlmap.id, peer->ptlmap.id);
-
-//			rpc_print_connection_err(rpc_s, peer, event_copy);
-//			printf("event is %d with status %d.\n", event_copy.event, event_copy.status);
-//			if(peer->sys_conn.f_connected==1)
-//				return 0;
 			err = event_copy.status;
 			goto err_out;
 		}
-//                printf("SYS connect %d %d OUTSIDE\n", rpc_s->ptlmap.id, peer->ptlmap.id);
-
 
 		if(check == 1)
 			break;
@@ -1868,9 +1838,7 @@ int rpc_process_event_with_timeout(struct rpc_server *rpc_s, int timeout)	//Done
 int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)	//Done
 {
 	if(peer->rpc_conn.f_connected != 1) {
-//              printf("RPC channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
 		rpc_connect(rpc_s, peer);
-//              goto err_out;
 	}
 
 

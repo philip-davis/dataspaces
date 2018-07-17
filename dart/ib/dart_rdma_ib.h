@@ -24,7 +24,7 @@ struct dart_rdma_mem_handle {
 	// TODO: fix using both mr and mr_ref
 	struct ibv_mr mr;	// memory region 
 	struct ibv_mr *mr_ref;	// keep the pointer value returned by ibv_reg_mr
-	uint64_t base_addr;
+	void *base_addr;
 	size_t size;
     enum dart_memory_type mem_type;
 };
