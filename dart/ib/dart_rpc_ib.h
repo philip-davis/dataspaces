@@ -28,8 +28,6 @@
 #include "../../include/bbox.h"
 #include "config.h"
 
-#include "dart_rdma_ib.h"
-
 #define MB_SYS_MSG              0x03
 #define MB_RPC_MSG              0x04
 #define MB_MIN_RESERVED         0x07
@@ -48,12 +46,6 @@
 
 #define FPTR_DEF  void * _fptr[] = {&malloc, &free, &memset};
 
-/*
-typedef unsigned char __u8;
-typedef unsigned int __u32;
-typedef int __s32;
-typedef uint64_t __u64;
-*/
 struct msg_buf;
 struct rpc_server;
 struct rpc_cmd;
