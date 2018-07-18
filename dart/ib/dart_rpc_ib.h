@@ -250,7 +250,6 @@ struct msg_buf {
 
 	struct ibv_mr mr;
 
-
 	void *private;
 
 	// Peer I should send this message to.
@@ -275,29 +274,19 @@ struct connection {
 struct rpc_server {
 
 	struct ptlid_map ptlmap;
-//IB    struct ptlid_map        tmp_map;////added in IB verstion, to store temp address for data receiving or sending
 
 	struct rdma_cm_id *listen_id;	//added for IB version
 	struct rdma_event_channel *rpc_ec;
-	//struct rdma_event_channel *sys_ec;
 
 	// Reference  to peers  table; storage  space is  allocated in dart client or server.
 	int num_peers;		// total number of peers
-//	struct node_id *peer_tab;
 
-        struct list_head peer_list; //list of peers(servers and clients)
-
-	//count number of sys connection
-//	int sys_conn_count;
+    struct list_head peer_list; //list of peers(servers and clients)
 
 	//Fields for barrier implementation.
 	int bar_num;
 	int *bar_tab;
 	int app_minid, app_num_peers, num_sp; //app min id, number of peer in app (fixed during execution) and numer of server
-
-	//Added in IB version. Just used at the beginning of registration.
-//	int num_reg;
-	//struct node_id                *tmp_peer_tab;
 
 	/* List of buffers for incoming RPC calls. */
 	struct list_head rpc_list;
@@ -331,11 +320,9 @@ struct rdma_mr {
 
 struct node_id {
 
-        struct list_head peer_entry;
+    struct list_head peer_entry;
 
 	struct ptlid_map ptlmap;
-//	struct rdma_mr peer_mr;
-//
 	int local_id;
 
 	int num_peer_in_app;
@@ -345,7 +332,6 @@ struct node_id {
 	struct rdma_event_channel *sys_ec;
 	struct connection rpc_conn;
 	struct connection sys_conn;
-	//struct rdma_conn_param        *cm_params;
 
 	int f_unreg;
 

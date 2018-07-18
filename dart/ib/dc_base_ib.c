@@ -93,9 +93,6 @@ static int dcrpc_barrier(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	return err;
 }
 
-
-
-
 static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)	//Done
 {
 	struct dart_client *dc = dc_ref_from_rpc(rpc_s);
@@ -248,6 +245,152 @@ static int dcrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	return 0;
       err_out:printf("'%s()' failed with %d.\n", __func__, err);
 	return err;
+}
+
+static int dc_disseminate_app(struct dart_client *dc, struct node_id *peer, struct hdr_register *recv_hreg, void *pmap_array)
+{
+
+    struct msg_buf *msg;
+    struct hdr_register *hreg;
+    struct ptlid_map *pptlmap;
+    int err;
+
+    err = -ENOMEM;
+    msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+    if(!msg) {
+        goto err_out;
+    }
+    msg->cb = default_completion_with_data_callback;
+    msg->size = sizeof(struct ptlid_map) * recv_hreg->num_cp;
+    pptlmap = msg->msg_data = malloc(msg->size);
+    if(!msg->msg_data) {
+        goto err_out_free;
+    }
+    memcpy(pptlmap, pmap_array, msg->size);
+    
+    msg->msg_rpc->cmd = sp_announce_app;
+    msg->msg_rpc->id = dc->self->ptlmap.id;
+    hreg = (struct hdr_register *)msg->msg_rpc->pad;
+    *hreg = *recv_hreg;
+
+    err = rpc_send(dc->rpc_s, peer, msg);
+    if(err < 0) {
+        goto err_out_free;
+    }
+    err = rpc_process_event(dc->rpc_s);
+    if(err != 0)
+        goto err_out_free;
+
+    return(0);
+
+err_out_free:
+    if(msg->msg_data) {
+        free(msg->msg_data);
+    }
+    free(msg);
+err_out:
+    fprintf(stderr, "(%s): err (%d).\n", __func__, err);
+    return(err);
+
+}
+
+static int announce_app_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+
+    struct dart_client *dc = dc_ref_from_rpc(rpc_s);
+    struct ptlid_map *pm = msg->msg_data;
+    struct node_id *temp_peer;
+    struct hdr_register *priv_hreg = (struct hdr_register *)msg->private;
+    int i, err = 0;
+   
+    for(i = 0; i < priv_hreg->num_cp; i++) {
+        temp_peer = peer_alloc();
+
+        temp_peer->ptlmap = *pm;
+        list_add(&temp_peer->peer_entry, &dc->rpc_s->peer_list);
+        INIT_LIST_HEAD(&temp_peer->req_list);
+        temp_peer->num_msg_at_peer = rpc_s->max_num_msg;
+        temp_peer->num_msg_ret = 0;
+
+        dc->num_cp++;
+        pm++;
+    }
+
+    if(dc->self->ptlmap.id == dc->cp_min_rank) {
+        list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, 
+                struct node_id, peer_entry) {
+            if(temp_peer->ptlmap.appid == dc->self->ptlmap.appid &&
+                temp_peer->ptlmap.id != dc->self->ptlmap.id) {
+                dc_disseminate_app(dc, temp_peer, priv_hreg, msg->msg_data);
+            }    
+        }
+    }
+    
+    free(msg->private);
+    free(msg->msg_data);
+    free(msg);
+
+    return(0);
+ 
+} 
+
+/* Receive info about a new group of nodes */
+static int dcrpc_sp_announce_app(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+    struct dart_client *dc = dc_ref_from_rpc(rpc_s);
+    struct hdr_register *hreg = (struct hdr_register *) cmd->pad;
+
+    struct node_id *peer;
+    struct msg_buf *msg;
+    int err = -ENOMEM;
+
+    // master clients receive from master server, then disseminate to slave clients
+    if(dc->self->ptlmap.id == dc->cp_min_rank) {
+        peer = dc_get_peer(dc, 0);
+    } else {
+        peer = dc_get_peer(dc, dc->cp_min_rank);
+    }
+    
+    msg = msg_buf_alloc(rpc_s, peer, 0);
+    if(!msg) {
+        goto err_out;
+    }
+    msg->size = sizeof(struct ptlid_map) * hreg->num_cp;
+    msg->msg_data = malloc(msg->size);
+    if(!msg->msg_data) {
+        goto err_out_free;
+    }
+    msg->cb = announce_app_completion;
+
+    msg->id = cmd->wr_id;
+    msg->mr = cmd->mr;
+
+    /* dart clients don't keep the same app structure as the server. We will need to remember 
+     * the size of the app and the appid later, when we are actually adding these nodes to
+     * the peer list / forwarding on to other peer clients. Stash this for a while.
+     */
+    msg->private = malloc(sizeof(*hreg));
+    memcpy(msg->private, hreg, sizeof(*hreg));
+
+    err = rpc_receive_direct(rpc_s, peer, msg);
+    if(err < 0) {
+        goto err_out_free;
+    }
+
+    return(0);
+
+err_out_free:
+    if(msg->private) {
+        free(msg->private);
+    }
+    if(msg->msg_data) {
+        free(msg->msg_data);
+    }
+    free(msg);
+err_out:
+    fprintf(stderr, "(%s): err (%d).\n", __func__, err);
+    return(err);
+
 }
 
 //RPC routine  to wait for  server confirmation that it  processed ourunregister message and all our other messages.
@@ -592,6 +735,11 @@ static void *dc_master_listen(void *server)
 					hdr.pm_sp = conpara.pm_sp;
 					hdr.num_cp = conpara.num_cp;
 					peer = dc_get_peer(dc, hdr.pm_cp.id);
+                    while(peer == NULL) {
+                        rpc_process_event_with_timeout(dc->rpc_s, 1);
+                        sleep(1);
+                        peer = dc_get_peer(dc, conpara.pm_cp.id);
+                    }
 					conpara.pm_cp.id = peer->ptlmap.id;
                     printf("%s, got connect from id = %d\n", __func__, peer->ptlmap.id);
 				}
@@ -1033,6 +1181,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
     rpc_add_service(cn_unregister_cp, dcrpc_unregister_cp);
 	rpc_add_service(sp_announce_cp, dcrpc_announce_cp);
     rpc_add_service(cp_announce_cp, dcrpc_announce_cp_all);
+    rpc_add_service(sp_announce_app, dcrpc_sp_announce_app);
 
 	if(comm != NULL) {
         dc->comm = malloc(sizeof(*dc->comm));

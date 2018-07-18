@@ -10,10 +10,9 @@ struct dart_client {
 	int peer_size;
 
 	int local_id;
-//	struct node_id *peer_tab;
 	struct node_id *cn_peers;
 
-	int num_sp, num_cp, num_cp_all;
+	int num_sp, num_cp;
 
 	struct node_id *self;
 
@@ -49,7 +48,7 @@ static inline struct node_id *dc_get_peer(struct dart_client *dc, int n)
 static inline struct dart_client *dc_ref_from_rpc(struct rpc_server *rpc_s)
 {
 	return rpc_s->dart_ref;
-}				// //
+}			
 
 int dc_barrier(struct dart_client *dc);
 struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *comm);	// //

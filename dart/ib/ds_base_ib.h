@@ -32,7 +32,6 @@ struct dart_server {
 
 	int current_client_size;
 
-//	struct node_id *peer_tab;
 	struct node_id *cn_peers;
 
 	int s_connected;
@@ -42,10 +41,6 @@ struct dart_server {
 	int size_cp, size_sp;
 
 	struct list_head app_list;	/* List of applications */
-
-
-	//struct list_head peer_list; //list of peers(servers and clients)
-
 
 	int connected;
 
@@ -68,7 +63,7 @@ struct dart_server {
 	void *dart_ref;
 	MPI_Comm *comm;
 
-};				// //
+};	
 
 struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm);
 void ds_free(struct dart_server *ds);	// //

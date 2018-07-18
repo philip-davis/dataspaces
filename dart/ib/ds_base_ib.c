@@ -329,7 +329,7 @@ static int announce_app_completion(struct rpc_server *rpc_s, struct msg_buf *msg
 	ds->rpc_s->num_peers = ds->rpc_s->num_peers + app->app_num_peers;
  
     for(i = 0; i < app->app_num_peers; i++) {
-	    temp_peer =peer_alloc();
+	    temp_peer = peer_alloc();
         temp_peer->ptlmap = *pm;
         list_add(&temp_peer->peer_entry, &ds->rpc_s->peer_list);
         INIT_LIST_HEAD(&temp_peer->req_list);
@@ -388,8 +388,6 @@ err_out:
     printf("(%s): err (%d).\n", __func__, err);
 	return err;
 }
-
-
 
 static int ds_disseminate_app(struct dart_server *ds, struct node_id *peer, int appid)
 {
@@ -505,7 +503,7 @@ err_out:
 static int cp_disseminate_cs_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
     struct dart_server *ds = ds_ref_from_rpc(rpc_s);
-    struct app_info *app;
+    struct app_info *app, *temp_app;
     struct ptlid_map *pm = msg->msg_data;
     int i, err = 0;
     int appid = 0;
@@ -537,7 +535,15 @@ static int cp_disseminate_cs_completion(struct rpc_server *rpc_s, struct msg_buf
 
     list_for_each_entry(temp_peer, &ds->rpc_s->peer_list, struct node_id, peer_entry) { 
         if(temp_peer->ptlmap.id != 0 && temp_peer->ptlmap.appid == 0)
-	        ds_disseminate_app(ds,temp_peer,app->app_id);
+	        ds_disseminate_app(ds, temp_peer, app->app_id);
+    }
+
+    // disseminate new nodes to existing apps
+    list_for_each_entry(temp_app, &ds->app_list, struct app_info, app_entry) {
+        if(temp_app->app_id != app->app_id) {
+            temp_peer = ds_get_peer(ds, temp_app->app_min_id);
+            ds_disseminate_app(ds, temp_peer, app->app_id);
+        }
     }
 
 	temp_peer = ds_get_peer(ds, app->app_min_id);
@@ -596,7 +602,7 @@ static int dsrpc_announce_app(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     struct dart_server *ds = ds_ref_from_rpc(rpc_s);
     struct hdr_register *hreg = (struct hdr_register *) cmd->pad;
-	int appid = hreg->num_sp;
+	int appid = hreg->num_sp; // abuse of the num_sp field
 	struct app_info *app = app_alloc();
         
     app->app_id = appid;
