@@ -1485,7 +1485,7 @@ void dcgrpc_kill(struct dcg_space *dcg)
 				msg->msg_rpc->cmd = ss_kill;
 				msg->msg_rpc->id = DCG_ID; // dcg->dc->self->id;
 
-				hdr = msg->msg_rpc->pad;
+				hdr = (struct hdr_dsg_kill *)msg->msg_rpc->pad;
 				hdr->kill_flag = 1;
 				err = rpc_send(dcg->dc->rpc_s, peer, msg);
 				if (err < 0) {
