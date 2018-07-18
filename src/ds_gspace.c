@@ -1265,7 +1265,7 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
     msg_ds->msg_rpc->id = DSG_ID;
     msg_ds->cb = obj_put_sync_completion;
 
-    hdr_ds = msg_ds->msg_rpc->pad;
+    hdr_ds = (struct hdr_obj_put *)msg_ds->msg_rpc->pad;
     hdr_ds->sync_op_id_ptr = msg->sync_op_id;
 
     err = rpc_send(rpc_s, peer_ds, msg_ds);
