@@ -1412,9 +1412,6 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
         rpc_add_service(cn_timing, dcgrpc_time_log);
         rpc_add_service(ss_info, dcgrpc_ss_info);
         
-        //server notify client 
-        rpc_add_service(ds_put_completion, dcgrpc_server_completion);
-        
 #ifdef DS_SYNC_MSG
         //server notify client 
         rpc_add_service(ds_put_completion, dcgrpc_server_completion);
