@@ -29,6 +29,7 @@
 *  docan@cac.rutgers.edu
 */
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -465,13 +466,6 @@ static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
         bbox_to_intv(&dht->bb_glb_domain, ssd->max_dim, ssd->bpd, 
                      &i_tab, &num_intv);
 
-        /*
-        printf("Global domain decomposes into: ");
-        for (i = 0; i < num_intv; i++)
-                printf("{%llu,%llu} ", i_tab[i].lb, i_tab[i].ub);
-        printf("\n");
-        */
-
         for (i = 0, j = 0; i < dht->num_entries; i++) {
                 len = sn;
 
@@ -481,7 +475,6 @@ static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
                 if (!de->i_tab)
                         break;
 
-                // printf("Node rank %d interval cut: ", i);
                 while (len > 0) {
                         if (intv_size(&i_tab[j]) > len) {
                                 intv.lb = i_tab[j].lb;
@@ -493,7 +486,6 @@ static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
                         }
                         len -= intv_size(&intv);
                         de->i_tab[de->num_intv++] = intv;
-                        // printf("{%llu,%llu} ", intv.lb, intv.ub);
                 }
 
                 de->i_virt.lb = de->i_tab[0].lb;
@@ -502,7 +494,6 @@ static int dht_construct_hash(struct dht *dht, struct sspace *ssd)
                 if (!de->i_tab)
                         break;
 
-                //printf("\n");
         }
 
         free(i_tab);
@@ -1388,7 +1379,7 @@ void convert_to_string(struct obj_descriptor *obj_desc, char *name){
     int i;
     for (i = 0; i < obj_desc->bb.num_dims; ++i)
     {
-        ap+=sprintf(ap, "_%llu_%llu", obj_desc->bb.lb.c[i], obj_desc->bb.ub.c[i]);
+        ap+=sprintf(ap, "_%" PRIu64 "_%" PRIu64 , obj_desc->bb.lb.c[i], obj_desc->bb.ub.c[i]);
     }
     i =0;
     sprintf(modified_name, "%s", obj_desc->name);

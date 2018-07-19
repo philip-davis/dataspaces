@@ -31,6 +31,7 @@
 *  qiansun@cac.rutgers.edu
 */
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "common.h"
@@ -110,8 +111,8 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
 #ifdef DEBUG
 	char str_lb[100]="", str_ub[100]="";
     for(i = 0; i < dims; i++){
-        sprintf(str_lb+strlen(str_lb), "%llu,", lb[i]);
-        sprintf(str_ub+strlen(str_ub), "%llu,", ub[i]);
+        sprintf(str_lb+strlen(str_lb), "%" PRIu64 ",", lb[i]);
+        sprintf(str_ub+strlen(str_ub), "%" PRIu64 ",", ub[i]);
     }
     uloga("Timestep=%u, %d read mnd (%s),(%s) from space\n", ts, rank_, str_lb, str_ub);
 #endif
