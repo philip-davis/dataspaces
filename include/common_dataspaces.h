@@ -56,19 +56,19 @@ void common_dspaces_unlock_on_read(const char *lock_name, void *comm);
 void common_dspaces_lock_on_write(const char *lock_name, void *comm);
 void common_dspaces_unlock_on_write(const char *lock_name,void *comm);
 void common_dspaces_define_gdim(const char *var_name, int ndim, uint64_t *gdim);
-int common_dspaces_get (const char *var_name, 
+int common_dspaces_get(const char *var_name, 
         unsigned int ver, int size,
         int ndim,
         uint64_t *lb, 
         uint64_t *ub,
         void *data);
-int common_dspaces_put (const char *var_name, 
+int common_dspaces_put(const char *var_name, 
         unsigned int ver, int size,
         int ndim,
         uint64_t *lb,
         uint64_t *ub,
-        void *data);
-int common_dspaces_put_location_aware (const char *var_name, 
+        const void *data);
+int common_dspaces_put_location_aware(const char *var_name, 
         unsigned int ver, int size,
         int ndim,
         uint64_t *lb,

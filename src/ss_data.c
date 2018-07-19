@@ -34,6 +34,8 @@
 #include <string.h>
 #include <math.h>
 #include <errno.h>
+#include <unistd.h>
+#include <sys/types.h>
 
 #include "debug.h"
 #include "ss_data.h"
@@ -871,26 +873,6 @@ int ssd_copy(struct obj_data *to_obj, struct obj_data *from_obj)
         return 0;
 }
 
-int ssd_copyv(struct obj_data *obj_dest, struct obj_data *obj_src)
-{
-	struct matrix mat_dest, mat_src;
-	struct bbox bbcom;
-
-	bbox_intersect(&obj_dest->obj_desc.bb, &obj_src->obj_desc.bb, &bbcom);
-
-	matrix_init(&mat_dest, obj_dest->obj_desc.st,
-			&obj_dest->obj_desc.bb, &bbcom,
-			obj_dest->data, obj_dest->obj_desc.size);
-
-	matrix_init(&mat_src, obj_src->obj_desc.st,
-			&obj_src->obj_desc.bb, &bbcom,
-			obj_src->data, obj_src->obj_desc.size);
-
-	matrix_copyv(&mat_dest, &mat_src);
-
-	return 0;
-}
-
 /*
 */
 int ssd_copy_list(struct obj_data *to, struct list_head *od_list)
@@ -1282,8 +1264,8 @@ struct obj_data *shmem_obj_data_alloc(struct obj_descriptor *odsc, int id)
     /* now map the shared memory segment in the address space of the process */
     ptr = mmap(0,SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
     if (ptr == MAP_FAILED) {
-        uloga("Map failed\n");
-        return -1;
+        perror("map failed.");
+        return NULL;
     }
     //now memcpy
     
@@ -1324,7 +1306,6 @@ struct obj_data *obj_data_allocv(struct obj_descriptor *odsc)
 	return od;
 }
 
->>>>>>> d62d43a... Added shared memory objects for local readers
 /* 
   Allocate space for the obj_data struct only; space for data is
   externally allocated.
@@ -1356,7 +1337,7 @@ struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *odsc, const voi
         return od;
 }
 
-struct obj_data *obj_data_alloc_with_data_split(struct obj_descriptor *odsc, const void *data, struct obj_descriptor *odsc_big)
+struct obj_data *obj_data_alloc_with_data_split(struct obj_descriptor *odsc, void *data, struct obj_descriptor *odsc_big)
 {
         struct obj_data *od = obj_data_alloc(odsc);
         if (!od)

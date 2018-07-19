@@ -277,61 +277,6 @@ int common_dspaces_get(const char *var_name,
     return err;
 }
 
-#ifndef SHMEM_OBJECTS
-int common_dspaces_put(const char *var_name, 
-        unsigned int ver, int size,
-        int ndim,
-        uint64_t *lb,
-        uint64_t *ub,
-        const void *data)
-{
-        if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) {
-            return -EINVAL;
-        }
-
-        struct obj_descriptor odsc = {
-                .version = ver, .owner = -1, 
-                .st = st,
-                .size = size,
-                .bb = {.num_dims = ndim,}
-        };
-
-        memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
-        memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
-
-        memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
-        memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
-
-        struct obj_data *od;
-        int err = -ENOMEM;
-
-        strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
-        odsc.name[sizeof(odsc.name)-1] = '\0';
-
-        od = obj_data_alloc_with_data(&odsc, data);
-        if (!od) {
-            uloga("'%s()': failed, can not allocate data object.\n", 
-                __func__);
-                return -ENOMEM;
-        }
-
-        // set global dimension
-        set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
-                             &od->gdim); 
-        err = dcg_obj_put(od);
-        if (err < 0) {
-            obj_data_free(od);
-            uloga("'%s()': failed with %d, can not put data object.\n", 
-                __func__, err);
-            return err;
-        }
-        sync_op_id = err;
-
-        return 0;
-}
-
-#endif
-
 #ifdef SHMEM_OBJECTS
 int common_dspaces_put(const char *var_name, 
         unsigned int ver, int size,
@@ -445,9 +390,72 @@ int common_dspaces_put(const char *var_name,
         }
         return 0;
 }
-#endif
+#else
+int common_dspaces_put(const char *var_name, 
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        const void *data)
+{
+#if defined(DS_HAVE_DSPACES_LOCATION_AWARE_WRITE)
+        return common_dspaces_put_location_aware(var_name, ver, size, ndim,
+                    lb, ub, data);
+#else
+        if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) {
+            return -EINVAL;
+        }
 
-int common_dspaces_remove (const char *var_name, unsigned int ver)
+        struct obj_descriptor odsc = {
+                .version = ver, .owner = -1, 
+                .st = st,
+                .size = size,
+                .bb = {.num_dims = ndim,}
+        };
+
+        memset(odsc.bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+        memset(odsc.bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+
+        memcpy(odsc.bb.lb.c, lb, sizeof(uint64_t)*ndim);
+        memcpy(odsc.bb.ub.c, ub, sizeof(uint64_t)*ndim);
+
+        struct obj_data *od;
+        int err = -ENOMEM;
+
+        strncpy(odsc.name, var_name, sizeof(odsc.name)-1);
+        odsc.name[sizeof(odsc.name)-1] = '\0';
+
+        od = obj_data_alloc_with_data(&odsc, data);
+        if (!od) {
+            uloga("'%s()': failed, can not allocate data object.\n", 
+                __func__);
+                return -ENOMEM;
+        }
+
+        // set global dimension
+        set_global_dimension(&dcg->gdim_list, var_name, &dcg->default_gdim,
+                             &od->gdim); 
+        err = dcg_obj_put(od);
+        if (err < 0) {
+            obj_data_free(od);
+            uloga("'%s()': failed with %d, can not put data object.\n", 
+                __func__, err);
+            return err;
+        }
+        sync_op_id = err;
+
+        return 0;
+#endif
+}
+
+#define MAX_NUM_PEER_PER_NODE 64
+#if defined(DS_HAVE_DSPACES_LOCATION_AWARE_WRITE)
+int common_dspaces_put_location_aware(const char *var_name, 
+        unsigned int ver, int size,
+        int ndim,
+        uint64_t *lb,
+        uint64_t *ub,
+        void *data)
 {
         if (!is_dspaces_lib_init() || !is_ndim_within_bound(ndim)) {
             return -EINVAL;
@@ -517,7 +525,19 @@ int common_dspaces_remove (const char *var_name, unsigned int ver)
         return 0;
 }
 #endif /* DS_HAVE_DSPACES_LOCATION_AWARE_WRITE */
+#endif /* SHM_OBJECTS */
 
+int common_dspaces_remove(const char *var_name, unsigned int ver)
+{
+    if (!is_dspaces_lib_init()) {
+        return 0;
+    }
+
+    int err = dcg_remove(var_name, ver);
+    if (err < 0)
+         ERROR_TRACE_AND_EXIT();
+    return err;
+}
 
 int common_dspaces_put_sync(void)
 {

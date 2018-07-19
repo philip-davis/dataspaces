@@ -1787,7 +1787,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         od = obj_data_alloc(&oh->u.o.odsc);
         if (!od)
                 goto err_out;
-        (fast_v)? ssd_copyv(od, from_obj) : ssd_copy(od, from_obj);
+        ssd_copy(od, from_obj);
         od->obj_ref = from_obj;
 
         msg = msg_buf_alloc(rpc_s, peer, 0);
