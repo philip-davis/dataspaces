@@ -65,7 +65,7 @@ struct matrix {
         size_t                  size_elem;
         enum storage_type       mat_storage;
         struct matrix_view      mat_view;
-        void                    *pdata;
+        const void              *pdata;
 };
 
 /*
@@ -180,7 +180,7 @@ void sh_free(void)
 
 static void matrix_init(struct matrix *mat, enum storage_type st,
                         struct bbox *bb_glb, struct bbox *bb_loc, 
-                        void *pdata, size_t se)
+                        const void *pdata, size_t se)
 {
     int i;
     int ndims = bb_glb->num_dims;
@@ -198,15 +198,15 @@ static void matrix_init(struct matrix *mat, enum storage_type st,
     mat->size_elem = se;
 }
 
-static void matrix_copy(struct matrix *a, struct matrix *b)
+static void matrix_copy(struct matrix *a, const struct matrix *b)
 {
-        char *A = a->pdata;
-        char *B = b->pdata;
+    char *A = a->pdata;
+    const char *B = b->pdata;
 
-        uint64_t a0, a1, a2, a3, a4, a5, a6, a7, a8, a9;
-        uint64_t aloc=0, aloc1=0, aloc2=0, aloc3=0, aloc4=0, aloc5=0, aloc6=0, aloc7=0, aloc8=0, aloc9=0;
-        uint64_t b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
-        uint64_t bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
+    uint64_t a0, a1, a2, a3, a4, a5, a6, a7, a8, a9;
+    uint64_t aloc=0, aloc1=0, aloc2=0, aloc3=0, aloc4=0, aloc5=0, aloc6=0, aloc7=0, aloc8=0, aloc9=0;
+    uint64_t b0, b1, b2, b3, b4, b5, b6, b7, b8, b9;
+    uint64_t bloc=0, bloc1=0, bloc2=0, bloc3=0, bloc4=0, bloc5=0, bloc6=0, bloc7=0, bloc8=0, bloc9=0;
     uint64_t numelem;
 
     switch(a->num_dims){
@@ -1337,7 +1337,7 @@ struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *odsc, const voi
         return od;
 }
 
-struct obj_data *obj_data_alloc_with_data_split(struct obj_descriptor *odsc, void *data, struct obj_descriptor *odsc_big)
+struct obj_data *obj_data_alloc_with_data_split(struct obj_descriptor *odsc, const void *data, struct obj_descriptor *odsc_big)
 {
         struct obj_data *od = obj_data_alloc(odsc);
         if (!od)

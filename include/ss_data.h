@@ -276,6 +276,7 @@ struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *, const void *)
 void obj_data_free(struct obj_data *od);
 void shmem_obj_data_free(struct obj_data *od);
 void obj_data_free_with_data(struct obj_data *);
+struct obj_data *obj_data_alloc_with_data_split(struct obj_descriptor *odsc, const void *data, struct obj_descriptor *odsc_big);
 uint64_t obj_data_size(struct obj_descriptor *);
 uint64_t obj_data_sizev(struct obj_descriptor *);
 

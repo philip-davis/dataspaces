@@ -1375,10 +1375,7 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
 
 	ERROR_TRACE();
 }
-#endif
-
-#ifndef SHMEM_OBJECTS
-
+#else
 static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
         struct hdr_obj_get *oh = msg->private;
@@ -1388,9 +1385,9 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
 
         qte = qt_find(&dcg->qt, oh->qid);
         if (!qte) {
-        uloga("can not find transaction ID = %d.\n", oh->qid);
-                goto err_out_free;
-    }
+            uloga("can not find transaction ID = %d.\n", oh->qid);
+            goto err_out_free;
+        }
 
         qte->qh->qh_num_rep_received++;
         qte->size_od += oh->u.o.num_de;
@@ -1398,15 +1395,10 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
         for (i = 0; i < oh->u.o.num_de; i++) {
                 if (!qt_find_obj(qte, od_tab+i)) {
                         err = qt_add_obj(qte, od_tab+i);
-            // err = qt_add_objv(qte, od_tab+i);
                         if (err < 0)
                                 goto err_out_free;
                 }
                 else {
-            /* DEBUG:
-                        uloga("'%s()': duplicate obj descriptor detected, "
-                              "keep only one copy.\n", __func__);
-            */
                         qte->size_od--;
                 }
         }
@@ -1418,17 +1410,6 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
         if (qte->qh->qh_num_rep_received == qte->qh->qh_num_peer) {
                 /* Object descriptor receive completed. */
                 qte->f_odsc_recv = 1;
-
-        /* NOTE: disabled the cache for object descriptors.
-                if (qte->f_err == 0) {
-                        struct query_cache_entry *qce;
-                        qce = qce_alloc(qte->num_od);
-                        if (qce) {
-                                qce_set_obj_desc(qce, &qte->q_obj, &qte->od_list);
-                                qc_add_entry(&dcg->qc, qce);
-                        }
-                }
-        */
         }
 
         return 0;
@@ -1439,8 +1420,7 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
 
     ERROR_TRACE();
 }
-
-#endif
+#endif /* SHMEM_OBJECTS */
 
 static void versions_reset(void)
 {

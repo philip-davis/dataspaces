@@ -1209,7 +1209,6 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 
 	dc->rpc_s->num_peers = dc->num_cp + dc->num_sp;
 	dc->num_unreg = 0;
-	printf("dc_alloc succeed %d.\n", dc->rpc_s->ptlmap.id);
 	err = dc_barrier(dc);
 	sleep(2);
     if(err < 0) {
