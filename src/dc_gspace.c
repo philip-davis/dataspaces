@@ -1294,88 +1294,87 @@ static int obj_filter_init(struct query_tran_entry *qte)
 
 static int obj_filter_reduce(struct query_tran_entry *qte, struct obj_data *od)
 {
-        struct obj_data *odt;
-        double *pa, *pb;
-        int first = 1;
+    struct obj_data *odt;
+    double *pa, *pb;
+    int first = 1;
 
-        pb = od->data;
-        list_for_each_entry(odt, &qte->od_list, struct obj_data, obj_entry) {
-                pa = odt->data;
-                if (first) {
-                        first = 0;
-                        *pb = *pa;
-                }
-                else if (*pa < *pb)
-                        *pb = *pa;
+    pb = od->data;
+    list_for_each_entry(odt, &qte->od_list, struct obj_data, obj_entry) {
+        pa = odt->data;
+        if (first) {
+            first = 0;
+            *pb = *pa;
+        } else if (*pa < *pb) {
+            *pb = *pa;
         }
+    }
 
-        return 0;
+    return 0;
 }
 
 #ifdef SHMEM_OBJECTS
 static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-        struct hdr_obj_get *oh = msg->private;
-        struct obj_descriptor *od_tab = msg->msg_data;
-        struct query_tran_entry *qte;
-        int i, err = -ENOENT;
+    struct hdr_obj_get *oh = msg->private;
+    int half_sz = oh->u.o.num_de / 2;
+    struct obj_descriptor *od_tab = msg->msg_data;
+    struct query_tran_entry *qte;
+    int *dupli_odsc;
+    int i, j, err = -ENOENT;
 
-        qte = qt_find(&dcg->qt, oh->qid);
-        if (!qte) {
-		uloga("can not find transaction ID = %d.\n", oh->qid);
-                goto err_out_free;
-	   }
+    qte = qt_find(&dcg->qt, oh->qid);
+    if (!qte) {
+        uloga("can not find transaction ID = %d.\n", oh->qid);
+        goto err_out_free;
+	}
 
-        qte->qh->qh_num_rep_received++;
-        qte->size_od += oh->u.o.num_de;
-        int j;
-        int half_sz = oh->u.o.num_de/2;
-        int *dupli_odsc;
-        dupli_odsc = malloc(sizeof(int) * half_sz);
-        for (i = 0; i < half_sz; i++){
-            dupli_odsc[i] = 0;
-        }
+    qte->qh->qh_num_rep_received++;
+    qte->size_od += oh->u.o.num_de;
+    dupli_odsc = malloc(sizeof(int) * half_sz);
+    for(i = 0; i < half_sz; i++) {
+        dupli_odsc[i] = 0;
+    }
 
-        for (i = 0; i < oh->u.o.num_de; i++) {
-                if(i < half_sz) {
-                     if (!qt_find_obj(qte, od_tab+i)) { 
-                        err = qt_add_obj(qte, od_tab+i);
-                        if (err < 0)
-                                goto err_out_free;
-                    }else{
-                        dupli_odsc[i+half_sz] = i + half_sz;
-                    }
-                } else {
-                    if(i!=dupli_odsc[i]) {
-                        err = qt_add_obj(qte, od_tab+i);
-                        if (err < 0)
-                            goto err_out_free;
-                    }
+    for(i = 0; i < oh->u.o.num_de; i++) {
+        if(i < half_sz) {
+            if(!qt_find_obj(qte, od_tab+i)) { 
+                err = qt_add_obj(qte, od_tab+i);
+                if(err < 0) {
+                    goto err_out_free;
                 }
             } else {
+                dupli_odsc[i+half_sz] = i + half_sz;
+            }
+        } else {
+            if(i != dupli_odsc[i]) {
                 err = qt_add_obj(qte, od_tab+i);
                 if (err < 0)
                     goto err_out_free;
-           }
+            }
         }
+    }
 
-        free(oh);
-        free(od_tab);
-        free(msg);
+    free(oh);
+    free(od_tab);
+    free(msg);
 
-        if (qte->qh->qh_num_rep_received == qte->qh->qh_num_peer) {
-                /* Object descriptor receive completed. */
-                qte->f_odsc_recv = 1;
-        }
-        return 0;
- err_out_free:
-        free(oh);
-        free(od_tab);
-        free(msg);
+    if(qte->qh->qh_num_rep_received == qte->qh->qh_num_peer) {
+        /* Object descriptor receive completed. */
+        qte->f_odsc_recv = 1;
+    }
+
+    return 0;
+
+err_out_free:
+    free(oh);
+    free(od_tab);
+    free(msg);
 
 	ERROR_TRACE();
 }
+
 #else
+
 static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
         struct hdr_obj_get *oh = msg->private;

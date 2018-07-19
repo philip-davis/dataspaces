@@ -1268,8 +1268,10 @@ struct obj_data *shmem_obj_data_alloc(struct obj_descriptor *odsc, int id)
         return NULL;
     }
     //now memcpy
-    
+   
+#ifdef DEBUG 
     uloga("Shared object created with name %s\n", name);
+#endif
 
     od->_data = od->data = ptr;
 
