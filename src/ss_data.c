@@ -59,13 +59,12 @@ struct matrix_view {
 };
 
 /* Generic matrix representation. */
-struct matrix {
+struct matrix_desc {
         uint64_t   dist[BBOX_MAX_NDIM];
         int 			        num_dims;
         size_t                  size_elem;
         enum storage_type       mat_storage;
         struct matrix_view      mat_view;
-        const void              *pdata;
 };
 
 /*
@@ -178,13 +177,13 @@ void sh_free(void)
         is_sfc_hash_list_free = 1;
 }
 
-static void matrix_init(struct matrix *mat, enum storage_type st,
+static void matrix_init(struct matrix_desc *mat, enum storage_type st,
                         struct bbox *bb_glb, struct bbox *bb_loc, 
-                        const void *pdata, size_t se)
+                        size_t se)
 {
     int i;
     int ndims = bb_glb->num_dims;
-    memset(mat, 0, sizeof(struct matrix));
+    memset(mat, 0, sizeof(struct matrix_desc));
 
     for(i = 0; i < ndims; i++){
         mat->dist[i] = bbox_dist(bb_glb, i);
@@ -194,14 +193,11 @@ static void matrix_init(struct matrix *mat, enum storage_type st,
 
     mat->num_dims = ndims;
     mat->mat_storage = st;
-    mat->pdata = pdata;
     mat->size_elem = se;
 }
 
-static void matrix_copy(struct matrix *a, const struct matrix *b)
+static void matrix_copy(struct matrix_desc *a, char *A, const struct matrix_desc *b, const char *B)
 {
-    char *A = a->pdata;
-    const char *B = b->pdata;
 
     uint64_t a0, a1, a2, a3, a4, a5, a6, a7, a8, a9;
     uint64_t aloc=0, aloc1=0, aloc2=0, aloc3=0, aloc4=0, aloc5=0, aloc6=0, aloc7=0, aloc8=0, aloc9=0;
@@ -283,7 +279,6 @@ dim2:                for(a1 = a->mat_view.lb[1], b1 = b->mat_view.lb[1];
 dim1:               numelem = (a->mat_view.ub[0] - a->mat_view.lb[0]) + 1;
                     aloc = aloc1 + a->mat_view.lb[0];
                     bloc = bloc1 + b->mat_view.lb[0];
-                    //uloga("Before matrix copy \n");
                     memcpy(&A[aloc*a->size_elem], &B[bloc*a->size_elem], (a->size_elem * numelem));     
             if(a->num_dims == 1)    return;
                 }
@@ -856,20 +851,20 @@ int ssd_init(struct sspace *ssd, int rank)
 */
 int ssd_copy(struct obj_data *to_obj, struct obj_data *from_obj)
 {
-        struct matrix to_mat, from_mat;
+        struct matrix_desc to_mat, from_mat;
         struct bbox bbcom;
 
         bbox_intersect(&to_obj->obj_desc.bb, &from_obj->obj_desc.bb, &bbcom);
 
         matrix_init(&from_mat, from_obj->obj_desc.st,
                     &from_obj->obj_desc.bb, &bbcom, 
-                    from_obj->data, from_obj->obj_desc.size);
+                    from_obj->obj_desc.size);
 
         matrix_init(&to_mat, to_obj->obj_desc.st, 
                     &to_obj->obj_desc.bb, &bbcom,
-                    to_obj->data, to_obj->obj_desc.size);
+                    to_obj->obj_desc.size);
 
-        matrix_copy(&to_mat, &from_mat);
+        matrix_copy(&to_mat, to_obj->data, &from_mat, from_obj->data);
         return 0;
 }
 
@@ -878,7 +873,7 @@ int ssd_copy(struct obj_data *to_obj, struct obj_data *from_obj)
 int ssd_copy_list(struct obj_data *to, struct list_head *od_list)
 {
         struct obj_data *from;
-        struct matrix to_mat, from_mat;
+        struct matrix_desc to_mat, from_mat;
         struct bbox bbcom;
 
         list_for_each_entry(from, od_list, struct obj_data, obj_entry) {
@@ -887,13 +882,13 @@ int ssd_copy_list(struct obj_data *to, struct list_head *od_list)
 
                 matrix_init(&from_mat, from->obj_desc.st,
                             &from->obj_desc.bb, &bbcom, 
-                            from->data, from->obj_desc.size);
+                            from->obj_desc.size);
 
                 matrix_init(&to_mat, to->obj_desc.st, 
                             &to->obj_desc.bb, &bbcom, 
-                            to->data, to->obj_desc.size);
+                            to->obj_desc.size);
 
-                matrix_copy(&to_mat, &from_mat);
+                matrix_copy(&to_mat, to->data, &from_mat, from->data);
         }
 
         return 0;
@@ -902,7 +897,7 @@ int ssd_copy_list(struct obj_data *to, struct list_head *od_list)
 int ssd_copy_list_shmem(struct obj_data *to, struct list_head *od_list, int nums)
 {
     struct obj_data *from;
-    struct matrix to_mat, from_mat;
+    struct matrix_desc to_mat, from_mat;
     struct bbox bbcom;
     int i = 0;
 
@@ -912,13 +907,13 @@ int ssd_copy_list_shmem(struct obj_data *to, struct list_head *od_list, int nums
 
             matrix_init(&from_mat, from->obj_desc.st,
                         &from->obj_desc.bb, &bbcom, 
-                        from->data, from->obj_desc.size);
+                        from->obj_desc.size);
 
             matrix_init(&to_mat, to->obj_desc.st, 
                         &to->obj_desc.bb, &bbcom, 
-                        to->data, to->obj_desc.size);
+                        to->obj_desc.size);
 
-            matrix_copy(&to_mat, &from_mat);
+            matrix_copy(&to_mat, to->data, &from_mat, from->data);
         }
         i++;
     }
@@ -1344,12 +1339,12 @@ struct obj_data *obj_data_alloc_with_data_split(struct obj_descriptor *odsc, con
         struct obj_data *od = obj_data_alloc(odsc);
         if (!od)
                 return NULL;
-        struct matrix to_mat, from_mat;
+        struct matrix_desc to_mat, from_mat;
         struct bbox bbcom;
         bbox_intersect(&od->obj_desc.bb, &odsc_big->bb, &bbcom);
-        matrix_init(&from_mat, odsc->st, &odsc_big->bb, &bbcom, data, odsc->size);
-        matrix_init(&to_mat, odsc->st,&od->obj_desc.bb, &bbcom, od->data, odsc->size);
-        matrix_copy(&to_mat, &from_mat);
+        matrix_init(&from_mat, odsc->st, &odsc_big->bb, &bbcom, odsc->size);
+        matrix_init(&to_mat, odsc->st,&od->obj_desc.bb, &bbcom, odsc->size);
+        matrix_copy(&to_mat, od->data, &from_mat, data);
         return od;
 }
 
