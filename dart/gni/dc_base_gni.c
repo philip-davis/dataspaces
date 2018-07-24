@@ -206,8 +206,7 @@ static int dc_unregister(struct dart_client *dc)
 	struct node_id *peer;
 	int sp_index, err = -ENOMEM;
 
-	//sp_index = dc->self->ptlmap.id % dc->num_sp;
-	sp_index = 0; //DSaaS
+	sp_index = 0;
 	peer = dc_get_peer(dc, sp_index);
 	msg = msg_buf_alloc(dc->rpc_s, peer, 1);
 	if (!msg) 
@@ -297,13 +296,13 @@ static int dc_connect_init(struct dart_client *dc, struct sockaddr_in *dest)
 
 static int dc_register_at_master(struct dart_client *dc, int appid)
 {
-        struct msg_buf *msg;
-        struct hdr_register *hr;
-        struct node_id *peer;
-        int err;
-        gni_return_t status;
+    struct msg_buf *msg;
+    struct hdr_register *hr;
+    struct node_id *peer;
+    int err;
+    gni_return_t status;
 
-        peer = dc->peer_tab;
+    peer = dc->peer_tab;
 
 	INIT_LIST_HEAD(&peer->req_list);
 	peer->num_msg_at_peer = dc->rpc_s->max_num_msg;
@@ -315,30 +314,29 @@ static int dc_register_at_master(struct dart_client *dc, int appid)
 
 
 	err = -ENOMEM;
-        msg = msg_buf_alloc(dc->rpc_s, peer, 1);
-        if (!msg) 
-                goto err_out;
-        msg->msg_rpc->cmd = cn_register;
+    msg = msg_buf_alloc(dc->rpc_s, peer, 1);
+    if(!msg) 
+        goto err_out;
+    msg->msg_rpc->cmd = cn_register;
 
-        hr = (struct hdr_register *) msg->msg_rpc->pad;
-        hr->pm_sp = peer->ptlmap;
-        hr->pm_cp = dc->rpc_s->ptlmap;
+    hr = (struct hdr_register *) msg->msg_rpc->pad;
+    hr->pm_sp = peer->ptlmap;
+    hr->pm_cp = dc->rpc_s->ptlmap;
 	hr->num_sp = dc->num_sp;
 	hr->num_cp = dc->num_cp;
 	hr->id_min = dc->rpc_s->ptlmap.id;
 
-        err = rpc_send(dc->rpc_s, peer, msg);
+    err = rpc_send(dc->rpc_s, peer, msg);
+    if (err < 0)
+        goto err_free;
+
+    do{
+        err = rpc_process_event(dc->rpc_s);
         if (err < 0)
-                goto err_free;
+            goto err_out;
+    }while (!dc->f_reg);
 
-        do {
-                err = rpc_process_event(dc->rpc_s);
-                if (err < 0)
-                        goto err_out;
-        }
-        while (!dc->f_reg);
-
-        return 0;
+    return 0;
 
 err_free:
 	printf("'%s()': failed with %d.\n", __func__, status);
@@ -362,12 +360,9 @@ err_out:
 9. smsg_config
 10. Done with registration.
 */
-
-
-
 static int dc_master_init(struct dart_client *dc) //working
 {
-  int i, j, k, err;
+    int i, j, k, err;
 	struct ptlid_map *dcreg;
 	struct node_id *peer;
 
@@ -377,7 +372,7 @@ static int dc_master_init(struct dart_client *dc) //working
 	int check=0;
 	int sp=0;
 
-        gni_return_t status;
+    gni_return_t status;
 	struct sockaddr_in address;
 	gni_smsg_attr_t * smsg_attr;
 
@@ -394,7 +389,7 @@ static int dc_master_init(struct dart_client *dc) //working
 	send_buffer = malloc(info_size);
 
 	dcreg = (struct ptlid_map *)send_buffer;
-	for(i=0;i<dc->num_cp;i++){
+	for(i = 0; i < dc->num_cp; i++) {
 		dcreg->nid = dc->rpc_s->peer_tab[i].ptlmap.nid;
 		dcreg->pid = dc->rpc_s->peer_tab[i].ptlmap.pid;
 		dcreg->appid = dc->rpc_s->peer_tab[i].ptlmap.appid;
@@ -403,8 +398,8 @@ static int dc_master_init(struct dart_client *dc) //working
 	}
 
 	tmp_size = 0;
-	while(1){
-		err = send(connectfd, tmp_size+&info_size, sizeof(int)-tmp_size, 0);
+	while(1) {
+		err = send(connectfd, tmp_size + &info_size, (sizeof(int) - tmp_size), 0);
 		if (-1 == err) {
 			if(errno == EINTR) {
 				continue;
@@ -1236,9 +1231,7 @@ int print_dc(struct dart_client *dc)
 void dc_free(struct dart_client *dc)
 {
 	int err;
-	int track;
 	int f_unregister = 1;
-
    
 	while(dc->rpc_s->rr_num != 0){
 	  err = rpc_process_event(dc->rpc_s);
@@ -1276,7 +1269,6 @@ void dc_free(struct dart_client *dc)
         assert(err == PMI_SUCCESS);
     }	
 
-	track = dc->self->ptlmap.id;
 	err = rpc_server_free(dc->rpc_s, dc->comm);
 	if(err!=0)
 	  uloga("(%s): failed. (%d)\n",__func__, err);

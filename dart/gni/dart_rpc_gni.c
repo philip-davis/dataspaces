@@ -612,24 +612,22 @@ static int sys_process_event(struct rpc_server *rpc_s)
 
 }
 
-static int sys_cleanup (struct rpc_server *rpc_s)
+static int sys_cleanup(struct rpc_server *rpc_s)
 {
 	gni_return_t status;
 	int i, err;
 	void *tmp;
 
 #ifdef DS_HAVE_DRC
-	if(rpc_s->cmp_type == DART_SERVER && rank_id_pmi==0){
+	if(rpc_s->cmp_type == DART_SERVER && rank_id_pmi == 0) {
 		drc_release(rpc_s->drc_credential_id, 0);
 	}
 #endif
 
-	for(i=0; i < rpc_s->num_rpc_per_buff; i++)
-	{
-	  if(rpc_s->peer_tab[i].ptlmap.id==rpc_s->ptlmap.id)
-	    continue;
+	for(i = 0; i < rpc_s->num_rpc_per_buff; i++) {
+	    if(rpc_s->peer_tab[i].ptlmap.id==rpc_s->ptlmap.id)
+	        continue;
 
-	  
 		status = GNI_EpUnbind(rpc_s->peer_tab[i].sys_ep_hndl);
 		if (status != GNI_RC_NOT_DONE && status != GNI_RC_SUCCESS) 
 		{
@@ -802,7 +800,7 @@ static struct node_id *rpc_get_peer(struct rpc_server *rpc_s, int peer_id) //DSa
 	struct node_id *cur_peer;
 
 	cur_peer = rpc_s->peer_tab;
-	while(cur_peer){
+	while(cur_peer) {
 	  if((peer_id < (cur_peer->ptlmap.id + cur_peer->peer_num)) && (peer_id > (cur_peer->ptlmap.id - 1)))
 			return cur_peer + peer_id - cur_peer->ptlmap.id;
 		else
@@ -2111,24 +2109,19 @@ static int rpc_server_finish(struct rpc_server *rpc_s)
 	struct node_id *cur_peer;
 	int i, err;
 	
-	peer = rpc_s->peer_tab;
-	while(peer){
-	  cur_peer = (struct node_id *)(peer + peer->peer_num -1);		
+    peer = rpc_s->peer_tab;
+    while(peer){
+        cur_peer = (struct node_id *)(peer + peer->peer_num - 1);
+        for(i = 0; i < peer->peer_num; i++, peer++) {
+            while (peer->num_req) {
+                err = peer_process_send_list(rpc_s, peer);
+                if (err<0)
+                    printf("'%s()': encountered an error %d, skipping.\n", __func__, err);
+            }
 
-		for(i=0;i<peer->peer_num;i++, peer++){
-			while (peer->num_req)
-			{
-				err = peer_process_send_list(rpc_s, peer);
-				if (err<0)
-					printf("'%s()': encountered an error %d, skipping.\n", __func__, err);
-			}
-
-		}
-
-		peer = cur_peer->next;
-
-	}
-
+        }
+        peer = cur_peer->next;
+    }
 
 	return 0;
 }
@@ -2140,7 +2133,7 @@ int rpc_server_free(struct rpc_server *rpc_s, void *comm)
 	struct node_id *peer, *cur_peer;
 	int err, i;
 	struct rr_index *ri, *ri_tmp;
-        struct gni_smsg_attr_info *cur_attr_info, *attr_info;
+    struct gni_smsg_attr_info *cur_attr_info, *attr_info;
 
 	rpc_server_finish(rpc_s);
 
@@ -2150,15 +2143,13 @@ int rpc_server_free(struct rpc_server *rpc_s, void *comm)
 	   release resources. */
 
 	/* Process any remaining events from the event queue. */
-	while (rpc_s->rr_num != 0) 
-	{
-	        err = rpc_process_event_with_timeout(rpc_s, 100);
-		{
-			if(err != 0 && err != GNI_RC_TIMEOUT)
-				uloga("'%s()': error at flushing the event queue %d!\n", __func__, err);
-		}
-	}
-
+    while (rpc_s->rr_num != 0)
+    {
+        err = rpc_process_event_with_timeout(rpc_s, 100);
+        if(err != 0 && err != GNI_RC_TIMEOUT) {
+            uloga("'%s()': error while flushing the event queue(%d)\n", __func__, err);
+        }
+    }
 
 	//Free memory to index_list
 	list_for_each_entry_safe(ri, ri_tmp, &index_list, struct rr_index, index_entry)
@@ -2168,7 +2159,7 @@ int rpc_server_free(struct rpc_server *rpc_s, void *comm)
 	}
 
 	// Clean system message related
-        sys_cleanup(rpc_s);
+    sys_cleanup(rpc_s);
 
 	// Clean rpc_smsg_init
 	cur_attr_info = rpc_s->attr_info_start;
@@ -2191,28 +2182,26 @@ int rpc_server_free(struct rpc_server *rpc_s, void *comm)
 	}
 
 	peer = rpc_s->peer_tab;
-	while(peer){
+	while(peer) {
 		cur_peer = peer;		
 
-		for(i=0;i<peer->peer_num;i++, peer++){
-			if(peer->ptlmap.id==rpc_s->ptlmap.id)
+		for(i = 0; i < peer->peer_num; i++, peer++) {
+			if(peer->ptlmap.id == rpc_s->ptlmap.id)
 				continue;
 
 			status = GNI_EpUnbind(peer->ep_hndl); //Unbind the remote address from the endpoint handler.
-			if (status != GNI_RC_SUCCESS && status != GNI_RC_NOT_DONE) 
-			{
+			if (status != GNI_RC_SUCCESS && status != GNI_RC_NOT_DONE) {
 				printf("%s(): Fail: GNI_EpUnbind returned error. %d.\n", __func__, status);
 				goto err_out;
 			}
 			status = GNI_EpDestroy(peer->ep_hndl); //You must do an EpDestroy for each endpoint pair.
-			if (status != GNI_RC_SUCCESS) 
-			{
+			if (status != GNI_RC_SUCCESS) {
 				printf("%s(): Fail: GNI_EpDestroy returned error. %d.\n", __func__, status);
 				goto err_out;
 			}
 		}
 
-		peer = cur_peer + cur_peer->peer_num -1;
+		peer = cur_peer + cur_peer->peer_num - 1;
 		peer = peer->next;
 		free(cur_peer);
 	}
@@ -2518,23 +2507,24 @@ uint32_t rpc_server_get_nid(struct rpc_server *rpc_s)
 void rpc_server_find_local_peers(struct rpc_server *rpc_s, struct node_id **peer_tab, int *num_local_peer, int peer_tab_size)
 {
 
-  // find all peers (include current peer itself) that reside on the
-  // same compute node as current peer
-  struct node_id *peer, *cur_peer;
-  int i, j=0;
+    // find all peers (include current peer itself) that reside on the
+    // same compute node as current peer
+    struct node_id *peer, *cur_peer;
+    int i, j = 0;
 
-  peer = rpc_s->peer_tab;
-  while (peer) {
-    cur_peer = (struct node_id *)(peer+peer->peer_num-1);
-    for(i=0;i<peer->peer_num;i++,peer++){
-      if (rpc_s->ptlmap.nid == peer->ptlmap.nid){
-        peer_tab[j++] = peer;
-      }
-    }
-    peer = cur_peer->next;
-  } 
+    peer = rpc_s->peer_tab;
+    while(peer) {
+        cur_peer = (struct node_id *)(peer + peer->peer_num - 1);
+        for(i = 0; i < peer->peer_num; i++, peer++) {
+            if(rpc_s->ptlmap.nid == peer->ptlmap.nid) {
+                peer_tab[j++] = peer;
+            }
+        }
+        peer = cur_peer->next;
+    } 
 
   *num_local_peer = j;
+
 }
 
 //Added for DSaaS:
