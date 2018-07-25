@@ -617,6 +617,7 @@ static int sys_cleanup(struct rpc_server *rpc_s)
 	gni_return_t status;
 	int i, err;
 	void *tmp;
+    struct node_id *peer;
 
 #ifdef DS_HAVE_DRC
 	if(rpc_s->cmp_type == DART_SERVER && rank_id_pmi == 0) {
@@ -624,24 +625,25 @@ static int sys_cleanup(struct rpc_server *rpc_s)
 	}
 #endif
 
-	for(i = 0; i < rpc_s->num_rpc_per_buff; i++) {
-	    if(rpc_s->peer_tab[i].ptlmap.id==rpc_s->ptlmap.id)
-	        continue;
+    peer = rpc_s->peer_tab;
+    while(peer) {
+        for(i = 0; i < peer->peer_num; peer++, i++) {
+            if(peer->ptlmap.id == rpc_s->ptlmap.id) {
+                continue;
+            }
+            status = GNI_EpUnbind(peer->sys_ep_hndl);
+            if (status != GNI_RC_NOT_DONE && status != GNI_RC_SUCCESS) {
+                printf("%s(): (%d)Fail: GNI_EpUnbind(%d) returned error. %d.\n", __func__, rank_id_pmi, peer->ptlmap.id, status);
+                goto err_out;
+            }
 
-		status = GNI_EpUnbind(rpc_s->peer_tab[i].sys_ep_hndl);
-		if (status != GNI_RC_NOT_DONE && status != GNI_RC_SUCCESS) 
-		{
-		    printf("%s(): (%d)Fail: GNI_EpUnbind(%d) returned error. %d.\n", __func__, rank_id_pmi, rpc_s->peer_tab[i].ptlmap.id, status);
-			goto err_out;
-		}
-
-		status = GNI_EpDestroy(rpc_s->peer_tab[i].sys_ep_hndl); 
-		if (status != GNI_RC_SUCCESS) 
-		{
-			printf("%s(): Fail: GNI_EpDestroy returned error. %d.\n", __func__, status);
-			goto err_out;
-		}
-	}
+            status = GNI_EpDestroy(peer->sys_ep_hndl);
+            if (status != GNI_RC_SUCCESS) {
+                printf("%s(): Fail: GNI_EpDestroy returned error. %d.\n", __func__, status);
+                goto err_out;
+            }
+        }
+    }
 
 	status = GNI_CqDestroy(rpc_s->sys_cq_hndl);
 	if (status != GNI_RC_SUCCESS) 
