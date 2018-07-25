@@ -484,7 +484,7 @@ static int dc_master_init(struct dart_client *dc) //working
 	dc->num_sp = dc->rpc_s->num_rpc_per_buff;
 
 
-	dc->peer_tab = (struct node_id *)malloc(dc->rpc_s->num_rpc_per_buff * sizeof(struct node_id)); //// DSaaS
+	dc->peer_tab = (struct node_id *)malloc(dc->rpc_s->num_rpc_per_buff * sizeof(struct node_id));
 	memset(dc->peer_tab, 0, dc->rpc_s->num_rpc_per_buff * sizeof(struct node_id));
 
 
@@ -494,18 +494,17 @@ static int dc_master_init(struct dart_client *dc) //working
 	dcreg = (struct ptlid_map *)recv_buffer;
 	peer = dc->peer_tab;
 	check = 0;
-	for (i = 0; i < dc->peer_size; i++) 
-	{
-		if(i<dc->rpc_s->num_rpc_per_buff){
-		        INIT_LIST_HEAD(&peer->req_list);
-		        peer->num_msg_at_peer = dc->rpc_s->max_num_msg;
+	for (i = 0; i < dc->peer_size; i++) {
+		if(i < dc->rpc_s->num_rpc_per_buff) {
+		    INIT_LIST_HEAD(&peer->req_list);
+		    peer->num_msg_at_peer = dc->rpc_s->max_num_msg;
 
-	                peer->num_msg_recv = 0;
-		        peer->num_msg_ret = 0;	  
+	        peer->num_msg_recv = 0;
+		    peer->num_msg_ret = 0;	  
 
-		        peer->sys_msg_recv = 0;
-		        peer->sys_msg_at_peer = dc->rpc_s->max_num_msg;
-		        peer->sys_msg_ret = 0;	
+		    peer->sys_msg_recv = 0;
+		    peer->sys_msg_at_peer = dc->rpc_s->max_num_msg;
+		    peer->sys_msg_ret = 0;	
 
 			peer->ptlmap.nid = dcreg->nid;
 			peer->ptlmap.pid = dcreg->pid;
@@ -514,22 +513,20 @@ static int dc_master_init(struct dart_client *dc) //working
 			peer->next = NULL;
 			peer->peer_rank = peer->ptlmap.id;
 			peer->peer_num = dc->rpc_s->num_rpc_per_buff;
-
-		}
-
-		else{
-		  if((dc->rpc_s->ptlmap.appid == dcreg->appid) && (i == dc->rpc_s->num_rpc_per_buff))
-			dc->rpc_s->app_minid = dc->cp_min_rank = dcreg->id;
-
-		  if((dc->rpc_s->ptlmap.pid == dcreg->pid) && (dc->rpc_s->ptlmap.nid == dcreg->nid)){
-			dc->rpc_s->ptlmap.id = dcreg->id;
-			break;
-		  }
+		} else{
+		    if((dc->rpc_s->ptlmap.appid == dcreg->appid) 
+                  && (i == dc->rpc_s->num_rpc_per_buff)) {
+			    dc->rpc_s->app_minid = dc->cp_min_rank = dcreg->id;
+            }
+		    if((dc->rpc_s->ptlmap.pid == dcreg->pid) 
+                && (dc->rpc_s->ptlmap.nid == dcreg->nid)) {
+		        dc->rpc_s->ptlmap.id = dcreg->id;
+			    break;
+		    }
 		}
 
 		dcreg++;
 		peer++;
-
 	}
 
 	if (dc->comm) {

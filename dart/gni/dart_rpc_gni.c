@@ -6,7 +6,7 @@
  * that the following conditions are met:
  *
  * - Redistributions of source code must retain the above copyright notice, this list of conditions and
- * the following disclaimer.
+/* the following disclaimer.
  * - Redistributions in binary form must reproduce the above copyright notice, this list of conditions and
  * the following disclaimer in the documentation and/or other materials provided with the distribution.
  * - Neither the name of the NSF Cloud and Autonomic Computing Center, Rutgers University, nor the names of its
@@ -2203,7 +2203,10 @@ int rpc_server_free(struct rpc_server *rpc_s, void *comm)
 
 		peer = cur_peer + cur_peer->peer_num - 1;
 		peer = peer->next;
-		free(cur_peer);
+        //the base of the peer_tab list is part of a larger allocation by now (bad encapsulation.)
+        if(cur_peer != rpc_s->peer_tab) {
+		    free(cur_peer);
+        }
 	}
 	rpc_s->peer_tab = NULL;
 
@@ -2339,7 +2342,7 @@ int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg
 	if(!rr)
 		goto err_out;
 
-    rr->type = 0;//0 represents cmd ; 1 for data
+    rr->type = 0; //0 represents cmd ; 1 for data
 	rr->msg = msg;
 	rr->iodir = io_send;
 	rr->cb = (async_callback)rpc_cb_req_completion;
@@ -2558,7 +2561,7 @@ err_status:
 
 int rpc_attr_cleanup(struct rpc_server *rpc_s, struct gni_smsg_attr_info *cur_attr_info)
 {
-        int i;
+    int i;
 	gni_return_t status;
 
 	status = GNI_MemDeregister(rpc_s->nic_hndl, &cur_attr_info->local_smsg_attr.mem_hndl);

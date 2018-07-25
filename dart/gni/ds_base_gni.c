@@ -141,7 +141,7 @@ static int dsrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 	}
 
-        return 0;
+    return 0;
 
  err_out:
 	printf("(%s): failed. (%d)\n", __func__, err);
@@ -171,12 +171,12 @@ static int ds_register_cp(struct dart_server *ds, struct app_info *app)
 	msg->msg_rpc->cmd = sp_announce_cp;
 	msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
 
-		cur_attr_info = (struct gni_smsg_attr_info *)(msg->msg_rpc->pad);
+    cur_attr_info = (struct gni_smsg_attr_info *)(msg->msg_rpc->pad);
 	cur_attr_info->appid = app->app_id;
 
 	attr_info = ds->rpc_s->attr_info_start;
 	
-	while(attr_info->appid != app->app_id){
+	while(attr_info->appid != app->app_id) {
 		attr_info = attr_info->next;
 	}
 
@@ -188,9 +188,9 @@ static int ds_register_cp(struct dart_server *ds, struct app_info *app)
 		goto err_out;
 	}
 
-        return 0;
+    return 0;
 
- err_out:
+err_out:
 	printf("(%s): failed. (%d)\n", __func__, err);
 	return err;
 
@@ -221,8 +221,8 @@ static int sp_register_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 	smsg_attr = (gni_smsg_attr_t *)(dcreg+num_cp);
 
 	cur_attr_info = ds->rpc_s->attr_info_start;
-	while(1){
-		if(!cur_attr_info->next){
+	while(1) {
+		if(!cur_attr_info->next) {
 			cur_attr_info->next = (struct gni_smsg_attr_info *)malloc(sizeof(struct gni_smsg_attr_info));
 			memset(cur_attr_info->next, 0, sizeof(struct gni_smsg_attr_info));
 			cur_attr_info = cur_attr_info->next;
@@ -230,33 +230,31 @@ static int sp_register_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 			cur_attr_info->appid = dcreg->appid;
 			break;
 		}
-		else
+		else {
 			cur_attr_info = cur_attr_info->next;	
-	}
+	    }
+    }
 
 	err = rpc_smsg_init(ds->rpc_s, cur_attr_info, num_cp);
-	if (err != 0){
+	if(err != 0) {
 		printf("Rank %d: failed for rpc_smsg_init. (%d)\n", ds->rpc_s->ptlmap.id, err);
 		goto err_out;
 	}
 
-
 	peer = &ds->peer_tab[ds->size_sp-1];
-	while(1){
-		if(!peer->next){
+	while(1) {
+		if(!peer->next) {
 			peer->next = (struct node_id *)malloc(num_cp * sizeof(struct node_id));
 			memset(peer->next, 0, num_cp * sizeof(struct node_id));
 			peer = peer->next;
-
 			break;
-		}
-		else
-			peer = (struct node_id *)(peer->next + peer->next->peer_num - 1);		
+		} else {
+			peer = (struct node_id *)(peer->next + peer->next->peer_num - 1);
+        }        
 	}	
 
-
 	//set up new peer_tab block for this app
-	for(j=0;j<num_cp;j++){
+	for(j = 0; j < num_cp; j++) {
 		peer->ptlmap.nid = dcreg->nid;
 		peer->ptlmap.pid = dcreg->pid;
 		peer->ptlmap.appid = dcreg->appid;
@@ -338,18 +336,16 @@ static int sp_register_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 		app->f_reg = 1;
 	}
 
-
-        err = ds_register_cp(ds, app);
+    err = ds_register_cp(ds, app);
 	if (err != 0){
 		printf("Rank %d: failed for ds_register_cp for application %d. (%d)\n", ds->rpc_s->ptlmap.id, dcreg->appid, err);
 		goto err_out;
 	}
 
-		
 	free(msg->msg_data);
 	free(msg);
 
-        return 0;
+    return 0;
 
 err_free:
 	printf("'%s()': failed with %d.\n", __func__, status);
@@ -368,7 +364,7 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	struct hdr_register *hr;
 	struct msg_buf *msg;
 	struct node_id *peer;
-        struct app_info *app;
+    struct app_info *app;
 	int err = -ENOMEM;
 	int i, j;
 
@@ -426,7 +422,7 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 		    peer = ds_get_peer(ds, hreg->pm_cp.id);
 
-		    for(j=0;j<hreg->num_cp;j++){
+		    for(j = 0; j < hreg->num_cp; j++){
 			    dcreg->nid = peer->ptlmap.nid;
 		    	dcreg->pid = peer->ptlmap.pid;
 			    dcreg->appid = peer->ptlmap.appid;
@@ -853,9 +849,6 @@ We should:
 2. open tcp and wait for apps join-in
 
 */
-
-
-
 static int ds_master_init(struct dart_server *ds)//testing
 {
 	int i, j, err, p, count = 0;
@@ -876,8 +869,7 @@ static int ds_master_init(struct dart_server *ds)//testing
 
 
 	// EpCreate+Epbind+smsg_init(rpc+sys)
-
-	for(i=0;i<ds->num_sp; i++){////DSaaS
+	for(i = 0; i < ds->num_sp; i++) {
 		if(i == ds->rpc_s->ptlmap.id)
 			continue;
 
@@ -1045,7 +1037,7 @@ static void *ds_master_listen(void *ds_v)
 
 	k = 0;
 
-	while(ds->thread_alive){
+	while(ds->thread_alive) {
 
 		//1. connect to app
 		connectfd[k] = accept(ds->rpc_s->address.sockfd, NULL, NULL);
@@ -1059,7 +1051,7 @@ static void *ds_master_listen(void *ds_v)
 
 		//2. recv app ptlmap info
 		tmp_size = 0;
-		while(1){
+		while(1) {
 			err = recv(connectfd[k], tmp_size+&info_size, sizeof(int)-tmp_size, 0);
 			if (-1 == err) {
 				if(errno == EINTR) {
@@ -1081,7 +1073,7 @@ static void *ds_master_listen(void *ds_v)
 
 		recv_buffer = malloc(info_size);
 		tmp_size = 0;
-		while(1){
+		while(1) {
 			err = recv(connectfd[k], tmp_size+recv_buffer, info_size-tmp_size, 0);
 			if (-1 == err) {
 				if(errno == EINTR) {
@@ -1111,7 +1103,7 @@ static void *ds_master_listen(void *ds_v)
             peer = (struct node_id *)((peer->next + peer->next->peer_num - 1));
         }
         peer->next = (struct node_id *)malloc(cur_cp * sizeof(struct node_id));
-        peer = peer->next
+        peer = peer->next;
 
 		cur_cn_peer = peer;
 
@@ -1155,7 +1147,7 @@ static void *ds_master_listen(void *ds_v)
 			}
 
 			status = GNI_EpCreate(ds->rpc_s->nic_hndl, ds->rpc_s->sys_cq_hndl, &peer->sys_ep_hndl);
-			if (status != GNI_RC_SUCCESS) {{
+			if (status != GNI_RC_SUCCESS) {
 				printf("Rank %d: Fail GNI_EpCreate SYS returned error. %d.\n", ds->rpc_s->ptlmap.id, status);
 				goto err_out;
 			}
@@ -1176,7 +1168,7 @@ static void *ds_master_listen(void *ds_v)
 		    cur_attr_info = cur_attr_info->next;
         }
 
-		cur_attr_info->next = (struct gni_smsg_attr_info *)malloc(sizeof(struct gni_smsg_attr_info)); //// DSaaS
+		cur_attr_info->next = (struct gni_smsg_attr_info *)malloc(sizeof(struct gni_smsg_attr_info)); 
 		memset(cur_attr_info->next, 0, sizeof(struct gni_smsg_attr_info));
 		cur_attr_info = cur_attr_info->next;
 		cur_attr_info->appid = appid;
@@ -1197,7 +1189,7 @@ static void *ds_master_listen(void *ds_v)
 		dcreg_tmp = (struct ptlid_map *)recv_buffer;
 
 		for(j = 0; j < ds->num_sp + cur_cp; j++) {
-			if(j<ds->num_sp) {
+			if(j < ds->num_sp) {
 				dcreg->nid = ds->peer_tab[j].ptlmap.nid;
 				dcreg->pid = ds->peer_tab[j].ptlmap.pid;
 				dcreg->appid = ds->peer_tab[j].ptlmap.appid;
@@ -1289,10 +1281,8 @@ static void *ds_master_listen(void *ds_v)
 				break;
 		}
 
-
 		peer = cur_cn_peer;
 		smsg_attr = (gni_smsg_attr_t *)recv_buffer;
-
 
 		for(j = 0; j < info_size / sizeof(gni_smsg_attr_t); j++) {
 			peer->remote_smsg_attr = *smsg_attr;
@@ -1320,7 +1310,7 @@ static void *ds_master_listen(void *ds_v)
 		*smsg_attr = cur_attr_info->local_smsg_attr;
 
 		tmp_size = 0;
-		while(1){
+		while(1) {
 			err = send(connectfd[k], tmp_size+&info_size, sizeof(int)-tmp_size, 0);
 			if (-1 == err) {
 				perror("error send attr size failed");
@@ -1334,7 +1324,7 @@ static void *ds_master_listen(void *ds_v)
 		}
 
 		tmp_size = 0;
-		while(1){
+		while(1) {
 			err = send(connectfd[k], tmp_size+send_buffer, info_size-tmp_size, 0);
 			if (-1 == err) {
 				perror("error send attr failed");
@@ -1351,9 +1341,8 @@ static void *ds_master_listen(void *ds_v)
 
 		// Done with this new app. Continue on waiting for the next ...
 		k++;
-		count = count+cur_cp;
+		count = count + cur_cp;
 		cur_cp = 0;
-
 	}
 
     ds->ct_rc = 0;
@@ -1404,8 +1393,8 @@ err_out:
 */
 static int ds_boot_slave(struct dart_server *ds)
 {
-        int i,j;
-        int err = -ENOMEM;
+    int i,j;
+    int err = -ENOMEM;
 	struct node_id *peer;
 	struct ptlid_map * ptlmap;
 	struct peer_attr_reg *peer_attr = (struct peer_attr_reg *)malloc(ds->peer_size * sizeof(struct peer_attr_reg));
@@ -1414,16 +1403,14 @@ static int ds_boot_slave(struct dart_server *ds)
 	gni_return_t status;
 	struct gni_smsg_attr_info *cur_attr_info;
 
-
 	// EpCreate+Epbind+smsg_init(rpc+sys)
-	for(i=0;i<ds->num_sp; i++) {
+	for(i = 0; i < ds->num_sp; i++) {
 		if(i == ds->rpc_s->ptlmap.id)
 			continue;
 
 		peer = &ds->peer_tab[i];
 		peer->peer_rank = i;
 		peer->peer_num = ds->num_sp;
-
 
 		status = GNI_EpCreate(ds->rpc_s->nic_hndl, ds->rpc_s->src_cq_hndl, &peer->ep_hndl);
 		if (status != GNI_RC_SUCCESS)
@@ -1593,9 +1580,9 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 	if (!ds)
 		goto err_out;
 	ds->dart_ref = dart_ref;
-	ds->peer_tab = (struct node_id *) (ds+1);
+	ds->peer_tab = (struct node_id *)(ds + 1);
 
-	ds->peer_size = num_sp;////DsaaS: peer_size represents current number of peers in total
+	ds->peer_size = num_sp; //peer_size represents current number of peers in total
 
 	ds->size_sp = num_sp;
 	ds->num_sp = num_sp;
@@ -1646,11 +1633,9 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 		peer++;
 	}
 
-        rpc_add_service(cn_register, dsrpc_cn_register);
-        rpc_add_service(cn_unregister, dsrpc_cn_unregister);
-        rpc_add_service(sp_announce_cp, dsrpc_announce_cp);
-
-
+    rpc_add_service(cn_register, dsrpc_cn_register);
+    rpc_add_service(cn_unregister, dsrpc_cn_unregister);
+    rpc_add_service(sp_announce_cp, dsrpc_announce_cp);
 
 	err = ds_boot(ds);
 	if (err < 0)

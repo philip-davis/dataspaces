@@ -1902,30 +1902,10 @@ static int dsgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 static int dsgrpc_ss_kill(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-			struct hdr_dsg_kill *hdr = (struct hdr_dsg_kill *)cmd->pad;
-	        struct node_id *peer;
-	        struct msg_buf *msg;
 	        int err;
 	        err = -ENOMEM;
 	        dsg->kill = 1;
 	        uloga("Server received kill command. Going to shut down...\n");
-	        /*
-	        peer = ds_get_peer(dsg->ds, cmd->id);
-	        msg = msg_buf_alloc(rpc_s, peer, 1);
-	        if (!msg)
-	                goto err_out;
-	        rpc_mem_info_cache(peer, msg, cmd);
-			err = rpc_receive_direct(rpc_s, peer, msg);
-			rpc_mem_info_reset(peer, msg, cmd);
-	        if(err< 0)
-	        	goto err_out;
-	        free(msg);
-
-	        return 0;
-	 err_out:
-	        uloga("'%s()': failed with %d.\n", __func__, err);
-	        free (msg);
-	        return err;*/
 	        sleep(3);
 	        return 0;
 }
@@ -2070,7 +2050,7 @@ int dsg_process(struct ds_gspace *dsg)
 
 int dsg_complete(struct ds_gspace *dsg)
 {
-    if( ds_stop(dsg->ds) || (dsg->kill == 1)){
+    if(ds_stop(dsg->ds) || (dsg->kill == 1)) {
     	return 1;
     }
     else
