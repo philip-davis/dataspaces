@@ -109,19 +109,6 @@ else
         AM_CONDITIONAL(BUILD_DIMES, false)
 fi
 
-dnl Check if DataSpaces location-aware write is enabled
-AC_ARG_ENABLE(dataspaces_location_aware_write,
-    [AS_HELP_STRING([--enable-dataspaces-location-aware-write],
-        [Include experimental feature. DataSpaces client writes data to
-         servers that running on local compute node. This feature is useful
-         when co-locating the execution of DataSpaces servers with application
-         on the same set of compute nodes. By default this is not included.])])
-AM_CONDITIONAL([DATASPACES_LOCATION_AWARE_WRITE], [test "x$enable_dataspaces_location_aware_write" == "xyes"])
-
-if test "x$enable_dataspaces_location_aware_write" == "xyes"; then
-    AC_DEFINE(DS_HAVE_DSPACES_LOCATION_AWARE_WRITE, 1, [DATASPACES location-aware write is enabled])
-fi 
-
 dnl Check if we are syncing with rpc messages
 AC_ARG_ENABLE(sync-msg,
     [AS_HELP_STRING([--enable-sync-msg],
@@ -138,13 +125,17 @@ AC_ARG_ENABLE(shmem,
 AM_CONDITIONAL([SHMEM], [test "x$enable_shmem" == "xyes"])
 
 if test "x$enable_shmem" == "xyes"; then
+    if test "x$enable_dimes" == "xyes"; then
+            AC_DEFINE(DS_HAVE_DIMES_SHMEM, 1, [Hybrid staging is enabled for DIMES])
+    else
             AC_DEFINE(SHMEM_OBJECTS, 1, [Hybrid Staging is enabled])
+    fi
             AM_CONDITIONAL(BUILD_HYBRID, true)
             echo "HYBRID STAGING enabled!"
             DSPACESLIB_LDADD+=" -lrt"
             DSPACES_EXT_LDADD+=" -lrt"
 else
-        AM_CONDITIONAL(BUILD_HYBRID, falSE)
+        AM_CONDITIONAL(BUILD_HYBRID, false)
 fi
 
 if test -z "${HAVE_UGNI_TRUE}"; then
