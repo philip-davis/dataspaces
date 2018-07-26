@@ -1,7 +1,7 @@
 Requirements
 ============
 1. DataSpaces requires MPI. 
-
+2. DataSpaces typically requires a filesystem that supports flock() system calls. There are work-arounds for this for some transports.
 
 Quick Installation Instructions
 ===============================
@@ -101,9 +101,6 @@ $ ./configure CC=[C_COMPILER_OPTION] FC=[Fortran_COMPILER_OPTION] --enable-dart-
    dimes_get() to fetch data in remote memory buffer. Must be used with
    --enable-dimes option. Default value is set as 64MB.
 
---with-build-for-stampede=integer
-  User set this value to 1 in order to configure and compile DataSpaces on Stampede cluster.
-
 --with-infiniband-msg-queue-size=integer value
   User can use this option to change the size of the messaging queue on DataSpaces servers.
   If you receive errors stating the messaging queue is full. You should use this option to
@@ -145,14 +142,16 @@ $ ./configure CC=[C_COMPILER_OPTION] FC=[Fortran_COMPILER_OPTION] --enable-dart-
    API functions (see dimes_interface.h for detailed documentation) should be
    called periodically to free data objects cached in DIMES. Where there is no
    sufficient memory space, dimes_put()/dimes_get() would fail and return errors. 
-   
- --enable-ib-cpp=yes
-   To use cpp implementation of dart communication layer using infiniband. If this is enabled, some
-   care needs to be taken on the configure command; CXX=mpicxx, LDFLAGS="-lstdc++ -lmpi_cxx -lpthread"
-   e.g., 
-   ./configure CC=mpicc FC=mpif90 CXX=mpicxx 
-     LDFLAGS="-lstdc++ -lmpi_cxx -lpthread" \
-     --enable-ib-cpp=yes --with-ib-interface=ib0 --prefix="install_dir"
+  
+  --enable-shmem
+    Use this option to enable Hybrid Staging. Read operations will use shared memory transport
+    instead of RDMA when the target of the read is colocated on the same node.
+
+  --enable-sync-msg
+    Client waits for RPC-based confirmation from server before completing dspaces_put_sync() call. This
+    allows more accurate timing information where the transport does not issue a completion event for
+    remotely triggered reads (i.e. Infiniband.)
+    
    
 3. Build & Install 
 # Under project top directory

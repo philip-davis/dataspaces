@@ -37,7 +37,6 @@ DataSpaces APIs
 Please read header files include/dataspaces.h and include/dimes_interface.h for
 detailed API documentation. 
 
-
 Test Applications
 =================
 
@@ -145,6 +144,35 @@ Both Fortran and C tests are using the same dataspaces_server executable written
 Note: if you would like to write your own job script, please add command rm -f conf
 srv.lck to your script in order to remove config files from previous run.
 
+DataSpaces-as-a-Service (DSaaS):
+================================
+
+IMPORTANT change as of 1.7.0: 
+
+The DataSpaces server now runs as a persistent service for the GNI and
+Infiniband transport methods. Client applications may come and go through
+the life of the server. The server will not remove data based upon the
+disconnection of a client. The server no longer needs to know how many
+client processes will connect, so the -c flag is now ignored for GNI and
+Infiniband transports. 
+
+Users should be aware that the server will continue to run, even if all 
+clients have disconnected. A new API call has been created to allow a 
+client to kill the server: dspaces_kill(). This should be used after 
+dspaces_init(), but before dspaces_finalize(). Alternatively, a job 
+script could kill the launch of the server externally after all client
+applications have completed.
+
+Hybrid Staging:
+===============
+
+Options have been added to support hybrid staging for read operations. When
+enabled, DataSpaces will use shared memory communication to perform reads
+when the data being read is already on the same node, either because the
+reader rank is colocated with the server (DataSpaces case), or the writer
+and reader ranks are colocated (DIMES case.)
+
+See INSTALL for usage.
 
 FAQ
 ===
