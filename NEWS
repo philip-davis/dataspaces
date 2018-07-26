@@ -1,3 +1,9 @@
+1.7.0 Released July 2018
+    - DataSpaces-as-a-Service (DSaas) release for GNI and Infiniband transports.
+    - Added shared-memory based communication for collocated peers (see README for some details.)
+    - Added optional sync message to make put_sync timing consistent for all transports.
+    - Various bug fixes, especially in IB transport.
+
 1.6.5 Released December 2017
     - Improved performance on KNL platforms with better copy alignments.
     - Various bug fixes for Cray DRC.
