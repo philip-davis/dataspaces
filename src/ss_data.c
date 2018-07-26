@@ -1245,7 +1245,10 @@ struct obj_data *shmem_obj_data_alloc(struct obj_descriptor *odsc, int id)
 
     /* configure the size of the shared memory segment */
     SIZE = obj_data_size(odsc) + 7;
-    ftruncate(shm_fd,SIZE);
+    if(ftruncate(shm_fd,SIZE) != 0) {
+        perror("resize failed.");
+        return(NULL);
+    }
 
     /* now map the shared memory segment in the address space of the process */
     ptr = mmap(0,SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
