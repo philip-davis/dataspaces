@@ -14,15 +14,9 @@ AC_FC_WRAPPERS
 
 m4_ifdef([AM_PROG_AR],[AM_PROG_AR])
 
-dnl AC_PROG_LIBTOOL
-dnl AC_CRAY_PMI
-dnl AC_CRAY_UGNI
-AC_PORTALS
 AC_INFINIBAND
-AC_DCMF
 AC_UGNI
 AC_GNI_PTAG
-AC_PAMI
 AC_TCP_SOCKET
 
 AC_CONFIGURE_OPTIONS
@@ -63,33 +57,15 @@ if test "x$enable_dart_tcp" == "xyes"; then
   if test -z "${HAVE_UGNI_TRUE}"; then
     AM_CONDITIONAL(HAVE_UGNI, false)
     AC_DEFINE(HAVE_UGNI, 0, [])
-  elif test -z "${HAVE_DCMF_TRUE}"; then
-    AM_CONDITIONAL(HAVE_DCMF, false)
-    AC_DEFINE(HAVE_DCMF, 0, [])
-  elif test -z "${HAVE_PAMI_TRUE}"; then
-    AM_CONDITIONAL(HAVE_PAMI, false)
-    AC_DEFINE(HAVE_PAMI, 0, [])
   elif test -z "${HAVE_INFINIBAND_TRUE}"; then
     AM_CONDITIONAL(HAVE_INFINIBAND, false)
     AC_DEFINE(HAVE_INFINIBAND, 0, [])
-  elif test -z "${HAVE_PORTALS_TRUE}"; then
-    AM_CONDITIONAL(HAVE_PORTALS, false)
-    AC_DEFINE(HAVE_PORTALS, 0, [])
   fi
 else
   if test -z "${HAVE_UGNI_TRUE}"; then
     AM_CONDITIONAL(HAVE_TCP_SOCKET, false)
     AC_DEFINE(HAVE_TCP_SOCKET, 0, [])
-  elif test -z "${HAVE_DCMF_TRUE}"; then
-    AM_CONDITIONAL(HAVE_TCP_SOCKET, false)
-    AC_DEFINE(HAVE_TCP_SOCKET, 0, [])
-  elif test -z "${HAVE_PAMI_TRUE}"; then
-    AM_CONDITIONAL(HAVE_TCP_SOCKET, false)
-    AC_DEFINE(HAVE_TCP_SOCKET, 0, [])
   elif test -z "${HAVE_INFINIBAND_TRUE}"; then
-    AM_CONDITIONAL(HAVE_TCP_SOCKET, false)
-    AC_DEFINE(HAVE_TCP_SOCKET, 0, [])
-  elif test -z "${HAVE_PORTALS_TRUE}"; then
     AM_CONDITIONAL(HAVE_TCP_SOCKET, false)
     AC_DEFINE(HAVE_TCP_SOCKET, 0, [])
   fi
@@ -188,13 +164,6 @@ if test -z "${HAVE_UGNI_TRUE}"; then
   fi
 fi
 
-if test -z "${HAVE_PORTALS_TRUE}"; then
-  DSPACESLIB_CPPFLAGS+=" ${PORTALS_CPPFLAGS}"
-  DSPACESLIB_CFLAGS+=" ${PORTALS_CFLAGS}"
-  DSPACESLIB_LDFLAGS+=" ${PORTALS_LDFLAGS}"
-  DSPACESLIB_LDADD+=" ${PORTALS_LIBS}"
-fi
-
 if test -z "${HAVE_INFINIBAND_TRUE}"; then
   DSPACESLIB_CPPFLAGS+=" ${INFINIBAND_CPPFLAGS}"
   DSPACES_EXT_CPPFLAGS+=" ${INFINIBAND_CPPFLAGS}"
@@ -204,20 +173,6 @@ if test -z "${HAVE_INFINIBAND_TRUE}"; then
   DSPACES_EXT_LDADD+=" ${INFINIBAND_LIBS} -lrdmacm"
   echo "DSPACESLIB_EXT_CPPFLAGS = ${DSPACESLIB_EXT_CPPFLAGS}"
   echo " DSPACESLIB_EXT_LDADD = ${DSPACESLIB_EXT_LDADD}"
-fi
-
-if test -z "${HAVE_DCMF_TRUE}"; then
-  DSPACESLIB_CPPFLAGS+=" ${DCMF_CPPFLAGS} -DHAVE_DCMF"
-  DSPACESLIB_CFLAGS+=" ${DCMF_CFLAGS} -DHAVE_DCMF"
-  DSPACESLIB_LDFLAGS+=" ${DCMF_LDFLAGS}"
-  DSPACESLIB_LDADD+=" ${DCMF_LIBS}"
-fi
-
-if test -z "${HAVE_PAMI_TRUE}"; then
-  DSPACESLIB_CPPFLAGS+=" ${PAMI_CPPFLAGS} -DHAVE_PAMI"
-  DSPACESLIB_CFLAGS+=" ${PAMI_CFLAGS} -DHAVE_PAMI"
-  DSPACESLIB_LDFLAGS+=" ${PAMI_LDFLAGS}"
-  DSPACESLIB_LDADD+=" ${PAMI_LIBS}"
 fi
 
 if test -z "${HAVE_TCP_SOCKET_TRUE}"; then
@@ -273,16 +228,6 @@ else
   echo "No Cray UGNI."
 fi
 
-if test -z "${HAVE_PORTALS_TRUE}"; then
-  echo "Cray Portals enabled.";
-  echo "	- PORTALS_CFLAGS = $PORTALS_CFLAGS";
-  echo "	- PORTALS_CPPFLAGS = $PORTALS_CPPFLAGS";
-  echo "	- PORTALS_LDFLAGS = $PORTALS_LDFLAGS";
-  echo "	- PORTALS_LIBS = $PORTALS_LIBS";
-else
-  echo "No Cray Portals."
-fi
-
 if test -z "${HAVE_INFINIBAND_TRUE}"; then
   echo "Infiniband available.";
   echo "	- INFINIBAND_CFLAGS = $INFINIBAND_CFLAGS";
@@ -291,26 +236,6 @@ if test -z "${HAVE_INFINIBAND_TRUE}"; then
   echo "	- INFINIBAND_LIBS = $INFINIBAND_LIBS";
 else
   echo "No Infiniband."
-fi
-
-if test -z "${HAVE_DCMF_TRUE}"; then
-  echo "IBM DCMF enabled.";
-  echo "	- DCMF_CFLAGS = $DCMF_CFLAGS";
-  echo "	- DCMF_CPPFLAGS = $DCMF_CPPFLAGS";
-  echo "	- DCMF_LDFLAGS = $DCMF_LDFLAGS";
-  echo "	- DCMF_LIBS = $DCMF_LIBS";
-else
-  echo "No IBM DCMF."
-fi
-
-if test -z "${HAVE_PAMI_TRUE}"; then
-  echo "IBM PAMI enabled.";
-  echo "        - PAMI_CFLAGS = $PAMI_CFLAGS";
-  echo "        - PAMI_CPPFLAGS = $PAMI_CPPFLAGS";
-  echo "        - PAMI_LDFLAGS = $PAMI_LDFLAGS";
-  echo "        - PAMI_LIBS = $PAMI_LIBS";
-else
-  echo "No IBM PAMI."
 fi
 
 if test -z "${HAVE_TCP_SOCKET_TRUE}"; then

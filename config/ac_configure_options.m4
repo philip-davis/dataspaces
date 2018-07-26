@@ -51,11 +51,6 @@ AC_ARG_WITH(infiniband-timeout,                                                 
         [have_infiniband_timeout=yes;
          INFINIBAND_TIMEOUT="$withval";])
 
-AC_ARG_ENABLE(ib-cpp,[AS_HELP_STRING([--enable-ib-cpp], [Enable ib-cpp] ) ],
-              [AM_CONDITIONAL(ENABLE_IB_CPP, true) ], [AM_CONDITIONAL(ENABLE_IB_CPP, false) ] )
-AC_MSG_CHECKING([whether to enable ib-cpp])
-AS_IF([test "x$enableval" = "xyes" ], AC_MSG_RESULT([yes]), AC_MSG_RESULT([no]))
-
 if test "x$have_max_num_array_dimension" = "xyes"; then
     AC_DEFINE_UNQUOTED(BBOX_MAX_NDIM,$MAX_NUM_ARRAY_DIMENSION,[Maximum number of array dimension])
 else
