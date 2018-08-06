@@ -55,7 +55,7 @@
 #include <rca_lib.h>
 #endif
 
-#if defined(HAVE_UGNI)
+#if HAVE_UGNI
 
 /* TODO: This needs to be updated to use MPI, when available so that MPMD will work. */
 int get_topology_info(int *out_pmi_rank, int *out_nid, 
