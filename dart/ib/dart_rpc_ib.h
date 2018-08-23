@@ -342,6 +342,7 @@ struct node_id {
 
 	// List of pending requests.
 	struct list_head req_list;
+	struct list_head pref_list;
 	int num_req;
 
 	int req_posted;
@@ -414,7 +415,9 @@ enum cmd_type {
 	cn_s_unregister,
 	ss_obj_get_desc_internal,
     ss_obj_send_desc,
-	get_prefetched_data
+	get_prefetched_data,
+	peer_prefetch_obj,
+	ss_obj_get_prefetch
 };
 
 enum lock_type {
@@ -473,9 +476,11 @@ void rpc_add_service(enum cmd_type rpc_cmd, rpc_service rpc_func);
 int rpc_barrier(struct rpc_server *rpc_s);
 
 int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg);
+int rpc_prefetch_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg);
 int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg);
 int rpc_send_directv(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg);	//API is here, but useless in InfiniBand version
 int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg);
+int rpc_prefetch_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg);
 
 int rpc_receive(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg);
 int rpc_receivev(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg);	//API is here, but useless in InfiniBand version

@@ -726,7 +726,26 @@ static inline struct node_id * dcg_which_peer(void)
         int peer_id;
         struct node_id *peer;
 
-        peer_id = dcg->dc->self->ptlmap.id % dcg->dc->num_sp;
+        //peer_id = dcg->dc->self->ptlmap.id % dcg->dc->num_sp;
+        //uloga("Client %d connecting to %d peer id\n", dcg->dc->self->ptlmap.id, peer_id);
+        //Attaching to the group of 2 servers
+        int num_groups = (dcg->dc->num_sp/2)-1;
+        int grp_no = (dcg->dc->self->ptlmap.id - 2) % num_groups;
+        peer_id = grp_no*2+3;
+        //uloga("Client %d connecting to %d peer id\n", dcg->dc->self->ptlmap.id, peer_id);
+        peer = dc_get_peer(dcg->dc, peer_id);
+
+        return peer;
+}
+
+static inline struct node_id * dcg_prefetch_peer(void)
+{
+        int peer_id;
+        struct node_id *peer;
+
+        //peer_id = dcg->dc->self->ptlmap.id % dcg->dc->num_sp;
+        //Attaching to the group of 2 servers
+        peer_id = (dcg->dc->self->ptlmap.id % (dcg->dc->num_sp/2))*2;
         peer = dc_get_peer(dcg->dc, peer_id);
 
         return peer;
@@ -989,7 +1008,7 @@ static int get_dht_peers_completion(struct rpc_server *rpc_s, struct msg_buf *ms
         if(qte->qh->qh_peerid_tab[0]==-2){
         	qte->f_node_local = 1;
         }
-
+        //uloga("Received dht_peers\n");
         free(msg);
 
         return 0;
@@ -1036,7 +1055,7 @@ static int get_dht_peers(struct query_tran_entry *qte)
 
 static int obj_prefetch_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-		uloga("Finished receiving the prefetched data\n");
+		//uloga("Finished receiving the prefetched data\n");
 		struct query_tran_entry *qte = msg->private;
 		qte->f_data_received = 1;
         free(msg);
@@ -1220,7 +1239,7 @@ static int obj_data_get_completion(struct rpc_server *rpc_s, struct msg_buf *msg
     if (++qte->num_parts_rec == qte->size_od) {
         qte->f_complete = 1;
     }
-
+    //uloga("Data get completion\n");
     free(msg);
     return 0;
 }
@@ -1259,7 +1278,7 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
             //before asking for object descriptors to owners, check on the local node
             //if prefetched before checking with obj_desc_owner or there is.
             //
-
+        	//uloga("Getting data \n");
             convert_to_string(&od->obj_desc, name);
             int shm_fd;
             void *ptr;
@@ -1763,6 +1782,7 @@ int dcg_obj_put(struct obj_data *od)
             peer = dcg_which_peer();
         }
 
+        //peer = dcg_prefetch_peer();
         sync_op_id = syncop_next();
 
         msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
@@ -1941,40 +1961,41 @@ int dcg_obj_get(struct obj_data *od)
         //now check if past read request had prefetched the current request
         //we do this after get_dht_peers because every request has to be sent to server
         //to prefetch next request.
-        char name[200];
-        convert_to_string(&od->obj_desc, name);
-        int shm_fd;
-        void *ptr;
-        int SIZE;
-        //uloga("Opening shared memory %s\n", name);
-        shm_fd = shm_open(name, O_RDONLY, 0666);
-        //uloga("Shm_fd %d\n", shm_fd);
-        if (shm_fd != -1) {
-            //read the file locally without any rpc call
-            SIZE = obj_data_size(&od->obj_desc);
-            ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
-            if (ptr == MAP_FAILED) {
-                printf("Map failed\n");
-                exit(-1);
-            }
-            memcpy(od->data, ptr, SIZE);
-            uloga("Finished with 1 rpc call %s\n", name);
-            qt_remove(&dcg->qt, qte);
-			free(qte);
-			return 0;
-
-        }
         if(qte->f_node_local == 1){
-        	//the data was prefetched, but current client is in separate node than server
-        	err=get_node_local_data(od, qte);
-        	if(err<0){
-        		goto err_qt_free;
-        	}
-        	uloga("Finished with 2 rpc calls %s\n", name);
-        	DC_WAIT_COMPLETION(qte->f_data_received == 1);
-        	qt_remove(&dcg->qt, qte);
-        	free(qte);
-        	return 0;
+			char name[200];
+			convert_to_string(&od->obj_desc, name);
+			int shm_fd;
+			void *ptr;
+			int SIZE;
+			//uloga("Opening shared memory %s\n", name);
+			shm_fd = shm_open(name, O_RDONLY, 0666);
+			//uloga("Shm_fd %d\n", shm_fd);
+			if (shm_fd != -1) {
+				//read the file locally without any rpc call
+				SIZE = obj_data_size(&od->obj_desc);
+				ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
+				if (ptr == MAP_FAILED) {
+					printf("Map failed\n");
+					exit(-1);
+				}
+				memcpy(od->data, ptr, SIZE);
+				//uloga("Finished with 1 rpc call %s\n", name);
+				qt_remove(&dcg->qt, qte);
+				free(qte);
+				return 0;
+
+			}else{
+				//the data was prefetched, but current client is in separate node than server
+				err=get_node_local_data(od, qte);
+				if(err<0){
+					goto err_qt_free;
+				}
+				//uloga("Finished with 2 rpc calls %s\n", name);
+				DC_WAIT_COMPLETION(qte->f_data_received == 1);
+				qt_remove(&dcg->qt, qte);
+				free(qte);
+				return 0;
+			}
         }
 
         err = get_obj_descriptors(qte);
@@ -1999,6 +2020,7 @@ int dcg_obj_get(struct obj_data *od)
 #endif
         //now receive the data local copy might be here
         //Pradeep
+    uloga("Get the data\n");
     err = dcg_obj_data_get(qte);
     if (err < 0) {
                 // FIXME: should I jump to err_qt_free ?

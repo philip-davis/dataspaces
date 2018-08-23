@@ -198,6 +198,26 @@ struct hdr_obj_get {
     struct global_dimension gdim;
 } __attribute__((__packed__));
 
+struct hdr_obj_get_prefetch {
+    int                     qid;
+    int                     rank;
+    int                     rc;
+    union {
+        struct {
+            /* Number of directory entries. */
+            int                     num_de;
+            struct obj_descriptor   odsc; //actual object descriptor
+            struct obj_descriptor shmem_odsc; //object descriptor with large or small name
+        } o;
+        struct {
+            /* Number of versions available. */
+            int			num_vers;
+            int			versions[1];
+        } v;
+	} u;
+    struct global_dimension gdim;
+} __attribute__((__packed__));
+
 /* Header structure for obj_put requests. */
 struct hdr_obj_put {
     struct obj_descriptor odsc;

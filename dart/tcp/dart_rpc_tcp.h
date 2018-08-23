@@ -240,7 +240,8 @@ enum cmd_type {
     _CMD_COUNT,
     ss_obj_get_desc_internal,
     ss_obj_send_desc,
-	get_prefetched_data
+	get_prefetched_data,
+	peer_prefetch_obj
 };
 
 enum lock_type {

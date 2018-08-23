@@ -27,6 +27,9 @@
 #include "ds_base_ib.h"
 
 #include "debug.h"
+#include "pthread.h"
+
+pthread_mutex_t rpcmutex = PTHREAD_MUTEX_INITIALIZER;
 
 #define SYS_WAIT_COMPLETION(x)					\
 	while (!(x)) {						\
@@ -153,7 +156,7 @@ static int sys_send(struct rpc_server *rpc_s, struct node_id *peer, struct hdr_s
 	sm->hs = *hs;
 	sm->sys_mr = ibv_reg_mr(peer->sys_conn.pd, &sm->hs, sizeof(struct hdr_sys), IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ);
 	if(sm->sys_mr == NULL) {
-		printf("ibv_reg_mr return NULL.\n");
+		printf("ibv_reg_mr return NULL %d.\n", rpc_s->ptlmap.id);
 		err = -ENOMEM;
 		goto err_out;
 	}
@@ -637,7 +640,82 @@ static int rpc_cb_req_completion(struct rpc_server *rpc_s, struct ibv_wc *wc)	//
 	return err;
 }
 
+static int rpc_prefetch_cb_req_completion(struct rpc_server *rpc_s, struct ibv_wc *wc)	//Working
+{
+	int err;
+	struct rpc_request *rr = (struct rpc_request *) (uintptr_t) wc->wr_id;
+	if(!rr)
+		return 0;
+	struct node_id *peer;
+	peer = (struct node_id *) rr->msg->peer;
 
+	if(rr->msg)
+		rr->msg->refcont--;
+
+	//test
+	/*      if (rr->msg->refcont != 0)
+	   if(wc->opcode == IBV_WC_SEND || wc->opcode == IBV_WC_RDMA_WRITE || wc->opcode == IBV_WC_RDMA_READ || wc->opcode == IBV_WC_RECV)
+	   {
+	   err = rpc_process_event(rpc_s);
+	   if (err != 0)
+	   {
+	   printf("'%s()': failed with %d.\n", __func__, err);
+	   return err;
+	   }
+
+	   return 0;
+	   } */
+	//test
+
+	//send back msg to tell other side RDMA operation is finished. Since IB just generates wc on post side.
+	if(rr->type == 1) {
+		struct msg_buf *msg;
+		//uint64_t *wrid;
+		msg = msg_buf_alloc(rpc_s, peer, 1);
+		if(!msg)
+			goto err_out;
+		msg->size = sizeof(struct rpc_cmd);
+		msg->msg_rpc->cmd = peer_rdma_done;
+		msg->msg_rpc->id = rpc_s->ptlmap.id;
+
+		msg->msg_rpc->wr_id = rr->msg->id;
+
+//                printf("Peer %d Send to peer(%d) with wrid (%ld). in %ld\n", rpc_s->ptlmap.id, peer->ptlmap.id, msg->msg_rpc->wr_id,rr);
+
+		err = rpc_prefetch_send(rpc_s, peer, msg);
+		uloga("Inside callback of prefetch send\n");
+		if(err < 0) {
+			free(msg->msg_data);
+			goto err_out;
+		}
+	}
+//      if(rpc_s->ptlmap.appid==0&&peer->ptlmap.appid!=0)
+//              printf("nextmsg %d %d %ld %d\n",rpc_s->ptlmap.id,peer->ptlmap.id,rr,rr->msg->refcont);
+	if(rr->msg) {
+		if(rr->msg->refcont == 0) {
+			if(rr->rpc_mr != 0) {
+				err = ibv_dereg_mr(rr->rpc_mr);
+				if(err != 0) {
+					goto err_out;
+				}
+			}
+			if(rr->data_mr != 0) {
+				err = ibv_dereg_mr(rr->data_mr);
+				if(err != 0) {
+					goto err_out;
+				}
+			}
+
+			(*rr->msg->cb) (rpc_s, rr->msg);
+			free(rr);
+		}
+	}
+	return 0;
+
+      err_out:
+	printf("'%s()' failed with %d.\n", __func__, err);
+	return err;
+}
 /* ------------------------------------------------------------------
   Message Passing and Data Transfer
 */
@@ -675,7 +753,8 @@ static int rpc_post_request(struct rpc_server *rpc_s, const struct node_id *peer
 	if(rr->type == 0) {
 		rr->rpc_mr = ibv_reg_mr(peer->rpc_conn.pd, rr->data, rr->size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ);
 		if(rr->rpc_mr == NULL) {
-			printf("ibv_reg_mr return NULL.\n");
+			//printf("ibv_reg_mr return NULL %d Error value: (%s)\n", rpc_s->ptlmap.id, strerror(errno));
+			printf("ibv_reg_mr return NULL %d Error value: (%d)\n", rpc_s->ptlmap.id, errno);
 			err = -ENOMEM;
 			goto err_out;
 		}
@@ -686,7 +765,8 @@ static int rpc_post_request(struct rpc_server *rpc_s, const struct node_id *peer
 	} else if(rr->type == 1) {
 		rr->data_mr = ibv_reg_mr(peer->rpc_conn.pd, rr->data, rr->size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ);
 		if(rr->data_mr == NULL) {
-			printf("ibv_reg_mr return NULL.\n");
+			//printf("ibv_reg_mr return NULL %d Error value: (%s)\n", rpc_s->ptlmap.id, strerror(errno));
+			printf("ibv_reg_mr return NULL %d Error value: (%d)\n", rpc_s->ptlmap.id, errno);
 			err = -ENOMEM;
 			goto err_out;
 		}
@@ -749,7 +829,7 @@ static int rpc_fetch_request(struct rpc_server *rpc_s, const struct node_id *pee
 	if(rr->type == 1) {
 		rr->data_mr = ibv_reg_mr(peer->rpc_conn.pd, rr->data, rr->size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
 		if(rr->data_mr == NULL) {
-			printf("ibv_reg_mr return NULL.\n");
+			printf("ibv_reg_mr return NULL %d.\n", rpc_s->ptlmap.id);
 			err = -ENOMEM;
 			goto err_out;
 		}
@@ -853,6 +933,72 @@ static int peer_process_send_list(struct rpc_server *rpc_s, struct node_id *peer
 	return err;
 }
 
+static int peer_process_send_prefetch_list(struct rpc_server *rpc_s, struct node_id *peer)	// working
+{
+	struct rpc_request *rr;
+//      struct hdr_sys hs;
+	int err, i;
+
+	//check peer->req_list
+	while(!list_empty(&peer->pref_list)) {
+		printf("posted is prefetch request %d.\n", peer->req_posted);
+		if(rpc_s->com_type == 1 || peer->req_posted > 100) {
+			for(i = 0; i < 10; i++)	//performance here
+			{
+				err = rpc_process_event_with_timeout(rpc_s, 1);
+				//if(err == -ETIME)
+				//break;
+				//if ((rpc_s->com_type == 1) && (err == 0))
+				//continue;
+				if(err != 0 && err != -ETIME)
+					goto err_out;
+			}
+		}
+		//?check credits (dont need in IB version, since IB reliable connection has credit mechanism underneath)
+
+		// Sending credit is good, we will send the message.
+
+
+		rr = list_entry(peer->pref_list.next, struct rpc_request, req_entry);
+
+
+		if(!rr) {
+			return 0;
+		}
+
+		if(!rr->msg)
+			return 0;
+
+		if(rr->msg->msg_data) {
+			err = rpc_prepare_buffers(rpc_s, peer, rr, rr->iodir);
+			if(err != 0)
+				goto err_out;
+		}
+		// Return the credits we have for peer //don't need any more
+
+		// post request
+		uloga("Posting prefetch request\n");
+		err = rpc_post_request(rpc_s, peer, rr, 0);
+
+
+		if(err != 0)
+			goto err_out;
+
+		// Message is sent, consume one credit. (dont need anymore?)
+		peer->num_msg_at_peer--;
+		list_del(&rr->req_entry);
+
+		//list_add_tail(&rr->req_entry, &rpc_s->rpc_list);
+		//rpc_s->rr_num++;////?TODO: do we need put rr to rpc_s->rpc_list? or just let it be
+		peer->num_req--;
+	}
+
+	return 0;
+      err_out:
+	printf("'%s()': failed with %d.\n", __func__, err);
+	return err;
+}
+
 /* ------------------------------------------------------------------
   Network/Device/IB system operation
 */
@@ -928,7 +1074,7 @@ int register_memory2(struct rpc_request *rr, struct node_id *peer)
 {
 	rr->rpc_mr = ibv_reg_mr(peer->rpc_conn.pd, rr->msg->msg_data, rr->msg->size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
 	if(rr->rpc_mr == NULL) {
-		printf("ibv_reg_mr return NULL.\n");
+		printf("ibv_reg_mr return NULL in register_memory2.\n");
 		return -ENOMEM;
 	}
 
@@ -948,7 +1094,7 @@ struct rpc_request *register_memory(struct node_id *peer)
 
 	rr->rpc_mr = ibv_reg_mr(peer->rpc_conn.pd, rr->msg->msg_data, rr->msg->size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
 	if(rr->rpc_mr == NULL) {
-		printf("ibv_reg_mr return NULL.\n");
+		printf("ibv_reg_mr return NULL in register_memory.\n");
 		return NULL;
 	}
 	rr->current_rpc_count++;
@@ -1264,7 +1410,7 @@ int sys_post_recv(struct rpc_server *rpc_s, struct node_id *peer)
 
 	sm->sys_mr = ibv_reg_mr(peer->sys_conn.pd, hs, rpc_s->num_buf * sizeof(struct hdr_sys), IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
 	if(sm->sys_mr == NULL) {
-		printf("ibv_reg_mr return NULL.\n");
+		printf("ibv_reg_mr return NULL %d.\n", rpc_s->ptlmap.id);
 		err = -ENOMEM;
 		goto err_out;
 	}
@@ -2062,6 +2208,7 @@ int rpc_process_event_with_timeout(struct rpc_server *rpc_s, int timeout)	//Done
 */
 int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)	//Done
 {
+	//pthread_mutex_lock(&rpcmutex);
 	if(peer->rpc_conn.f_connected != 1) {
 //              printf("RPC channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
 		rpc_connect(rpc_s, peer);
@@ -2089,6 +2236,7 @@ int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg
 	peer->req_posted++;
 
 	err = peer_process_send_list(rpc_s, peer);
+	//pthread_mutex_unlock(&rpcmutex);
 	if(err == 0)
 		return 0;
 
@@ -2097,6 +2245,40 @@ int rpc_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg
 	return err;
 }
 
+int rpc_prefetch_send(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)	//Done
+{
+	if(peer->rpc_conn.f_connected != 1) {
+		rpc_connect(rpc_s, peer);
+	}
+
+	struct rpc_request *rr;
+	int err = -ENOMEM;
+
+	rr = calloc(1, sizeof(struct rpc_request));
+	if(!rr)
+		goto err_out;
+
+	rr->type = 0;
+	rr->msg = msg;
+	rr->iodir = io_send;
+	rr->cb = (async_callback) rpc_cb_req_completion;
+
+	rr->data = msg->msg_rpc;
+	rr->size = sizeof(*msg->msg_rpc);
+
+	list_add_tail(&rr->req_entry, &peer->pref_list);
+
+	peer->num_req++;
+	peer->req_posted++;
+
+	err = peer_process_send_prefetch_list(rpc_s, peer);
+	if(err == 0)
+		return 0;
+
+      err_out:
+	printf("%d to %d '%s()': failed with %d.\n", rpc_s->ptlmap.id, peer->ptlmap.id, __func__, err);
+	return err;
+}
 
 inline static int __send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg, flag_t f_vec)	//Done
 {
@@ -2143,8 +2325,9 @@ inline static int __send_direct(struct rpc_server *rpc_s, struct node_id *peer, 
 int rpc_send_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)	//Done
 {
 	int err;
-
+	//pthread_mutex_lock(&rpcmutex);
 	err = __send_direct(rpc_s, peer, msg, unset);
+	//pthread_mutex_unlock(&rpcmutex);
 	if(err == 0)
 		return 0;
 
@@ -2191,11 +2374,50 @@ inline static int __receive(struct rpc_server *rpc_s, struct node_id *peer, stru
 	return err;
 }
 
+inline static int __prefetch_receive(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg, flag_t f_vec)	//Done
+{
+	if(peer->rpc_conn.f_connected != 1) {
+		rpc_connect(rpc_s, peer);
+		//printf("RPC channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
+		//goto err_out;
+	}
+
+	struct rpc_request *rr;
+	int err = -ENOMEM;
+
+	rr = calloc(1, sizeof(struct rpc_request));
+	if(!rr)
+		goto err_out;
+
+	rr->type = 0;		//0 represents cmd ; 1 for data
+	rr->msg = msg;
+	rr->iodir = io_receive;
+	rr->cb = (async_callback) rpc_prefetch_cb_req_completion;
+
+	rr->data = msg->msg_rpc;
+	rr->size = sizeof(*msg->msg_rpc);
+	rr->f_vec = 0;
+
+
+	list_add_tail(&rr->req_entry, &peer->pref_list);
+
+	peer->num_req++;
+	peer->req_posted++;
+
+	err = peer_process_send_prefetch_list(rpc_s, peer);
+	if(err == 0)
+		return 0;
+
+      err_out:
+	printf("'%s()': failed with %d.\n", __func__, err);
+	return err;
+}
 int rpc_receive(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)	//Done
 {
 	int err;
-
+	//pthread_mutex_lock(&rpcmutex);
 	err = __receive(rpc_s, peer, msg, unset);
+	//pthread_mutex_unlock(&rpcmutex);
 	if(err == 0)
 		return 0;
 
@@ -2203,8 +2425,19 @@ int rpc_receive(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *
 	return err;
 }
 
+int rpc_prefetch_receive(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)	//Done
+{
+	int err;
+	err = __prefetch_receive(rpc_s, peer, msg, unset);
+	if(err == 0)
+		return 0;
+
+	printf("'%s()': failed with %d.\n", __func__, err);
+	return err;
+}
 int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)	//Done
 {
+	//pthread_mutex_lock(&rpcmutex);
 	if(peer->rpc_conn.f_connected != 1) {
 		printf("RPC channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
 		goto err_out;
@@ -2229,6 +2462,7 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 	peer->req_posted++;
 
 	err = rpc_fetch_request(rpc_s, peer, rr);
+	//pthread_mutex_unlock(&rpcmutex);
 	if(err == 0)
 		return 0;
 
@@ -2237,6 +2471,42 @@ int rpc_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct ms
 	return err;
 }
 
+
+int rpc_prefetch_receive_direct(struct rpc_server *rpc_s, struct node_id *peer, struct msg_buf *msg)	//Done
+{
+	//pthread_mutex_lock(&rpcmutex);
+	if(peer->rpc_conn.f_connected != 1) {
+		printf("RPC channel has not been established  %d %d\n", rpc_s->ptlmap.id, peer->ptlmap.id);
+		goto err_out;
+	}
+
+	struct rpc_request *rr;
+	int err = -ENOMEM;
+
+	rr = calloc(1, sizeof(struct rpc_request));
+	if(!rr)
+		goto err_out;
+
+	rr->type = 1;		//0 represents cmd ; 1 for data
+	rr->msg = msg;
+	rr->cb = (async_callback) rpc_cb_req_completion;
+	rr->data = msg->msg_data;
+	rr->size = msg->size;
+
+	//list_add_tail(&rr->req_entry, &rpc_s->rpc_list);
+	//rpc_s->rr_num++;
+
+	peer->req_posted++;
+
+	err = rpc_fetch_request(rpc_s, peer, rr);
+	//pthread_mutex_unlock(&rpcmutex);
+	if(err == 0)
+		return 0;
+
+      err_out:
+	printf("'%s()': failed with %d.\n", __func__, err);
+	return err;
+}
 
 
 //Not be used in InfiniBand version. Just keep an empty func here.
