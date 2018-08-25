@@ -257,6 +257,8 @@ order:
     reader acquires lock for "var1";
     writer acquires lock for "var1";
 
+Lock type 3 is similar to lock type 2, but does not allow a read lock to
+be acquired until after the first write lock is released.
 
 2. Set the number of DataSpaces servers
 ---------------------------------------
