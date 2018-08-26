@@ -2182,10 +2182,6 @@ int dcg_lock_on_read(const char *lock_name, void *comm)
 	int err = -ENOMEM;
 	int myid, app_minid;
 	
-    lock = lock_get(lock_name, 1);
-	if (!lock) 
-		goto err_out;
-
 	if (comm == NULL) {
 		myid = DCG_ID;
 		app_minid = dcg->dc->cp_min_rank;
@@ -2194,17 +2190,36 @@ int dcg_lock_on_read(const char *lock_name, void *comm)
 		app_minid = 0;
 	}
 
+	ulog("Rank %d: '%s()':getting lock %s\n",
+			myid, __func__, lock_name);
+
+    lock = lock_get(lock_name, 1);
+	if (!lock)
+		goto err_out;
+
+    ulog("Rank %d: '%s()':got lock successfully %s\n",
+    	myid, __func__, lock_name);
+
+
 	if (myid == app_minid) {
 		/* I am the master peer for this app job. */
+		ulog("Rank %d: '%s()':requesting lock %s\n",
+				myid, __func__, lock_name);
 		err = dcg_lock_request(lock, lk_read_get);
 		if (err < 0)
 			goto err_out;
+		ulog("Rank %d: '%s()':request for lock %s sent\n",
+			myid, __func__, lock_name);
 
 		while (lock->ack == 0) {
 			err = dc_process(dcg->dc);
 			if (err < 0)
 				goto err_out;
 		}
+
+		ulog("Rank %d: '%s()':acquired lock %s \n",
+				myid, __func__, lock_name);
+
 	}
 
 	if(comm == NULL){
@@ -2228,9 +2243,23 @@ int dcg_unlock_on_read(const char *lock_name, void *comm)
 	int err = -ENOMEM;
 	int myid, app_minid;
 
+	if (comm == NULL) {
+		myid = DCG_ID;
+		app_minid = dcg->dc->cp_min_rank;
+	} else {
+		MPI_Comm_rank(*(MPI_Comm *)comm, &myid);
+		app_minid = 0;
+	}
+
+	ulog("Rank %d: '%s()':getting lock %s\n",
+				myid, __func__, lock_name);
+
 	lock = lock_get(lock_name, 1);
 	if (!lock)
 		goto err_out;
+
+	ulog("Rank %d: '%s()':got lock successfully %s\n",
+	    	myid, __func__, lock_name);
 
 	if(comm == NULL){
 		err = dc_barrier(dcg->dc);
@@ -2243,18 +2272,14 @@ int dcg_unlock_on_read(const char *lock_name, void *comm)
 			goto err_out;
 	}
 
-	if (comm == NULL) {
-		myid = DCG_ID;
-		app_minid = dcg->dc->cp_min_rank;
-	} else {
-		MPI_Comm_rank(*(MPI_Comm *)comm, &myid);
-		app_minid = 0;
-	}
-
 	if (myid == app_minid) {
+		ulog("Rank %d: '%s()':requesting unlock %s\n",
+				myid, __func__, lock_name);
 		err = dcg_lock_request(lock, lk_read_release);
 		if (err < 0)
 			goto err_out;
+		ulog("Rank %d: '%s()':request for unlock %s sent\n",
+				myid, __func__, lock_name);
 	}
 
 	return 0;
@@ -2268,10 +2293,6 @@ int dcg_lock_on_write(const char *lock_name, void *comm)
 	int err = -ENOMEM;
 	int myid, app_minid;
 
-	lock = lock_get(lock_name, 1);
-	if (!lock)
-		goto err_out;
-
 	if (comm == NULL) {
 		myid = DCG_ID;
 		app_minid = dcg->dc->cp_min_rank;
@@ -2280,11 +2301,23 @@ int dcg_lock_on_write(const char *lock_name, void *comm)
 		app_minid = 0;
 	}
 
+	ulog("Rank %d: '%s()':getting lock %s\n",
+				myid, __func__, lock_name);
+	lock = lock_get(lock_name, 1);
+	if (!lock)
+		goto err_out;
+	ulog("Rank %d: '%s()':got lock successfully %s\n",
+		    	myid, __func__, lock_name);
+
 	if (myid == app_minid) {
 		/* I am the master peer for this app job. */
+		ulog("Rank %d: '%s()':requesting lock %s\n",
+			myid, __func__, lock_name);
 		err = dcg_lock_request(lock, lk_write_get);
 		if (err < 0)
 			goto err_out;
+		ulog("Rank %d: '%s()':request for lock %s sent\n",
+			myid, __func__, lock_name);
 
 		while (lock->ack == 0) {
 			err = dc_process(dcg->dc);
@@ -2314,9 +2347,13 @@ int dcg_unlock_on_write(const char *lock_name, void *comm)
 	int err = -ENOMEM;
 	int myid, app_minid;
 	
+	ulog("Rank %d: '%s()':getting lock %s\n",
+		myid, __func__, lock_name);
     lock = lock_get(lock_name, 1);
 	if (!lock)
 		goto err_out;
+	ulog("Rank %d: '%s()':got lock successfully %s\n",
+			myid, __func__, lock_name);
 
 	if(comm == NULL){
 		err = dc_barrier(dcg->dc);
@@ -2338,9 +2375,13 @@ int dcg_unlock_on_write(const char *lock_name, void *comm)
 	}
 
 	if (myid == app_minid) {
+		ulog("Rank %d: '%s()':requesting unlock %s\n",
+				myid, __func__, lock_name);
 		err = dcg_lock_request(lock, lk_write_release);
 		if (err < 0)
 			goto err_out;
+		ulog("Rank %d: '%s()':request for unlock %s sent\n",
+			myid, __func__, lock_name);
 	}
 
 	return 0;

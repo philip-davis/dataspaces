@@ -1,5 +1,6 @@
 #include "mpi.h"
 #include <arpa/inet.h>
+#include <inttypes.h>
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
@@ -93,6 +94,8 @@ static int socket_recv_bytes(int sockfd, char *buffer, uint64_t size, int f_bloc
         }
     }
 
+    ulog("Receiving %" PRIu64 " bytes...\n", size);
+
     while (size > 0) {
         ssize_t n = recv(sockfd, buffer, (size_t)(socket_best_read_size < size ? socket_best_read_size : size), 0);
         if (n < 0) {
@@ -106,6 +109,9 @@ static int socket_recv_bytes(int sockfd, char *buffer, uint64_t size, int f_bloc
         buffer += n;
         size -= n;
     }
+
+    ulog("...done receiving.\n");
+
     return 0;
 
     err_out:
@@ -383,7 +389,8 @@ static int rpc_process_cmd(struct rpc_server *rpc_s, struct rpc_cmd *cmd) {
 
 /* Process the RPC requests from a specific peer */
 static int rpc_process_event_peer(struct rpc_server *rpc_s, struct node_id *peer) {
-    while (1) {
+    int evproc = 0;
+	while (1) {
         struct rpc_cmd cmd;
         int ret = socket_recv_rpc_cmd(peer->sockfd, &cmd);
         if (ret < 0) {
@@ -401,10 +408,16 @@ static int rpc_process_event_peer(struct rpc_server *rpc_s, struct node_id *peer
             printf("[%s]: process RPC command failed!\n", __func__);
             goto err_out;
         }
+        evproc++;
     }
+
+	if(evproc) {
+		ulog("processed %d rpcs\n", evproc);
+	}
+
     return 0;
 
-    err_out:
+err_out:
     return -1;
 }
 

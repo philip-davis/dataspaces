@@ -987,14 +987,13 @@ void ls_add_obj(struct ss_storage *ls, struct obj_data *od)
 
         od_existing = ls_find_no_version(ls, &od->obj_desc);
         if (od_existing) {
-                od_existing->f_free = 1;
-                if (od_existing->refcnt == 0) {
-                        ls_remove(ls, od_existing);
-                        obj_data_free(od_existing);
-                }
-                else {
-                        uloga("'%s()': object eviction delayed.\n", __func__);
-                }
+        	od_existing->f_free = 1;
+        	if (od_existing->refcnt == 0) {
+        		ls_remove(ls, od_existing);
+        		obj_data_free(od_existing);
+        	} else {
+        		uloga("'%s()': object eviction delayed.\n", __func__);
+        	}
         }
 
         index = od->obj_desc.version % ls->size_hash;

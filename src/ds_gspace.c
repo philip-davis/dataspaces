@@ -1004,10 +1004,7 @@ static struct dsg_lock * dsg_lock_alloc(const char *lock_name,
                 dl->process_request = &lock_process_request;
                 dl->process_wait_list = &lock_process_wait_list;
                 dl->service = &lock_service;
-#ifdef DEBUG
-		uloga("'%s()': generic lock %s created.\n", 
-			__func__, lock_name);
-#endif
+                ulog("generic lock %s created.\n", lock_name);
                 break;
 
         case lock_custom:
@@ -1015,16 +1012,14 @@ static struct dsg_lock * dsg_lock_alloc(const char *lock_name,
                 dl->process_request = &sem_process_request;
                 dl->process_wait_list = &sem_process_wait_list;
                 dl->service = &sem_service;
-#ifdef DEBUG
-		uloga("'%s()': custom lock %s created.\n", 
-			__func__, lock_name);
-#endif
+                ulog("custom lock %s created.\n", lock_name);
                 break;
         case lock_v3:
                 dl->init = &lock_init_v3;
                 dl->process_request = &lock_process_request_v3;
                 dl->process_wait_list = &lock_process_wait_list_v3;
                 dl->service = &lock_service_v3;
+                ulog("type 3 lock %s created.\n", lock_name);
                 break;
 	default:
 		// TODO: ERROR here, this should not happen. 
@@ -1057,22 +1052,14 @@ static int dsgrpc_lock_service(struct rpc_server *rpc, struct rpc_cmd *cmd)
 {
 	struct lockhdr *lh = (struct lockhdr *) cmd->pad;
 	struct dsg_lock *dl;
-        int err = -ENOMEM;
+    int err = -ENOMEM;
 
-	// uloga("'%s()': lock %s.\n", __func__, lh->name);
 	dl = dsg_lock_find_by_name(lh->name);
 
 	if (!dl) {
 		dl = dsg_lock_alloc(lh->name, 
 			ds_conf.lock_type, 
 			ds_conf.max_readers);
-		/*
-		struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
-
-		uloga("'%s()': lock '%s' created on server %d at request "
-			"from compute peer %d.\n", 
-			__func__, lh->name, DSG_ID, peer->ptlmap.id);
-		*/
 
 		if (!dl)
 			goto err_out;
@@ -1300,6 +1287,7 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 	int num_de, i, min_rank, err;
 
 	/* Compute object distribution to nodes in the space. */
+	ulog("server %d determining object hash.", DSG_ID);
 	num_de = ssd_hash(ssd, &odsc->bb, dht_tab);
 	if (num_de == 0) {
 		uloga("'%s()': this should not happen, num_de == 0 ?!\n",
@@ -1328,9 +1316,9 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 					goto err_out;
 			}
 			continue;
-		}
+
 #ifdef DEBUG
-		{
+		} else {
 			char *str;
 
             str = alloc_sprintf("S%2d: fwd obj_desc '%s' to S%2d ver %d for ",
@@ -1339,6 +1327,8 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 
 			uloga("'%s()': %s\n", __func__, str);
 			free(str);
+		}
+#else
 		}
 #endif
 		err = -ENOMEM;
@@ -1479,9 +1469,13 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	/* NOTE: This  early update, has  to be protected  by external
 	   locks in the client code. */
 
+        ulog("server %d updating DHT\n", DSG_ID);
+
         err = obj_put_update_dht(dsg, od);
-        if (err == 0)
+        if (err == 0) {
+        	ulog("server %d finished server side put.\n", DSG_ID);
 	        return 0;
+        }
  err_free_msg:
         free(msg);
  err_free_data:
