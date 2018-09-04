@@ -363,7 +363,7 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	struct hdr_register *hreg = (struct hdr_register *)(cmd->pad);	
 	struct hdr_register *hr;
 	struct msg_buf *msg;
-	struct node_id *peer;
+	struct node_id *peer = ds_get_peer(ds, hreg->pm_cp.id);
     struct app_info *app;
 	int err = -ENOMEM;
 	int i, j;
@@ -406,8 +406,6 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		    *smsg_attr = tmp_attr_info->local_smsg_attr;
 
 		    msg->cb = default_completion_with_data_callback;
-
-		    peer = ds_get_peer(ds, hreg->pm_cp.id);
 
 		    err = rpc_send(rpc_s, peer, msg);
 		    if(err != 0) {
