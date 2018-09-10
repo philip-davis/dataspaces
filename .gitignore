@@ -10,3 +10,4 @@ run.sh
 *.Tpo
 *.Po
 *.zed*
+.DS_Store
