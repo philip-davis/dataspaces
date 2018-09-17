@@ -1,4 +1,4 @@
-AC_INIT([dataspaces],[1.7.1])
+AC_INIT([dataspaces],[1.7.2])
 AC_CONFIG_AUX_DIR(config)
 
 dnl AM_INIT_AUTOMAKE([-Wall -Wno-extra-portability -Werror subdir-objects foreign])
