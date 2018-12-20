@@ -194,6 +194,7 @@ AC_CONFIG_FILES([
                 tests/Makefile
                 tests/C/Makefile
                 tests/Fortran/Makefile
+                tests/Python/dspaceswrapper/Makefile
                 scripts/dspaces_config.makesrc
                 ])
 
