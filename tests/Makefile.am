@@ -1,1 +1,4 @@
-SUBDIRS=C Fortran Python/dspaceswrapper
+SUBDIRS=C Fortran
+if BUILD_PYTHON_WRAPPER
+    SUBDIRS+= Python/dspaceswrapper
+endif BUILD_PYTHON_WRAPPER
