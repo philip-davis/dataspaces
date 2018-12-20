@@ -13,6 +13,7 @@ AM_PROG_CC_C_O
 AC_FC_WRAPPERS
 
 AC_PYTHON_WRAPPER
+AX_PKG_SWIG([2.0.10],[],[])
 
 m4_ifdef([AM_PROG_AR],[AM_PROG_AR])
 
@@ -139,6 +140,7 @@ if test "x$enable_shmem" == "xyes"; then
 else
         AM_CONDITIONAL(BUILD_HYBRID, false)
 fi
+
 
 if test -z "${HAVE_UGNI_TRUE}"; then
   DSPACESLIB_CPPFLAGS+=" ${PMI_CPPFLAGS}"

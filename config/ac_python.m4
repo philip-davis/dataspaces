@@ -30,10 +30,12 @@ AC_DEFUN([AC_PYTHON_MODULE],[
 
 AC_DEFUN([AC_PYTHON_WRAPPER],[
     AM_PATH_PYTHON([3.0],, [:])
+    AM_CONDITIONAL(BUILD_PYTHON_WRAPPER, false)
     AM_CONDITIONAL([HAVE_PYTHON], [test "$PYTHON" != :])
     if test -n "${PYTHON}"
     then    
         AC_PYTHON_MODULE([numpy],yes)
         AC_PYTHON_MODULE([mpi4py],yes)
+        AM_CONDITIONAL(BUILD_PYTHON_WRAPPER, true)
     fi
 ])
