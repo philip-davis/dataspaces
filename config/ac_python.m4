@@ -11,7 +11,7 @@ dnl @version 2014-09-08
 dnl @license AllPermissive
 AC_DEFUN([AC_PYTHON_MODULE],[
     AC_MSG_CHECKING(python module: $1)
-    python -c "import $1" 2&gt;/dev/null
+    ${PYTHN} -c "import $1" 2>/dev/null
     if test $? -eq 0;
     then
         AC_MSG_RESULT(yes)
@@ -26,4 +26,9 @@ AC_DEFUN([AC_PYTHON_MODULE],[
             exit 1
         fi
     fi
+])
+
+AC_DEFUN([AC_PYTHON_WRAPPER],[
+    AC_PYTHON_MODULE([numpy],yes)
+    AC_PYTHON_MODULE([mpi4py],yes)
 ])
