@@ -12,8 +12,6 @@ AM_PROG_CC_C_O
 
 AC_FC_WRAPPERS
 
-AC_PYTHON_WRAPPER
-
 m4_ifdef([AM_PROG_AR],[AM_PROG_AR])
 
 AC_INFINIBAND
@@ -139,6 +137,17 @@ if test "x$enable_shmem" == "xyes"; then
 else
         AM_CONDITIONAL(BUILD_HYBRID, false)
 fi
+
+
+AC_ARG_ENABLE(python-bindings,
+    [AS_HELP_STRING([--enable-python-bindings],
+        [Enable building python bindings for DataSpaces])])
+
+if test "x$enable-python-bindings" == "xyes"; then
+    AC_PYTHON_WRAPPER
+    AX_PKG_SWIG([2.0.10],[],[])
+fi  
+
 
 if test -z "${HAVE_UGNI_TRUE}"; then
   DSPACESLIB_CPPFLAGS+=" ${PMI_CPPFLAGS}"
