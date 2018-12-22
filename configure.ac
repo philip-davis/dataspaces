@@ -11,6 +11,7 @@ AC_PROG_RANLIB
 AM_PROG_CC_C_O
 
 AC_FC_WRAPPERS
+AC_PYTHON_WRAPPER
 
 m4_ifdef([AM_PROG_AR],[AM_PROG_AR])
 
@@ -139,14 +140,8 @@ else
 fi
 
 
-AC_ARG_ENABLE(python-bindings,
-    [AS_HELP_STRING([--enable-python-bindings],
-        [Enable building python bindings for DataSpaces])])
 
-if test "x$enable-python-bindings" == "xyes"; then
-    AC_PYTHON_WRAPPER
-    AX_PKG_SWIG([2.0.10],[],[])
-fi  
+ 
 
 
 if test -z "${HAVE_UGNI_TRUE}"; then
@@ -205,8 +200,8 @@ AC_CONFIG_FILES([
                 tests/Makefile
                 tests/C/Makefile
                 tests/Fortran/Makefile
-                tests/Python/dspaceswrapper/Makefile
                 scripts/dspaces_config.makesrc
+                tests/Python/dspaceswrapper/Makefile
                 ])
 
 AC_OUTPUT
