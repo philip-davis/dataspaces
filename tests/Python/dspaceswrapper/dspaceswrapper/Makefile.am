@@ -1,11 +1,11 @@
 AUTOMAKE_OPTIONS = foreign
 
-PYTHON_CONFIG = $(PYTHON) ../python-config
+PYTHON_CONFIG = $(PYTHON) ../../python-config
 MPI4PY_INCLUDE = ${shell $(PYTHON) -c 'import mpi4py; print( mpi4py.get_include() )'}
 NUMPY_INCLUDE = ${shell $(PYTHON) -c 'import numpy; print( numpy.get_include() )'}
 PREFIX = ${abs_top_srcdir}
 PREINCLUDES = -I$(PREFIX)/include
-DSCOMMON = ../../C/common.o
+DSCOMMON = ../../../C/common.o
 LFLAG = -L${abs_top_srcdir}/install/lib -ldspaces -ldart -ldscommon -ldspacesf -lpthread -lm -lrt -libverbs -lrdmacm
 
 SWIG = swig
