@@ -28,5 +28,8 @@ _dspaces${SO}:  dspaces_wrap.c
 
 all: buildwrap
 
+install-exec-local:
+	cd .. && python3 setup.py install
+
 clean-local:
 	${RM} -r dspaces_wrap.c dspaces.py* _dspaces*.so *pycache*
