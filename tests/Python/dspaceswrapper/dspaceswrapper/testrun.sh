@@ -10,11 +10,11 @@ NP=1
 
 # update the configuration files and restart server if test the 1d case
 
-#${MPIEXEC} ${NP_FLAG} ${NP} ${PYTHON} ./testput1d.py
-#${MPIEXEC} ${NP_FLAG} ${NP} ${PYTHON} ./testget1d.py
+${MPIEXEC} ${NP_FLAG} ${NP} ${PYTHON} ./testput1d.py
+${MPIEXEC} ${NP_FLAG} ${NP} ${PYTHON} ./testget1d.py
 
 
 # update the configuration files and restart server if test the 2d case
 
-${MPIEXEC} ${NP_FLAG} ${NP} ${PYTHON} ./testput2d.py
-${MPIEXEC} ${NP_FLAG} ${NP} ${PYTHON} ./testget2d.py
+#${MPIEXEC} ${NP_FLAG} ${NP} ${PYTHON} ./testput2d.py
+#${MPIEXEC} ${NP_FLAG} ${NP} ${PYTHON} ./testget2d.py

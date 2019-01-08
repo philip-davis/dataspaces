@@ -1,6 +1,6 @@
 
 import numpy as np
-import dspaces 
+import dspaceswrapper.dspaces as dspaces 
 import copy
 
 class dataspaceClient:

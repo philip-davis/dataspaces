@@ -1,6 +1,6 @@
 from mpi4py import MPI
 import numpy as np
-import dataspaces 
+import dspaceswrapper.dataspaces as dataspaces 
 import ctypes
 import os
 import time
