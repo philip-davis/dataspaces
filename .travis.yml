@@ -9,5 +9,5 @@ before_install:
     - sudo apt-get install mpich
 script:
     - ./autogen.sh
-    - ./configure CC=mpicc FC=mpif90
+    - ./configure CC=mpicc FC=mpif90 --enable-python-bindings
     - make
