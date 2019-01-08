@@ -11,3 +11,4 @@ script:
     - ./autogen.sh
     - ./configure CC=mpicc FC=mpif90 --enable-python-bindings
     - make
+    - sudo make install
