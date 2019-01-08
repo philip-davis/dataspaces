@@ -6,7 +6,7 @@ os:
     - precise
 before_install:
     - sudo apt-get update
-    - sudo apt-get install mpich python3-numpy python3-mpi4py
+    - sudo apt-get install mpich python3-numpy python3-mpi4py swig
 script:
     - ./autogen.sh
     - ./configure CC=mpicc FC=mpif90 --enable-python-bindings
