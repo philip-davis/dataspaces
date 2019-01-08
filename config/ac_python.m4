@@ -33,7 +33,7 @@ AC_DEFUN([AC_PYTHON_WRAPPER],[
     AC_ARG_ENABLE(python-bindings,
     [AS_HELP_STRING([--enable-python-bindings],
         [Enable building python bindings for DataSpaces])])
-    if test "x$enable-python-bindings" == "xyes"; then
+    if test "x${enable_python_bindings}" == "xyes"; then
         AM_PATH_PYTHON([3.0])
         AX_PKG_SWIG([2.0.10]) 
         dnl AM_CONDITIONAL([HAVE_PYTHON], [test "$PYTHON" != :])
