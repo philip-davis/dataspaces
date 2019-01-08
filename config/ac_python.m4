@@ -35,13 +35,10 @@ AC_DEFUN([AC_PYTHON_WRAPPER],[
         [Enable building python bindings for DataSpaces])])
     if test "x${enable_python_bindings}" == "xyes"; then
         AM_PATH_PYTHON([3.0])
-        AX_PKG_SWIG([2.0.10]) 
-        dnl AM_CONDITIONAL([HAVE_PYTHON], [test "$PYTHON" != :])
-        if test -n "${PYTHON}"
-        then    
-            AC_PYTHON_MODULE([numpy],yes)
-            AC_PYTHON_MODULE([mpi4py],yes)
-            AM_CONDITIONAL(BUILD_PYTHON_WRAPPER, true)
-        fi
+        AX_PKG_SWIG([2.0.0], [], [ AC_MSG_ERROR([SWIG is required to build the Python bindings.]) ]) 
+        AX_SWIG_PYTHON
+        AC_PYTHON_MODULE([numpy],yes)
+        AC_PYTHON_MODULE([mpi4py],yes)
+        AM_CONDITIONAL(BUILD_PYTHON_WRAPPER, true)
     fi
 ])
