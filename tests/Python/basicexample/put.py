@@ -9,7 +9,6 @@ appid = 1
 var_name = "ex1_sample_data"
 
 ds = dataspaces(appid, comm)
-'''
 for ts in range(10):
     ds.lock_on_write("my_test_lock")
     data = np.random.randint(0, 99, size=3)
@@ -17,4 +16,3 @@ for ts in range(10):
     lb = np.array([rank,0])
     ds.put(var_name, ts, data, lb)
     ds.unlock_on_write(i"my_test_lock")
-'''
