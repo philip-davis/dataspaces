@@ -35,14 +35,17 @@ ds.dspaces_init(comm,num_peers,appid)
 for ver in range (2):
 
     ds.dspaces_lock_on_write(lock_name)
-
-    elemsize = ctypes.sizeof(ctypes.c_double)
+    
     data = [1.1*(ver+1),2.2*(ver+1),3.3*(ver+1)]
     lb = [0+ver*3]
+
+    print ("put data")
+    print (data)
     
-    ds.dspaces_put_data(var_name,ver,elemsize,lb,data)
+    ds.dspaces_put_data(var_name,ver,lb,data)
     ds.dspaces_unlock_on_write(lock_name)
     time.sleep(1)
+
 
 
 ds.dspaces_wrapper_finalize()

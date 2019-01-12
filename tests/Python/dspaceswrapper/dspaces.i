@@ -34,8 +34,6 @@ void wrapper_dspaces_lock_on_read(char *varname);
 
 void wrapper_dspaces_unlock_on_read(char *varname);
 
-
-
 void wrapper_finalize();
 
 int wrapper_put_data(const char *var_name,
