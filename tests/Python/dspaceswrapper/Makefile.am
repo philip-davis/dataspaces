@@ -5,7 +5,6 @@ MPI4PY_INCLUDE = ${shell $(PYTHON) -c 'import mpi4py; print( mpi4py.get_include(
 NUMPY_INCLUDE = ${shell $(PYTHON) -c 'import numpy; print( numpy.get_include() )'}
 PREINCLUDES = -I${abs_top_srcdir}/include
 LFLAG = -L${abs_top_srcdir}/src -ldspaces -ldscommon -ldspacesf -L${abs_top_srcdir}/dart -ldart $(DSPACESLIB_LDADD)
-DSCOMMON = ../../C/common.o
 
 SWIG = swig
 SWIG_PY = ${SWIG} -python
@@ -23,7 +22,7 @@ SO = ${shell ${PYTHON_CONFIG} --extension-suffix}
 .PHONY: buildwrap
 buildwrap: _dspaces${SO} 
 _dspaces${SO}:  dspaces_wrap.c 
-	${MPICC} ${CFLAGS} -I${MPI4PY_INCLUDE} -I${NUMPY_INCLUDE} $(PREINCLUDES) $(DSCOMMON) $(LFLAG) -o $@ $< ${LDFLAGS}
+	${MPICC} ${CFLAGS} -I${MPI4PY_INCLUDE} -I${NUMPY_INCLUDE} $(PREINCLUDES) $(LFLAG) -o $@ $< ${LDFLAGS}
 
 all: buildwrap
 
