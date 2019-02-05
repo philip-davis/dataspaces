@@ -19,7 +19,7 @@ os.system(copyCommand)
 
 
 # number of clients at clients end to join server
-num_peers= 1
+# num_peers= 1
 appid = 1
 
 
@@ -39,6 +39,7 @@ for ver in range (2):
     print (data)
     
     ds.put(var_name,ver,lb,data)
+    
     ds.unlock_on_write(lock_name)
     time.sleep(1)
 

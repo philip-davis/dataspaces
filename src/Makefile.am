@@ -1,5 +1,5 @@
 AM_CFLAGS = -DLINUX -g 
-AM_CPPFLAGS = -I../dart/ -I../include/ $(DSPACESLIB_CPPFLAGS)
+AM_CPPFLAGS = -fPIC -I../dart/ -I../include/ $(DSPACESLIB_CPPFLAGS)
 AM_LDFLAGS = -L../dart -ldart $(DSPACESLIB_LDFLAGS) $(DSPACESLIB_LDADD)
 
 lib_LIBRARIES =  libdscommon.a libdspaces.a libdspacesf.a

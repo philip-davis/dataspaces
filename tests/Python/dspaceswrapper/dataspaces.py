@@ -10,9 +10,8 @@ class dataspaceClient:
         self.comm = comm
         self.num_peers = comm.Get_size()
         print("init num_peers")
-        print(num_peers)
-        #init(comm,num_peers,appid)
-
+        print(self.num_peers)
+        self.init(comm,self.num_peers,appid)
     
     def getElemNum(self,lb,ub):
         # get elem number between lb and ub
@@ -56,10 +55,10 @@ class dataspaceClient:
         dspaces.wrapper_finalize()
 
     def lock_on_write(self,lock_name):
-        dspaces.wrapper_dspaces_lock_on_read(lock_name)
+        dspaces.wrapper_dspaces_lock_on_write(lock_name)
 
     def unlock_on_write(self,lock_name):
-        dspaces.wrapper_dspaces_lock_on_write(lock_name)
+        dspaces.wrapper_dspaces_unlock_on_write(lock_name)
 
     def get(self,var_name,ver,lb,ub):
 
@@ -101,10 +100,10 @@ class dataspaceClient:
         dspaces.wrapper_put_data(var_name,ver,elemsize,ndim,lb,ub,arraydata)
 
     def lock_on_read(self,lock_name):
-        dspaces.wrapper_dspaces_unlock_on_read(lock_name)
+        dspaces.wrapper_dspaces_lock_on_read(lock_name)
 
     def unlock_on_read(self,lock_name):
-        dspaces.wrapper_dspaces_unlock_on_write(lock_name)
+        dspaces.wrapper_dspaces_unlock_on_read(lock_name)
 
 
 

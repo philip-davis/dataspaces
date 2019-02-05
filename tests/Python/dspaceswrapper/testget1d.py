@@ -48,6 +48,6 @@ for ver in range (2):
     time.sleep(1)
 
 
-ds.dspaces_wrapper_finalize()
+ds.finalize()
 MPI.Finalize()
 
