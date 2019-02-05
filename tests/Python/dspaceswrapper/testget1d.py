@@ -18,7 +18,8 @@ copyCommand = "cp "+confpath+" ."
 os.system(copyCommand)
 
 # number of clients at clients end to join server
-num_peers= 1
+# num_peers can be acquired from the communicator
+# num_peers= 1
 appid = 2
 
 
@@ -27,25 +28,22 @@ lock_name = "my_test_lock"
 
 data = np.array([0.0,0.0,0.0])
 
-ds = dataspaces.dataspaceClient()
-
-ds.dspaces_init(comm,num_peers,appid)
-
+ds = dataspaces.dataspaceClient(appid,comm)
 
 for ver in range (2):
 
-    ds.dspaces_lock_on_read(lock_name)
+    ds.lock_on_read(lock_name)
 
     lb = [0+ver*3]
     ub = [0+ver*3+2]
     
     # get ndim from the dimention of the lb and ub
-    getdata=ds.dspaces_get_data(var_name,ver,lb,ub)
+    getdata=ds.get(var_name,ver,lb,ub)
     
     print ("get data")
     print (getdata)
 
-    ds.dspaces_unlock_on_read(lock_name)
+    ds.unlock_on_read(lock_name)
 
     time.sleep(1)
 

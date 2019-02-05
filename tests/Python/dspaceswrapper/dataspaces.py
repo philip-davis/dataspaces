@@ -5,6 +5,15 @@ import ctypes
 import copy
 
 class dataspaceClient:
+    def __init__(self, appid, comm):
+        self.appid = appid
+        self.comm = comm
+        self.num_peers = comm.Get_size()
+        print("init num_peers")
+        print(num_peers)
+        #init(comm,num_peers,appid)
+
+    
     def getElemNum(self,lb,ub):
         # get elem number between lb and ub
         dim = len(lb)
@@ -40,20 +49,19 @@ class dataspaceClient:
         ub = ub.astype(int)
         return ub.tolist(),dim
 
-    
-    def dspaces_init(self,comm,num_peers,appid):
+    def init(self,comm,num_peers,appid):
         dspaces.wrapper_dspaces_init(comm,num_peers,appid) 
 
-    def dspaces_wrapper_finalize(self):
+    def finalize(self):
         dspaces.wrapper_finalize()
 
-    def dspaces_lock_on_read(self,lock_name):
+    def lock_on_write(self,lock_name):
         dspaces.wrapper_dspaces_lock_on_read(lock_name)
 
-    def dspaces_lock_on_write(self,lock_name):
+    def unlock_on_write(self,lock_name):
         dspaces.wrapper_dspaces_lock_on_write(lock_name)
 
-    def dspaces_get_data(self,var_name,ver,lb,ub):
+    def get(self,var_name,ver,lb,ub):
 
         # originalShape = data.shape
         # ub,ndim = this.getUpBound(lb,data)
@@ -79,7 +87,7 @@ class dataspaceClient:
         return getdata
 
 
-    def dspaces_put_data(self,var_name,ver,lb,putdata):
+    def put(self,var_name,ver,lb,putdata):
 
         arraydata = np.asarray(putdata)
         ub,ndim = self.getUpBound(lb,arraydata)
@@ -92,10 +100,10 @@ class dataspaceClient:
         # the elemsize here is the size for each element
         dspaces.wrapper_put_data(var_name,ver,elemsize,ndim,lb,ub,arraydata)
 
-    def dspaces_unlock_on_read(self,lock_name):
+    def lock_on_read(self,lock_name):
         dspaces.wrapper_dspaces_unlock_on_read(lock_name)
 
-    def dspaces_unlock_on_write(self,lock_name):
+    def unlock_on_read(self,lock_name):
         dspaces.wrapper_dspaces_unlock_on_write(lock_name)
 
 

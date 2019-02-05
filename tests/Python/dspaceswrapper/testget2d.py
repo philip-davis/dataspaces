@@ -25,29 +25,26 @@ appid = 2
 var_name = "ex1_sample_data" 
 lock_name = "my_test_lock"
 
-ds = dataspaces.dataspaceClient()
-
-ds.dspaces_init(comm,num_peers,appid)
-
+ds = dataspaces.dataspaceClient(appid,comm)
 
 for ver in range (2):
 
-    ds.dspaces_lock_on_read(lock_name)
+    ds.lock_on_read(lock_name)
 
     lb = [0+ver*3,0+ver*3]
     #ub,ndim = ds.getUpBound(lb,data)
     ub = [0+ver*3+1,0+ver*3+2]
 
-    getdata=ds.dspaces_get_data(var_name,ver,lb,ub)
+    getdata=ds.get(var_name,ver,lb,ub)
     
     print ("get data")
     print (getdata)
 
-    ds.dspaces_unlock_on_read(lock_name)
+    ds.unlock_on_read(lock_name)
 
     time.sleep(1)
 
 
-ds.dspaces_wrapper_finalize()
+ds.finalize()
 MPI.Finalize()
 

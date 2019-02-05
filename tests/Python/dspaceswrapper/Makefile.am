@@ -12,7 +12,7 @@ SWIG_PY = ${SWIG} -python
 src: dspaces_wrap.c
 dspaces_wrap.c: dspaces.i
 	[ -f ./numpy.i ] && echo "numpy.i already here, good" || curl -O https://raw.githubusercontent.com/numpy/numpy/master/tools/swig/numpy.i
-	${SWIG_PY} -I${MPI4PY_INCLUDE} -I${NUMPY_INCLUDE} $(PREINCLUDES) -o $@ $<
+	${SWIG_PY} -I${MPI4PY_INCLUDE} -I${NUMPY_INCLUDE} $(PREINCLUDES) $(LFLAG) -o $@ $<
 
 MPICC = mpicc
 CFLAGS = -fPIC ${shell ${PYTHON_CONFIG} --includes} -Wall -g
