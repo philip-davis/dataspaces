@@ -26,13 +26,13 @@
 
 void wrapper_dspaces_init(MPI_Comm pgcomm,int num_peers, int appid);
 
-void wrapper_dspaces_lock_on_write(char *varname);
+void wrapper_dspaces_lock_on_write(MPI_Comm pgcomm, char *varname);
 
-void wrapper_dspaces_unlock_on_write(char *varname);
+void wrapper_dspaces_unlock_on_write(MPI_Comm pgcomm, char *varname);
 
-void wrapper_dspaces_lock_on_read(char *varname);
+void wrapper_dspaces_lock_on_read(MPI_Comm pgcomm, char *varname);
 
-void wrapper_dspaces_unlock_on_read(char *varname);
+void wrapper_dspaces_unlock_on_read(MPI_Comm pgcomm, char *varname);
 
 void wrapper_finalize();
 

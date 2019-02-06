@@ -76,33 +76,32 @@ int wrapper_get_data(const char *var_name,
     return rcode;
 }
 
-void wrapper_dspaces_lock_on_write(char *varname)
+void wrapper_dspaces_lock_on_write(MPI_Comm pgcomm, char *varname)
 {
     //printf("get varname %s\n", varname);
-    MPI_Comm gcomm = MPI_COMM_WORLD;
-    dspaces_lock_on_write(varname, &gcomm);
+    //MPI_Comm gcomm = MPI_COMM_WORLD;
+    dspaces_lock_on_write(varname, &pgcomm);
     return;
 }
 
-void wrapper_dspaces_unlock_on_write(char *varname)
+void wrapper_dspaces_unlock_on_write(MPI_Comm pgcomm, char *varname)
 {
-    MPI_Comm gcomm = MPI_COMM_WORLD;
-    dspaces_unlock_on_write(varname, &gcomm);
+    //MPI_Comm gcomm = MPI_COMM_WORLD;
+    dspaces_unlock_on_write(varname, &pgcomm);
     return;
 }
 
-void wrapper_dspaces_lock_on_read(char *varname)
+void wrapper_dspaces_lock_on_read(MPI_Comm pgcomm, char *varname)
 {
     //printf("get varname %s\n", varname);
-    MPI_Comm gcomm = MPI_COMM_WORLD;
-    dspaces_lock_on_read(varname, &gcomm);
+    //MPI_Comm gcomm = MPI_COMM_WORLD;
+    dspaces_lock_on_read(varname, &pgcomm);
     return;
 }
 
-void wrapper_dspaces_unlock_on_read(char *varname)
+void wrapper_dspaces_unlock_on_read(MPI_Comm pgcomm, char *varname)
 {
-    MPI_Comm gcomm = MPI_COMM_WORLD;
-    dspaces_unlock_on_read(varname, &gcomm);
+    dspaces_unlock_on_read(varname, &pgcomm);
     return;
 }
 
