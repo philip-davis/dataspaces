@@ -1,5 +1,5 @@
 ./Python/basicexample shows a basic case to combine python and c code based on swig and mpi4py
-./Python/dspaceswrapper shows an example to get and put data from the DataSpaces project
+./Python/dataspaces shows an example to get and put data from the DataSpaces project
 
 (This python wrapper is only tested on Caliburn with dependency: python/3.6.3 mpi4py/3.0.0 numpy)
 
@@ -14,7 +14,7 @@ following steps should be finished if you want to add python wrapper to call the
 module load mpich
 module load python/3.6.3
 ```
-Please remove `~/.cache/pip` and `*.so` in dspaceswrapper and reinstall mpi4py if you switch from mpich to openmpi.
+Please remove `~/.cache/pip` and `*.so` in dataspaces and reinstall mpi4py if you switch from mpich to openmpi.
 
 We use python virtual env as an example but the following is also suitable for other python enviroment
 enter python virtual env and install the mpi4py, for example:
@@ -65,7 +65,7 @@ lock_type = 1
 ./dataspaces_server -c 2 -s 1
 ```
 
-7> run test case in `./test/Python/dspaceswrapper` or other folder you created:
+7> run test case in `./test/Python/dataspaces` or other folder you created:
 
 ```
 /bin/bash testrun.sh
