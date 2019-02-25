@@ -9,8 +9,6 @@ class dataspaceClient:
         self.appid = appid
         self.comm = comm
         self.num_peers = comm.Get_size()
-        print("init num_peers")
-        print(self.num_peers)
         self.init(comm,self.num_peers,appid)
     
     def getElemNum(self,lb,ub):
