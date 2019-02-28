@@ -33,10 +33,9 @@ extern void rpc_server_dec_reply(struct rpc_server *);
 static struct app_info *app_alloc()
 {
 	struct app_info *app = 0;
-	app = malloc(sizeof(*app));
+	app = calloc(1, sizeof(*app));
 	if(!app)
 		return 0;
-	memset(app, 0, sizeof(*app));
 	return app;
 }
 
@@ -540,7 +539,7 @@ static int cp_disseminate_cs_completion(struct rpc_server *rpc_s, struct msg_buf
 
     // disseminate new nodes to existing apps
     list_for_each_entry(temp_app, &ds->app_list, struct app_info, app_entry) {
-        if(temp_app->app_id != app->app_id) {
+        if(temp_app->app_id != app->app_id && temp_app->sent_announce) {
             temp_peer = ds_get_peer(ds, temp_app->app_min_id);
             ds_disseminate_app(ds, temp_peer, app->app_id);
         }
@@ -548,6 +547,7 @@ static int cp_disseminate_cs_completion(struct rpc_server *rpc_s, struct msg_buf
 
 	temp_peer = ds_get_peer(ds, app->app_min_id);
 	cs_disseminate_cp(ds,temp_peer);
+	app->sent_announce = 1;
 
     return 0;
     

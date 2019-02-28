@@ -22,6 +22,7 @@ struct app_info {
 	struct node_id *app_peer_tab;	/* Reference to app nodes info */
 
 	int app_cnt_peers;	/* Peers so far */
+	int sent_announce;
 };
 
 struct dart_server {
