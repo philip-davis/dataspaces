@@ -1084,60 +1084,6 @@ static int dc_boot(struct dart_client *dc, int appid)
 
     dc->rpc_s->num_sp = dc->num_sp;
 
-    int i;
-    int n = log2_ceil(dc->peer_size);
-    int *check_cp = malloc(sizeof(int) * (dc->peer_size + dc->cp_min_rank));
-    int j;
-
-    for(j = 0; j < dc->peer_size + dc->cp_min_rank; j++)
-        check_cp[j] = 0;
-
-    int *a = malloc(sizeof(int) * n);
-    int k;
-    int smaller_cid = 0;
-    int greater_cid = 0;
-
-    for(k = dc->cp_min_rank; k < dc->peer_size + dc->cp_min_rank; k++) {
-        a[0] = 1;
-        for(j = 1; j < n; j++) {
-            a[j] = a[j - 1] * 2;
-        }
-
-        for(j = 0; j < n; j++) {
-            a[j] = (a[j] + k - dc->cp_min_rank);
-            if(a[j] > dc->peer_size - 1)
-                a[j] = a[j] % dc->peer_size;
-
-            if(k == dc->rpc_s->ptlmap.id) {
-                check_cp[a[j] + dc->cp_min_rank] = 1;
-            }
-            if(a[j] + dc->cp_min_rank == dc->rpc_s->ptlmap.id) {
-                check_cp[k] = 1;
-            }
-        }
-    }
-    for(k = dc->cp_min_rank; k < dc->peer_size + dc->cp_min_rank; k++) {
-        if(check_cp[k] == 1) {
-            if(k < dc->rpc_s->ptlmap.id) {
-                smaller_cid++;
-            } else {
-                greater_cid++;
-            }                
-        }
-    }
-
-	struct node_id *peer;
-    for(i = 1; i < dc->self->ptlmap.id; i++) {
-        if(i > dc->num_sp - 1 && i < dc->cp_min_rank)
-            continue;
-
-        int count = 0;
-        peer = dc_get_peer(dc, i);
-        if(i == 0 && dc->self->ptlmap.id == dc->cp_min_rank) {
-            continue;
-        }
-    }
-
     return 0;
 
 err_flock:
