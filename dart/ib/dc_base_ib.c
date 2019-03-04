@@ -156,7 +156,7 @@ static int announce_cp_completion_all(struct rpc_server *rpc_s, struct msg_buf *
         return 0;
 }
 
-static int dcrpc_announce_cp_all(struct rpc_server *rpc_s, struct rpc_cmd *cmd)     //Done
+static int dcrpc_announce_cp_all(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     struct dart_client *dc = dc_ref_from_rpc(rpc_s);
     struct hdr_register *hreg = (struct hdr_register *) cmd->pad;
@@ -294,42 +294,50 @@ err_out:
 
 }
 
+static int install_app_cp(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+	struct dart_client *dc = dc_ref_from_rpc(rpc_s);
+	struct ptlid_map *pm = msg->msg_data;
+	struct node_id *temp_peer;
+	struct hdr_register *priv_hreg = (struct hdr_register *)msg->private;
+	int i, err = 0;
+
+	for(i = 0; i < priv_hreg->num_cp; i++) {
+		temp_peer = peer_alloc();
+
+		temp_peer->ptlmap = *pm;
+		list_add(&temp_peer->peer_entry, &dc->rpc_s->peer_list);
+		INIT_LIST_HEAD(&temp_peer->req_list);
+		temp_peer->num_msg_at_peer = rpc_s->max_num_msg;
+		temp_peer->num_msg_ret = 0;
+
+		dc->num_cp++;
+		pm++;
+	}
+
+	if(dc->self->ptlmap.id == dc->cp_min_rank) {
+		list_for_each_entry(temp_peer, &dc->rpc_s->peer_list,
+				struct node_id, peer_entry) {
+			if(temp_peer->ptlmap.appid == dc->self->ptlmap.appid &&
+					temp_peer->ptlmap.id != dc->self->ptlmap.id) {
+				dc_disseminate_app(dc, temp_peer, priv_hreg, msg->msg_data);
+			}
+		}
+	}
+
+	free(msg->private);
+	free(msg->msg_data);
+	free(msg);
+
+	return(0);
+}
+
 static int announce_app_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-
     struct dart_client *dc = dc_ref_from_rpc(rpc_s);
-    struct ptlid_map *pm = msg->msg_data;
-    struct node_id *temp_peer;
-    struct hdr_register *priv_hreg = (struct hdr_register *)msg->private;
-    int i, err = 0;
-   
-    for(i = 0; i < priv_hreg->num_cp; i++) {
-        temp_peer = peer_alloc();
-
-        temp_peer->ptlmap = *pm;
-        list_add(&temp_peer->peer_entry, &dc->rpc_s->peer_list);
-        INIT_LIST_HEAD(&temp_peer->req_list);
-        temp_peer->num_msg_at_peer = rpc_s->max_num_msg;
-        temp_peer->num_msg_ret = 0;
-
-        dc->num_cp++;
-        pm++;
-    }
 
     if(dc->f_reg_all) {
-        if(dc->self->ptlmap.id == dc->cp_min_rank) {
-            list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, 
-                    struct node_id, peer_entry) {
-                if(temp_peer->ptlmap.appid == dc->self->ptlmap.appid &&
-                    temp_peer->ptlmap.id != dc->self->ptlmap.id) {
-                    dc_disseminate_app(dc, temp_peer, priv_hreg, msg->msg_data);
-                }
-            }    
-        }
-
-        free(msg->private);
-        free(msg->msg_data);
-        free(msg);
+    	install_app_cp(rpc_s, msg);
     } else {
         printf("deferring app registration...\n");
         struct msg_list *app_reg = malloc(sizeof(*app_reg));
@@ -364,7 +372,7 @@ static int dcrpc_sp_announce_app(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         goto err_out;
     }
     msg->size = sizeof(struct ptlid_map) * hreg->num_cp;
-    msg->msg_data = malloc(msg->size);
+    msg->msg_data = calloc(1, msg->size);
     if(!msg->msg_data) {
         goto err_out_free;
     }
@@ -917,7 +925,7 @@ static int dc_disseminate_dc(struct dart_client *dc)
     int i, k, err;
 
 	for(i = 1; i < dc->peer_size; i++) {
-        fprintf(stderr, "%s: %i\n", __func__, i);
+        fprintf(stderr, "%s: %i (sizeof(struct ptlid_map) = %d, dc->num_sp = %d, dc->num_cp = %d)\n", __func__, i, sizeof(struct ptlid_map), dc->num_sp, dc->num_cp);
 		peer = dc_get_peer(dc, i + dc->cp_min_rank);
 		if(!peer)
 			continue;
@@ -1031,19 +1039,8 @@ int dc_boot_master(struct dart_client *dc)
 
         list_for_each_entry_safe(deferred, it, &dc->deferred_app_msg, struct msg_list, list_entry) {
             msg = deferred->msg;
-            if(dc->self->ptlmap.id == dc->cp_min_rank) {
-                list_for_each_entry(temp_peer, &dc->rpc_s->peer_list,
-                    struct node_id, peer_entry) {
-                    if(temp_peer->ptlmap.appid == dc->self->ptlmap.appid &&
-                        temp_peer->ptlmap.id != dc->self->ptlmap.id) {
-                        dc_disseminate_app(dc, temp_peer, msg->private, msg->msg_data);
-                    }
-                }
-            }
+            install_app_cp(dc->rpc_s, msg);
             list_del(&deferred->list_entry);
-            free(msg->private);
-            free(msg->msg_data);
-            free(msg);
             free(deferred);
         }
     }
