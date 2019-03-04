@@ -93,7 +93,7 @@ static int dcrpc_barrier(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	return err;
 }
 
-static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)	//Done
+static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
 	struct dart_client *dc = dc_ref_from_rpc(rpc_s);
 	struct node_id *peer;
@@ -225,7 +225,7 @@ static int dcrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	if(!msg)
 		goto err_out;
 	msg->size = sizeof(struct ptlid_map) * (hreg->num_cp + hreg->num_sp - dc->peer_size - 1 );
-	msg->msg_data = malloc(msg->size);
+	msg->msg_data = calloc(1, msg->size);
 	if(!msg->msg_data) {
 		free(msg);
 		goto err_out;
