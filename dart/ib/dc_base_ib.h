@@ -35,6 +35,8 @@ struct dart_client {
 
 	void *dart_ref;
 
+    struct list_head deferred_app_msg;
+
 	int num_posted;
 	MPI_Comm *comm;
 };		

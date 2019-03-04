@@ -173,7 +173,7 @@ static int dcrpc_announce_cp_all(struct rpc_server *rpc_s, struct rpc_cmd *cmd) 
     if(!msg)
         goto err_out;
     msg->size = sizeof(struct ptlid_map) * (hreg->num_cp + hreg->num_sp);
-    msg->msg_data = malloc(msg->size);
+    msg->msg_data = calloc(1, msg->size);
     if(!msg->msg_data) {
         free(msg);
         goto err_out;
@@ -316,19 +316,27 @@ static int announce_app_completion(struct rpc_server *rpc_s, struct msg_buf *msg
         pm++;
     }
 
-    if(dc->self->ptlmap.id == dc->cp_min_rank) {
-        list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, 
-                struct node_id, peer_entry) {
-            if(temp_peer->ptlmap.appid == dc->self->ptlmap.appid &&
-                temp_peer->ptlmap.id != dc->self->ptlmap.id) {
-                dc_disseminate_app(dc, temp_peer, priv_hreg, msg->msg_data);
+    if(dc->f_reg_all) {
+        if(dc->self->ptlmap.id == dc->cp_min_rank) {
+            list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, 
+                    struct node_id, peer_entry) {
+                if(temp_peer->ptlmap.appid == dc->self->ptlmap.appid &&
+                    temp_peer->ptlmap.id != dc->self->ptlmap.id) {
+                    dc_disseminate_app(dc, temp_peer, priv_hreg, msg->msg_data);
+                }
             }    
         }
+
+        free(msg->private);
+        free(msg->msg_data);
+        free(msg);
+    } else {
+        printf("deferring app registration...\n");
+        struct msg_list *app_reg = malloc(sizeof(*app_reg));
+
+        app_reg->msg = msg;
+        list_add(&app_reg->list_entry, &dc->deferred_app_msg);
     }
-    
-    free(msg->private);
-    free(msg->msg_data);
-    free(msg);
 
     return(0);
  
@@ -883,6 +891,22 @@ static int dc_disseminate(struct dart_client *dc)
         return err;
 }
 
+static int dc_disseminate_dc_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+    struct dart_client *dc = dc_ref_from_rpc(rpc_s);
+
+    if(msg->msg_data)
+        free(msg->msg_data);
+    free(msg);
+
+
+    if(++dc->num_posted == (dc->peer_size - 1)) {
+        dc->f_reg_all = 1;
+    }
+
+    return 0;
+}
+
 static int dc_disseminate_dc(struct dart_client *dc) 
 {
     struct msg_buf *msg;
@@ -893,6 +917,7 @@ static int dc_disseminate_dc(struct dart_client *dc)
     int i, k, err;
 
 	for(i = 1; i < dc->peer_size; i++) {
+        fprintf(stderr, "%s: %i\n", __func__, i);
 		peer = dc_get_peer(dc, i + dc->cp_min_rank);
 		if(!peer)
 			continue;
@@ -900,7 +925,7 @@ static int dc_disseminate_dc(struct dart_client *dc)
 		msg = msg_buf_alloc(dc->rpc_s, peer, 1);
 		if(!msg)
 			goto err_out;
-		msg->cb = default_completion_with_data_callback;
+		msg->cb = dc_disseminate_dc_completion;
 		msg->size = sizeof(struct ptlid_map) * (dc->num_sp + dc->num_cp);
 		pptlmap = msg->msg_data = malloc(msg->size);
 		if(!msg->msg_data)
@@ -962,6 +987,8 @@ int dc_boot_master(struct dart_client *dc)
 
 	dc->rpc_s->ptlmap.id = 0;
 
+    INIT_LIST_HEAD(&dc->deferred_app_msg);
+
 	struct node_id *master_peer = peer_alloc();
 
 	master_peer->ptlmap.id = 0;
@@ -997,9 +1024,33 @@ int dc_boot_master(struct dart_client *dc)
     //send peers info in my app to master server
 	dc_disseminate_dc(dc);
 
+    if(!list_empty(&dc->deferred_app_msg)) {
+        struct msg_buf *msg;
+        struct msg_list *deferred, *it;
+        struct node_id *temp_peer;        
+
+        list_for_each_entry_safe(deferred, it, &dc->deferred_app_msg, struct msg_list, list_entry) {
+            msg = deferred->msg;
+            if(dc->self->ptlmap.id == dc->cp_min_rank) {
+                list_for_each_entry(temp_peer, &dc->rpc_s->peer_list,
+                    struct node_id, peer_entry) {
+                    if(temp_peer->ptlmap.appid == dc->self->ptlmap.appid &&
+                        temp_peer->ptlmap.id != dc->self->ptlmap.id) {
+                        dc_disseminate_app(dc, temp_peer, msg->private, msg->msg_data);
+                    }
+                }
+            }
+            list_del(&deferred->list_entry);
+            free(msg->private);
+            free(msg->msg_data);
+            free(msg);
+            free(deferred);
+        }
+    }
+
+
     if(err != 0)
         goto err_out;
-    dc->f_reg = 1;
 
     return 0;
 err_out:
