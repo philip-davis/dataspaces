@@ -169,13 +169,13 @@ static int qt_gen_qid(void)
 static struct query_dht *qh_alloc(int qh_num)
 {
         struct query_dht *qh = 0;
+        int size = sizeof(*qh) + sizeof(int)*(qh_num+1) + 7;
 
-        qh = malloc(sizeof(*qh) + sizeof(int)*(qh_num+1) + 7);
+        qh = calloc(1, size);
         if (!qh) {
                 errno = ENOMEM;
                 return qh;
         }
-        memset(qh, 0, sizeof(*qh));
 
         qh->qh_peerid_tab = (int *) (qh + 1);
         ALIGN_ADDR_QUAD_BYTES(qh->qh_peerid_tab);
