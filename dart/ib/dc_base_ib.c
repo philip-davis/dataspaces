@@ -213,7 +213,7 @@ static int dcrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	dc->num_sp = hreg->num_sp;
 	dc->num_cp = hreg->num_cp;
 
-	if(dc->peer_size, hreg->num_cp + hreg->num_sp - dc->peer_size - 1 == 0) {
+	if(hreg->num_cp + hreg->num_sp - dc->peer_size - 1 == 0) {
 		dc->cp_min_rank = dc->rpc_s->app_minid;
 	        dc->f_reg = 1;
 		return 0;
@@ -359,6 +359,13 @@ static int dcrpc_sp_announce_app(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
     struct node_id *peer;
     struct msg_buf *msg;
     int err = -ENOMEM;
+
+    //wait until registration completes to procede.
+    while(!dc->f_reg) {
+        err = rpc_process_event_with_timeout(dc->rpc_s, 1);
+        if(err != 0 && err != -ETIME)
+        	goto err_out;
+    }
 
     // master clients receive from master server, then disseminate to slave clients
     if(dc->self->ptlmap.id == dc->cp_min_rank) {
