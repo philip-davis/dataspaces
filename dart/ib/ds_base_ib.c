@@ -698,14 +698,20 @@ static void *ds_master_listen(void *server)
 	struct dart_server *ds = (struct dart_server *) server;
     struct node_id *peer = NULL;
 	time_t tm_st, tm_end;
+	void *priv_data;
 
 	while(ds->rpc_s->thread_alive && (rdma_get_cm_event(ds->rpc_s->rpc_ec, &event) == 0)) {
 		struct con_param conpara;
 		struct rdma_cm_event event_copy;
+		priv_data = NULL;
+		if(event->param.conn.private_data) {
+			priv_data = malloc(event->param.conn.private_data_len);
+			memcpy(priv_data, event->param.conn.private_data, event->param.conn.private_data_len);
+		}
 		memcpy(&event_copy, event, sizeof(*event));
 		rdma_ack_cm_event(event);
 		if(event_copy.event == RDMA_CM_EVENT_CONNECT_REQUEST) {
-            conpara = *(struct con_param *) event_copy.param.conn.private_data;
+            conpara = *(struct con_param *) priv_data;
             if(conpara.type == 0) {
                 peer = ds_get_peer(ds, conpara.pm_cp.id);
                 conn = &peer->sys_conn;
@@ -792,11 +798,17 @@ static void *ds_master_listen(void *server)
 	    } else if(event_copy.event != RDMA_CM_EVENT_DISCONNECTED) {
             err = event_copy.status;
         }
+		if(priv_data) {
+			free(priv_data);
+		}
     }
 	
     pthread_exit(0);
     return 0;
 err_out:
+	if(priv_data) {
+		free(priv_data);
+	}
     printf("'%s()': failed with %d.\n", __func__, err);
     pthread_exit(0);
     return 0;
@@ -859,14 +871,22 @@ static void *ds_listen(void *server)
 	check = 0;
 	connected = 0;
 	peer = NULL;
+	void *priv_data;
 
 	while(ds->rpc_s->thread_alive && (rdma_get_cm_event(ds->rpc_s->rpc_ec, &event) == 0)) {
 
 		struct rdma_cm_event event_copy;
+
+		priv_data = NULL;
+		if(event->param.conn.private_data) {
+			priv_data = malloc(event->param.conn.private_data_len);
+			memcpy(priv_data, event->param.conn.private_data, event->param.conn.private_data_len);
+		}
+
 		memcpy(&event_copy, event, sizeof(*event));
 		rdma_ack_cm_event(event);
 		if(event_copy.event == RDMA_CM_EVENT_CONNECT_REQUEST) {
-			conpara = *(struct con_param *) event_copy.param.conn.private_data;
+			conpara = *(struct con_param *) priv_data;
 			peer = ds_get_peer(ds, conpara.pm_cp.id);
 			while(peer == NULL) {
 				sched_yield();
@@ -917,13 +937,19 @@ static void *ds_listen(void *server)
 			printf("event is %d with status %d.\n", event_copy.event, event_copy.status);
 			err = event_copy.status;
 		}
-
+		if(priv_data) {
+			free(priv_data);
+		}
 
 	}
 
 	pthread_exit(0);
 	return 0;
-      err_out:printf("'%s()': failed with %d.\n", __func__, err);
+err_out:
+	if(priv_data) {
+		free(priv_data);
+	}
+	printf("'%s()': failed with %d.\n", __func__, err);
 	pthread_exit(0);
 	return 0;
 }

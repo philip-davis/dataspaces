@@ -1368,6 +1368,7 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 	struct rdma_cm_event *event = NULL;
 	struct rdma_conn_param cm_params;
 	struct con_param conpara;
+	void *priv_data;
 
 	char *ip;
 	char port[32];
@@ -1406,7 +1407,13 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 
 	while(rdma_get_cm_event(peer->rpc_ec, &event) == 0) {
 		struct rdma_cm_event event_copy;
+		priv_data = NULL;
 		memcpy(&event_copy, event, sizeof(*event));
+		if(event_copy.param.conn.private_data) {
+			priv_data = malloc(event_copy.param.conn.private_data_len);
+			memcpy(priv_data, event_copy.param.conn.private_data, event_copy.param.conn.private_data_len);
+		}
+
 		rdma_ack_cm_event(event);
 
 		if(event_copy.event == RDMA_CM_EVENT_ADDR_RESOLVED) {
@@ -1459,21 +1466,25 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 			if(peer->ptlmap.id == 0) {
 				if(rpc_s->ptlmap.appid != 0) {
 					//Here is a tricky design. Master Server puts app_minid into this 'type' field and return.
-					rpc_s->app_minid = ((struct con_param *) event_copy.param.conn.private_data)->type;
-					rpc_s->ptlmap.id = ((struct con_param *) event_copy.param.conn.private_data)->pm_sp.id;
-					peer->ptlmap = ((struct con_param *) event_copy.param.conn.private_data)->pm_cp;
+					rpc_s->app_minid = ((struct con_param *) priv_data)->type;
+					rpc_s->ptlmap.id = ((struct con_param *) priv_data)->pm_sp.id;
+					peer->ptlmap = ((struct con_param *) priv_data)->pm_cp;
 					//only the master client will get the total number of peers from the master server
 					if(rpc_s->ptlmap.id == rpc_s->app_minid || rpc_s->app_minid ==0){
-						rpc_s->num_peers = rpc_s->app_num_peers + ((struct con_param *) event_copy.param.conn.private_data)->num_cp;
+						rpc_s->num_peers = rpc_s->app_num_peers + ((struct con_param *) priv_data)->num_cp;
 					}
 				} else
-					rpc_s->ptlmap.id = *((int *) event_copy.param.conn.private_data);
+					rpc_s->ptlmap.id = *((int *) priv_data);
 			}
 			peer->rpc_conn.f_connected = 1;
 			check = 1;
 		} else {
 			err = event_copy.status;
 			goto err_out;
+		}
+
+		if(priv_data) {
+			free(priv_data);
 		}
 
 		if(check == 1)
@@ -1483,6 +1494,9 @@ int rpc_connect(struct rpc_server *rpc_s, struct node_id *peer)
 	return 0;
 
 err_out:
+	if(priv_data) {
+		free(priv_data);
+	}
 	return err;
 }
 

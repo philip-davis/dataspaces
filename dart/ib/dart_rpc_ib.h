@@ -256,6 +256,11 @@ struct msg_buf {
 	const struct node_id *peer;
 };
 
+struct msg_list {
+    struct list_head list_entry;
+    struct msg_buf *msg;
+};
+
 /* Struct to represent the connection*/
 struct connection {
 	struct rdma_cm_id *id;

@@ -93,7 +93,7 @@ static int dcrpc_barrier(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	return err;
 }
 
-static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)	//Done
+static int announce_cp_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
 	struct dart_client *dc = dc_ref_from_rpc(rpc_s);
 	struct node_id *peer;
@@ -156,7 +156,7 @@ static int announce_cp_completion_all(struct rpc_server *rpc_s, struct msg_buf *
         return 0;
 }
 
-static int dcrpc_announce_cp_all(struct rpc_server *rpc_s, struct rpc_cmd *cmd)     //Done
+static int dcrpc_announce_cp_all(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
     struct dart_client *dc = dc_ref_from_rpc(rpc_s);
     struct hdr_register *hreg = (struct hdr_register *) cmd->pad;
@@ -173,7 +173,7 @@ static int dcrpc_announce_cp_all(struct rpc_server *rpc_s, struct rpc_cmd *cmd) 
     if(!msg)
         goto err_out;
     msg->size = sizeof(struct ptlid_map) * (hreg->num_cp + hreg->num_sp);
-    msg->msg_data = malloc(msg->size);
+    msg->msg_data = calloc(1, msg->size);
     if(!msg->msg_data) {
         free(msg);
         goto err_out;
@@ -213,7 +213,7 @@ static int dcrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	dc->num_sp = hreg->num_sp;
 	dc->num_cp = hreg->num_cp;
 
-	if(dc->peer_size, hreg->num_cp + hreg->num_sp - dc->peer_size - 1 == 0) {
+	if(hreg->num_cp + hreg->num_sp - dc->peer_size - 1 == 0) {
 		dc->cp_min_rank = dc->rpc_s->app_minid;
 	        dc->f_reg = 1;
 		return 0;
@@ -225,7 +225,7 @@ static int dcrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	if(!msg)
 		goto err_out;
 	msg->size = sizeof(struct ptlid_map) * (hreg->num_cp + hreg->num_sp - dc->peer_size - 1 );
-	msg->msg_data = malloc(msg->size);
+	msg->msg_data = calloc(1, msg->size);
 	if(!msg->msg_data) {
 		free(msg);
 		goto err_out;
@@ -294,41 +294,56 @@ err_out:
 
 }
 
+static int install_app_cp(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+	struct dart_client *dc = dc_ref_from_rpc(rpc_s);
+	struct ptlid_map *pm = msg->msg_data;
+	struct node_id *temp_peer;
+	struct hdr_register *priv_hreg = (struct hdr_register *)msg->private;
+	int i, err = 0;
+
+	for(i = 0; i < priv_hreg->num_cp; i++) {
+		temp_peer = peer_alloc();
+
+		temp_peer->ptlmap = *pm;
+		list_add(&temp_peer->peer_entry, &dc->rpc_s->peer_list);
+		INIT_LIST_HEAD(&temp_peer->req_list);
+		temp_peer->num_msg_at_peer = rpc_s->max_num_msg;
+		temp_peer->num_msg_ret = 0;
+
+		dc->num_cp++;
+		pm++;
+	}
+
+	if(dc->self->ptlmap.id == dc->cp_min_rank) {
+		list_for_each_entry(temp_peer, &dc->rpc_s->peer_list,
+				struct node_id, peer_entry) {
+			if(temp_peer->ptlmap.appid == dc->self->ptlmap.appid &&
+					temp_peer->ptlmap.id != dc->self->ptlmap.id) {
+				dc_disseminate_app(dc, temp_peer, priv_hreg, msg->msg_data);
+			}
+		}
+	}
+
+	free(msg->private);
+	free(msg->msg_data);
+	free(msg);
+
+	return(0);
+}
+
 static int announce_app_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-
     struct dart_client *dc = dc_ref_from_rpc(rpc_s);
-    struct ptlid_map *pm = msg->msg_data;
-    struct node_id *temp_peer;
-    struct hdr_register *priv_hreg = (struct hdr_register *)msg->private;
-    int i, err = 0;
-   
-    for(i = 0; i < priv_hreg->num_cp; i++) {
-        temp_peer = peer_alloc();
 
-        temp_peer->ptlmap = *pm;
-        list_add(&temp_peer->peer_entry, &dc->rpc_s->peer_list);
-        INIT_LIST_HEAD(&temp_peer->req_list);
-        temp_peer->num_msg_at_peer = rpc_s->max_num_msg;
-        temp_peer->num_msg_ret = 0;
+    if(dc->f_reg_all || dc->self->ptlmap.id == dc->cp_min_rank) {
+    	install_app_cp(rpc_s, msg);
+    } else {
+        struct msg_list *app_reg = malloc(sizeof(*app_reg));
 
-        dc->num_cp++;
-        pm++;
+        app_reg->msg = msg;
+        list_add(&app_reg->list_entry, &dc->deferred_app_msg);
     }
-
-    if(dc->self->ptlmap.id == dc->cp_min_rank) {
-        list_for_each_entry(temp_peer, &dc->rpc_s->peer_list, 
-                struct node_id, peer_entry) {
-            if(temp_peer->ptlmap.appid == dc->self->ptlmap.appid &&
-                temp_peer->ptlmap.id != dc->self->ptlmap.id) {
-                dc_disseminate_app(dc, temp_peer, priv_hreg, msg->msg_data);
-            }    
-        }
-    }
-    
-    free(msg->private);
-    free(msg->msg_data);
-    free(msg);
 
     return(0);
  
@@ -344,6 +359,13 @@ static int dcrpc_sp_announce_app(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
     struct msg_buf *msg;
     int err = -ENOMEM;
 
+    //wait until registration completes to procede.
+    while(!dc->f_reg) {
+        err = rpc_process_event_with_timeout(dc->rpc_s, 1);
+        if(err != 0 && err != -ETIME)
+        	goto err_out;
+    }
+
     // master clients receive from master server, then disseminate to slave clients
     if(dc->self->ptlmap.id == dc->cp_min_rank) {
         peer = dc_get_peer(dc, 0);
@@ -356,7 +378,7 @@ static int dcrpc_sp_announce_app(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         goto err_out;
     }
     msg->size = sizeof(struct ptlid_map) * hreg->num_cp;
-    msg->msg_data = malloc(msg->size);
+    msg->msg_data = calloc(1, msg->size);
     if(!msg->msg_data) {
         goto err_out_free;
     }
@@ -491,9 +513,6 @@ static int dc_unregister(struct dart_client *dc)	//Done
 	if(err < 0)
 		goto err_out_free;
 
-
-	// Should wait here for 'unregister' confirmation. 
-//	printf("I am %d after sending unreg app to master 0\n", dc->rpc_s->ptlmap.id);              
 	while(dc->f_reg) {
 		err = rpc_process_event(dc->rpc_s);
 		if(err < 0)
@@ -554,13 +573,20 @@ static void *dc_listen(void *client)
 	check = 0;
 	connected = 0;
 	peer = NULL;
+	void *priv_data;
+
 	while(dc->rpc_s->thread_alive && (rdma_get_cm_event(dc->rpc_s->rpc_ec, &event) == 0)) {
 
 		struct rdma_cm_event event_copy;
+		priv_data = NULL;
+		if(event->param.conn.private_data) {
+			priv_data = malloc(event->param.conn.private_data_len);
+			memcpy(priv_data, event->param.conn.private_data, event->param.conn.private_data_len);
+		}
 		memcpy(&event_copy, event, sizeof(*event));
 		rdma_ack_cm_event(event);
 		if(event_copy.event == RDMA_CM_EVENT_CONNECT_REQUEST) {
-			conpara = *(struct con_param *) event_copy.param.conn.private_data;
+			conpara = *(struct con_param *) priv_data;
 			peer = dc_get_peer(dc, conpara.pm_cp.id);
 
 			int kk = 0;
@@ -650,12 +676,19 @@ static void *dc_listen(void *client)
 			dc->s_connected--;
 			err = event_copy.status;
 		}
+		if(priv_data) {
+			free(priv_data);
+		}
 
 	}
 
 	pthread_exit(0);
 	return 0;
-      err_out:printf("'%s()': failed with %d.\n", __func__, err);
+err_out:
+	if(priv_data) {
+		free(priv_data);
+	}
+	printf("'%s()': failed with %d.\n", __func__, err);
 	pthread_exit(0);
 	return 0;
 }
@@ -670,15 +703,21 @@ static void *dc_master_listen(void *server)
     struct connection *conn;
     struct dart_client *dc = (struct dart_client *) server;
 	struct node_id *peer = NULL;
+	void *priv_data;
 
     while(dc->rpc_s->thread_alive && (rdma_get_cm_event(dc->rpc_s->rpc_ec, &event) == 0)) {
         struct con_param conpara;
         struct rdma_cm_event event_copy;
         
+        priv_data = NULL;
+        if(event->param.conn.private_data) {
+        	priv_data = malloc(event->param.conn.private_data_len);
+        	memcpy(priv_data, event->param.conn.private_data, event->param.conn.private_data_len);
+        }
         memcpy(&event_copy, event, sizeof(*event));
         rdma_ack_cm_event(event);
         if(event_copy.event == RDMA_CM_EVENT_CONNECT_REQUEST) {
-			conpara = *(struct con_param *) event_copy.param.conn.private_data;
+			conpara = *(struct con_param *) priv_data;
 			if(conpara.type == 0) {
 				peer = dc_get_peer(dc, conpara.pm_cp.id);
 				conn = &peer->sys_conn;
@@ -801,10 +840,16 @@ static void *dc_master_listen(void *server)
 			dc->s_connected--;
             err = event_copy.status;
         }
+        if(priv_data) {
+        	free(priv_data);
+        }
     }
     pthread_exit(0);
     return 0;
 err_out:
+	if(priv_data) {
+		free(priv_data);
+	}
     printf("'%s()': failed with %d.\n", __func__, err);
     pthread_exit(0);
     return 0;
@@ -857,6 +902,22 @@ static int dc_disseminate(struct dart_client *dc)
         return err;
 }
 
+static int dc_disseminate_dc_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+    struct dart_client *dc = dc_ref_from_rpc(rpc_s);
+
+    if(msg->msg_data)
+        free(msg->msg_data);
+    free(msg);
+
+
+    if(++dc->num_posted == (dc->peer_size - 1)) {
+        dc->f_reg_all = 1;
+    }
+
+    return 0;
+}
+
 static int dc_disseminate_dc(struct dart_client *dc) 
 {
     struct msg_buf *msg;
@@ -874,7 +935,7 @@ static int dc_disseminate_dc(struct dart_client *dc)
 		msg = msg_buf_alloc(dc->rpc_s, peer, 1);
 		if(!msg)
 			goto err_out;
-		msg->cb = default_completion_with_data_callback;
+		msg->cb = dc_disseminate_dc_completion;
 		msg->size = sizeof(struct ptlid_map) * (dc->num_sp + dc->num_cp);
 		pptlmap = msg->msg_data = malloc(msg->size);
 		if(!msg->msg_data)
@@ -936,6 +997,8 @@ int dc_boot_master(struct dart_client *dc)
 
 	dc->rpc_s->ptlmap.id = 0;
 
+    INIT_LIST_HEAD(&dc->deferred_app_msg);
+
 	struct node_id *master_peer = peer_alloc();
 
 	master_peer->ptlmap.id = 0;
@@ -971,9 +1034,26 @@ int dc_boot_master(struct dart_client *dc)
     //send peers info in my app to master server
 	dc_disseminate_dc(dc);
 
+	while(dc->f_reg_all == 0){
+		err = rpc_process_event_with_timeout(dc->rpc_s, 1);
+	}
+
+    if(!list_empty(&dc->deferred_app_msg)) {
+        struct msg_buf *msg;
+        struct msg_list *deferred, *it;
+        struct node_id *temp_peer;        
+
+        list_for_each_entry_safe(deferred, it, &dc->deferred_app_msg, struct msg_list, list_entry) {
+            msg = deferred->msg;
+            install_app_cp(dc->rpc_s, msg);
+            list_del(&deferred->list_entry);
+            free(deferred);
+        }
+    }
+
+
     if(err != 0)
         goto err_out;
-    dc->f_reg = 1;
 
     return 0;
 err_out:
@@ -1027,6 +1107,8 @@ int dc_boot_slave(struct dart_client *dc)
     int rc;
     dc->rpc_s->thread_alive = 1;
 
+    INIT_LIST_HEAD(&dc->deferred_app_msg);
+
     rc = pthread_create(&(dc->rpc_s->comm_thread), NULL, dc_listen, (void *) dc);
     if(rc) {
         printf("ERROR; return code from pthread_create() is %d\n", rc);
@@ -1039,6 +1121,8 @@ int dc_boot_slave(struct dart_client *dc)
         if(err != 0 && err != -ETIME)
             goto err_out;
     }
+
+    dc->f_reg_all = 1;
 
     return 0;
       
@@ -1083,60 +1167,6 @@ static int dc_boot(struct dart_client *dc, int appid)
 	MPI_Barrier(MPI_COMM_WORLD);
 
     dc->rpc_s->num_sp = dc->num_sp;
-
-    int i;
-    int n = log2_ceil(dc->peer_size);
-    int *check_cp = malloc(sizeof(int) * (dc->peer_size + dc->cp_min_rank));
-    int j;
-
-    for(j = 0; j < dc->peer_size + dc->cp_min_rank; j++)
-        check_cp[j] = 0;
-
-    int *a = malloc(sizeof(int) * n);
-    int k;
-    int smaller_cid = 0;
-    int greater_cid = 0;
-
-    for(k = dc->cp_min_rank; k < dc->peer_size + dc->cp_min_rank; k++) {
-        a[0] = 1;
-        for(j = 1; j < n; j++) {
-            a[j] = a[j - 1] * 2;
-        }
-
-        for(j = 0; j < n; j++) {
-            a[j] = (a[j] + k - dc->cp_min_rank);
-            if(a[j] > dc->peer_size - 1)
-                a[j] = a[j] % dc->peer_size;
-
-            if(k == dc->rpc_s->ptlmap.id) {
-                check_cp[a[j] + dc->cp_min_rank] = 1;
-            }
-            if(a[j] + dc->cp_min_rank == dc->rpc_s->ptlmap.id) {
-                check_cp[k] = 1;
-            }
-        }
-    }
-    for(k = dc->cp_min_rank; k < dc->peer_size + dc->cp_min_rank; k++) {
-        if(check_cp[k] == 1) {
-            if(k < dc->rpc_s->ptlmap.id) {
-                smaller_cid++;
-            } else {
-                greater_cid++;
-            }                
-        }
-    }
-
-	struct node_id *peer;
-    for(i = 1; i < dc->self->ptlmap.id; i++) {
-        if(i > dc->num_sp - 1 && i < dc->cp_min_rank)
-            continue;
-
-        int count = 0;
-        peer = dc_get_peer(dc, i);
-        if(i == 0 && dc->self->ptlmap.id == dc->cp_min_rank) {
-            continue;
-        }
-    }
 
     return 0;
 
