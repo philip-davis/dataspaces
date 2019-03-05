@@ -336,10 +336,9 @@ static int announce_app_completion(struct rpc_server *rpc_s, struct msg_buf *msg
 {
     struct dart_client *dc = dc_ref_from_rpc(rpc_s);
 
-    if(dc->f_reg_all) {
+    if(dc->f_reg_all || dc->self->ptlmap.id == dc->cp_min_rank) {
     	install_app_cp(rpc_s, msg);
     } else {
-        printf("deferring app registration...\n");
         struct msg_list *app_reg = malloc(sizeof(*app_reg));
 
         app_reg->msg = msg;
@@ -514,9 +513,6 @@ static int dc_unregister(struct dart_client *dc)	//Done
 	if(err < 0)
 		goto err_out_free;
 
-
-	// Should wait here for 'unregister' confirmation. 
-//	printf("I am %d after sending unreg app to master 0\n", dc->rpc_s->ptlmap.id);              
 	while(dc->f_reg) {
 		err = rpc_process_event(dc->rpc_s);
 		if(err < 0)
@@ -932,7 +928,6 @@ static int dc_disseminate_dc(struct dart_client *dc)
     int i, k, err;
 
 	for(i = 1; i < dc->peer_size; i++) {
-        fprintf(stderr, "%s: %i (sizeof(struct ptlid_map) = %d, dc->num_sp = %d, dc->num_cp = %d)\n", __func__, i, sizeof(struct ptlid_map), dc->num_sp, dc->num_cp);
 		peer = dc_get_peer(dc, i + dc->cp_min_rank);
 		if(!peer)
 			continue;
@@ -1039,6 +1034,10 @@ int dc_boot_master(struct dart_client *dc)
     //send peers info in my app to master server
 	dc_disseminate_dc(dc);
 
+	while(dc->f_reg_all == 0){
+		err = rpc_process_event_with_timeout(dc->rpc_s, 1);
+	}
+
     if(!list_empty(&dc->deferred_app_msg)) {
         struct msg_buf *msg;
         struct msg_list *deferred, *it;
@@ -1108,6 +1107,8 @@ int dc_boot_slave(struct dart_client *dc)
     int rc;
     dc->rpc_s->thread_alive = 1;
 
+    INIT_LIST_HEAD(&dc->deferred_app_msg);
+
     rc = pthread_create(&(dc->rpc_s->comm_thread), NULL, dc_listen, (void *) dc);
     if(rc) {
         printf("ERROR; return code from pthread_create() is %d\n", rc);
@@ -1120,6 +1121,8 @@ int dc_boot_slave(struct dart_client *dc)
         if(err != 0 && err != -ETIME)
             goto err_out;
     }
+
+    dc->f_reg_all = 1;
 
     return 0;
       
