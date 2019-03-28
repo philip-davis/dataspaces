@@ -204,6 +204,20 @@ struct hdr_obj_put {
 #endif
 } __attribute__((__packed__));
 
+
+/* Header structure for meta_get requests. */
+struct hdr_nvars_get {
+    int current_version;
+    char f_name[128];
+} __attribute__((__packed__));
+
+/* Header structure for meta_get requests. */
+struct hdr_var_meta_get {
+    int current_version;
+    int length;
+    char f_name[128];
+} __attribute__((__packed__));
+
 /* Header structure for obj_filter requests. */
 struct hdr_obj_filter {
         int                     qid;

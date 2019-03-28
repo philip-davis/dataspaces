@@ -243,6 +243,10 @@ int dspaces_get (const char *var_name,
         int ndim, uint64_t *lb, uint64_t *ub,
         void *data);
 
+char* dspaces_get_next_meta(unsigned int ver, char *name, int *nVars, int *version);
+char* dspaces_get_latest_meta(unsigned int ver, char *name, int *nVars, int *version);
+
+
 /**
  * Remove a particular version of a variable (whole domain)
  * @param[in] var_name:     Name of the variable.

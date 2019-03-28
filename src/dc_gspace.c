@@ -1977,6 +1977,144 @@ err_out:
     ERROR_TRACE();
 }
 
+
+static int nvars_get_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+    	int *var = (int*)(msg->private);
+	*var = 0;
+	free(msg);
+        return 0;
+}
+
+
+int dcg_obj_get_nvars(int type, int ver, char *name, int *var_array, int *comp)
+{
+    struct msg_buf *msg;
+    struct node_id *peer;
+    struct hdr_nvars_get *oh;
+    int err;
+    
+    peer = dc_get_peer(dcg->dc, 0);
+    err = -ENOMEM;
+    msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+    if (!msg) {
+            goto err_out;
+    }
+    msg->msg_data = var_array;
+    msg->size = sizeof(int)*2;
+    msg->cb = nvars_get_completion;
+    msg->private = comp;
+
+    if(type==0)
+        msg->msg_rpc->cmd = ss_obj_get_next_meta;
+    else
+        msg->msg_rpc->cmd = ss_obj_get_latest_meta;
+
+    msg->msg_rpc->id = DCG_ID;
+
+    oh = (struct hdr_nvars_get *) msg->msg_rpc->pad;
+    oh->current_version = ver;
+    sprintf(oh->f_name, "%s", name);
+
+    err = rpc_receive(dcg->dc->rpc_s, peer, msg);
+
+    if(err < 0){
+        free(msg);
+        goto err_out;
+    }
+    if(err == 0)
+        return 0;
+    
+    err_out:
+        uloga("'%s()': failed with %d.\n", __func__, err);
+        return err;
+
+
+}
+
+
+int dcg_obj_get_varBuffer(int ver, int length, char* data, char* name, int* comp)
+{
+    struct msg_buf *msg;
+    struct node_id *peer;
+    struct hdr_var_meta_get *oh;
+    int err;
+    
+    peer = dc_get_peer(dcg->dc, 0);
+    err = -ENOMEM;
+    msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+    if (!msg) {
+            goto err_out;
+    }
+    msg->msg_data = data;
+    msg->size = length;
+    msg->cb = nvars_get_completion;
+    msg->private = comp;
+    msg->msg_rpc->cmd = ss_obj_get_var_meta;
+    msg->msg_rpc->id = DCG_ID;
+
+    oh = (struct hdr_var_meta_get *) msg->msg_rpc->pad;
+    oh->current_version = ver;
+    oh->length = length;
+    sprintf(oh->f_name, "%s", name);
+
+    err = rpc_receive(dcg->dc->rpc_s, peer, msg);
+
+    if(err < 0){
+        free(msg);
+        goto err_out;
+    }
+    if(err == 0)
+        return 0;
+    
+    err_out:
+        uloga("'%s()': failed with %d.\n", __func__, err);
+        return err;
+
+
+}
+
+
+char * dcg_obj_get_meta(int type, int ver, char*name, int *var_num, int *var_version)
+{
+    int err = -ENOMEM;
+    int var_array[2]={-2,-2};
+    int comp_flg = -2;
+    err = dcg_obj_get_nvars(type, ver, name, var_array, &comp_flg);
+    if (err < 0)
+        goto err_out;
+    DC_WAIT_COMPLETION(var_array[0]!=-2);
+    if(var_array[0]==-3){
+	uloga("Current Version %d>= Latest version\n", ver);
+	return NULL;
+	}
+    int nVars = var_array[0];
+    int version = var_array[1];
+    int var_name_max_length = 128;
+    int buf_len = nVars * sizeof(int) + nVars * sizeof(int)+ 10 * nVars * sizeof(uint64_t) + nVars * var_name_max_length * sizeof(char);
+    char *buffer = (char*) malloc(buf_len);
+    memset(buffer, 0, buf_len);
+    comp_flg = -2;
+
+    err = dcg_obj_get_varBuffer(version, buf_len, buffer, name, &comp_flg);
+
+    if (err < 0)
+        goto err_out;
+    DC_WAIT_COMPLETION(comp_flg!=-2);
+    *var_num = nVars;
+    *var_version = version;
+    if(err == 0)
+        return buffer;
+
+    err_out:
+        uloga("'%s()': failed with %d.\n", __func__, err);
+        return NULL;
+
+
+}
+
+
+
 int dcg_get_versions(int **p_version)
 {
 	static int versions[sizeof(dcg->versions)/sizeof(int)];

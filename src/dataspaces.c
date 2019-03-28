@@ -162,7 +162,15 @@ int dspaces_get (const char *var_name,
     return common_dspaces_get(var_name, ver, size, ndim, lb, ub, data);    
 }
 
+char* dspaces_get_latest_meta(unsigned int ver, char *name, int *nVars, int *version){
 
+    return common_dspaces_get_latest_meta(ver, name, nVars, version);
+}
+
+char* dspaces_get_next_meta(unsigned int ver, char *name, int *nVars, int *version){
+
+    return common_dspaces_get_next_meta(ver, name, nVars, version);
+}
 
 int dspaces_put_sync(void)
 {
