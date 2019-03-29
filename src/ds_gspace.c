@@ -1514,15 +1514,13 @@ static int dsgrpc_obj_get_next_meta(struct rpc_server *rpc_s, struct rpc_cmd *cm
     memset(pref_odsc->bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
     pref_odsc->bb.ub.c[0] = 1;
     sprintf(pref_odsc->name, "LATESTVERSION@%s", oh->f_name);
-
+    int err = -ENOMEM;
         from_obj = ls_find(dsg->ls, pref_odsc);
         if (!from_obj) {
-            uloga("'%s()': Object not found for LATESTVERSION\n", __func__);
+            uloga("'%s()': Object not found for LATESTVERSION in server %d\n", __func__, DSG_ID);
             goto err_out;
         }
-    int err = -ENOMEM;
     latest_v = ((int*)(from_obj->data))[0];
-    uloga("Current version:%d, Latest Version: %d\n", curr_version, latest_v);
     if(curr_version >= latest_v)
         goto send_data;
     pref_odsc->version = curr_version+1;
@@ -1532,7 +1530,6 @@ static int dsgrpc_obj_get_next_meta(struct rpc_server *rpc_s, struct rpc_cmd *cm
         from_obj = ls_find(dsg->ls, pref_odsc);
         if (!from_obj) {
             uloga("'%s()': Object not found for nVars\n", __func__);
-           // goto err_out;
            goto send_data;
         }
 
@@ -1581,13 +1578,13 @@ static int dsgrpc_obj_get_latest_meta(struct rpc_server *rpc_s, struct rpc_cmd *
     memset(pref_odsc->bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
     pref_odsc->bb.ub.c[0] = 1;
     sprintf(pref_odsc->name, "LATESTVERSION@%s", oh->f_name);
+    int err = -ENOMEM;
 
         from_obj = ls_find(dsg->ls, pref_odsc);
         if (!from_obj) {
             uloga("'%s()': Object not found for LATESTVERSION\n", __func__);
             goto err_out;
         }
-    int err = -ENOMEM;
     latest_v = ((int*)(from_obj->data))[0];
     if(curr_version >= latest_v)
         goto send_data;
@@ -1644,13 +1641,12 @@ static int dsgrpc_obj_get_var_meta(struct rpc_server *rpc_s, struct rpc_cmd *cmd
     memset(pref_odsc->bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
     pref_odsc->bb.ub.c[0] = oh->length;
     sprintf(pref_odsc->name, "VARMETA@%s", oh->f_name);
-
+    int err = -ENOMEM;
         from_obj = ls_find(dsg->ls, pref_odsc);
         if (!from_obj) {
             uloga("'%s()': Object not found for LATESTVERSION\n", __func__);
             goto err_out;
         }
-    int err = -ENOMEM;
     msg = msg_buf_alloc(rpc_s, peer, 0);
     if (!msg) {
             goto err_out;
