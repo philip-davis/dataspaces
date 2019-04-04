@@ -1644,16 +1644,16 @@ static int dsgrpc_obj_get_var_meta(struct rpc_server *rpc_s, struct rpc_cmd *cmd
     pref_odsc->bb.ub.c[0] = oh->length + pref_odsc->bb.lb.c[0]-1;
     sprintf(pref_odsc->name, "VARMETA@%s", oh->f_name);
     int err = -ENOMEM;
-        from_obj = ls_find(dsg->ls, pref_odsc);
-        if (!from_obj) {
-            uloga("'%s()': Object not found for LATESTVERSION\n", __func__);
-            goto err_out;
-        }
+    from_obj = ls_find(dsg->ls, pref_odsc);
+    if (!from_obj) {
+        uloga("'%s()': Metdata Object not found. Should not happen\n", __func__);
+        goto err_out;
+    }
     msg = msg_buf_alloc(rpc_s, peer, 0);
     if (!msg) {
             goto err_out;
     }
-    msg->msg_data = ((char*)(from_obj->data))[sizeof(int)/sizeof(char)];
+    msg->msg_data = &((int*)(from_obj->data))[1];
     msg->size = oh->length;
     msg->cb = obj_meta_get_completion;
 
