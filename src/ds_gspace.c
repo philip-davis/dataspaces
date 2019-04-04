@@ -1504,22 +1504,26 @@ static int dsgrpc_obj_get_next_meta(struct rpc_server *rpc_s, struct rpc_cmd *cm
 
     struct obj_descriptor *pref_odsc;
     pref_odsc= (struct obj_descriptor *) malloc(sizeof(struct obj_descriptor));
-    pref_odsc->version = 0;
+    pref_odsc->version = curr_version+1;
     pref_odsc->owner = -1;
     pref_odsc->st = st;
-    pref_odsc->size = sizeof(int);
+    pref_odsc->size = sizeof(char);
     pref_odsc->bb.num_dims = 1;
 
     memset(pref_odsc->bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
     memset(pref_odsc->bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
-    pref_odsc->bb.ub.c[0] = 1;
-    sprintf(pref_odsc->name, "LATESTVERSION@%s", oh->f_name);
+    pref_odsc->bb.ub.c[0] = (sizeof(int)/sizeof(char))-1;
+
+    sprintf(pref_odsc->name, "VARMETA@%s", oh->f_name);
     int err = -ENOMEM;
-        from_obj = ls_find(dsg->ls, pref_odsc);
-        if (!from_obj) {
-            uloga("'%s()': Object not found for LATESTVERSION in server %d\n", __func__, DSG_ID);
-            goto err_out;
-        }
+    from_obj = ls_find(dsg->ls, pref_odsc);
+    if (!from_obj) {
+        //uloga("'%s()': Object not found for LATESTVERSION in server %d\n", __func__, DSG_ID);
+        //goto err_out;
+        uloga("End of stream. MetaData Object not found\n");
+        goto send_data;
+    }
+        /*
     latest_v = ((int*)(from_obj->data))[0];
     if(curr_version >= latest_v)
         goto send_data;
@@ -1532,6 +1536,8 @@ static int dsgrpc_obj_get_next_meta(struct rpc_server *rpc_s, struct rpc_cmd *cm
             uloga("'%s()': Object not found for nVars\n", __func__);
            goto send_data;
         }
+
+    */
 
     var_data[0] = ((int*)(from_obj->data))[0];
     var_data[1] = curr_version+1;
@@ -1564,57 +1570,52 @@ static int dsgrpc_obj_get_latest_meta(struct rpc_server *rpc_s, struct rpc_cmd *
     enum storage_type st = column_major;
     struct obj_data *od, *from_obj;
     int latest_v;
-    int var_data[2]={-1, -1};
+    int var_data[2]={-3, -3};
 
     struct obj_descriptor *pref_odsc;
     pref_odsc= (struct obj_descriptor *) malloc(sizeof(struct obj_descriptor));
-    pref_odsc->version = 0;
+    //pref_odsc->version = curr_version+1;
     pref_odsc->owner = -1;
     pref_odsc->st = st;
-    pref_odsc->size = sizeof(int);
+    pref_odsc->size = sizeof(char);
     pref_odsc->bb.num_dims = 1;
 
     memset(pref_odsc->bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
     memset(pref_odsc->bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
-    pref_odsc->bb.ub.c[0] = 1;
-    sprintf(pref_odsc->name, "LATESTVERSION@%s", oh->f_name);
+    pref_odsc->bb.ub.c[0] = (sizeof(int)/sizeof(char))-1;
+
+    sprintf(pref_odsc->name, "VARMETA@%s", oh->f_name);
     int err = -ENOMEM;
 
-        from_obj = ls_find(dsg->ls, pref_odsc);
-        if (!from_obj) {
-            uloga("'%s()': Object not found for LATESTVERSION\n", __func__);
-            goto err_out;
-        }
-    latest_v = ((int*)(from_obj->data))[0];
-    if(curr_version >= latest_v)
-        goto send_data;
-    var_data[1] = latest_v; 
-    pref_odsc->version = latest_v;
-    sprintf(pref_odsc->name, "VERSION@%s", oh->f_name);
+    do{
+        from_obj = od;
+        latest_v=curr_version+1
+        pref_odsc->version = latest_v;
+        od = ls_find(dsg->ls, pref_odsc);
+    }while(!od)
 
-        from_obj = ls_find(dsg->ls, pref_odsc);
-        if (!from_obj) {
-            uloga("'%s()': Object not found for nVars\n", __func__);
-            goto err_out;
-        }
-    
+    if (!from_obj) {
+        uloga("End of stream. MetaData Object not found\n");
+        goto send_data;
+    }
+
     var_data[0] = ((int*)(from_obj->data))[0];
+    var_data[1] = latest_v-1;
     send_data:
-	msg = msg_buf_alloc(rpc_s, peer, 0);
+    msg = msg_buf_alloc(rpc_s, peer, 0);
         if (!msg) {
             goto err_out;
-         }
-    	msg->msg_data = var_data;
-    	msg->size = sizeof(int)*2;
-    	msg->cb = obj_meta_get_completion;
+     }
+        msg->msg_data = var_data;
+        msg->size = sizeof(int)*2;
+        msg->cb = obj_meta_get_completion;
 
-    	rpc_mem_info_cache(peer, msg, cmd);
-    	err = rpc_send_direct(rpc_s, peer, msg);
-    	rpc_mem_info_reset(peer, msg, cmd);
-    	if (err == 0)
+        rpc_mem_info_cache(peer, msg, cmd);
+        err = rpc_send_direct(rpc_s, peer, msg);
+        rpc_mem_info_reset(peer, msg, cmd);
+        if (err == 0)
             return 0;
-
-    	free(msg);
+        free(msg);
     err_out:
         uloga("'%s()': failed with %d.\n", __func__, err);
         return err;
@@ -1639,7 +1640,8 @@ static int dsgrpc_obj_get_var_meta(struct rpc_server *rpc_s, struct rpc_cmd *cmd
     pref_odsc->bb.num_dims = 1;
     memset(pref_odsc->bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
     memset(pref_odsc->bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
-    pref_odsc->bb.ub.c[0] = oh->length;
+    pref_odsc->bb.lb.c[0] = sizeof(int)/sizeof(char);
+    pref_odsc->bb.ub.c[0] = oh->length + pref_odsc->bb.lb.c[0]-1;
     sprintf(pref_odsc->name, "VARMETA@%s", oh->f_name);
     int err = -ENOMEM;
         from_obj = ls_find(dsg->ls, pref_odsc);
@@ -1651,7 +1653,7 @@ static int dsgrpc_obj_get_var_meta(struct rpc_server *rpc_s, struct rpc_cmd *cmd
     if (!msg) {
             goto err_out;
     }
-    msg->msg_data = from_obj->data;
+    msg->msg_data = ((char*)(from_obj->data))[sizeof(int)/sizeof(char)];
     msg->size = oh->length;
     msg->cb = obj_meta_get_completion;
 

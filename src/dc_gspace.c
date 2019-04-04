@@ -2085,8 +2085,8 @@ char * dcg_obj_get_meta(int type, int ver, char*name, int *var_num, int *var_ver
         goto err_out;
     DC_WAIT_COMPLETION(var_array[0]!=-2);
     if(var_array[0]==-3){
-	uloga("Current Version %d>= Latest version\n", ver);
-	return NULL;
+    	uloga("Current Version %d>= Latest version\n", ver);
+    	return NULL;
 	}
     int nVars = var_array[0];
     int version = var_array[1];
