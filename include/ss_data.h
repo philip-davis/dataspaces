@@ -33,6 +33,7 @@
 #define __SS_DATA_H_
 
 #include <stdlib.h>
+#include <limits.h>
 
 #include "bbox.h"
 #include "list.h"
@@ -279,6 +280,8 @@ struct obj_data* ls_lookup(struct ss_storage *, char *);
 void ls_remove(struct ss_storage *, struct obj_data *);
 void ls_try_remove_free(struct ss_storage *, struct obj_data *);
 struct obj_data * ls_find(struct ss_storage *, const struct obj_descriptor *);
+struct obj_data * ls_find_next(struct ss_storage *, const struct obj_descriptor *);
+struct obj_data * ls_find_latest(struct ss_storage *, const struct obj_descriptor *);
 struct obj_data * ls_find_no_version(struct ss_storage *, struct obj_descriptor *);
 
 struct obj_data *obj_data_alloc(struct obj_descriptor *);

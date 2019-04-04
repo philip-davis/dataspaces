@@ -1516,28 +1516,11 @@ static int dsgrpc_obj_get_next_meta(struct rpc_server *rpc_s, struct rpc_cmd *cm
 
     sprintf(pref_odsc->name, "VARMETA@%s", oh->f_name);
     int err = -ENOMEM;
-    from_obj = ls_find(dsg->ls, pref_odsc);
+    from_obj = ls_find_next(dsg->ls, pref_odsc);
     if (!from_obj) {
-        //uloga("'%s()': Object not found for LATESTVERSION in server %d\n", __func__, DSG_ID);
-        //goto err_out;
-        uloga("End of stream. MetaData Object not found\n");
+        uloga("End of stream. Current step is the maximum\n");
         goto send_data;
     }
-        /*
-    latest_v = ((int*)(from_obj->data))[0];
-    if(curr_version >= latest_v)
-        goto send_data;
-    pref_odsc->version = curr_version+1;
-    sprintf(pref_odsc->name, "VERSION@%s", oh->f_name);
-
-
-        from_obj = ls_find(dsg->ls, pref_odsc);
-        if (!from_obj) {
-            uloga("'%s()': Object not found for nVars\n", __func__);
-           goto send_data;
-        }
-
-    */
 
     var_data[0] = ((int*)(from_obj->data))[0];
     var_data[1] = curr_version+1;
@@ -1586,7 +1569,7 @@ static int dsgrpc_obj_get_latest_meta(struct rpc_server *rpc_s, struct rpc_cmd *
 
     sprintf(pref_odsc->name, "VARMETA@%s", oh->f_name);
     int err = -ENOMEM;
-
+/*
     do{
         from_obj = od;
         latest_v=curr_version+1
@@ -1596,6 +1579,13 @@ static int dsgrpc_obj_get_latest_meta(struct rpc_server *rpc_s, struct rpc_cmd *
 
     if (!from_obj) {
         uloga("End of stream. MetaData Object not found\n");
+        goto send_data;
+    }
+    */
+
+    from_obj = ls_find_latest(dsg->ls, pref_odsc);
+    if (!from_obj) {
+        uloga("End of stream. Current data is the latest\n");
         goto send_data;
     }
 
