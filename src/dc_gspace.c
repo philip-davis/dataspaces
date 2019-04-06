@@ -2085,13 +2085,13 @@ char * dcg_obj_get_meta(int type, int ver, char*name, int *var_num, int *var_ver
         goto err_out;
     DC_WAIT_COMPLETION(var_array[0]!=-2);
     if(var_array[0]==-3){
-    	uloga("Current Version %d>= Latest version\n", ver);
+    //	uloga("Current Version %d>= Latest version\n", ver);
     	return NULL;
 	}
     int nVars = var_array[0];
     int version = var_array[1];
     int var_name_max_length = 128;
-    int buf_len = nVars * sizeof(int) + nVars * sizeof(int)+ 10 * nVars * sizeof(uint64_t) + nVars * var_name_max_length * sizeof(char);
+    int buf_len = sizeof(int) + nVars * sizeof(int) + nVars * sizeof(int)+ 10 * nVars * sizeof(uint64_t) + nVars * var_name_max_length * sizeof(char);
     char *buffer = (char*) malloc(buf_len);
     memset(buffer, 0, buf_len);
     comp_flg = -2;

@@ -1074,21 +1074,21 @@ struct obj_data *ls_find_next(struct ss_storage *ls, const struct obj_descriptor
         struct list_head *list;
         int offset, index, next_ver;
         struct obj_data *od_next = NULL;
-
         next_ver = INT_MAX;
+	int curr_ver = odsc->version;
         for(offset=1; offset <= ls->size_hash; offset++) {
             index = (odsc->version + offset) % ls->size_hash;
             list = &ls->obj_hash[index];
             list_for_each_entry(od, list, struct obj_data, obj_entry) {
-                if (obj_desc_equals_intersect(odsc, &od->obj_desc)){
-                    if(od->obj_desc.version > odsc->version &&
-                            od->obj_desc.version < next_ver) {
+                if (obj_desc_by_name_intersect(odsc, &od->obj_desc)){
+                    if(od->obj_desc.version >= (odsc->version+1) && 
+			od->obj_desc.version < next_ver) {
                         od_next = od;
                         next_ver = od_next->obj_desc.version;
                         if(next_ver <= (odsc->version + ls->size_hash)) {
                             return(od_next);
                         }
-                    }
+		     }
                 }
             }
         }
@@ -1111,8 +1111,8 @@ struct obj_data *ls_find_latest(struct ss_storage *ls, const struct obj_descript
         for(index=0; index <= ls->size_hash; index++){
             list = &ls->obj_hash[index];
             list_for_each_entry(od, list, struct obj_data, obj_entry) {
-                if (obj_desc_equals_intersect(odsc, &od->obj_desc)) {
-                    if(od->obj_desc.version > odsc->version) {
+                if (obj_desc_by_name_intersect(odsc, &od->obj_desc)) {
+                    if(od->obj_desc.version >= (odsc->version+1)) {
                         if((od_next->obj_desc.version < od->obj_desc.version)
                                 || !od_next) {
                             od_next = od;                           

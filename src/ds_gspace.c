@@ -1504,7 +1504,7 @@ static int dsgrpc_obj_get_next_meta(struct rpc_server *rpc_s, struct rpc_cmd *cm
 
     struct obj_descriptor *pref_odsc;
     pref_odsc= (struct obj_descriptor *) malloc(sizeof(struct obj_descriptor));
-    pref_odsc->version = curr_version+1;
+    pref_odsc->version = curr_version;
     pref_odsc->owner = -1;
     pref_odsc->st = st;
     pref_odsc->size = sizeof(char);
@@ -1516,6 +1516,7 @@ static int dsgrpc_obj_get_next_meta(struct rpc_server *rpc_s, struct rpc_cmd *cm
 
     sprintf(pref_odsc->name, "VARMETA@%s", oh->f_name);
     int err = -ENOMEM;
+
     from_obj = ls_find_next(dsg->ls, pref_odsc);
     if (!from_obj) {
         uloga("End of stream. Current step is the maximum\n");
@@ -1523,7 +1524,7 @@ static int dsgrpc_obj_get_next_meta(struct rpc_server *rpc_s, struct rpc_cmd *cm
     }
 
     var_data[0] = ((int*)(from_obj->data))[0];
-    var_data[1] = curr_version+1;
+    var_data[1] = from_obj->obj_desc.version;
     send_data:
 	msg = msg_buf_alloc(rpc_s, peer, 0);
     	if (!msg) {
@@ -1557,7 +1558,7 @@ static int dsgrpc_obj_get_latest_meta(struct rpc_server *rpc_s, struct rpc_cmd *
 
     struct obj_descriptor *pref_odsc;
     pref_odsc= (struct obj_descriptor *) malloc(sizeof(struct obj_descriptor));
-    //pref_odsc->version = curr_version+1;
+    pref_odsc->version = curr_version;
     pref_odsc->owner = -1;
     pref_odsc->st = st;
     pref_odsc->size = sizeof(char);
@@ -1566,23 +1567,8 @@ static int dsgrpc_obj_get_latest_meta(struct rpc_server *rpc_s, struct rpc_cmd *
     memset(pref_odsc->bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
     memset(pref_odsc->bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
     pref_odsc->bb.ub.c[0] = (sizeof(int)/sizeof(char))-1;
-
-    sprintf(pref_odsc->name, "VARMETA@%s", oh->f_name);
     int err = -ENOMEM;
-/*
-    do{
-        from_obj = od;
-        latest_v=curr_version+1
-        pref_odsc->version = latest_v;
-        od = ls_find(dsg->ls, pref_odsc);
-    }while(!od)
-
-    if (!from_obj) {
-        uloga("End of stream. MetaData Object not found\n");
-        goto send_data;
-    }
-    */
-
+    sprintf(pref_odsc->name, "VARMETA@%s", oh->f_name);
     from_obj = ls_find_latest(dsg->ls, pref_odsc);
     if (!from_obj) {
         uloga("End of stream. Current data is the latest\n");
@@ -1590,7 +1576,7 @@ static int dsgrpc_obj_get_latest_meta(struct rpc_server *rpc_s, struct rpc_cmd *
     }
 
     var_data[0] = ((int*)(from_obj->data))[0];
-    var_data[1] = latest_v-1;
+    var_data[1] = from_obj->obj_desc.version;
     send_data:
     msg = msg_buf_alloc(rpc_s, peer, 0);
         if (!msg) {
@@ -1643,7 +1629,7 @@ static int dsgrpc_obj_get_var_meta(struct rpc_server *rpc_s, struct rpc_cmd *cmd
     if (!msg) {
             goto err_out;
     }
-    msg->msg_data = &((int*)(from_obj->data))[1];
+    msg->msg_data = from_obj->data;
     msg->size = oh->length;
     msg->cb = obj_meta_get_completion;
 
