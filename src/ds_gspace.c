@@ -1512,7 +1512,6 @@ static int dsgrpc_obj_get_next_meta(struct rpc_server *rpc_s, struct rpc_cmd *cm
 
     memset(pref_odsc->bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
     memset(pref_odsc->bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
-    pref_odsc->bb.ub.c[0] = (sizeof(int)/sizeof(char))-1;
 
     sprintf(pref_odsc->name, "VARMETA@%s", oh->f_name);
     int err = -ENOMEM;
@@ -1523,7 +1522,7 @@ static int dsgrpc_obj_get_next_meta(struct rpc_server *rpc_s, struct rpc_cmd *cm
         goto send_data;
     }
 
-    var_data[0] = ((int*)(from_obj->data))[0];
+    var_data[0] = (from_obj->obj_desc.bb.ub.c[0]+1)*sizeof(char);
     var_data[1] = from_obj->obj_desc.version;
     send_data:
 	msg = msg_buf_alloc(rpc_s, peer, 0);
@@ -1566,7 +1565,6 @@ static int dsgrpc_obj_get_latest_meta(struct rpc_server *rpc_s, struct rpc_cmd *
 
     memset(pref_odsc->bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
     memset(pref_odsc->bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
-    pref_odsc->bb.ub.c[0] = (sizeof(int)/sizeof(char))-1;
     int err = -ENOMEM;
     sprintf(pref_odsc->name, "VARMETA@%s", oh->f_name);
     from_obj = ls_find_latest(dsg->ls, pref_odsc);
@@ -1575,7 +1573,8 @@ static int dsgrpc_obj_get_latest_meta(struct rpc_server *rpc_s, struct rpc_cmd *
         goto send_data;
     }
 
-    var_data[0] = ((int*)(from_obj->data))[0];
+    //var_data[0] = ((int*)(from_obj->data))[0];
+    var_data[0] = (from_obj->obj_desc.bb.ub.c[0]+1)*sizeof(char);
     var_data[1] = from_obj->obj_desc.version;
     send_data:
     msg = msg_buf_alloc(rpc_s, peer, 0);
@@ -1616,8 +1615,8 @@ static int dsgrpc_obj_get_var_meta(struct rpc_server *rpc_s, struct rpc_cmd *cmd
     pref_odsc->bb.num_dims = 1;
     memset(pref_odsc->bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
     memset(pref_odsc->bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
-    pref_odsc->bb.lb.c[0] = sizeof(int)/sizeof(char);
-    pref_odsc->bb.ub.c[0] = oh->length + pref_odsc->bb.lb.c[0]-1;
+	//    pref_odsc->bb.lb.c[0] = sizeof(int)/sizeof(char);
+  	//  pref_odsc->bb.ub.c[0] = oh->length + pref_odsc->bb.lb.c[0]-1;
     sprintf(pref_odsc->name, "VARMETA@%s", oh->f_name);
     int err = -ENOMEM;
     from_obj = ls_find(dsg->ls, pref_odsc);

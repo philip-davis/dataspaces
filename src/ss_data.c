@@ -1063,6 +1063,18 @@ struct obj_data *ls_find(struct ss_storage *ls, const struct obj_descriptor *ods
         return NULL;
 }
 
+
+/*
+ *  *   Test if two object descriptors have the same name
+ *   */
+int obj_desc_by_name_only_intersect(const struct obj_descriptor *odsc1,
+                const struct obj_descriptor *odsc2)
+{
+        if (strcmp(odsc1->name, odsc2->name) == 0)
+                return 1;
+        return 0;
+}
+
 /*
   Find  an object  in the  local storage  that has  the same  name and
   its version is just greater(can have gaps) than the object descriptor 'odsc'.
@@ -1080,7 +1092,7 @@ struct obj_data *ls_find_next(struct ss_storage *ls, const struct obj_descriptor
             index = (odsc->version + offset) % ls->size_hash;
             list = &ls->obj_hash[index];
             list_for_each_entry(od, list, struct obj_data, obj_entry) {
-                if (obj_desc_by_name_intersect(odsc, &od->obj_desc)){
+                if (obj_desc_by_name_only_intersect(odsc, &od->obj_desc)){
                     if(od->obj_desc.version >= (odsc->version+1) && 
 			od->obj_desc.version < next_ver) {
                         od_next = od;
@@ -1111,7 +1123,7 @@ struct obj_data *ls_find_latest(struct ss_storage *ls, const struct obj_descript
         for(index=0; index <= ls->size_hash; index++){
             list = &ls->obj_hash[index];
             list_for_each_entry(od, list, struct obj_data, obj_entry) {
-                if (obj_desc_by_name_intersect(odsc, &od->obj_desc)) {
+                if (obj_desc_by_name_only_intersect(odsc, &od->obj_desc)) {
                     if(od->obj_desc.version >= (odsc->version+1)) {
                         if((od_next->obj_desc.version < od->obj_desc.version)
                                 || !od_next) {
@@ -1545,6 +1557,7 @@ int obj_desc_by_name_intersect(const struct obj_descriptor *odsc1,
                 return 1;
         return 0;
 }
+
 
 void copy_global_dimension(struct global_dimension *l, int ndim,
                         const uint64_t *gdim)
