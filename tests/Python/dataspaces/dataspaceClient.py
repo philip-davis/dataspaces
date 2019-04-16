@@ -76,11 +76,11 @@ class dataspaceClient:
         elemsize = ctypes.sizeof(ctypes.c_double)
 
         # the elemsize here is the size for each element
-        dspaces.wrapper_get_data(var_name,ver,elemsize,ndim,lb,ub,arraydataFlaten)
+        rcode = dspaces.wrapper_get_data(var_name,ver,elemsize,ndim,lb,ub,arraydataFlaten)
         
         # reshape into original format
         getdata = arraydataFlaten.reshape(originalShape)
-        return getdata
+        return getdata,rcode
 
 
     def put(self,var_name,ver,lb,putdata):
