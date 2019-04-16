@@ -163,7 +163,6 @@ int dspaces_get (const char *var_name,
 }
 
 
-
 int dspaces_put_sync(void)
 {
 	return common_dspaces_put_sync();

@@ -1,0 +1,39 @@
+.PHONY: default
+default: runtest
+
+PYTHON = python
+PYTHON_CONFIG = ${PYTHON} ../python-config
+MPI4PY_INCLUDE = ${shell ${PYTHON} -c 'import mpi4py; print( mpi4py.get_include() )'}
+NUMPY_INCLUDE = ${shell ${PYTHON} -c 'import numpy; print( numpy.get_include() )'}
+PREFIX = /home1/zw241/dataspaces
+INCLUDES = -I$(PREFIX)/include
+DSCOMMON = ../../C/common.o
+LFLAG = -L/home1/zw241/dataspaces/install/lib -ldspaces -ldart -ldscommon -ldspacesf -lpthread -lm -lrt -libverbs -lrdmacm
+CFLAGS = -Wall -g
+
+SWIG = swig
+SWIG_PY = ${SWIG} -python
+.PHONY: src
+src: dspaces_wrap.c
+dspaces_wrap.c: dspaces.i
+	[ -f ./numpy.i ] && echo "numpy.i already here, good" || curl -O https://raw.githubusercontent.com/numpy/numpy/master/tools/swig/numpy.i
+	${SWIG_PY} -I${MPI4PY_INCLUDE} -I${NUMPY_INCLUDE} $(INCLUDES) -o $@ $<
+
+MPICC = mpicc
+CFLAGS = -fPIC ${shell ${PYTHON_CONFIG} --includes}
+LDFLAGS = -shared ${shell ${PYTHON_CONFIG} --libs}
+SO = ${shell ${PYTHON_CONFIG} --extension-suffix}
+
+.PHONY: buildput
+buildput: _dspaces${SO} 
+_dspaces${SO}:  dspaces_wrap.c 
+	${MPICC} ${CFLAGS} -I${MPI4PY_INCLUDE} -I${NUMPY_INCLUDE} $(INCLUDES) $(DSCOMMON) $(LFLAG) -o $@ $< ${LDFLAGS}
+
+.PHONY: runtest 
+runtest: buildput
+	/bin/bash ./testrun.sh
+
+
+.PHONY: clean
+clean:
+	${RM} -r dspaces_wrap.c dspaces.py* _dspaces*.so *pycache*

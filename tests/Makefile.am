@@ -1,1 +1,6 @@
 SUBDIRS=C Fortran
+if BUILD_PYTHON_WRAPPER
+    SUBDIRS+= Python/dataspaces
+endif BUILD_PYTHON_WRAPPER
+
+

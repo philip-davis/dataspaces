@@ -555,7 +555,7 @@ void lock_init(struct dsg_lock *dl, int max_readers)
 /*
   Custom lock service.
 */
-void sem_init(struct dsg_lock *dl, int max_readers)
+static void sem_init(struct dsg_lock *dl, int max_readers)
 {
         dl->wr_max = 1;
         dl->rd_max = max_readers;

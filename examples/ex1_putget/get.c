@@ -7,14 +7,22 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include "dataspaces.h"
+#include "mpi.h"
 
 int main(int argc, char **argv)
 {
 	// DataSpaces: Initalize and identify application
 	// Usage: dspaces_init(num_peers, appid, Ptr to MPI comm, parameters)
 	// Note: appid for get.c is 2 [for put.c, it was 1]
+	
+
+	MPI_Init(NULL, NULL);
+
+
+	printf("debug1\n");
 	dspaces_init(1, 2, NULL, NULL);
 	
+	printf("debug2\n");
 
 	int timestep=0;
 

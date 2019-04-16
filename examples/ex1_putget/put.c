@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include "dataspaces.h"
+#include "mpi.h"
 
 int main(int argc, char **argv)
 {
@@ -17,8 +18,9 @@ int main(int argc, char **argv)
 	// Pointer to the MPI Communicator: 
 	//      when NOT NULL, allows DS Layer to use MPI barrier func
 	// Addt'l parameters: Placeholder for future arguments, currently NULL.
-	dspaces_init(1, 1, NULL, NULL);
 
+	MPI_Init(NULL, NULL);
+	dspaces_init(1, 1, NULL, NULL);
 	
 	int timestep=0;
 

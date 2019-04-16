@@ -11,6 +11,7 @@ AC_PROG_RANLIB
 AM_PROG_CC_C_O
 
 AC_FC_WRAPPERS
+AC_PYTHON_WRAPPER
 
 m4_ifdef([AM_PROG_AR],[AM_PROG_AR])
 
@@ -138,6 +139,11 @@ else
         AM_CONDITIONAL(BUILD_HYBRID, false)
 fi
 
+
+
+ 
+
+
 if test -z "${HAVE_UGNI_TRUE}"; then
   DSPACESLIB_CPPFLAGS+=" ${PMI_CPPFLAGS}"
   DSPACESLIB_CFLAGS+=""
@@ -195,6 +201,7 @@ AC_CONFIG_FILES([
                 tests/C/Makefile
                 tests/Fortran/Makefile
                 scripts/dspaces_config.makesrc
+                tests/Python/dataspaces/Makefile
                 ])
 
 AC_OUTPUT
