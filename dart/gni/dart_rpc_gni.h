@@ -423,8 +423,10 @@ enum cmd_type {
 	CN_TIMING_AVG,
 	_CMD_COUNT,
 	ss_obj_get_desc_internal,
-    ss_obj_send_desc,
-	get_prefetched_data
+	ss_obj_send_desc,
+	get_prefetched_data,
+	peer_prefetch_obj,
+	ss_obj_get_prefetch
 };
 
 enum lock_type {
