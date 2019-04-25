@@ -2032,7 +2032,7 @@ int dcg_obj_get(struct obj_data *od)
 #endif
         //now receive the data local copy might be here
         //Pradeep
-    uloga("Get the data\n");
+    //uloga("Get the data\n");
     err = dcg_obj_data_get(qte);
     if (err < 0) {
                 // FIXME: should I jump to err_qt_free ?

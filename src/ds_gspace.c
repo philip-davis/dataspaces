@@ -2167,7 +2167,7 @@ static int dsg_internal_rpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cm
         struct obj_descriptor *od_tab;
         struct msg_buf *msg;
         int err = -ENOMEM;
-        uloga("RPC received internally with object descriptor lists %d\n", DSG_ID);
+        //uloga("RPC received internally with object descriptor lists %d\n", DSG_ID);
         /* Test for errors ... */
         if (oh->rc < 0) {
         /* TODO: copy versions available if any !!! */
@@ -2212,7 +2212,7 @@ static int dsg_internal_rpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cm
         rpc_mem_info_cache(peer, msg, cmd);
         //uloga("Before rpc receive direct for obj_descriptor %d\n", DSG_ID);
         err = rpc_receive_direct(rpc_s, peer, msg);
-        uloga("After rpc receive direct for obj_descriptor %d\n", DSG_ID);
+        //uloga("After rpc receive direct for obj_descriptor %d\n", DSG_ID);
         rpc_mem_info_reset(peer, msg, cmd);
         if (err == 0)
                 return 0;
@@ -2389,12 +2389,12 @@ static int server_prefetch_dht_peers( struct obj_descriptor *odsc_pref, struct g
                     goto err_out;
             qt_add(&dsg->qt, qte);
             qte->qh->qh_num_peer = peer_num;
-            uloga("peer_num is %d\n", peer_num);
+            //uloga("peer_num is %d\n", peer_num);
             for (i = 0; i < peer_num; i++){
-            	uloga("Checking with peer %d in server_prefetch_dht_peers\n", i);
+            	//uloga("Checking with peer %d in server_prefetch_dht_peers\n", i);
                 struct node_id *peer = ds_get_peer(dsg->ds, de_tab[i]->rank);
                 if (peer == dsg->ds->self) {
-                        uloga("Self server, no rpc needed for obj_desc, search for obj_descriptor to assemble\n");
+                        //uloga("Self server, no rpc needed for obj_desc, search for obj_descriptor to assemble\n");
                         const struct obj_descriptor *podsc[ssd->ent_self->odsc_num];
                         int obj_versions[ssd->ent_self->odsc_size];
                         struct obj_descriptor odsc, *odsc_tab;
@@ -2449,7 +2449,7 @@ static int server_prefetch_dht_peers( struct obj_descriptor *odsc_pref, struct g
 
                     }
                     else{
-                        uloga("%d Separate Server, send rpc call to DHT server for odsc\n", DSG_ID);
+                        //uloga("%d Separate Server, send rpc call to DHT server for odsc\n", DSG_ID);
 
                         qte->f_peer_received = 1;
                         err = dsg_get_obj_descriptors(qte, peer);
@@ -2495,7 +2495,7 @@ static int server_prefetch_dht_peers( struct obj_descriptor *odsc_pref, struct g
             /* Wait for transaction to complete. */
             //uloga("Before qte_fcomplete\n");
             while (! qte->f_complete) {
-            		uloga("qte is not complete\n");
+            		//uloga("qte is not complete\n");
 					#if HAVE_TCP_SOCKET
 					for (i = 0; i < peer_num; i++){
 						struct node_id *peer = ds_get_peer(dsg->ds, de_tab[i]->rank);
