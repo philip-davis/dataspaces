@@ -37,8 +37,17 @@
 #include "dart.h"
 #include "ss_data.h"
 
+#define MAX_PREFETCH 48
+
+struct query_tran {
+        struct list_head        q_list;
+        int                     num_ent;
+};
+
 struct ds_gspace {
         struct dart_server      *ds;
+
+        struct query_tran       qt;
 
         /* Shared space data structure. */
         struct sspace           *ssd;

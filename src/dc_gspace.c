@@ -110,7 +110,11 @@ struct query_tran_entry {
                     f_peer_received:1,
                     f_odsc_recv:1,
                     f_complete:1,
-                    f_err:1;
+                    f_err:1,
+					f_node_local:1, //this indicates that the whole object descriptor that you asked
+        			//is available on the server that you are connected to
+					f_data_received:1;
+
         int num_peers;
 };
 
@@ -690,12 +694,18 @@ static inline struct node_id * dcg_which_peer(void)
 {
         int peer_id;
         struct node_id *peer;
-
-        peer_id = dcg->dc->self->ptlmap.id % dcg->dc->num_sp;
+        //uloga("Client %d connecting to %d peer id\n", dcg->dc->self->ptlmap.id, peer_id);
+        //Attaching to the group of 2 servers
+        int num_groups = (dcg->dc->num_sp/2)-1;
+        int grp_no = (dcg->dc->self->ptlmap.id - 2) % num_groups;
+        peer_id = grp_no*2+3;
+        //uloga("Client %d connecting to %d peer id\n", dcg->dc->self->ptlmap.id, peer_id);
         peer = dc_get_peer(dcg->dc, peer_id);
 
         return peer;
 }
+
+
 
 #ifdef DS_HAVE_ACTIVESPACE
 /*
@@ -873,6 +883,12 @@ static int get_dht_peers_completion(struct rpc_server *rpc_s, struct msg_buf *ms
         qte->qh->qh_num_peer = i;
         qte->f_peer_received = 1;
 
+        //check if the data is local to the attached server
+		if(qte->qh->qh_peerid_tab[0]==-2){
+			qte->f_node_local = 1;
+		}
+		//uloga("Received dht_peers\n");
+
         free(msg);
 
         return 0;
@@ -908,6 +924,45 @@ static int get_dht_peers(struct query_tran_entry *qte)
         oh->rank = DCG_ID;
         memcpy(&oh->gdim, &qte->gdim, sizeof(struct global_dimension));
 
+        err = rpc_receive(dcg->dc->rpc_s, peer, msg);
+        if (err == 0)
+                return 0;
+
+        free(msg);
+ err_out:
+        ERROR_TRACE();
+}
+
+static int obj_prefetch_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+		//uloga("Finished receiving the prefetched data in client\n");
+		struct query_tran_entry *qte = msg->private;
+		qte->f_data_received = 1;
+        free(msg);
+        return 0;
+}
+
+static int get_node_local_data(struct obj_data *od, struct query_tran_entry *qte)
+{
+        struct hdr_obj_prefetch *oh;
+        struct msg_buf *msg;
+        struct node_id *peer;
+        int err = -ENOMEM;
+
+        peer = dcg_which_peer();
+        msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+        if (!msg)
+                goto err_out;
+
+        msg->msg_rpc->cmd = get_prefetched_data;
+        msg->msg_rpc->id = DCG_ID;
+        msg->msg_data = od->data;
+        msg->size = obj_data_size(&od->obj_desc);
+        msg->cb = obj_prefetch_completion;
+        msg->private = qte;
+
+        oh = (struct hdr_obj_prefetch *) msg->msg_rpc->pad;
+        oh->odsc = od->obj_desc;
         err = rpc_receive(dcg->dc->rpc_s, peer, msg);
         if (err == 0)
                 return 0;
@@ -1088,87 +1143,111 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
     int od_start_indx = 0;
     struct obj_data **od_tab;
     char name[200];
-    qte->size_od = qte->size_od/2;
+
     int block_size = qte->num_od/(qte->qh->qh_num_peer * 2);
     if(block_size < 1) block_size = 1;
     err = qt_alloc_obj_data_shmem(qte, block_size);
     if (err < 0)
         goto err_out;
+    qte->size_od = qte->size_od/2;
     od_tab = malloc(sizeof(*od_tab) * qte->num_od);
     int shmem_flag = 0;
-     
+
     list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
         if((od_indx %(block_size*2)) < block_size){
             od_tab[od_indx] = od;
         }
         else{
             //Pradeep
-            peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
-            if(on_same_node(peer, dcg->dc->self)){
-                convert_to_string(&od->obj_desc, name);
-                int shm_fd;
-                void *ptr;
-                int SIZE;
-                shm_fd = shm_open(name, O_RDONLY, 0666);
-                if (shm_fd == -1) {
-                    od_start_indx = od_indx - block_size;
-                    convert_to_string(&od_tab[od_start_indx]->obj_desc, name);
-                    shm_fd = shm_open(name, O_RDONLY, 0666);
-                    SIZE = obj_data_size(&od_tab[od_start_indx]->obj_desc);
-                    ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
-                    if (ptr == MAP_FAILED) {
-                        printf("Map failed\n");
-                        exit(-1);
-                    }
-                    od_tab[od_start_indx]->data = ptr;
-                    ssd_copy(od, od_tab[od_start_indx]);
-
-                }else{
-                            /* configure the size of the shared memory segment */
-                    SIZE = obj_data_size(&od->obj_desc);
+            //before asking for object descriptors to owners, check on the local node
+            //if prefetched before checking with obj_desc_owner or there is.
+            //
+        	//uloga("Getting data \n");
+            convert_to_string(&od->obj_desc, name);
+            int shm_fd;
+            void *ptr;
+            int SIZE;
+            shm_fd = shm_open(name, O_RDONLY, 0666);
+            if(shm_fd != -1){
+                //the data has been already prefetched on the local node
+                SIZE = obj_data_size(&od->obj_desc);
                             /* now map the shared memory segment in the address space of the process */
-                    ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
-                    if (ptr == MAP_FAILED) {
-                        printf("Map failed\n");
-                        exit(-1);
-                    }
-                    memcpy(od->data, ptr, SIZE);
+                ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
+                if (ptr == MAP_FAILED) {
+                    printf("Map failed\n");
+                    exit(-1);
                 }
+                memcpy(od->data, ptr, SIZE);
                 ++qte->num_parts_rec;
 
             }else{
-                shmem_flag = 1;
-                err = -ENOMEM;
-                msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
-                if (!msg) {
-                    free(od->data);
-                    od->data = NULL;
-                    goto err_out;
+                peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
+                if(on_same_node(peer, dcg->dc->self)){
+
+                    shm_fd = shm_open(name, O_RDONLY, 0666);
+                    if (shm_fd == -1) {
+                        od_start_indx = od_indx - block_size;
+                        convert_to_string(&od_tab[od_start_indx]->obj_desc, name);
+                        shm_fd = shm_open(name, O_RDONLY, 0666);
+                        SIZE = obj_data_size(&od_tab[od_start_indx]->obj_desc);
+                        ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
+                        if (ptr == MAP_FAILED) {
+                            printf("Map failed\n");
+                            exit(-1);
+                        }
+                        od_tab[od_start_indx]->data = ptr;
+                        ssd_copy(od, od_tab[od_start_indx]);
+
+                    }else{
+                                /* configure the size of the shared memory segment */
+                        SIZE = obj_data_size(&od->obj_desc);
+                                /* now map the shared memory segment in the address space of the process */
+                        ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
+                        if (ptr == MAP_FAILED) {
+                            printf("Map failed\n");
+                            exit(-1);
+                        }
+                        memcpy(od->data, ptr, SIZE);
+                    }
+                    ++qte->num_parts_rec;
+
+                }else{
+                    shmem_flag = 1;
+                    err = -ENOMEM;
+                    msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+                    if (!msg) {
+                        free(od->data);
+                        od->data = NULL;
+                        goto err_out;
+                    }
+
+                    msg->msg_data = od->data;
+                    msg->size = obj_data_size(&od->obj_desc);
+                    msg->cb = obj_data_get_completion;
+                    msg->private = qte;
+
+                    msg->msg_rpc->cmd = ss_obj_get;
+                    msg->msg_rpc->id = DCG_ID;
+
+                    oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
+                    oh->qid = qte->q_id;
+                    oh->u.o.odsc = od->obj_desc;
+                    oh->u.o.odsc.version = qte->q_obj.version;
+                    memcpy(&oh->gdim, &qte->gdim,
+                        sizeof(struct global_dimension));
+
+                    err = rpc_receive(dcg->dc->rpc_s, peer, msg);
+                    if (err < 0) {
+                        free(msg);
+                        free(od->data);
+                        od->data = NULL;
+                        goto err_out;
+                    }
                 }
 
-                msg->msg_data = od->data;
-                msg->size = obj_data_size(&od->obj_desc);
-                msg->cb = obj_data_get_completion;
-                msg->private = qte;
 
-                msg->msg_rpc->cmd = ss_obj_get;
-                msg->msg_rpc->id = DCG_ID;
-
-                oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
-                oh->qid = qte->q_id;
-                oh->u.o.odsc = od->obj_desc;
-                oh->u.o.odsc.version = qte->q_obj.version;
-                memcpy(&oh->gdim, &qte->gdim,
-                    sizeof(struct global_dimension));
-
-                err = rpc_receive(dcg->dc->rpc_s, peer, msg);
-                if (err < 0) {
-                    free(msg);
-                    free(od->data);
-                    od->data = NULL;
-                    goto err_out;
-                }
             }
+
 
         }
         od_indx++;
@@ -1315,60 +1394,71 @@ static int obj_filter_reduce(struct query_tran_entry *qte, struct obj_data *od)
 #ifdef SHMEM_OBJECTS
 static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-    struct hdr_obj_get *oh = msg->private;
-    int half_sz = oh->u.o.num_de / 2;
-    struct obj_descriptor *od_tab = msg->msg_data;
-    struct query_tran_entry *qte;
-    int *dupli_odsc;
-    int i, j, err = -ENOENT;
+        struct hdr_obj_get *oh = msg->private;
+        struct obj_descriptor *od_tab = msg->msg_data;
+        struct query_tran_entry *qte;
+        int i, err = -ENOENT;
 
-    qte = qt_find(&dcg->qt, oh->qid);
-    if (!qte) {
-        uloga("can not find transaction ID = %d.\n", oh->qid);
-        goto err_out_free;
-	}
+        qte = qt_find(&dcg->qt, oh->qid);
+        if (!qte) {
+		uloga("can not find transaction ID = %d.\n", oh->qid);
+                goto err_out_free;
+	   }
 
-    qte->qh->qh_num_rep_received++;
-    qte->size_od += oh->u.o.num_de;
-    dupli_odsc = malloc(sizeof(int) * half_sz);
-    for(i = 0; i < half_sz; i++) {
-        dupli_odsc[i] = 0;
-    }
-
-    for(i = 0; i < oh->u.o.num_de; i++) {
-        if(i < half_sz) {
-            if(!qt_find_obj(qte, od_tab+i)) { 
-                err = qt_add_obj(qte, od_tab+i);
-                if(err < 0) {
-                    goto err_out_free;
-                }
-            } else {
-                dupli_odsc[i+half_sz] = i + half_sz;
-            }
-        } else {
-            if(i != dupli_odsc[i]) {
-                err = qt_add_obj(qte, od_tab+i);
-                if (err < 0)
-                    goto err_out_free;
-            }
+        qte->qh->qh_num_rep_received++;
+        qte->size_od += oh->u.o.num_de;
+        //uloga("Received num_odsc is %d\n", oh->u.o.num_de);
+        int j;
+        int half_sz = oh->u.o.num_de/2;
+        int *dupli_odsc;
+        dupli_odsc = malloc(sizeof(int) * half_sz);
+        //uloga("Half size is %d\n", half_sz);
+        for (i = 0; i < half_sz; i++){
+            dupli_odsc[i] = 0;
         }
-    }
 
-    free(oh);
-    free(od_tab);
-    free(msg);
+        for (i = 0; i < oh->u.o.num_de; i++) {
+                if(i<half_sz){
+                     if (!qt_find_obj(qte, od_tab+i)){
+                        err = qt_add_obj(qte, od_tab+i);
+                        if (err < 0)
+                                goto err_out_free;
+                    }else{
+                        dupli_odsc[i+half_sz] = i+half_sz;
+                    }
+                }else{
+                    if(i!=dupli_odsc[i]){
+                        err = qt_add_obj(qte, od_tab+i);
+                        if (err < 0)
+                                goto err_out_free;
+                    }
+                }
+        }
 
-    if(qte->qh->qh_num_rep_received == qte->qh->qh_num_peer) {
-        /* Object descriptor receive completed. */
-        qte->f_odsc_recv = 1;
-    }
+        free(oh);
+        free(od_tab);
+        free(msg);
 
-    return 0;
+        if (qte->qh->qh_num_rep_received == qte->qh->qh_num_peer) {
+                /* Object descriptor receive completed. */
+                qte->f_odsc_recv = 1;
 
-err_out_free:
-    free(oh);
-    free(od_tab);
-    free(msg);
+		/* NOTE: disabled the cache for object descriptors.
+                if (qte->f_err == 0) {
+                        struct query_cache_entry *qce;
+                        qce = qce_alloc(qte->num_od);
+                        if (qce) {
+                                qce_set_obj_desc(qce, &qte->q_obj, &qte->od_list);
+                                qc_add_entry(&dcg->qc, qce);
+                        }
+                }
+		*/
+        }
+        return 0;
+ err_out_free:
+        free(oh);
+        free(od_tab);
+        free(msg);
 
 	ERROR_TRACE();
 }
@@ -1852,28 +1942,6 @@ int dcg_obj_sync(int sync_op_id)
 
 int dcg_obj_get(struct obj_data *od)
 {
-
-#ifdef SHMEM_OBJECTS    
-    char name[200];
-    convert_to_string(&od->obj_desc, name);
-    int shm_fd;
-    void *ptr;
-    int SIZE;
-    shm_fd = shm_open(name, O_RDONLY, 0666);
-    if (shm_fd != -1) {
-        //read the file locally without any rpc call
-        SIZE = obj_data_size(&od->obj_desc);
-        ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
-        if (ptr == MAP_FAILED) {
-            printf("Map failed\n");
-            exit(-1);
-        }
-        memcpy(od->data, ptr, SIZE);
-        return 0;
-    }
-
-#endif
-
     struct query_tran_entry *qte;
     const struct query_cache_entry *qce;
     int err = -ENOMEM;
@@ -1889,10 +1957,6 @@ int dcg_obj_get(struct obj_data *od)
     qt_add(&dcg->qt, qte);
 
     versions_reset();
-
-        // TODO:  I have  intentionately  disabled the  cache here.  I
-        // should reconsider.
-        // qce = qc_find(&dcg->qc, &od->obj_desc);
     qce = 0;
     if (qce) {
         err = qte_set_odsc_from_cache(qte, qce);
@@ -1906,6 +1970,45 @@ int dcg_obj_get(struct obj_data *od)
         if (err < 0)
             goto err_qt_free;
         DC_WAIT_COMPLETION(qte->f_peer_received == 1);
+        //now check if past read request had prefetched the current request
+        //we do this after get_dht_peers because every request has to be sent to server
+        //to prefetch next request.
+        if(qte->f_node_local == 1){
+			char name[200];
+			convert_to_string(&od->obj_desc, name);
+			int shm_fd;
+			void *ptr;
+			int SIZE;
+			//uloga("Opening shared memory %s\n", name);
+			shm_fd = shm_open(name, O_RDONLY, 0666);
+			//uloga("Shm_fd %d\n", shm_fd);
+			if (shm_fd != -1) {
+				//read the file locally without any rpc call
+				SIZE = obj_data_size(&od->obj_desc);
+				ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
+				if (ptr == MAP_FAILED) {
+					printf("Map failed\n");
+					exit(-1);
+				}
+				memcpy(od->data, ptr, SIZE);
+				//uloga("Finished with 1 rpc call %s\n", name);
+				qt_remove(&dcg->qt, qte);
+				free(qte);
+				return 0;
+
+			}else{
+				//the data was prefetched, but current client is in separate node than server
+				err=get_node_local_data(od, qte);
+				if(err<0){
+					goto err_qt_free;
+				}
+				//uloga("Finished with 2 rpc calls %s\n", name);
+				DC_WAIT_COMPLETION(qte->f_data_received == 1);
+				qt_remove(&dcg->qt, qte);
+				free(qte);
+				return 0;
+			}
+        }
 
         err = get_obj_descriptors(qte);
         if (err < 0) {
@@ -1927,7 +2030,9 @@ int dcg_obj_get(struct obj_data *od)
         od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
     tm_st = tm_end;
 #endif
-
+        //now receive the data local copy might be here
+        //Pradeep
+    uloga("Get the data\n");
     err = dcg_obj_data_get(qte);
     if (err < 0) {
                 // FIXME: should I jump to err_qt_free ?
@@ -1947,8 +2052,10 @@ int dcg_obj_get(struct obj_data *od)
         }
     }
     if (!qte->f_complete) {
+        // !qte->num_req || qte->num_reply != qte->num_od) {
         /* Object is not complete, not all parts
-           successful. */
+           successfull. */
+        // qt_free_obj_data(qte, 1);
         err = -ENODATA;
         goto out_no_data;
     }
@@ -1958,22 +2065,17 @@ int dcg_obj_get(struct obj_data *od)
             uloga("TIMING_PERF fetch_data ts %d peer %d time %lf %s\n",
                 od->obj_desc.version, dcg_get_rank(dcg), tm_end-tm_st, log_header);
 #endif 
-out_no_data:
-#ifdef SHMEM_OBJECTS
+    out_no_data:
     qt_free_obj_data_shmem(qte, 1);
-#endif
-#ifndef SHMEM_OBJECTS
-    qt_free_obj_data(qte, 1);
-#endif
     qt_remove(&dcg->qt, qte);
     free(qte);
     return err;
-err_data_free:
+    err_data_free:
     qt_free_obj_data(qte, 1);
-err_qt_free:
+    err_qt_free:
     qt_remove(&dcg->qt, qte);
     free(qte);
-err_out:
+    err_out:
     ERROR_TRACE();
 }
 

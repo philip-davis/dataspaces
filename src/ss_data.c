@@ -897,11 +897,11 @@ int ssd_copy_list_shmem(struct obj_data *to, struct list_head *od_list, int nums
             bbox_intersect(&to->obj_desc.bb, &from->obj_desc.bb, &bbcom);
 
             matrix_init(&from_mat, from->obj_desc.st,
-                        &from->obj_desc.bb, &bbcom, 
+                        &from->obj_desc.bb, &bbcom,
                         from->obj_desc.size);
 
-            matrix_init(&to_mat, to->obj_desc.st, 
-                        &to->obj_desc.bb, &bbcom, 
+            matrix_init(&to_mat, to->obj_desc.st,
+                        &to->obj_desc.bb, &bbcom,
                         to->obj_desc.size);
 
             matrix_copy(&to_mat, to->data, &from_mat, from->data);
@@ -911,6 +911,7 @@ int ssd_copy_list_shmem(struct obj_data *to, struct list_head *od_list, int nums
 
     return 0;
 }
+
 
 int ssd_filter(struct obj_data *from, struct obj_descriptor *odsc, double *dval)
 {
@@ -1392,6 +1393,29 @@ void convert_to_string(struct obj_descriptor *obj_desc, char *name){
         i++;
     }
     sprintf(name, "%s_%d%s", modified_name, obj_desc->version, lb_name);
+
+}
+
+void convert_to_string_no_version(struct obj_descriptor *obj_desc, char *name){
+    char lb_name[100];
+    char *ap = lb_name;
+    char modified_name[100];
+    int SIZE;
+    //char ub_name[50];
+    int i;
+    for (i = 0; i < obj_desc->bb.num_dims; ++i)
+    {
+        ap+=sprintf(ap, "_%llu_%llu", obj_desc->bb.lb.c[i], obj_desc->bb.ub.c[i]);
+    }
+    i =0;
+    sprintf(modified_name, "%s", obj_desc->name);
+    while(modified_name[i] != '\0'){
+        if (modified_name[i] == '/'){
+            modified_name[i] = '_';
+        }
+        i++;
+    }
+    sprintf(name, "%s%s", modified_name, lb_name);
 
 }
 

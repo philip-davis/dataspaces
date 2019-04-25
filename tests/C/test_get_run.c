@@ -152,6 +152,9 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
                 ts, transport_type_str_, tm_max);
     }
 
+
+    sleep(10);
+
 	for (i = 0; i < num_vars; i++) {
 		sprintf(var_name, "mnd_%d", i);
 		check_data(var_name, data_tab[i],dims_size*elem_size_/sizeof(double),
