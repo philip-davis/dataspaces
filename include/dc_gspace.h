@@ -93,6 +93,8 @@ int dcg_obj_cq_register(struct obj_data *);
 int dcg_obj_cq_update(int);
 int dcg_obj_sync(int);
 
+char* dcg_obj_get_meta(int type, int ver, char*name, int *var_num, int *var_version);
+
 int dcg_lock_on_read(const char *, void *comm);
 int dcg_unlock_on_read(const char *, void *comm);
 int dcg_lock_on_write(const char *, void *comm);

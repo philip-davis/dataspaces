@@ -425,7 +425,10 @@ enum cmd_type {
 	CN_TIMING_AVG,
 	_CMD_COUNT,
 	cn_s_unregister,
-	ss_kill
+	ss_kill,
+	ss_obj_get_next_meta,
+    	ss_obj_get_latest_meta,
+    	ss_obj_get_var_meta
 };
 
 enum lock_type {
