@@ -184,7 +184,7 @@ static int parse_line(int lineno, char *line)
                     }
                     if(idx != *(int*)options[0].pval){
                         uloga("index=%d, ndims=%d\n",idx, *(int*)options[0].pval);
-                        uloga("The number of coordination should the same with number of dimension!\n");
+                        uloga("The number of coordination should the same as the number of dimensions!\n");
                         return -EINVAL;
                     }
                     break;
@@ -234,6 +234,9 @@ static inline struct ds_gspace * dsg_ref_from_rpc(struct rpc_server *rpc_s)
 static int init_sspace(struct bbox *default_domain, struct ds_gspace *dsg_l)
 {
     int err = -ENOMEM;
+
+    ulog("rank %d creating default gdomain\n", DSG_ID);
+
     dsg_l->ssd = ssd_alloc(default_domain, dsg_l->ds->size_sp,
                             ds_conf.max_versions, ds_conf.hash_version);
     if (!dsg_l->ssd)
@@ -282,6 +285,7 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
         return dsg_l->ssd;
     }
 
+
     // Otherwise, search for shared space based on the
     // global data domain specified by application in put()/get().
     struct sspace_list_entry *ssd_entry = NULL;
@@ -311,7 +315,7 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
     ssd_entry->ssd = ssd_alloc(&domain, dsg_l->ds->size_sp, 
                             ds_conf.max_versions, ds_conf.hash_version);     
     if (!ssd_entry->ssd) {
-        uloga("%s(): ssd_alloc failed\n", __func__);
+        uloga("%s(): ssd_alloc failed for '%s'\n", __func__, var_name);
         return dsg_l->ssd;
     }
 
@@ -323,7 +327,7 @@ static struct sspace* lookup_sspace(struct ds_gspace *dsg_l, const char* var_nam
 
 #ifdef DEBUG
 /*
-    uloga("%s(): add new shared space ndim= %d global dimension= %llu %llu %llu\n",
+    ulog("%s(): add new shared space ndim= %d global dimension= %llu %llu %llu\n",
         __func__, gdim.ndim, gdim.sizes.c[0], gdim.sizes.c[1], gdim.sizes.c[2]);
 */
 #endif

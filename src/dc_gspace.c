@@ -1965,6 +1965,9 @@ out_no_data:
 #ifndef SHMEM_OBJECTS
     qt_free_obj_data(qte, 1);
 #endif
+    if(err == -ENODATA) {
+    	printf("got nothing in dspaces_get\n");
+    }
     qt_remove(&dcg->qt, qte);
     free(qte);
     return err;

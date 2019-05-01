@@ -191,36 +191,53 @@ void common_dspaces_lock_on_read(const char *lock_name, void *comm)
 {
     if (!is_dspaces_lib_init()) return;
 
+    //printf("Requesting read lock on %s\n", lock_name);
+
 	int err = dcg_lock_on_read(lock_name, comm);
 	if (err < 0) 
 		ERROR_TRACE_AND_EXIT();
+
+	//printf("Got read lock on %s\n", lock_name);
 }
 
 void common_dspaces_unlock_on_read(const char *lock_name, void *comm)
 {
     if (!is_dspaces_lib_init()) return;
 
+    //printf("Releasing read lock on %s\n", lock_name);
+
 	int err = dcg_unlock_on_read(lock_name, comm);
 	if (err < 0) 
 		ERROR_TRACE_AND_EXIT();
+
+	//printf("Released read lock on %s\n", lock_name);
 }
 
 void common_dspaces_lock_on_write(const char *lock_name, void *comm)
 {
     if (!is_dspaces_lib_init()) return;
 
+    //printf("Requesting write lock on %s\n", lock_name);
+
 	int err = dcg_lock_on_write(lock_name, comm);
 	if (err < 0)
 		ERROR_TRACE_AND_EXIT();
+
+	//printf("Got write lock on %s\n", lock_name);
 }
 
 void common_dspaces_unlock_on_write(const char *lock_name, void *comm)
 {
     if (!is_dspaces_lib_init()) return;
 
+    //printf("Releasing write lock on %s\n", lock_name);
+
 	int err = dcg_unlock_on_write(lock_name, comm);
 	if (err < 0)
 		ERROR_TRACE_AND_EXIT();
+
+	//printf("Released write lock on %s\n", lock_name);
+
 }
 
 void common_dspaces_define_gdim(const char *var_name, int ndim, uint64_t *gdim)

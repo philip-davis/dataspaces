@@ -516,6 +516,7 @@ static struct sspace *ssd_alloc_v1(const struct bbox *bb_domain, int num_nodes, 
                 goto err_out;
         memset(ssd, 0, sizeof(*ssd));
 
+
         ssd->dht = dht_alloc(ssd, bb_domain, num_nodes, max_versions);
         if (!ssd->dht) {
             free(ssd);
@@ -754,6 +755,12 @@ struct sspace *ssd_alloc(const struct bbox *bb_domain, int num_nodes, int max_ve
     tm_st = timer_read(&tm);
 #endif
 
+
+#ifdef DEBUG
+    char *str = bbox_sprint(bb_domain);
+    uloga("%s: allocating new shared space %s\n", __func__, str);
+#endif
+
     switch (hash_version) {
     case ssd_hash_version_v1:
         ss = ssd_alloc_v1(bb_domain, num_nodes, max_versions);
@@ -806,6 +813,7 @@ int ssd_hash(struct sspace *ss, const struct bbox *bb, struct dht_entry *de_tab[
 #endif
 
     int ret;
+
     switch (ss->hash_version) {
     case ssd_hash_version_v1:
         ret = ssd_hash_v1(ss, bb, de_tab);
