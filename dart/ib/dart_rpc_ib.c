@@ -1614,9 +1614,11 @@ struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *pe
 	size_t size;
 
 	size = sizeof(struct msg_buf) + sizeof(struct rpc_cmd) * num_rpcs + 7;
-	msg = calloc(1, size);
+	msg = (struct msg_buf *) malloc(size);
+	//msg = calloc(1, size);
 	if(!msg)
 		return NULL;
+	memset(msg, 0, size);
 
 	msg->peer = peer;
 	msg->cb = default_completion_callback;

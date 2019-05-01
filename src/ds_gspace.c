@@ -2167,7 +2167,7 @@ static int dsg_internal_rpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cm
         struct obj_descriptor *od_tab;
         struct msg_buf *msg;
         int err = -ENOMEM;
-        //uloga("RPC received internally with object descriptor lists %d\n", DSG_ID);
+        uloga("RPC received internally with object descriptor lists %d\n", DSG_ID);
         /* Test for errors ... */
         if (oh->rc < 0) {
         /* TODO: copy versions available if any !!! */
@@ -2212,7 +2212,7 @@ static int dsg_internal_rpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cm
         rpc_mem_info_cache(peer, msg, cmd);
         //uloga("Before rpc receive direct for obj_descriptor %d\n", DSG_ID);
         err = rpc_receive_direct(rpc_s, peer, msg);
-        //uloga("After rpc receive direct for obj_descriptor %d\n", DSG_ID);
+        uloga("After rpc receive direct for obj_descriptor %d\n", DSG_ID);
         rpc_mem_info_reset(peer, msg, cmd);
         if (err == 0)
                 return 0;
@@ -2233,7 +2233,7 @@ static int obj_data_get_completion_internal(struct rpc_server *rpc_s, struct msg
         qte->f_complete = 1;
     }
 
-    free(msg);
+    //free(msg);
     return 0;
 }
 
@@ -2449,7 +2449,7 @@ static int server_prefetch_dht_peers( struct obj_descriptor *odsc_pref, struct g
 
                     }
                     else{
-                        //uloga("%d Separate Server, send rpc call to DHT server for odsc\n", DSG_ID);
+                        uloga("%d Separate Server, send rpc call to DHT server for odsc\n", DSG_ID);
 
                         qte->f_peer_received = 1;
                         err = dsg_get_obj_descriptors(qte, peer);
@@ -2495,7 +2495,7 @@ static int server_prefetch_dht_peers( struct obj_descriptor *odsc_pref, struct g
             /* Wait for transaction to complete. */
             //uloga("Before qte_fcomplete\n");
             while (! qte->f_complete) {
-            		//uloga("qte is not complete\n");
+            		uloga("qte is not complete\n");
 					#if HAVE_TCP_SOCKET
 					for (i = 0; i < peer_num; i++){
 						struct node_id *peer = ds_get_peer(dsg->ds, de_tab[i]->rank);
@@ -3139,6 +3139,7 @@ static int dsgrpc_obj_get_colocated_server(struct rpc_server *rpc_s, struct rpc_
 		void *ptr;
 		int SIZE;
 		convert_to_string(&oh->u.o.odsc, name);
+		peer = ds_get_peer(dsg->ds, cmd->id);
 		//uloga("Looking for %s ", name);
 		shm_fd = shm_open(name, O_RDWR, 0666);
 		if (shm_fd == -1) {
