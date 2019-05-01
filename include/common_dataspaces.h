@@ -74,6 +74,8 @@ int common_dspaces_put_location_aware(const char *var_name,
         uint64_t *lb,
         uint64_t *ub,
         void *data);
+char* common_dspaces_get_latest_meta(unsigned int ver, char *name, int *nVars, int *version);
+char* common_dspaces_get_next_meta(unsigned int ver, char *name, int *nVars, int *version);
 int common_dspaces_put_sync(void);
 void common_dspaces_finalize (void);
 void common_dspaces_kill (void);

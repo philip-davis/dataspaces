@@ -1489,6 +1489,167 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         return err;
 }
 
+static int obj_meta_get_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+
+        free(msg);
+        return 0;
+}
+
+static int dsgrpc_obj_get_next_meta(struct rpc_server *rpc_s, struct rpc_cmd *cmd){
+    struct msg_buf *msg;
+    struct hdr_nvars_get *oh = (struct hdr_nvars_get *) cmd->pad;
+    struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
+    int curr_version = oh->current_version;
+    enum storage_type st = column_major;
+    struct obj_data *od, *from_obj;
+    int latest_v;
+    int var_data[2]={-3, -3};
+
+    struct obj_descriptor *pref_odsc;
+    pref_odsc= (struct obj_descriptor *) malloc(sizeof(struct obj_descriptor));
+    pref_odsc->version = curr_version;
+    pref_odsc->owner = -1;
+    pref_odsc->st = st;
+    pref_odsc->size = sizeof(char);
+    pref_odsc->bb.num_dims = 1;
+
+    memset(pref_odsc->bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+    memset(pref_odsc->bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+
+    sprintf(pref_odsc->name, "VARMETA@%s", oh->f_name);
+    int err = -ENOMEM;
+
+    from_obj = ls_find_next(dsg->ls, pref_odsc);
+    if (!from_obj) {
+        uloga("End of stream. Current step is the maximum\n");
+        goto send_data;
+    }
+
+    var_data[0] = (from_obj->obj_desc.bb.ub.c[0]+1)*sizeof(char);
+    var_data[1] = from_obj->obj_desc.version;
+    send_data:
+	msg = msg_buf_alloc(rpc_s, peer, 0);
+    	if (!msg) {
+            goto err_out;
+   	 }
+    	msg->msg_data = var_data;
+    	msg->size = sizeof(int)*2;
+    	msg->cb = obj_meta_get_completion;
+
+    	rpc_mem_info_cache(peer, msg, cmd);
+    	err = rpc_send_direct(rpc_s, peer, msg);
+    	rpc_mem_info_reset(peer, msg, cmd);
+    	if (err == 0)
+            return 0;
+    	free(msg);
+    err_out:
+        uloga("'%s()': failed with %d.\n", __func__, err);
+        return err;
+
+}
+
+static int dsgrpc_obj_get_latest_meta(struct rpc_server *rpc_s, struct rpc_cmd *cmd){
+    struct msg_buf *msg;
+    struct hdr_nvars_get *oh = (struct hdr_nvars_get *) cmd->pad;
+    struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
+    int curr_version = oh->current_version;
+    enum storage_type st = column_major;
+    struct obj_data *od, *from_obj;
+    int latest_v;
+    int var_data[2]={-3, -3};
+
+    struct obj_descriptor *pref_odsc;
+    pref_odsc= (struct obj_descriptor *) malloc(sizeof(struct obj_descriptor));
+    pref_odsc->version = curr_version;
+    pref_odsc->owner = -1;
+    pref_odsc->st = st;
+    pref_odsc->size = sizeof(char);
+    pref_odsc->bb.num_dims = 1;
+
+    memset(pref_odsc->bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+    memset(pref_odsc->bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+    int err = -ENOMEM;
+    sprintf(pref_odsc->name, "VARMETA@%s", oh->f_name);
+    from_obj = ls_find_latest(dsg->ls, pref_odsc);
+    if (!from_obj) {
+        uloga("End of stream. Current data is the latest\n");
+        goto send_data;
+    }
+
+    //var_data[0] = ((int*)(from_obj->data))[0];
+    var_data[0] = (from_obj->obj_desc.bb.ub.c[0]+1)*sizeof(char);
+    var_data[1] = from_obj->obj_desc.version;
+    send_data:
+    msg = msg_buf_alloc(rpc_s, peer, 0);
+        if (!msg) {
+            goto err_out;
+     }
+        msg->msg_data = var_data;
+        msg->size = sizeof(int)*2;
+        msg->cb = obj_meta_get_completion;
+
+        rpc_mem_info_cache(peer, msg, cmd);
+        err = rpc_send_direct(rpc_s, peer, msg);
+        rpc_mem_info_reset(peer, msg, cmd);
+        if (err == 0)
+            return 0;
+        free(msg);
+    err_out:
+        uloga("'%s()': failed with %d.\n", __func__, err);
+        return err;
+
+}
+
+static int dsgrpc_obj_get_var_meta(struct rpc_server *rpc_s, struct rpc_cmd *cmd){
+    struct msg_buf *msg;
+    struct hdr_var_meta_get *oh = (struct hdr_var_meta_get *) cmd->pad;
+    struct node_id *peer = ds_get_peer(dsg->ds, cmd->id);
+    enum storage_type st = column_major;
+    struct obj_data *od, *from_obj;
+    int latest_v;
+    int var_data[2];
+
+    struct obj_descriptor *pref_odsc;
+    pref_odsc= (struct obj_descriptor *) malloc(sizeof(struct obj_descriptor));
+    pref_odsc->version = oh->current_version;
+    pref_odsc->owner = -1;
+    pref_odsc->st = st;
+    pref_odsc->size = sizeof(char);
+    pref_odsc->bb.num_dims = 1;
+    memset(pref_odsc->bb.lb.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+    memset(pref_odsc->bb.ub.c, 0, sizeof(uint64_t)*BBOX_MAX_NDIM);
+	//    pref_odsc->bb.lb.c[0] = sizeof(int)/sizeof(char);
+  	//  pref_odsc->bb.ub.c[0] = oh->length + pref_odsc->bb.lb.c[0]-1;
+    sprintf(pref_odsc->name, "VARMETA@%s", oh->f_name);
+    int err = -ENOMEM;
+    from_obj = ls_find(dsg->ls, pref_odsc);
+    if (!from_obj) {
+        uloga("'%s()': Metdata Object not found. Should not happen\n", __func__);
+        goto err_out;
+    }
+    msg = msg_buf_alloc(rpc_s, peer, 0);
+    if (!msg) {
+            goto err_out;
+    }
+    msg->msg_data = from_obj->data;
+    msg->size = oh->length;
+    msg->cb = obj_meta_get_completion;
+
+    rpc_mem_info_cache(peer, msg, cmd);
+    err = rpc_send_direct(rpc_s, peer, msg);
+    rpc_mem_info_reset(peer, msg, cmd);
+    if (err == 0)
+            return 0;
+
+    free(msg);
+    err_out:
+        uloga("'%s()': failed with %d.\n", __func__, err);
+        return err;
+
+}
+
+
 static int obj_info_reply_descriptor(
         struct node_id *q_peer,
         const struct obj_descriptor *q_odsc) // __attribute__((__unused__))
@@ -2110,7 +2271,10 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name, void *comm)
         rpc_add_service(ss_obj_get_desc, dsgrpc_obj_get_desc);
         rpc_add_service(ss_obj_get, dsgrpc_obj_get);
         rpc_add_service(ss_obj_put, dsgrpc_obj_put);
-        rpc_add_service(ss_obj_update, dsgrpc_obj_update);
+       	rpc_add_service(ss_obj_get_next_meta, dsgrpc_obj_get_next_meta);
+        rpc_add_service(ss_obj_get_latest_meta, dsgrpc_obj_get_latest_meta);
+        rpc_add_service(ss_obj_get_var_meta, dsgrpc_obj_get_var_meta);
+	rpc_add_service(ss_obj_update, dsgrpc_obj_update);
         rpc_add_service(ss_obj_filter, dsgrpc_obj_filter);
         rpc_add_service(cp_lock, dsgrpc_lock_service);
         rpc_add_service(cp_remove, dsgrpc_remove_service);

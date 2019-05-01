@@ -294,6 +294,32 @@ int common_dspaces_get(const char *var_name,
     return err;
 }
 
+char* common_dspaces_get_latest_meta(unsigned int ver, char *name, int *nVars, int *version)
+{
+    int err = -ENOMEM;
+   char *data;
+    data = dcg_obj_get_meta(1,ver, name, nVars, version);
+    if(!data){
+        uloga("'%s()': failed with %d, can not get data object.\n",
+            __func__, err);
+	 return NULL;
+	}
+	return data;
+}
+
+char* common_dspaces_get_next_meta(unsigned int ver, char *name, int *nVars, int *version)
+{
+    int err = -ENOMEM;
+    char *data;
+    data = dcg_obj_get_meta(0, ver, name, nVars, version);
+    if(!data){
+       // uloga("'%s()': failed with %d, can not get data object.\n",
+       //     __func__, err);
+    	return NULL;
+	}
+	return data;
+}
+
 #ifdef SHMEM_OBJECTS
 int common_dspaces_put(const char *var_name, 
         unsigned int ver, int size,
