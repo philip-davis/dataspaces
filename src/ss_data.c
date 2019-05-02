@@ -1432,7 +1432,7 @@ void shmem_obj_data_free(struct obj_data *od)
     printf("cons: Error removing %s: %s\n", name, strerror(errno));
     exit(1);
   }else{
-    printf("Unlinked shared object\n");
+    //printf("Unlinked shared object\n");
   }
 }
 
