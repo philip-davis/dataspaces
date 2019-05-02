@@ -693,16 +693,29 @@ static int * syncds_ref(int opid)
 static inline struct node_id * dcg_which_peer(void)
 {
         int peer_id;
-        struct node_id *peer;
-        //uloga("Client %d connecting to %d peer id\n", dcg->dc->self->ptlmap.id, peer_id);
-        //Attaching to the group of 2 servers
-        int num_groups = (dcg->dc->num_sp/2)-1;
-        int grp_no = (dcg->dc->self->ptlmap.id - 2) % num_groups;
-        peer_id = grp_no*2+3;
-        //uloga("Client %d connecting to %d peer id\n", dcg->dc->self->ptlmap.id, peer_id);
+        static int calculated;
+        static struct node_id *attached_peer;
+        if(calculated == -1)
+        	return attached_peer;
+        struct node_id *peer, *old_peer;
+        int num_groups = (dcg->dc->num_sp - 2)/2;
+        int group_id = (dcg->dc->self->ptlmap.id - 2) % num_groups;
+        peer_id = group_id*2+3;
         peer = dc_get_peer(dcg->dc, peer_id);
+        old_peer = peer;
 
-        return peer;
+        int check_same_node = 0;
+        for(int i=0; i <= num_groups; i++){
+        		if(on_same_node(dcg->dc->self, peer)){
+        			calculated = -1;
+        			attached_peer = peer;
+        			return peer;
+        		}
+        		peer_id = i*2+3;
+        		peer = dc_get_peer(dcg->dc, peer_id);
+        }
+
+        return old_peer;
 }
 
 

@@ -49,7 +49,7 @@ typedef struct {
 enum storage_type {row_major, column_major};
 
 struct obj_descriptor {
-        char                    name[154];
+        char                    name[50];
 
         enum storage_type       st;
 

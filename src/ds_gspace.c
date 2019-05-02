@@ -2233,7 +2233,7 @@ static int obj_data_get_completion_internal(struct rpc_server *rpc_s, struct msg
         qte->f_complete = 1;
     }
 
-    //free(msg);
+    free(msg);
     return 0;
 }
 
