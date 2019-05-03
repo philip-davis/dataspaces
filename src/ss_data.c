@@ -1257,6 +1257,8 @@ struct obj_data *shmem_obj_data_alloc(struct obj_descriptor *odsc, int id)
         return NULL;
     }
     //now memcpy
+    fsync(shm_fd);
+    uloga("Shared object created with name %s in server %d\n", name, id);
    
 #ifdef DEBUG 
     uloga("Shared object created with name %s\n", name);

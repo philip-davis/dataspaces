@@ -2276,6 +2276,8 @@ static int dsg_internal_obj_data_get(struct query_tran_entry *qte)
 						convert_to_string(&od_tab[od_start_indx]->obj_desc, name);
 						//uloga("Not found. Opening %s\n", name);
 						shm_fd = shm_open(name, O_RDWR, 0666);
+						if(shm_fd==-1)
+								uloga("Should not happen in internal_obj_data_get. File not found %s in server %d with error %s\n", name, DSG_ID, strerror(errno));
 						SIZE = obj_data_size(&od_tab[od_start_indx]->obj_desc);
 						ptr = mmap(0,SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
 						if (ptr == MAP_FAILED) {
@@ -2284,6 +2286,7 @@ static int dsg_internal_obj_data_get(struct query_tran_entry *qte)
 						}
 						od_tab[od_start_indx]->data = ptr;
 						ssd_copy(od, od_tab[od_start_indx]);
+						munmap(ptr, SIZE);
 
 					}else{
 								/* configure the size of the shared memory segment */
@@ -2292,10 +2295,11 @@ static int dsg_internal_obj_data_get(struct query_tran_entry *qte)
 								/* now map the shared memory segment in the address space of the process */
 						ptr = mmap(0,SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
 						if (ptr == MAP_FAILED) {
-							printf("Map failed\n");
+							printf("Map failed even if file is found\n");
 							exit(-1);
 						}
 						memcpy(od->data, ptr, SIZE);
+						munmap(ptr, SIZE);
 					}
 				++qte->num_parts_rec;
 
@@ -3037,6 +3041,7 @@ static int obj_get_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 static int obj_get_completion_prefetch(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
         struct obj_data *od = msg->private;
+        munmap(msg->msg_data, msg->size);
 
         free(msg);
         obj_data_free(od);
@@ -3143,16 +3148,24 @@ static int dsgrpc_obj_get_colocated_server(struct rpc_server *rpc_s, struct rpc_
 		//uloga("Looking for %s ", name);
 		shm_fd = shm_open(name, O_RDWR, 0666);
 		if (shm_fd == -1) {
+			uloga("File %s not found in server %d\n",name ,DSG_ID);
 			od = obj_data_alloc(&oh->u.o.odsc);
 			convert_to_string(&oh->u.o.shmem_odsc, name);
-			shm_fd = shm_open(name, O_RDWR, 0666);
+			shm_fd = shm_open(name, O_RDONLY, 0666);
+			while(shm_fd==-1){
+				shm_fd = shm_open(name, O_RDONLY, 0666);
+				uloga("Should not happen. File not found %s in server %d with error %s\n", name, DSG_ID, strerror(errno));
+				sleep(1);
+			}
 			SIZE = obj_data_size(&oh->u.o.shmem_odsc);
-			ptr = mmap(0,SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+			//ptr = mmap(0,SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+			ptr = mmap(0,SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
 			if (ptr == MAP_FAILED) {
 				printf("Map failed\n");
 				exit(-1);
 			}
 			ssd_copy(od, obj_data_alloc_no_data(&oh->u.o.shmem_odsc, ptr));
+			munmap(ptr, SIZE);
 			msg = msg_buf_alloc(rpc_s, peer, 0);
 			if (!msg) {
 					obj_data_free(od);
@@ -3178,7 +3191,7 @@ static int dsgrpc_obj_get_colocated_server(struct rpc_server *rpc_s, struct rpc_
 					/* now map the shared memory segment in the address space of the process */
 			ptr = mmap(0,SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
 			if (ptr == MAP_FAILED) {
-				printf("Map failed\n");
+				printf("Map failed, when file was found\n");
 				exit(-1);
 			}
 			msg = msg_buf_alloc(rpc_s, peer, 0);
@@ -3228,7 +3241,7 @@ static int dsgrpc_obj_copy(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 			SIZE = obj_data_size(&oh->odsc);
 			ptr = mmap(0,SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
 			if (ptr == MAP_FAILED) {
-				printf("Map failed\n");
+				printf("Map failed even if file is there is dsgrpc_obj_copy\n");
 				exit(-1);
 			}
 			msg->msg_data = ptr;
@@ -3349,6 +3362,7 @@ static int dsgrpc_ss_kill(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
 	        int err;
 	        err = -ENOMEM;
+	        int status = system("rm -rf /dev/shm/mnd_*");
 	        dsg->kill = 1;
 	        uloga("Server received kill command. Going to shut down...\n");
 	        sleep(3);
