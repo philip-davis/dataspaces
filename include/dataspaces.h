@@ -243,7 +243,37 @@ int dspaces_get (const char *var_name,
         int ndim, uint64_t *lb, uint64_t *ub,
         void *data);
 
+/**
+ * @brief Query the space to retrieve next available version of metadata.
+ * The metadata is 1-D buffer and is variable length. It is identified
+ * using the name of buffer
+ *
+ * @param[in] ver:     Version of the metadata-buffer.
+ * @param[in] name:     Name of the metadata-buffer.
+ * @param[in] nVars:     pointer to number of variables in next available metadata.
+ * 					Updated by the function with number of variables in the metadata
+ * @param[in] version:     pointer to version number of variables. Updated
+ * 					by the function to version number of the variables in the metadata.
+ * @return  pointer to buffer, which contains the metadata
+ */
+
 char* dspaces_get_next_meta(unsigned int ver, char *name, int *nVars, int *version);
+
+
+/**
+ * @brief Query the space to retrieve latest available version of metadata.
+ * The metadata is 1-D buffer and is variable length. It is identified
+ * using the name of buffer
+ *
+ * @param[in] ver:     Version of the metadata-buffer.
+ * @param[in] name:     Name of the metadata-buffer.
+ * @param[in] nVars:     pointer to number of variables in latest available metadata.
+ * 					Updated by the function with number of variables in the metadata
+ * @param[in] version:     pointer to version number of variables. Updated
+ * 					by the function to latest version number of the variables in the metadata.
+ * @return  pointer to buffer, which contains the metadata
+ */
+
 char* dspaces_get_latest_meta(unsigned int ver, char *name, int *nVars, int *version);
 
 
