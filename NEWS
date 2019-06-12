@@ -1,3 +1,7 @@
+1.8.0 Released May 2019
+    - Added new metadata support API calls
+    - Various bug fixes for Infiniband transport
+
 1.7.2 Released September 2018
     - Add lock type 3
     - Various bug fixes
