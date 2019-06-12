@@ -6,7 +6,7 @@ os:
     - precise
 before_install:
     - sudo apt-get update
-    - sudo apt-get install mpich
+    - sudo apt-get install mpich libmpich-dev
 script:
     - ./autogen.sh
     - ./configure CC=mpicc FC=mpif90
