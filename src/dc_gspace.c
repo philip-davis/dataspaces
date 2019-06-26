@@ -50,6 +50,8 @@
 
 #define DCG_ID          dcg->dc->self->ptlmap.id
 
+//#define TIMING_PERF 1
+
 #ifdef TIMING_PERF
 #include "timer.h"
 static char log_header[256] = "";
@@ -1618,7 +1620,12 @@ static int dcgrpc_time_log(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 
 struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
 {
-        struct dcg_space *dcg_l;
+
+#ifdef TIMING_PERF
+        timer_init(&tm_perf, 1);
+        timer_start(&tm_perf);
+#endif
+		struct dcg_space *dcg_l;
         int i, err = -ENOMEM;
 
         if (dcg)
@@ -1643,9 +1650,19 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
 #endif
 
         /* Added for ccgrid demo. */
-        rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);	
+        rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);
+
+#ifdef TIMING_PERF
+    double tm_st, tm_end;
+    tm_st = timer_read(&tm_perf);
+#endif
 	
         dcg_l->dc = dc_alloc(num_nodes, appid, dcg_l, comm);
+
+#ifdef TIMING_PERF
+    tm_end = timer_read(&tm_perf);
+    uloga("TIMING_PERF dc_alloc time %lf\n", tm_end-tm_st);
+#endif
         if (!dcg_l->dc) {
                 free(dcg_l);
                 goto err_out;
@@ -1657,10 +1674,7 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
         dcg_l->hash_version = ssd_hash_version_v1; // set default hash version
 
 
-#ifdef TIMING_PERF
-        timer_init(&tm_perf, 1);
-        timer_start(&tm_perf);
-#endif
+
         dcg = dcg_l;
         return dcg_l;
  err_out:
