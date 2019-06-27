@@ -1130,6 +1130,7 @@ int dc_boot_master(struct dart_client *dc)
 		err = rpc_process_event_with_timeout(dc->rpc_s, 1);
 	}	
 	
+
     //send peers info in my app to master server
 	if(dc->comm != NULL){
 		dc_disseminate_dc_mpi(dc);
@@ -1163,50 +1164,23 @@ err_out:
     return err;
 }
 
-/*
-int dc_boot_slave_mpi(struct dart_client *dc)
+
+int dc_boot_slave_mpi(struct dart_client *dc, struct node_id *peer)
 {
     struct rdma_conn_param cm_params;
     struct con_param conpara;
     struct connection *con;
     struct rdma_cm_event *event = NULL;
-    int i, err, check, connected, connect_count = 0;
-
-    check = 0;
-    connected = 0;
-
-    struct node_id *peer = peer_alloc();
-	INIT_LIST_HEAD(&peer->req_list);
-	peer->num_msg_at_peer = dc->rpc_s->max_num_msg;
-	peer->num_msg_ret = 0;
-	do{
-		err = rpc_read_config(dc->rpc_s->ptlmap.appid, &peer->ptlmap.address);
-	} while(err!=0);
-	peer->ptlmap.id = 0;
+    int i, err;
 
     list_add(&peer->peer_entry, &dc->rpc_s->peer_list);
 
-	struct node_id *temp_peer;
-	if(err < 0)
-		goto err_out;
-	if(peer->ptlmap.address.sin_addr.s_addr == dc->rpc_s->ptlmap.address.sin_addr.s_addr 
-        && peer->ptlmap.address.sin_port == dc->rpc_s->ptlmap.address.sin_port) {
-
-		// This is the master server! the config file may be
-		// around from a previous run 
-		dc->self = peer;
-		dc->self->ptlmap = peer->ptlmap;
-		printf("'%s()': WARNING! config file exists, but I am the master server\n", __func__);
-		err = dc_boot_master(dc);
-		if(err < 0)
-			goto err_out;
-		return 0;
-	}
+    //printf("Before rpc connect to peer 0 \n");
 	//Connect to master server, build rpc channel and sys channel;
 	do{
 		err = rpc_connect(dc->rpc_s, peer);
 	}while(err != 0);
-
+	//printf("After rpc connect to peer 0\n");
 
     int rc;
     dc->rpc_s->thread_alive = 1;
@@ -1220,16 +1194,13 @@ int dc_boot_slave_mpi(struct dart_client *dc)
         exit(-1);
     }
     dc_disseminate_dc_mpi(dc);
-    //printf("Slave client finished receiving MPI from master client\n");
+
 
     dc->f_reg_all = 1;
     return 0;
       
-err_out:
-    printf("'%s()': failed with %d.\n", __func__, err);
-    return err;
 }
-*/
+
 
 int dc_boot_slave(struct dart_client *dc)
 {
@@ -1246,6 +1217,7 @@ int dc_boot_slave(struct dart_client *dc)
 	INIT_LIST_HEAD(&peer->req_list);
 	peer->num_msg_at_peer = dc->rpc_s->max_num_msg;
 	peer->num_msg_ret = 0;
+	//printf("RPC read in dc_boot_slave: %d\n", dc->rpc_s->ptlmap.appid);
 	do{
 		err = rpc_read_config(dc->rpc_s->ptlmap.appid, &peer->ptlmap.address);
 	} while(err!=0);
@@ -1306,6 +1278,53 @@ err_out:
     return err;
 }
 
+static int boot_client_processes(struct dart_client *dc, int appid, int rank)
+{
+	int err;
+	char *buffer;
+	int portid;
+	char nodeid[16];
+	int buff_len = sizeof(int) + 16; //uint16_t for port number, 16 characters for node id
+	buffer = (char*) malloc(buff_len);
+	if(rank==0){
+		portid = ntohs(dc->rpc_s->ptlmap.address.sin_port);
+		memcpy( &buffer[0], &portid, sizeof(int));
+		sprintf(nodeid, "%s", inet_ntoa(dc->rpc_s->ptlmap.address.sin_addr));
+		memcpy(&buffer[sizeof(int)], &nodeid[0], 16);
+
+	}
+	//printf("Peer %d, before bcast\n", rank);
+	MPI_Bcast(buffer, buff_len, MPI_CHAR, 0, *(dc->comm));
+	//printf("Peer %d, After bcast\n", rank);
+	if(rank!=0){
+		memcpy(&portid,  &buffer[0], sizeof(int));
+		memcpy(&nodeid[0], &buffer[sizeof(int)], 16);
+
+	}
+	if(rank==0){
+		struct node_id *temp_peer = peer_alloc();
+		temp_peer->ptlmap = dc->rpc_s->ptlmap;
+		dc->self = temp_peer;
+		list_add(&temp_peer->peer_entry, &dc->rpc_s->peer_list);
+		INIT_LIST_HEAD(&temp_peer->req_list);
+		temp_peer->num_msg_at_peer = dc->rpc_s->max_num_msg;
+		temp_peer->num_msg_ret = 0;
+		err = dc_boot_master(dc);
+	}else{
+		struct node_id *peer = peer_alloc();
+		INIT_LIST_HEAD(&peer->req_list);
+		peer->num_msg_at_peer = dc->rpc_s->max_num_msg;
+		peer->num_msg_ret = 0;
+		peer->ptlmap.address.sin_addr.s_addr= inet_addr(nodeid);
+		peer->ptlmap.address.sin_port = htons(portid);
+		peer->ptlmap.id = 0;
+		err= dc_boot_slave_mpi(dc, peer);
+
+	}
+	return err;
+
+}
+
 static int dc_boot(struct dart_client *dc, int appid)
 {
 	struct stat st_buff;
@@ -1318,31 +1337,29 @@ static int dc_boot(struct dart_client *dc, int appid)
 
 	if(dc->comm != NULL){
 		MPI_Comm_rank(*(dc->comm), &rank);
+		boot_client_processes(dc, appid, rank);
 	}else{
 		 MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+		 if(rank == 0 || dc->peer_size == 1) {
+			err = rpc_write_config(appid, dc->rpc_s);
+			if(err != 0)
+				goto err_flock;
+			 struct node_id *temp_peer = peer_alloc();
+			 temp_peer->ptlmap = dc->rpc_s->ptlmap;
+			 dc->self = temp_peer;
+			 list_add(&temp_peer->peer_entry, &dc->rpc_s->peer_list);
+			 INIT_LIST_HEAD(&temp_peer->req_list);
+			 temp_peer->num_msg_at_peer = dc->rpc_s->max_num_msg;
+			 temp_peer->num_msg_ret = 0;
+			 err = dc_boot_master(dc);
+			 if(err != 0)
+				 goto err_flock;
+		 } else {
+			sleep(1);
+			 err = dc_boot_slave(dc);
+		 }
+
 	}
-
-
-
-    if(rank == 0 || dc->peer_size == 1) {
-        err = rpc_write_config(appid, dc->rpc_s);
-        if(err != 0)
-            goto err_flock;
-        
-        struct node_id *temp_peer = peer_alloc();
-        temp_peer->ptlmap = dc->rpc_s->ptlmap;
-        dc->self = temp_peer;
-        list_add(&temp_peer->peer_entry, &dc->rpc_s->peer_list);
-        INIT_LIST_HEAD(&temp_peer->req_list);
-        temp_peer->num_msg_at_peer = dc->rpc_s->max_num_msg;
-        temp_peer->num_msg_ret = 0;
-        err = dc_boot_master(dc);
-        if(err != 0)
-            goto err_flock;
-    } else {
-		sleep(1);
-        err = dc_boot_slave(dc);
-    }
 
     if(dc->comm != NULL){
     	MPI_Barrier(*(dc->comm));
@@ -1409,12 +1426,14 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 	}
 	//printf("Init the server: rpc_server_init\n");
 	dc->rpc_s = rpc_server_init(0, NULL, 0, 100, num_peers, dc, DART_CLIENT);
+	//printf("After rpc init the server: rpc_server_init\n");
 	if(!dc->rpc_s) {
 		free(dc);
 		return NULL;
 	}
 
 	dc->rpc_s->ptlmap.appid = appid;
+	//printf("Before dc_boot\n");
 	err = dc_boot(dc, appid);
 	//printf("After dc_boot\n");
 	if(err < 0) {
