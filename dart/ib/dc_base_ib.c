@@ -1082,6 +1082,7 @@ int dc_boot_master(struct dart_client *dc)
     struct node_id *peer;
     struct connection *conn;
     int rc;
+    int dimes_flag = 0;
         
     dc->rpc_s->thread_alive = 1;
     rc = pthread_create(&(dc->rpc_s->comm_thread), NULL, dc_master_listen, (void *) dc);
@@ -1132,10 +1133,15 @@ int dc_boot_master(struct dart_client *dc)
 	
 
     //send peers info in my app to master server
+#ifndef DS_HAVE_DIMES
 	if(dc->comm != NULL){
 		dc_disseminate_dc_mpi(dc);
-	}else{
-		dc_disseminate(dc);
+		dimes_flag=1;
+	}
+#endif
+
+	if(dimes_flag==0){
+		dc_disseminate_dc(dc);
 		while(dc->f_reg_all == 0){
 				err = rpc_process_event_with_timeout(dc->rpc_s, 1);
 			}
@@ -1217,7 +1223,6 @@ int dc_boot_slave(struct dart_client *dc)
 	INIT_LIST_HEAD(&peer->req_list);
 	peer->num_msg_at_peer = dc->rpc_s->max_num_msg;
 	peer->num_msg_ret = 0;
-	//printf("RPC read in dc_boot_slave: %d\n", dc->rpc_s->ptlmap.appid);
 	do{
 		err = rpc_read_config(dc->rpc_s->ptlmap.appid, &peer->ptlmap.address);
 	} while(err!=0);
@@ -1258,16 +1263,11 @@ int dc_boot_slave(struct dart_client *dc)
     }
 
     //Waiting for dissemination msg from master server;
-    if(dc->comm != NULL){
-    	dc_disseminate_dc_mpi(dc);
-    }else{
-    	while(dc->f_reg == 0) {
-    	        err = rpc_process_event_with_timeout(dc->rpc_s, 1);
-    	        if(err != 0 && err != -ETIME)
-    	            goto err_out;
-    	    }
+    while(dc->f_reg == 0) {
+        err = rpc_process_event_with_timeout(dc->rpc_s, 1);
+        if(err != 0 && err != -ETIME)
+            goto err_out;
     }
-
 
     dc->f_reg_all = 1;
 
@@ -1334,11 +1334,16 @@ static int dc_boot(struct dart_client *dc, int appid)
 	sprintf(fil_conf, "conf.%d", appid);
 	int fd, err;
 	int rank;
+	int dimes_flag = 0;
 
+#ifndef DS_HAVE_DIMES
 	if(dc->comm != NULL){
-		MPI_Comm_rank(*(dc->comm), &rank);
-		boot_client_processes(dc, appid, rank);
-	}else{
+			MPI_Comm_rank(*(dc->comm), &rank);
+			boot_client_processes(dc, appid, rank);
+			dimes_flag=1;
+	}
+#endif
+	if(dimes_flag==0){
 		 MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 		 if(rank == 0 || dc->peer_size == 1) {
 			err = rpc_write_config(appid, dc->rpc_s);
@@ -1460,9 +1465,14 @@ err_out:
 void dc_free(struct dart_client *dc)
 {
 	int err;
+	int dimes_flag = 0;
+#ifndef DS_HAVE_DIMES
 	if(dc->comm != NULL){
 		dc_unregister_mpi(dc);
-	}else{
+		dimes_flag = 1;
+	}
+#endif
+	if(dimes_flag == 0){
 		dc_unregister(dc);
 	}
 	dc_barrier(dc);

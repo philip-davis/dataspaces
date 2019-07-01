@@ -538,14 +538,14 @@ static int cp_disseminate_cs_completion(struct rpc_server *rpc_s, struct msg_buf
     }
 
     // disseminate new nodes to existing apps
-    /*
+#ifdef DS_HAVE_DIMES
     list_for_each_entry(temp_app, &ds->app_list, struct app_info, app_entry) {
         if(temp_app->app_id != app->app_id && temp_app->sent_announce) {
             temp_peer = ds_get_peer(ds, temp_app->app_min_id);
             ds_disseminate_app(ds, temp_peer, app->app_id);
         }
     }
-	*/
+#endif
 	temp_peer = ds_get_peer(ds, app->app_min_id);
 	cs_disseminate_cp(ds,temp_peer);
 	app->sent_announce = 1;
