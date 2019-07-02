@@ -955,6 +955,35 @@ static int dc_disseminate_dc_completion(struct rpc_server *rpc_s, struct msg_buf
     return 0;
 }
 
+static int gather_peer_list(struct dart_client *dc){
+	int rank, gsize;
+	struct ptlid_map *pptlmap;
+	struct ptlid_map local_map = dc->rpc_s->ptlmap;
+	MPI_Comm_rank(*(dc->comm), &rank);
+	 if(rank==0){
+		 MPI_Comm_size(*(dc->comm), &gsize);
+		 pptlmap = malloc(sizeof(struct ptlid_map) * gsize);
+	 }
+	MPI_Gather(&local_map, sizeof(struct ptlid_map), MPI_CHAR, pptlmap, sizeof(struct ptlid_map), MPI_CHAR, 0, *(dc->comm));
+	if(rank==0){
+		pptlmap++;
+		for(int i=1; i<gsize; i++){
+			struct node_id *temp_peer = peer_alloc();
+			list_add(&temp_peer->peer_entry, &dc->rpc_s->peer_list);
+			temp_peer->ptlmap = *pptlmap;
+			temp_peer->ptlmap.id = i;
+			INIT_LIST_HEAD(&temp_peer->req_list);
+			temp_peer->num_msg_at_peer = dc->rpc_s->max_num_msg;
+			temp_peer->num_msg_ret = 0;
+
+			pptlmap++;
+		}
+
+	}
+
+	return 0;
+}
+
 static int dc_disseminate_dc_mpi(struct dart_client *dc)
 {
 
@@ -1091,10 +1120,17 @@ int dc_boot_master(struct dart_client *dc)
         exit(-1);
     }
 
-	while(dc->connected != dc->peer_size - 1) {
-		sched_yield();
+#ifndef DS_HAVE_DIMES
+	if(dc->comm != NULL){
+		gather_peer_list(dc);
+		dimes_flag=1;
 	}
-
+#endif
+	if(dimes_flag==0){
+		while(dc->connected != dc->peer_size - 1) {
+			sched_yield();
+		}
+	}
 	dc->rpc_s->ptlmap.id = 0;
 
     INIT_LIST_HEAD(&dc->deferred_app_msg);
@@ -1181,12 +1217,7 @@ int dc_boot_slave_mpi(struct dart_client *dc, struct node_id *peer)
 
     list_add(&peer->peer_entry, &dc->rpc_s->peer_list);
 
-    //printf("Before rpc connect to peer 0 \n");
-	//Connect to master server, build rpc channel and sys channel;
-	do{
-		err = rpc_connect(dc->rpc_s, peer);
-	}while(err != 0);
-	//printf("After rpc connect to peer 0\n");
+	gather_peer_list(dc);
 
     int rc;
     dc->rpc_s->thread_alive = 1;
