@@ -2133,18 +2133,21 @@ char * dcg_obj_get_meta(int type, int ver, char*name, int *var_num, int *var_ver
 char * dcg_obj_get_meta(int type, int ver, char*name, int *var_num, int *var_version)
 {
     int err = -ENOMEM;
-    int var_array[2]={-2,-2};
+    int *var_array;
+	var_array=malloc(sizeof(int)*2);
+	memset(var_array, 0, sizeof(int)*2);
     int comp_flg = -2;
     err = dcg_obj_get_nvars(type, ver, name, var_array, &comp_flg);
     if (err < 0)
         goto err_out;
-    DC_WAIT_COMPLETION(var_array[0]!=-2);
+    DC_WAIT_COMPLETION(comp_flg!=-2);
     if(var_array[0]==-3){
         return NULL;
         }
     
     int version = var_array[1];
     int buf_len = var_array[0];
+    free(var_array);
     char *buffer = (char*) malloc(buf_len);
     memset(buffer, 0, buf_len);
     comp_flg = -2;

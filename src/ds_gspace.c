@@ -1489,9 +1489,15 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         return err;
 }
 
+static int obj_meta_get_completion_data(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+		free(msg->msg_data);
+        free(msg);
+        return 0;
+}
+
 static int obj_meta_get_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-
         free(msg);
         return 0;
 }
@@ -1504,7 +1510,10 @@ static int dsgrpc_obj_get_next_meta(struct rpc_server *rpc_s, struct rpc_cmd *cm
     enum storage_type st = column_major;
     struct obj_data *od, *from_obj;
     int latest_v;
-    int var_data[2]={-3, -3};
+    int *var_data;
+	var_data=malloc(sizeof(int)*2);
+	var_data[0]=-3;
+	var_data[1]=-3;
 
     struct obj_descriptor *pref_odsc;
     pref_odsc= (struct obj_descriptor *) malloc(sizeof(struct obj_descriptor));
@@ -1535,7 +1544,7 @@ static int dsgrpc_obj_get_next_meta(struct rpc_server *rpc_s, struct rpc_cmd *cm
    	 }
     	msg->msg_data = var_data;
     	msg->size = sizeof(int)*2;
-    	msg->cb = obj_meta_get_completion;
+    	msg->cb = obj_meta_get_completion_data;
 
     	rpc_mem_info_cache(peer, msg, cmd);
     	err = rpc_send_direct(rpc_s, peer, msg);
@@ -1557,7 +1566,10 @@ static int dsgrpc_obj_get_latest_meta(struct rpc_server *rpc_s, struct rpc_cmd *
     enum storage_type st = column_major;
     struct obj_data *od, *from_obj;
     int latest_v;
-    int var_data[2]={-3, -3};
+    int *var_data;
+	var_data=malloc(sizeof(int)*2);
+	var_data[0]=-3;
+	var_data[1]=-3;
 
     struct obj_descriptor *pref_odsc;
     pref_odsc= (struct obj_descriptor *) malloc(sizeof(struct obj_descriptor));
@@ -1587,7 +1599,7 @@ static int dsgrpc_obj_get_latest_meta(struct rpc_server *rpc_s, struct rpc_cmd *
      }
         msg->msg_data = var_data;
         msg->size = sizeof(int)*2;
-        msg->cb = obj_meta_get_completion;
+        msg->cb = obj_meta_get_completion_data;
 
         rpc_mem_info_cache(peer, msg, cmd);
         err = rpc_send_direct(rpc_s, peer, msg);
