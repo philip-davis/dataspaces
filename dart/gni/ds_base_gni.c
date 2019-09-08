@@ -356,6 +356,19 @@ err_free:
 	return err;
 }
 
+static int cn_register_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
+{
+    int *count = (int *)msg->private;
+
+    (*count)--;
+    if(*count == 0) {
+        free(msg->msg_data);
+        free(msg->private);
+        free(msg);
+    }
+
+    return(0);
+}
 
 static int dsrpc_cn_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
@@ -448,7 +461,9 @@ static int dsrpc_cn_register(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 		    msg->msg_data = send_buffer;
 	 	    msg->size = info_size;
 	        msg->msg_rpc->id = ds->rpc_s->ptlmap.id;
-            msg->cb = default_completion_with_data_callback;
+            msg->cb = cn_register_completion;
+            msg->private = malloc(sizeof(int));
+            *(int *)msg->private = ds->num_sp - 1; // a counter of how many times we have left to complete before freeing buffers
 
 		    hr = (struct hdr_register *) msg->msg_rpc->pad;
 		    hr->pm_sp = peer->ptlmap;
