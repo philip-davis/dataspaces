@@ -2109,12 +2109,14 @@ static int rpc_server_finish(struct rpc_server *rpc_s)
 {
 	struct node_id *peer;
 	struct node_id *cur_peer;
+    int peer_num;
 	int i, err;
 	
     peer = rpc_s->peer_tab;
     while(peer){
         cur_peer = (struct node_id *)(peer + peer->peer_num - 1);
-        for(i = 0; i < peer->peer_num; i++, peer++) {
+        peer_num = cur_peer->peer_num;
+        for(i = 0; i < peer_num; i++, peer++) {
             while (peer->num_req) {
                 err = peer_process_send_list(rpc_s, peer);
                 if (err<0)
