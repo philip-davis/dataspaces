@@ -1677,12 +1677,11 @@ static int rpc_process(struct rpc_server *rpc_s, struct node_id *peer)
 			continue;
 		}
 		if(wc.status != IBV_WC_SUCCESS) {
-//			printf("Status (%d) is not IBV_WC_SUCCESS.\n", wc.status);
 			const char *descr;
  
-			descr = ibv_wc_status_str(IBV_WC_SUCCESS);
+			descr = ibv_wc_status_str(wc.status);
  
-			printf("The description of the enumerated value %d is %s\n", IBV_WC_SUCCESS, descr);
+			printf("The description of the enumerated value %d is %s\n", wc.status, descr);
 			err = -wc.status;
 			return 0;
 			goto err_out;
