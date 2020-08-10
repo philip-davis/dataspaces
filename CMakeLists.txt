@@ -47,6 +47,11 @@ configure_file(
   ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/dspaces_config
 )
 
+install(
+    PROGRAMS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/dspaces_config
+    DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
 add_subdirectory(dart)
 add_subdirectory(include)
 add_subdirectory(src)
