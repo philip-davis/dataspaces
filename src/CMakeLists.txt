@@ -30,3 +30,5 @@ target_include_directories(dspaces PRIVATE
   $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
   $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}>
 )
+
+install(TARGETS dspaces dscommon dart)

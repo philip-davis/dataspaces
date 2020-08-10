@@ -1,0 +1,4 @@
+install(
+  FILES dataspaces.h 
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)

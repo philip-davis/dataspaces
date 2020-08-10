@@ -8,7 +8,22 @@ if(EXISTS "${LOC_PATH}")
     message(FATAL_ERROR "You cannot build in a source directory (or any directory with a CMakeLists.txt file). Please make a build subdirectory. Feel free to remove CMakeCache.txt and CMakeFiles.")
 endif()
 
+include(GNUInstallDirs)
+
 list(INSERT CMAKE_MODULE_PATH 0 "${PROJECT_SOURCE_DIR}/cmake")
+if(NOT CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
+  set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY
+    ${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR})
+endif()
+if(NOT CMAKE_LIBRARY_OUTPUT_DIRECTORY)
+  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY
+    ${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR})
+endif()
+if(NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY
+    ${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
+endif()
+
 
 # Default to a debug build if not specified
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -27,7 +42,13 @@ configure_file(
   ${PROJECT_BINARY_DIR}/config.h
 )
 
+configure_file(
+  ${PROJECT_SOURCE_DIR}/scripts/dspaces_config.in
+  ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/dspaces_config
+)
+
 add_subdirectory(dart)
+add_subdirectory(include)
 add_subdirectory(src)
-#add_subdirectory(scripts)
 add_subdirectory(tests)
+
