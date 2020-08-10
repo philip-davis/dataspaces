@@ -16,7 +16,6 @@ target_include_directories(dataspaces_server PRIVATE
 )
 
 install(TARGETS dataspaces_server
-  EXPORT DataSpaces RUNTIME
 )
 
 add_executable(test_writer

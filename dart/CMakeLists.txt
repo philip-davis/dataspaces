@@ -33,3 +33,5 @@ set_target_properties(dart PROPERTIES
   OUTPUT_NAME dart
   VERSION ${DataSpaces_VERSION}
 )
+
+install(TARGETS dart)
