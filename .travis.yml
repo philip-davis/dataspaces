@@ -1,14 +1,16 @@
 language: c
-compiler:
-    - gcc
-    - clang
-os:
-    - linux
+os: linux
 jobs:
   include:
   - name: "cmake"
+    compiler:
+      - gcc
+      - clang
     env: BUILD_SYS=cmake
   - name: "autotools"
+    compiler:
+      - gcc
+      - clang
     env: BUILD_SYS=autotools
 before_install:
     - sudo apt-get update
