@@ -7,10 +7,8 @@ if [ "$1" == "cmake" ] ; then
     cd build
     cmake .. -DCMAKE_C_COMPILER=mpicc
     make
-    make install
 else
     ./autogen.sh
     ./configure CC=mpicc FC=mpifort
     make
-    make install
 fi
