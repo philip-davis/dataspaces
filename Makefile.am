@@ -1,4 +1,5 @@
 ## File used to generate Makefile.in
+ACLOCAL_AMFLAGS = -I config
 EXTRA_DIST=autogen.sh scripts
 SUBDIRS=dart src tests
 

@@ -1,18 +1,23 @@
 AC_INIT([dataspaces],[1.8.1])
+AC_CONFIG_MACRO_DIRS([config])
 AC_CONFIG_AUX_DIR(config)
 
 dnl AM_INIT_AUTOMAKE([-Wall -Wno-extra-portability -Werror subdir-objects foreign])
 AM_INIT_AUTOMAKE([-Wall -Werror subdir-objects foreign])
 
+m4_pattern_allow([AC_CONFIG_MACRO])
+
 AC_PROG_CC
 AC_PROG_CXX
 AC_PROG_FC
-AC_PROG_RANLIB
 AM_PROG_CC_C_O
+
 
 AC_FC_WRAPPERS
 
 m4_ifdef([AM_PROG_AR],[AM_PROG_AR])
+LT_INIT
+
 
 AC_INFINIBAND
 AC_UGNI

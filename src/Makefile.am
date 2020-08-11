@@ -2,14 +2,14 @@ AM_CFLAGS = -DLINUX -g
 AM_CPPFLAGS = -I../dart/ -I../include/ $(DSPACESLIB_CPPFLAGS)
 AM_LDFLAGS = -L../dart -ldart $(DSPACESLIB_LDFLAGS) $(DSPACESLIB_LDADD)
 
-lib_LIBRARIES =  libdscommon.a libdspaces.a libdspacesf.a
+lib_LTLIBRARIES = libdscommon.la libdspaces.la libdspacesf.la
 
-libdscommon_a_SOURCES = bbox.c \
+libdscommon_la_SOURCES = bbox.c \
 			ss_data.c \
 			timer.c \
 			util.c 
 
-libdspaces_a_SOURCES =  dataspaces.c \
+libdspaces_la_SOURCES =  dataspaces.c \
 			common_dataspaces.c \
 			ds_gspace.c \
 			dc_gspace.c \
@@ -17,7 +17,7 @@ libdspaces_a_SOURCES =  dataspaces.c \
 			dimes_server.c \
 			dimes_client.c 
 
-libdspacesf_a_SOURCES = dataspaces_fortran.c \
+libdspacesf_la_SOURCES = dataspaces_fortran.c \
 			common_dataspaces.c \
 			ds_gspace.c \
 			dc_gspace.c \
