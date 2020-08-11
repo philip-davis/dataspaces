@@ -4,10 +4,13 @@ compiler:
     - clang
 os:
     - precise
+jobs:
+  include:
+  - name: "cmake"
+    env: BUILD_SYS=cmake
+  - name: "autotools"
+    env: BUILD_SYS=autotools
 before_install:
     - sudo apt-get update
     - sudo apt-get install mpich libmpich-dev
-script:
-    - ./autogen.sh
-    - ./configure CC=mpicc FC=mpif90
-    - make
+script: scripts/ci/build.sh $BUILD_SYS
