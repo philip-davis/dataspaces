@@ -1,4 +1,4 @@
-if(NOT (PC_GNI_FOUND STREQUAL "IGNORE")
+if(NOT (PC_GNI_FOUND STREQUAL "IGNORE"))
     find_package(PkgConfig)
     if(PKG_CONFIG_FOUND)
         set(SAVED_CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH})
@@ -39,7 +39,7 @@ if(NOT (PC_GNI_FOUND STREQUAL "IGNORE")
                 set(_PF_TYPE _STATIC)
             endif()
             set(GNI_INCLUDE_DIRS ${PC_GNI${_PC_TYPE}_INCLUDE_DIRS})
-            set(GNI_LIBRARIES ${PC_GNI$${_PC_TYPE}_LINK_LIBRARIES})
+            set(GNI_LIBRARIES ${PC_GNI${_PC_TYPE}_LINK_LIBRARIES})
             set(GNI_DEFINITIONS ${PC_GNI${_PC_TYPE}_CFLAGS_OTHER})
         endif()
     endif()
@@ -47,7 +47,7 @@ endif()
        
 include(FindPackageHandleStandardArgs)
 
-find_package_handle_standard_args(GNI, DEFAULT_MSG, GNI_LIBRARIES)
+find_package_handle_standard_args(GNI DEFAULT_MSG  GNI_LIBRARIES)
 
 if(GNI_FOUND)
     if(NOT TARGET gni::gni)
@@ -62,7 +62,8 @@ if(GNI_FOUND)
                 INTERFACE_COMPILE_OPTIONS "${GNI_DEFINITIONS}"
             )
         endif()
-        set_target_properties(gni::gni PROPERTIES
+        if(GNI_LIBRARIES)
+            set_target_properties(gni::gni PROPERTIES
                 INTERFACE_LINK_LIBRARIES "${GNI_LIBRARIES}"
             )
         endif()
