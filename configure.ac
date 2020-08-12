@@ -1,4 +1,4 @@
-AC_INIT([dataspaces],[1.8.1])
+AC_INIT([dataspaces],[1.9.0])
 AC_CONFIG_MACRO_DIRS([config])
 AC_CONFIG_AUX_DIR(config)
 
