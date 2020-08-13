@@ -1,0 +1,4 @@
+replicate: in-memory replication version
+hybird: in-memory hybrid erasure coding version
+checkpoint: in-disk/in-bust buffer checkpoint data version
+detection: staging based error detection
