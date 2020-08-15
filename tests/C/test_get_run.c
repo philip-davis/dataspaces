@@ -151,7 +151,7 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
         uloga("TS= %u TRANSPORT_TYPE= %s read MAX time= %lf\n",
                 ts, transport_type_str_, tm_max);
     }
-
+	/*duan
 	for (i = 0; i < num_vars; i++) {
 		sprintf(var_name, "mnd_%d", i);
 		check_data(var_name, data_tab[i],dims_size*elem_size_/sizeof(double),
@@ -160,6 +160,7 @@ static int couple_read_nd(unsigned int ts, int num_vars, enum transport_type typ
             free(data_tab[i]);
         }
     }
+	*/
     free(data_tab);
 
     return 0;

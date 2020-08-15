@@ -149,6 +149,7 @@ static int couple_write_nd(unsigned int ts, int num_vars, enum transport_type ty
 	MPI_Barrier(gcomm_);
     tm_st = timer_read(&timer_);
 
+	//entire
 	for(i = 0; i < num_vars; i++){
 		sprintf(var_name, "mnd_%d", i);
 		common_put(var_name, ts, elem_size, dims, lb, ub,
@@ -157,6 +158,60 @@ static int couple_write_nd(unsigned int ts, int num_vars, enum transport_type ty
 			common_put_sync(type);
 		}
 	}
+	//entire
+	/*
+	//duan consecutive
+	int num_server = 8;
+	int round = nproc_ % num_server ? nproc_ / num_server + 1 : nproc_ / num_server;
+	//round = round - 4;//subset
+	if (rank_ / num_server == ts % round || rank_ / num_server + 1 == ts % round){
+		//uloga("Timestep=%u, %d write mnd into space. round = %d, num_server = %d\n", ts, rank_, round, num_server);
+		//if (2 > 1){//entrie
+		for (i = 0; i < num_vars; i++){
+			sprintf(var_name, "mnd_%d", i);
+			common_put(var_name, ts, elem_size, dims, lb, ub,
+				data_tab[i], type);
+			if (type == USE_DSPACES){
+				common_put_sync(type);
+			}
+		}
+	}
+	//duan consecutive
+
+	//duan subset
+	int num_server = 8;
+	int round = nproc_ % num_server ? nproc_ / num_server + 1 : nproc_ / num_server;
+	round = round - 4;//subset
+	if (rank_ / num_server == ts % round || rank_ / num_server + 1 == ts % round){//subset
+		//uloga("Timestep=%u, %d write mnd into space. round = %d, num_server = %d\n", ts, rank_, round, num_server);
+		//if (2 > 1){//entrie
+		for (i = 0; i < num_vars; i++){
+			sprintf(var_name, "mnd_%d", i);
+			common_put(var_name, ts, elem_size, dims, lb, ub,
+				data_tab[i], type);
+			if (type == USE_DSPACES){
+				common_put_sync(type);
+			}
+		}
+	}
+	//duan subset
+
+	//duan random
+	int num_server = 8;
+	int round = nproc_ % num_server ? nproc_ / num_server + 1 : nproc_ / num_server;
+	if (rank_ / num_server == ts % round || rank_ / num_server + 1 == ts % round || (rank_ / num_server + 2 == ts % round && rand() % 2 == 1)){//random
+		//uloga("Timestep=%u, %d write mnd into space. round = %d, num_server = %d\n", ts, rank_, round, num_server);
+		for (i = 0; i < num_vars; i++){
+			sprintf(var_name, "mnd_%d", i);
+			common_put(var_name, ts, elem_size, dims, lb, ub,
+				data_tab[i], type);
+			if (type == USE_DSPACES){
+				common_put_sync(type);
+			}
+		}
+	}
+	//duan random
+	*/
 	tm_end = timer_read(&timer_);
 
 	sleep(3);
@@ -169,9 +224,19 @@ static int couple_write_nd(unsigned int ts, int num_vars, enum transport_type ty
 	uloga("TIMING_PERF put_data ts %u peer %d time %lf\n",
             ts, common_rank(), tm_diff);
 #endif
+	int failure_recovery_series[100] = FAILURE_RECOVERY_SERIES;//duan
+	int node_id;
     if (rank_ == root) {
         uloga("TS= %u TRANSPORT_TYPE= %s write MAX time= %lf\n",
                 ts, transport_type_str_, tm_max);
+		node_id = failure_recovery_series[ts];
+		if (node_id > 0){		
+			dspaces_server_status_test(node_id, 2);
+		}//duan turn to fail
+		if (node_id < 0){
+			node_id = node_id *(-1);
+			dspaces_server_status_test(node_id, 0);
+		}//duan turn to recovery
     }
 
 	for (i = 0; i < num_vars; i++) {

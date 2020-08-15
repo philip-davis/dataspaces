@@ -60,6 +60,7 @@ int main(int argc, char **argv)
     int dims; // number of dimensions
     size_t elem_size; // Optional: size of one element in the global array. Default value is 8 (bytes).
     int num_vars; // Optional: number of variables to be shared in the testing. Default value is 1.
+	double begin_time, end_time, period_time, max_time;//duan
 
 	if (parse_args(argc, argv, &type, &npapp, &dims, np, sp,
     		&timestep, &appid, &elem_size, &num_vars) != 0) {
@@ -75,12 +76,18 @@ int main(int argc, char **argv)
 
 	int color = 1;
 	MPI_Comm_split(MPI_COMM_WORLD, color, rank, &gcomm);
-
+	begin_time = get_curr_time();//duan
 	// Run as data writer
 	test_put_run(type, npapp, dims, np,
 		sp, timestep, appid, elem_size, num_vars, gcomm);
 
 	MPI_Barrier(gcomm);
+	end_time = get_curr_time();//duan
+	period_time = end_time - begin_time;
+	MPI_Reduce(&period_time, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, gcomm);
+	if (rank == 0) {
+		uloga("'%s()': total excution time = %lf\n", __func__, max_time);//duan
+	}
 	MPI_Finalize();
 	uloga("All complete\n");
 	return 0;	

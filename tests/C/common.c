@@ -179,3 +179,11 @@ int common_run_server(int num_sp, int num_cp, enum transport_type type, void* gc
         }
         return 0;
 }
+
+double get_curr_time(void)//duan
+{
+	struct timeval tv;
+	gettimeofday(&tv, 0);
+	double ret = (double)tv.tv_usec * 1.e-6 + tv.tv_sec;
+	return ret;
+}
