@@ -687,16 +687,55 @@ static int * syncds_ref(int opid)
         return &sync_op.ds_comp[opid];
 }
 #endif
+static inline int dcg_next_peer(int peer_id)//duan
+{
+	int i, peer_ftid, ft_group_id;
+	struct node_id *peer;
+	peer = ds_get_peer(dcg->dc, peer_id);
+	peer_ftid = peer->ftmap.ftid;
+	ft_group_id = peer_ftid / DSG_FT_LEVEL;
 
+	for (i = ft_group_id*DSG_FT_LEVEL; i < (ft_group_id + 1)*DSG_FT_LEVEL; i++){
+		struct node_id * nid = rpc_server_find(dcg->dc->rpc_s, i);
+		if (nid->ftmap.ns == node_normal){
+			return i;
+		}
+	}
+
+	uloga("'%s()' error: all peers in peer %d replication group fail.\n", __func__, peer_id);
+	return peer_id;
+}
 static inline struct node_id * dcg_which_peer(void)
 {
-        int peer_id;
+	int peer_id, next_peer_id, i;
         struct node_id *peer;
+		//duan
+		peer_id = dcg->dc->self->ptlmap.id % dcg->dc->num_sp;
+		peer = dc_get_peer(dcg->dc, peer_id);
+		if (peer->ftmap.ns != node_normal){//duan
+			//uloga("'%s()': peer->ftmap.ns != node_normal peer_id = %d.\n", __func__, peer_id);
+			next_peer_id = dcg_next_peer(peer_id);
+			peer = dc_get_peer(dcg->dc, next_peer_id);
+		}//duan
+		return peer;
+}
 
-        peer_id = dcg->dc->self->ptlmap.id % dcg->dc->num_sp;
-        peer = dc_get_peer(dcg->dc, peer_id);
+static inline int dcg_which_code_peer(int peer_id, int peer_id_arr[])//duan
+{
+	int i, j, peer_ftid, ft_group_id, size_group;
+	struct node_id *peer;
+	peer = dc_get_peer(dcg->dc, peer_id);
+	peer_ftid = peer->ftmap.ftid;
+	size_group = NUM_DATA_DEVICE + NUM_CODE_DEVICE;
+	ft_group_id = peer_ftid / size_group;
 
-        return peer;
+	j = 0;
+	for (i = ft_group_id*size_group; i < (ft_group_id*size_group + NUM_DATA_DEVICE); i++){
+		peer_id_arr[j] = i; 
+		//printf("peer_id_arr[%d] is %d.\n", j, i);//debug
+		j++;
+	}
+	return j;
 }
 
 #ifdef DS_HAVE_ACTIVESPACE
@@ -929,12 +968,17 @@ static int get_obj_descriptors(struct query_tran_entry *qte)
         struct hdr_obj_get *oh;
         struct node_id *peer;
         struct msg_buf *msg;
-        int *peer_id, err;
+		int *peer_id, next_peer_id, err;
 
         qte->f_odsc_recv = 0;
         peer_id = qte->qh->qh_peerid_tab;
         while (*peer_id != -1) {
                 peer = dc_get_peer(dcg->dc, *peer_id);
+				if (peer->ftmap.ns != node_normal){//duan
+					next_peer_id = dcg_next_peer(*peer_id);
+					peer = dc_get_peer(dcg->dc, next_peer_id);
+				}//duan
+
                 err = -ENOMEM;
                 msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
                 if (!msg)
@@ -1190,23 +1234,29 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
         struct msg_buf *msg;
         struct node_id *peer;
         struct hdr_obj_get *oh;
-        struct obj_data *od;
-        int err;
-
+		struct obj_data *od, *sub_ob;//duan
+		int i, num_sub_ob, err;//duan
+		int peer_id_arr[NUM_DATA_DEVICE] = { 0 };//duan
         err = qt_alloc_obj_data(qte);
         if (err < 0)
                 goto err_out;
 
         list_for_each_entry(od, &qte->od_list, struct obj_data, obj_entry) {
-                peer = dc_get_peer(dcg->dc, od->obj_desc.owner);
-
-                err = -ENOMEM;
-                msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
-                if (!msg) {
-                        free(od->data);
-                        od->data = NULL;
-                        goto err_out;
-                }
+			if (od->obj_desc.ob_status == replicate || od->obj_desc.ob_status == replicating || od->obj_desc.ob_status == deleting){
+				//uloga("'%s()': od->obj_desc.ob_status == replicate.\n", __func__);
+				//uloga("'%s()': od->obj_desc.ob_status == replicate od->obj_desc.owner = %d \n", __func__, od->obj_desc.owner);
+				int j;
+				for (j = 0; j < DSG_FT_LEVEL; j++){
+					peer = dc_get_peer(dcg->dc, od->obj_desc.owner);//duan
+					if (peer->ftmap.ns == node_normal){ j = DSG_FT_LEVEL; }
+				}
+					err = -ENOMEM;
+					msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+					if (!msg) {
+						free(od->data);
+						od->data = NULL;
+						goto err_out;
+					}
 
                 msg->msg_data = od->data;
                 msg->size = obj_data_size(&od->obj_desc);
@@ -1233,6 +1283,52 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
                 // TODO: uncomment next line ?!
                 // qte->num_req++;
                 //uloga("Found object descriptor in obj_get \n");
+				}else{		
+				    num_sub_ob = NUM_DATA_DEVICE;//duan
+					dcg_which_code_peer(od->obj_desc.code_owner, peer_id_arr);//duan
+					//uloga("'%s()': od->obj_desc.ob_status == coding, num_sub_ob= %d.\n", __func__, num_sub_ob);
+					for (i = 0; i < num_sub_ob; i++){
+						//if (i != 0){
+						//	sub_ob = obj_data_alloc(&od->obj_desc);//duan
+						//	list_add(&sub_ob->obj_entry, &od->obj_entry);
+						//	od = sub_ob;
+						//}
+						if (i != num_sub_ob - 1){ --qte->num_parts_rec; }
+						peer = dc_get_peer(dcg->dc, peer_id_arr[i]);//duan
+						err = -ENOMEM;
+						msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+						if (!msg) {
+							free(od->data);
+							od->data = NULL;
+							goto err_out;
+						}
+
+						msg->msg_data = od->data;
+						msg->size = obj_data_size(&od->obj_desc) / num_sub_ob;
+						msg->cb = obj_data_get_completion;
+						msg->private = qte;
+
+						msg->msg_rpc->cmd = ss_obj_get;
+						msg->msg_rpc->id = DCG_ID;
+
+						oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
+						oh->qid = qte->q_id;
+						oh->u.o.odsc = od->obj_desc;
+						oh->u.o.odsc.version = qte->q_obj.version;
+						memcpy(&oh->gdim, &qte->gdim,
+							sizeof(struct global_dimension));
+
+						err = rpc_receive(dcg->dc->rpc_s, peer, msg);//duan
+						if (err < 0) {
+							free(msg);
+							free(od->data);
+							od->data = NULL;
+							goto err_out;
+						}
+						// TODO: uncomment next line ?!
+						// qte->num_req++;
+					}
+				}
         }
 
         return 0;
@@ -1242,6 +1338,44 @@ static int dcg_obj_data_get(struct query_tran_entry *qte)
 }
 
 #endif
+/*
+Update the peer status, only be called by master server. duan
+*/
+int dcg_peer_status_test(int peer_id, int status)//duan
+{
+	struct msg_buf *msg;
+	struct node_id *peer;
+	struct hdr_peer_update *hdr;
+	int sync_op_id;
+	int err = -ENOMEM;
+	int destinate_peer_id = 0;
+
+	peer = dc_get_peer(dcg->dc, destinate_peer_id);
+	sync_op_id = syncop_next();
+	msg = msg_buf_alloc(dcg->dc->rpc_s, peer, 1);
+	if (!msg)
+		goto err_out;
+
+	msg->sync_op_id = syncop_ref(sync_op_id);
+
+	msg->msg_rpc->cmd = ss_peer_test;
+	msg->msg_rpc->id = DCG_ID; // dcg->dc->self->id;
+
+	hdr = (struct hdr_peer_update *) msg->msg_rpc->pad;
+	hdr->peer_id = peer_id;
+	hdr->status = status;
+
+	err = rpc_send(dcg->dc->rpc_s, peer, msg);
+	if (err < 0) {
+		free(msg);
+		goto err_out;
+	}
+
+	return sync_op_id;
+err_out:
+	uloga("'%s()': failed with %d.\n", __func__, err);
+	return err;
+}
 
 /*
   Initiate a custom filter retrieve operation.
@@ -1589,6 +1723,38 @@ static int dcgrpc_ss_info(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	return 0;
 }
 
+
+/*
+Rpc routine to update (add or insert) an object descriptor in the
+dht table.
+*/
+static int dcgrpc_peer_update(struct rpc_server *rpc_s, struct rpc_cmd *cmd)//duan
+{
+	int err;
+	struct hdr_peer_update *oh = (struct hdr_peer_update *) cmd->pad;
+	#ifdef DEBUG
+	{
+		char *str;
+		asprintf(&str, "S%2d: peer_id = %d status = %d from S%2d",
+			DCG_ID, oh->peer_id, oh->status, cmd->id);
+		uloga("'%s()': %s\n", __func__, str);
+		free(str);
+	}
+	#endif
+	/**/
+	uloga("'%s()' in S%2d: node failure test!\n", __func__, DCG_ID);
+	int i;
+	for (i = oh->peer_id; i < 64; i = i + 4){//16 process fail for Titan & Caliburn compute node
+		set_rpc_server_status(dcg->dc->rpc_s, i, oh->status);//duan node failure
+	}
+	
+	//set_rpc_server_status(dcg->dc->rpc_s, oh->peer_id, oh->status);//duan process failure
+
+	return 0;
+err_out:
+	ERROR_TRACE();
+}
+
 /*
   Routine to log the timing information. NOTE: output goes to 'stdout' !
 */
@@ -1648,7 +1814,7 @@ struct dcg_space *dcg_alloc(int num_nodes, int appid, void* comm)
         //server notify client 
         rpc_add_service(ds_put_completion, dcgrpc_server_completion);
 #endif
-
+        rpc_add_service(ss_peer_update, dcgrpc_peer_update);//duan
         /* Added for ccgrid demo. */
         rpc_add_service(CN_TIMING_AVG, dcgrpc_collect_timing);
 

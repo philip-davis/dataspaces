@@ -1,5 +1,5 @@
 AM_CFLAGS = -DLINUX -g 
-AM_CPPFLAGS = -I../dart/ -I../include/ $(DSPACESLIB_CPPFLAGS)
+AM_CPPFLAGS = -I./ -I./jerasure -I../dart/ -I../include/ $(DSPACESLIB_CPPFLAGS)
 AM_LDFLAGS = -L../dart -ldart $(DSPACESLIB_LDFLAGS) $(DSPACESLIB_LDADD)
 
 lib_LIBRARIES =  libdscommon.a libdspaces.a libdspacesf.a
@@ -7,7 +7,13 @@ lib_LIBRARIES =  libdscommon.a libdspaces.a libdspacesf.a
 libdscommon_a_SOURCES = bbox.c \
 			ss_data.c \
 			timer.c \
-			util.c 
+			util.c \
+			jerasure/cauchy.c \
+			jerasure/cauchy_best_r6.c \
+			jerasure/galois.c \
+			jerasure/jerasure.c \
+			jerasure/liberation.c \
+			jerasure/reed_sol.c
 
 libdspaces_a_SOURCES =  dataspaces.c \
 			common_dataspaces.c \
@@ -42,4 +48,9 @@ noinst_HEADERS = ../include/sfc.h \
 		 ../include/dimes_data.h \
 		 ../include/dimes_server.h \
 		 ../include/dimes_client.h \
-		 ../include/common_dataspaces.h
+		 ../include/common_dataspaces.h \
+		 jerasure/cauchy.h \
+		 jerasure/galois.h \
+		 jerasure/jerasure.h \
+		 jerasure/liberation.h \
+		 jerasure/reed_sol.h

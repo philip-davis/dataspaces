@@ -115,6 +115,11 @@ int dspaces_get_num_space_server(void)
 	return common_dspaces_get_num_space_peers();
 }
 
+int dspaces_server_status_test(int peer_id, int status)//duan
+{
+	return common_dspaces_server_status_test(peer_id, status);
+}
+
 void dspaces_barrier(void)
 {
 	common_dspaces_barrier();

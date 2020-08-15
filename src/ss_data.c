@@ -38,9 +38,17 @@
 #include <unistd.h>
 #include <sys/types.h>
 
+#include <sys/time.h>//duan
+
 #include "debug.h"
 #include "ss_data.h"
 #include "queue.h"
+
+#include "jerasure.h"//duan
+#include "reed_sol.h"
+#include "galois.h"
+#include "cauchy.h"
+#include "liberation.h"
 
 #ifdef TIMING_SSD
 #include "timer.h"
@@ -846,6 +854,34 @@ int ssd_init(struct sspace *ssd, int rank)
     return 0;
 }
 
+
+/*duan
+*/
+int ssd_partition(struct obj_data *to_obj, struct obj_data *from_obj, uint64_t size)
+{
+	int flag = 1;
+	struct obj_descriptor odsc1, odsc2;
+	struct obj_data *to_obj1, *to_obj2;
+	while (flag == 1){
+		flag = 0;
+		list_for_each_entry(from_obj, &to_obj->obj_entry, struct obj_data, obj_entry) {
+			if (obj_data_size(&from_obj->obj_desc) > size){
+				flag = 1;
+				//bb_partition(&from_obj->obj_desc, &odsc1, &odsc2);
+				to_obj1 = obj_data_alloc(&odsc1);
+				to_obj2 = obj_data_alloc(&odsc2);
+				ssd_copy(to_obj1, from_obj);
+				ssd_copy(to_obj2, from_obj);
+				list_add(&to_obj1->obj_entry, to_obj);
+				list_add(&to_obj2->obj_entry, to_obj);
+				list_del(&from_obj->obj_entry);
+				obj_data_free(from_obj);
+			}
+		}
+	}
+	return 0;
+}
+
 /*
 */
 int ssd_copy(struct obj_data *to_obj, struct obj_data *from_obj)
@@ -953,6 +989,28 @@ struct ss_storage *ls_alloc(int max_versions)
         return ls;
 }
 
+/*
+Allocate and init the local storage of block structure. duan
+*/
+struct ssb_storage *lsb_alloc(int max_versions)//duan
+{
+	struct ssb_storage *lsb = 0;
+	int i;
+
+	lsb = malloc(sizeof(*lsb) + sizeof(struct list_head) * max_versions);
+	if (!lsb) {
+		errno = ENOMEM;
+		return lsb;
+	}
+
+	memset(lsb, 0, sizeof(*lsb));
+	for (i = 0; i < max_versions; i++)
+		INIT_LIST_HEAD(&lsb->block_hash[i]);
+	lsb->size_hash = max_versions;
+
+	return lsb;
+}
+
 void ls_free(struct ss_storage *ls)
 {
     if (!ls) return;
@@ -984,6 +1042,28 @@ void ls_free(struct ss_storage *ls)
     free(ls);
 }
 
+void lsb_free(struct ssb_storage *lsb)//duan
+{
+    if (!lsb) return;
+
+    struct block_data *bd, *t;
+    struct list_head *list;
+    int i;
+
+    for (i = 0; i < lsb->size_hash; i++) {
+		list = &lsb->block_hash[i];
+        list_for_each_entry_safe(bd, t, list, struct block_data, obj_entry ) {
+            lsb_remove(lsb, bd);
+            block_data_free(bd);
+        }
+    }
+
+    if (lsb->num_block != 0) {
+		uloga("%s(): ERROR lsb->num_block is %d not 0\n", __func__, lsb->num_block);
+    }
+    free(lsb);
+}
+
 /*
   Add an object to the local storage.
 */
@@ -1009,8 +1089,56 @@ void ls_add_obj(struct ss_storage *ls, struct obj_data *od)
 
         /* NOTE: new object comes first in the list. */
         list_add(&od->obj_entry, bin);
+		ls->size_obj += obj_data_size(&od->obj_desc);//duan
         ls->num_obj++;
 }
+
+/*
+Add a block to the local storage.
+*/
+void lsb_add_block(struct ssb_storage *lsb, struct block_data *bd)//duan
+{
+	int index;
+	struct list_head *bin;
+	struct block_data *bd_existing;
+
+	bd_existing = lsb_find_no_version(lsb, bd->obj_desc);
+	if (bd_existing) {
+		lsb_remove(lsb, bd_existing);
+		block_data_free(bd_existing);
+	}
+
+	index = bd->obj_desc->version % lsb->size_hash;
+	bin = &lsb->block_hash[index];
+
+	/* NOTE: new block comes first in the list. */
+	list_add(&bd->obj_entry, bin);
+	lsb->size_block += bd->block_size;
+	lsb->num_block++;
+}
+
+
+struct obj_data* ls_cold_data_lookup(struct ss_storage *ls, int offset)//duan
+{
+	struct obj_data *od;
+	struct list_head *list;
+	int i, j = 0;
+
+	for (i = 0; i < ls->size_hash; i++) {
+		list = &ls->obj_hash[i];
+		//list_for_each_entry_from_tail(od, list, struct obj_data, obj_entry) {//duan replication
+		list_for_each_entry(od, list, struct obj_data, obj_entry) {
+			if (j == offset){
+				return od;	
+			}else{ 
+				j++;
+			}
+		}
+	}
+
+	return NULL;
+}
+
 
 struct obj_data* ls_lookup(struct ss_storage *ls, char *name)
 {
@@ -1033,7 +1161,15 @@ struct obj_data* ls_lookup(struct ss_storage *ls, char *name)
 void ls_remove(struct ss_storage *ls, struct obj_data *od)
 {
         list_del(&od->obj_entry);
+		ls->size_obj -= obj_data_size(&od->obj_desc);//duan
         ls->num_obj--;
+}
+
+void lsb_remove(struct ssb_storage *lsb, struct block_data *bd)//duan
+{
+	list_del(&bd->obj_entry);
+	lsb->size_block -= bd->block_size;
+	lsb->num_block--;
 }
 
 void ls_try_remove_free(struct ss_storage *ls, struct obj_data *od)
@@ -1048,6 +1184,20 @@ void ls_try_remove_free(struct ss_storage *ls, struct obj_data *od)
                 }
                 obj_data_free(od);
         }
+}
+
+void lsb_try_remove_free(struct ssb_storage *lsb, struct block_data *bd)//duan
+{
+	/* Note:  we   assume  the  object  data   is  allocated  with
+	obj_data_alloc(), i.e., the data follows the structure.  */
+	if (bd->refcnt == 0) {
+		lsb_remove(lsb, bd);
+		if (bd->data != bd + 1) {
+			uloga("'%s()': we are about to free an object "
+				"with external allocation.\n", __func__);
+		}
+		block_data_free(bd);
+	}
 }
 
 /*
@@ -1071,6 +1221,25 @@ struct obj_data *ls_find(struct ss_storage *ls, const struct obj_descriptor *ods
         return NULL;
 }
 
+/*
+Search for an object in the local storage that is mapped to the same
+bin, and that has the same  name and object descriptor, but may have
+different version.
+*/
+struct block_data *lsb_find(struct ssb_storage *lsb, struct obj_descriptor *odsc)//duan
+{
+	struct block_data *bd;
+	struct list_head *list;
+	int index, i;
+	index = odsc->version % lsb->size_hash;
+	list = &lsb->block_hash[index];
+	list_for_each_entry(bd, list, struct block_data, obj_entry) {
+			if (obj_desc_equals_intersect(odsc, bd->obj_desc)){//duan
+				return bd;
+			}
+	}
+	return NULL;
+}
 
 /*
  *  *   Test if two object descriptors have the same name
@@ -1145,6 +1314,29 @@ struct obj_data *ls_find_latest(struct ss_storage *ls, const struct obj_descript
         return od_next;
 }
 
+/*
+Find  an object  in the  local storage  that has  the same  name and
+version with the object descriptor 'odsc'.
+*/
+int lsb_find_all(struct ssb_storage *lsb, const struct obj_descriptor *odsc, struct block_data * bd_data[])//duan
+{
+	struct block_data *bd;
+	struct list_head *list;
+	int index, i;
+
+	index = odsc->version % lsb->size_hash;
+	list = &lsb->block_hash[index];
+
+	list_for_each_entry(bd, list, struct block_data, obj_entry) {
+		if (bd->bd_type == data_block){
+			if (obj_desc_equals_intersect(odsc, bd->obj_desc)){
+				bd_data[bd->block_index] = bd;
+			}	
+		}
+	}
+	return 0;
+}
+
 
 /*
   Search for an object in the local storage that is mapped to the same
@@ -1165,6 +1357,30 @@ ls_find_no_version(struct ss_storage *ls, struct obj_descriptor *odsc)
                 if (obj_desc_by_name_intersect(odsc, &od->obj_desc))
                         return od;
         }
+
+        return NULL;
+}
+
+/*
+Search for an object in the local storage that is mapped to the same
+bin, and that has the same  name and object descriptor, but may have
+different version.
+*/
+struct block_data *
+	lsb_find_no_version(struct ssb_storage *lsb, struct obj_descriptor *odsc)//duan
+{
+	struct block_data *bd;
+	struct list_head *list;
+	int index, i;
+
+	index = odsc->version % lsb->size_hash;
+	list = &lsb->block_hash[index];
+
+	list_for_each_entry(bd, list, struct block_data, obj_entry) {
+		if (obj_desc_by_name_intersect(odsc, bd->obj_desc)){//duan
+			return bd;
+		}
+	}
 
         return NULL;
 }
@@ -1202,20 +1418,25 @@ int dht_add_entry(struct dht_entry *de, const struct obj_descriptor *odsc)
 	struct obj_desc_list *odscl;
         int n, err = -ENOMEM;
 
-        odscl = dht_find_match(de, odsc);
-        if (odscl) {
-                /* There  is allready  a descriptor  with  a different
-		   version in the DHT, so I will overwrite it. */
-                memcpy(&odscl->odsc, odsc, sizeof(*odsc));
-                return 0;
-        }
+	struct timeval tv;//duan
+	gettimeofday(&tv, 0);
+	double ret = (double)tv.tv_usec + tv.tv_sec * 1.e6;
+
+	odscl = dht_find_match(de, odsc);
+	if (odscl) {
+		// There  is allready  a descriptor  with  a different
+		//version in the DHT, so I will overwrite it. 
+		memcpy(&odscl->odsc, odsc, sizeof(*odsc));
+		odscl->odsc.time_stamp = ret;//duan
+		return 0;
+	}
 
 	n = odsc->version % de->odsc_size;
 	odscl = malloc(sizeof(*odscl));
 	if (!odscl)
 		return err;
 	memcpy(&odscl->odsc, odsc, sizeof(*odsc));
-
+	odscl->odsc.time_stamp = ret;//duan
 	list_add(&odscl->odsc_entry, &de->odsc_hash[n]);
 	de->odsc_num++;
 
@@ -1357,6 +1578,427 @@ struct obj_data *shmem_obj_data_alloc(struct obj_descriptor *odsc, int id)
 }
 
 /*
+Allocate space for the obj_data struct only; space for data is
+externally allocated.duan
+*/
+struct obj_data * obj_data_alloc_with_size(struct obj_descriptor *odsc, uint64_t  data_size)
+{
+	struct obj_data *od;
+
+	od = malloc(sizeof(*od));
+	if (!od)
+		return NULL;
+	memset(od, 0, sizeof(*od));
+
+	od->_data = od->data = malloc(data_size + 7);
+	if (!od->_data) {
+		free(od);
+		return NULL;
+	}
+	ALIGN_ADDR_QUAD_BYTES(od->data);
+	copy_obj_desc(&od->obj_desc, odsc);//duan
+	return od;
+}
+
+struct block_data *block_data_alloc_copy(struct block_data *bd_from)//duan
+{
+	struct block_data *bd = 0;
+
+	bd = malloc(sizeof(*bd));
+	if (!bd)
+		return NULL;
+	memset(bd, 0, sizeof(*bd));
+
+	bd->_data = bd->data = malloc(bd_from->block_size + 7);
+	if (!bd->_data) {
+		free(bd);
+		return NULL;
+	}
+	ALIGN_ADDR_QUAD_BYTES(bd->data);
+
+	bd->obj_desc = bd_from->obj_desc;
+	memcpy(&bd->gdim, &bd_from->gdim, sizeof(struct global_dimension));
+	bd->block_size = bd_from->block_size;
+	bd->block_index = bd_from->block_index;
+	bd->num_data_device = NUM_DATA_DEVICE;
+	bd->num_code_device = NUM_CODE_DEVICE;
+	bd->word_size = WORD_SIZE;
+	bd->code_tech = CODE_TECH;
+	bd->bd_type = bd_from->bd_type;
+
+	return bd;
+}
+
+struct block_data *block_data_alloc_copy_no_data(struct block_data *bd_from, void *data)//duan
+{
+	struct block_data *bd = 0;
+
+	bd = malloc(sizeof(*bd));
+	if (!bd)
+		return NULL;
+	memset(bd, 0, sizeof(*bd));
+
+	bd->_data = bd->data = data;
+
+	bd->obj_desc = bd_from->obj_desc;
+	memcpy(&bd->gdim, &bd_from->gdim, sizeof(struct global_dimension));
+	bd->block_size = bd_from->block_size;
+	bd->block_index = bd_from->block_index;
+	bd->num_data_device = NUM_DATA_DEVICE;
+	bd->num_code_device = NUM_CODE_DEVICE;
+	bd->word_size = WORD_SIZE;
+	bd->code_tech = CODE_TECH;
+	bd->bd_type = bd_from->bd_type;
+
+	return bd;
+}
+
+
+struct block_data *block_data_alloc_with_size(struct obj_descriptor *odsc, uint64_t size)//duan
+{
+	struct block_data *bd = 0;
+
+	bd = malloc(sizeof(*bd));
+	if (!bd)
+		return NULL;
+	memset(bd, 0, sizeof(*bd));
+
+	bd->_data = bd->data = malloc(size + 7);
+	if (!bd->_data) {
+		free(bd);
+		return NULL;
+	}
+	ALIGN_ADDR_QUAD_BYTES(bd->data);
+	bd->obj_desc = NULL;
+	bd->obj_desc = odsc;
+	return bd;
+}
+
+/*
+Allocate space for an obj_data structure and the data.
+*/
+int block_data_alloc(struct obj_data * od[], int num_od, uint64_t size, struct block_data * bd_data[], struct block_data * bd_code[])//duan
+{
+	enum code_technique tech;		// coding technique (parameter)
+	int i, k, m, w;					// parameters
+	uint64_t newsize, bd_size;			// size of total and size of k+m block seperate
+	struct obj_descriptor *odsc;
+	struct block_data *bd = 0;
+	/* Jerasure Arguments */
+	tech = CODE_TECH;				//coding technic
+	k = NUM_DATA_DEVICE;			//num of data device
+	m = NUM_CODE_DEVICE;			//num of coding device
+	w = WORD_SIZE;					//word size 8, 16, 32
+
+	odsc = (struct obj_descriptor *) malloc(sizeof(struct obj_descriptor));
+	if (!odsc){
+		return 1;
+	}
+	//uloga("'%s()': begin\n", __func__);
+	newsize = size;
+	/* Find new size by determining next closest multiple */
+	if (size % (k*w*sizeof(int)) != 0) {
+		while (newsize % (k*w*sizeof(int)) != 0)
+			newsize++;
+	}
+	/* Determine size of k+m files */
+	bd_size = newsize / k;
+
+	for (i = 0; i < k; i++){
+		bd = malloc(sizeof(*bd));
+		if (!bd)
+			return 1;
+		memset(bd, 0, sizeof(*bd));
+		bd->block_size = bd_size;
+		bd->block_index = i;
+		bd->bd_type = data_block;
+		bd->num_data_device = k;
+		bd->num_code_device = m;
+		bd->word_size = w;
+		bd->code_tech = tech;
+		memcpy(&bd->gdim, &od[0]->gdim, sizeof(struct global_dimension));
+		bd->obj_desc = odsc;
+		bd->_data = bd->data = malloc(sizeof(char)*(bd_size + 7));
+		if (!bd->_data) {
+			free(bd->obj_desc);
+			free(bd);
+			return 1;
+		}
+		ALIGN_ADDR_QUAD_BYTES(bd->data);
+		bd_data[i] = bd;
+	}
+
+	for (i = 0; i < m; i++){
+		bd = malloc(sizeof(*bd));
+		if (!bd)
+			return 1;
+		memset(bd, 0, sizeof(*bd));
+		bd->block_size = bd_size;
+		bd->block_index = i;
+		bd->bd_type = code_block;
+		bd->num_data_device = k;
+		bd->num_code_device = m;
+		bd->word_size = w;
+		bd->code_tech = tech;
+		memcpy(&bd->gdim, &od[0]->gdim, sizeof(struct global_dimension));
+		bd->obj_desc = odsc;
+		bd->_data = bd->data = malloc(sizeof(char)*(bd_size + 7));
+		if (!bd->_data) {
+			free(bd->obj_desc);
+			free(bd);
+			return 1;
+		}
+		ALIGN_ADDR_QUAD_BYTES(bd->data);
+		bd_code[i] = bd;
+	}
+	int od_offset, od_rest;
+	int bd_offset = 0, bd_rest = bd_size, bd_index = 0;
+
+	struct timeval tv;
+	gettimeofday(&tv, 0);
+	double ret = (double)tv.tv_usec + tv.tv_sec * 1.e6;
+
+	for (i = 0; i < num_od; i++){
+		od[i]->obj_desc.time_stamp = ret;//duan
+		copy_obj_desc(&(bd->obj_desc[i]), &od[i]->obj_desc);
+		od_rest = obj_data_size(&od[i]->obj_desc);
+		od_offset = 0;
+		while (bd_index < k){
+			if (od_rest == bd_rest){
+				//uloga("'%s()': od_rest == bd_rest\n", __func__);
+				memcpy(bd_data[bd_index]->_data + bd_offset, od[i]->_data + od_offset, od_rest);
+				bd_offset = 0;
+				bd_rest = bd_size;
+				bd_index++;
+				break;
+			}else if (od_rest < bd_rest){
+				//uloga("'%s()': od_rest < bd_rest \n", __func__);
+				memcpy(bd_data[bd_index]->_data + bd_offset, od[i]->_data + od_offset, od_rest);
+				bd_rest -= od_rest;
+				break;
+			}else{
+				//uloga("'%s()': od_rest > bd_rest \n", __func__);
+				memcpy(bd_data[bd_index]->_data + bd_offset, od[i]->_data + od_offset, bd_rest);
+				od_offset += bd_rest;
+				od_rest -= bd_rest;
+				bd_offset = 0;
+				bd_rest = bd_size;
+				bd_index++;
+			}	
+		}
+	}
+	//uloga("'%s()': end\n", __func__);
+	return 0;
+}
+
+
+void block_data_encode(struct block_data * bd_data[], struct block_data * bd_code[])//duan
+{
+	enum code_technique tech;		// coding technique (parameter)
+	int i, k, m, w, packetsize;		// parameters
+	int blocksize;					// size of k+m files
+	/* Jerasure Arguments */
+	char **data;
+	char **coding;
+	int *code_matrix;
+	int *code_bitmatrix;
+	int **schedule;
+	//uloga("'%s()': begin\n", __func__);
+	tech = CODE_TECH;
+	k = NUM_DATA_DEVICE;
+	m = NUM_CODE_DEVICE;
+	w = WORD_SIZE;
+	blocksize = (int) bd_data[0]->block_size;
+	code_matrix = NULL;
+	code_bitmatrix = NULL;
+	schedule = NULL;
+	/* Allocate data and coding */
+	data = (char **)malloc(sizeof(char*)*k);
+	coding = (char **)malloc(sizeof(char*)*m);
+	for (i = 0; i < k; i++) {
+		data[i] = bd_data[i]->data;
+	}
+	for (i = 0; i < m; i++) {
+		coding[i] = bd_code[i]->data;
+	}
+	/* Create coding matrix or bitmatrix and schedule */
+	switch (tech) {
+	case No_Coding:
+		break;
+	case Reed_Sol_Van:
+		code_matrix = reed_sol_vandermonde_coding_matrix(k, m, w);
+		break;
+	case Cauchy_Orig:
+		code_matrix = cauchy_original_coding_matrix(k, m, w);
+		code_bitmatrix = jerasure_matrix_to_bitmatrix(k, m, w, code_matrix);
+		schedule = jerasure_smart_bitmatrix_to_schedule(k, m, w, code_bitmatrix);
+		break;
+	case Cauchy_Good:
+		code_matrix = cauchy_good_general_coding_matrix(k, m, w);
+		code_bitmatrix = jerasure_matrix_to_bitmatrix(k, m, w, code_matrix);
+		schedule = jerasure_smart_bitmatrix_to_schedule(k, m, w, code_bitmatrix);
+		break;
+	case Liberation:
+		code_bitmatrix = liberation_coding_bitmatrix(k, w);
+		schedule = jerasure_smart_bitmatrix_to_schedule(k, m, w, code_bitmatrix);
+		break;
+	case Blaum_Roth:
+		code_bitmatrix = blaum_roth_coding_bitmatrix(k, w);
+		schedule = jerasure_smart_bitmatrix_to_schedule(k, m, w, code_bitmatrix);
+		break;
+	case Liber8tion:
+		code_bitmatrix = liber8tion_coding_bitmatrix(k);
+		schedule = jerasure_smart_bitmatrix_to_schedule(k, m, w, code_bitmatrix);
+		break;
+	}
+	/* Encode according to coding method */
+	switch (tech) {
+	case No_Coding:
+		break;
+	case Reed_Sol_Van:
+		//uloga("'%s()': Call Reed_Sol_Van jerasure_matrix_encode()\n", __func__);
+		jerasure_matrix_encode(k, m, w, code_matrix, data, coding, blocksize);
+		break;
+	case Reed_Sol_R6_Op:
+		reed_sol_r6_encode(k, w, data, coding, blocksize);
+		break;
+	case Cauchy_Orig:
+		jerasure_schedule_encode(k, m, w, schedule, data, coding, blocksize, packetsize);
+		break;
+	case Cauchy_Good:
+		jerasure_schedule_encode(k, m, w, schedule, data, coding, blocksize, packetsize);
+		break;
+	case Liberation:
+		jerasure_schedule_encode(k, m, w, schedule, data, coding, blocksize, packetsize);
+		break;
+	case Blaum_Roth:
+		jerasure_schedule_encode(k, m, w, schedule, data, coding, blocksize, packetsize);
+		break;
+	case Liber8tion:
+		jerasure_schedule_encode(k, m, w, schedule, data, coding, blocksize, packetsize);
+		break;
+	}
+	//uloga("'%s()': free(data);\n", __func__);
+	free(data);
+	//uloga("'%s()': free(coding);\n", __func__);
+	free(coding);
+	//uloga("'%s()': end\n", __func__);
+}
+
+void block_data_decode(struct block_data * bd_data[], struct block_data * bd_code[])//duan
+{
+	enum code_technique tech;		// coding technique (parameter)
+	int i, k, m, w, packetsize;		// parameters
+	int blocksize;					// size of k+m files
+	/* Jerasure Arguments */
+	char **data;
+	char **coding;
+	int *code_matrix;
+	int *code_bitmatrix;
+	int **schedule;
+	//uloga("'%s()': begin\n", __func__);
+	tech = CODE_TECH;
+	k = NUM_DATA_DEVICE;
+	m = NUM_CODE_DEVICE;
+	w = WORD_SIZE;
+	blocksize = (int) bd_data[0]->block_size;
+	code_matrix = NULL;
+	code_bitmatrix = NULL;
+	schedule = NULL;
+	/* Allocate data and coding */
+	data = (char **)malloc(sizeof(char*)*k);
+	coding = (char **)malloc(sizeof(char*)*m);
+
+	int *erasures;
+	int return_value;
+	int numerased = 0;			// number of erased files
+	erasures = (int *)malloc(sizeof(int)*(k + m));
+	/* Open files, check for erasures, read in data/coding */
+	for (i = 0; i < k; i++) {
+		//uloga("'%s()': begin3, bd_data[%d] = %p \n", __func__, i, bd_data[i]);
+		if (bd_data[i]->data == NULL) {
+			erasures[numerased] = i;
+			data[i] = bd_data[i]->data = (char *)malloc(sizeof(char)*blocksize);
+			numerased++;
+			//printf("%s failed\n", fname);
+		}else{
+			data[i] = bd_data[i]->data;
+		}
+	}
+	for (i = 0; i < m; i++) {
+		if (bd_code[i]->data == NULL) {
+			erasures[numerased] = k + i;
+			coding[i] = bd_code[i]->data = (char *)malloc(sizeof(char)*blocksize);
+			numerased++;
+			//printf("%s failed\n", fname);
+		}else{
+			coding[i] = bd_code[i]->data;
+		}
+	}
+	erasures[numerased] = -1;
+	/* Create coding matrix or bitmatrix */
+	switch (tech) {
+	case No_Coding:
+		break;
+	case Reed_Sol_Van:
+		code_matrix = reed_sol_vandermonde_coding_matrix(k, m, w);
+		break;
+	case Reed_Sol_R6_Op:
+		code_matrix = reed_sol_r6_coding_matrix(k, w);
+		break;
+	case Cauchy_Orig:
+		code_matrix = cauchy_original_coding_matrix(k, m, w);
+		code_bitmatrix = jerasure_matrix_to_bitmatrix(k, m, w, code_matrix);
+		break;
+	case Cauchy_Good:
+		code_matrix = cauchy_good_general_coding_matrix(k, m, w);
+		code_bitmatrix = jerasure_matrix_to_bitmatrix(k, m, w, code_matrix);
+		break;
+	case Liberation:
+		code_bitmatrix = liberation_coding_bitmatrix(k, w);
+		break;
+	case Blaum_Roth:
+		code_bitmatrix = blaum_roth_coding_bitmatrix(k, w);
+		break;
+	case Liber8tion:
+		code_bitmatrix = liber8tion_coding_bitmatrix(k);
+	}
+
+	/* Choose proper decoding method */
+	if (tech == Reed_Sol_Van || tech == Reed_Sol_R6_Op) {
+		return_value = jerasure_matrix_decode(k, m, w, code_matrix, 1, erasures, data, coding, blocksize);
+	}
+	else if (tech == Cauchy_Orig || tech == Cauchy_Good || tech == Liberation || tech == Blaum_Roth || tech == Liber8tion) {
+		return_value = jerasure_schedule_decode_lazy(k, m, w, code_bitmatrix, erasures, data, coding, blocksize, packetsize, 1);
+	}
+	else {
+		fprintf(stderr, "Not a valid coding technique.\n");
+		exit(0);
+	}
+
+	/* Exit if decoding was unsuccessful */
+	if (return_value == -1) {
+		fprintf(stderr, "Unsuccessful!\n");
+		exit(0);
+	}
+
+	for (i = 0; i < m; i++) {
+		//block_data_free(bd_code[i]);//duan bug
+		//uloga("'%s()': block_data_free(bd_data[j]), bd_data[%d] %p.\n", __func__, i, bd_data[i]);
+		//block_data_free_without_odsc(bd_data[i]);
+		//uloga("'%s()': block_data_free(bd_data[j]), bd_data[%d] %p.\n", __func__, i, bd_data[i]);
+	}
+
+	//printf("free(data)\n");
+	free(data);
+	//printf("free(coding)\n");
+	free(coding);
+	//printf("free(erasures)\n");
+	free(erasures);
+	//uloga("'%s()': end\n", __func__);
+}
+
+/*
   Allocate  space  for obj_data  structure  and  references for  data.
 */
 struct obj_data *obj_data_allocv(struct obj_descriptor *odsc)
@@ -1495,6 +2137,22 @@ void shmem_obj_data_free(struct obj_data *od)
   }
 }
 
+void block_data_free(struct block_data *bd)//duan
+{
+	if (bd->_data)
+		free(bd->_data);
+	if (bd->obj_desc)
+		free(bd->obj_desc); //duan
+	free(bd);
+}
+
+void block_data_free_without_odsc(struct block_data *bd)//duan
+{
+	if (bd->_data)
+		free(bd->_data);
+	free(bd);
+}
+
 uint64_t obj_data_size(struct obj_descriptor *obj_desc)
 {
     return obj_desc->size * bbox_volume(&obj_desc->bb);
@@ -1551,6 +2209,29 @@ int obj_desc_equals_intersect(const struct obj_descriptor *odsc1,
             bbox_does_intersect(&odsc1->bb, &odsc2->bb))
                 return 1;
         return 0;
+}
+
+int copy_obj_desc(struct obj_descriptor *odsc1, const struct obj_descriptor *odsc2)//duan
+{
+	int i, j, k;
+	strcpy(odsc1->name, odsc2->name);
+	odsc1->st = odsc2->st;
+	odsc1->ob_status = odsc2->ob_status;
+	odsc1->time_stamp = odsc2->time_stamp;
+	
+	odsc1->owner = odsc2->owner;
+	odsc1->code_owner = odsc2->code_owner;
+	odsc1->version = odsc2->version;
+
+	odsc1->bb.num_dims = odsc2->bb.num_dims;
+	for (j = 0; j < odsc1->bb.num_dims; j++){
+		odsc1->bb.lb.c[j] = odsc2->bb.lb.c[j];
+		odsc1->bb.ub.c[j] = odsc2->bb.ub.c[j];
+	}
+	odsc1->size = odsc2->size;
+	for (k = 0; k < ODSC_PAD_SIZE; k++){
+		odsc1->pad[k] = odsc2->pad[k];
+	}
 }
 
 /*

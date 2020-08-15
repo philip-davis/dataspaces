@@ -92,6 +92,11 @@ void FC_FUNC(dspaces_get_num_space_server, DSPACES_GET_NUM_SPACE_SERVER)(int *pe
 	*peers = common_dspaces_get_num_space_peers();
 }
 
+void FC_FUNC(dspaces_server_status_test, DSPACES_SERVER_STATUS_TEST)(int *peer_id, int *status, int *err)//duan
+{
+	*err = common_dspaces_server_status_test(*peer_id, *status);
+}
+
 void FC_FUNC(dspaces_barrier, DSPACES_BARRIER)(void)
 {
 	common_dspaces_barrier();

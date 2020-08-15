@@ -178,6 +178,14 @@ int common_dspaces_get_num_space_peers(void)
 	else return -1;
 }
 
+int common_dspaces_server_status_test(int peer_id, int status)//duan
+{
+	if (dcg)
+		return dcg_peer_status_test(peer_id, status);//duan;
+	else return -1;
+}
+
+
 void common_dspaces_barrier(void)
 {
     if (!is_dspaces_lib_init()) return;

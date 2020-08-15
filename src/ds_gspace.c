@@ -135,6 +135,16 @@ static struct {
         {"hash_version",        &ds_conf.hash_version}, 
 };
 
+static int dsg_block_put(struct block_data * bd_data[], struct block_data * bd_code[]);//duan
+static int dsg_block_get(struct block_data * bd_data[], struct block_data * bd_code[], struct block_data * bd);//duan
+static int dsg_block_get_with_delete(struct block_data * bd_data[], struct block_data * bd_code[], struct block_data * bd);//duan
+static int dsg_block_get_without_delete(struct block_data * bd_data[], struct block_data * bd_code[], struct block_data * bd);//duan
+static int dsg_obj_sync(struct obj_data *od, int num_odsc, enum encode_token token, int peer_id);//duan
+static int dsg_block_put(struct block_data * bd_data[], struct block_data * bd_code[]);//duan
+static int dsg_block_sync(struct ds_gspace *dsg, struct obj_data *od);//duan
+static int dsg_obj_replicate(struct obj_data *od);//duan
+
+
 static void eat_spaces(char *line)
 {
         char *t = line;
@@ -229,6 +239,16 @@ static inline struct ds_gspace * dsg_ref_from_rpc(struct rpc_server *rpc_s)
         struct dart_server * ds = ds_ref_from_rpc(rpc_s);
 
         return ds->dart_ref;
+}
+
+static inline void dsg_inc_pending(void)//duan
+{
+	dsg->num_pending++;
+}
+
+static inline void dsg_dec_pending(void)//duan
+{
+	dsg->num_pending--;
 }
 
 static int init_sspace(struct bbox *default_domain, struct ds_gspace *dsg_l)
@@ -1239,6 +1259,150 @@ static char *obj_desc_sprint(const struct obj_descriptor *odsc)
 	return str;
 }
 
+
+//>>>>>>>duan
+
+/*
+Rpc routine to update (add or insert) an object descriptor in the
+dht table.
+*/
+static int dsgrpc_peer_update(struct rpc_server *rpc_s, struct rpc_cmd *cmd)//duan
+{
+	int err;
+	struct hdr_peer_update *oh = (struct hdr_peer_update *) cmd->pad;
+#ifdef DEBUG
+	{
+		char *str;
+		str = alloc_sprintf( "S%2d: peer_id = %d status = %d from S%2d",
+			DSG_ID, oh->peer_id, oh->status, cmd->id);
+		uloga("'%s()': %s\n", __func__, str);
+		free(str);
+	}
+#endif
+	/**/
+	uloga("'%s()' in S%2d: node failure test!\n", __func__, DSG_ID);
+	int i;
+	for (i = oh->peer_id; i < 64; i = i + 4){//16 process fail for Titan & Caliburn compute node
+		set_rpc_server_status(dsg->ds->rpc_s, i, oh->status);//duan node failure
+	}
+	
+	//set_rpc_server_status(dsg->ds->rpc_s, oh->peer_id, oh->status);//duan process failure
+	if (oh->peer_id == DSG_ID && 1==2){//duan
+		err = -ENOMEM;
+		dsg->kill = 1;
+		uloga("'%s()': Server %d received kill command. Going to shut down...\n", __func__, DSG_ID);
+		sleep(3);
+	}
+	return 0;
+err_out:
+	ERROR_TRACE();
+}
+
+
+/*
+Update the peer status, only be called by master server. duan
+*/
+static int peer_status_update(struct ds_gspace *dsg, int peer_id, int status)//duan
+{
+
+	/* TODO: create a separate header structure for object
+	updates; for now just abuse the hdr_obj_get. */
+	struct hdr_peer_update *oh;
+	struct msg_buf *msg;
+	struct node_id *peer;
+	int num_sp, num_cp, j, err;
+
+	/* Update object descriptors on the corresponding nodes. */
+	num_sp = ds_get_num_sp(dsg->ds);//duan
+	num_cp = ds_get_num_cp(dsg->ds);//duan
+	uloga("'%s()': for server peers num_sp = %d, num_cp = %d, peer_id = %d, status = %d \n", __func__, num_sp, num_cp, peer_id, status);
+	
+	for (j = 0; j < num_sp + num_cp; j++){//duan
+		peer = ds_get_peer(dsg->ds, j);//duan
+
+		#ifdef DEBUG
+		{
+			char *str;
+			str = alloc_sprintf( "S%2d: peer_id = %d status = %d update to S%2d", DSG_ID, peer_id, status, j);
+			uloga("'%s()': %s\n", __func__, str);
+			free(str);
+		}
+		#endif
+
+		if (j == DSG_ID){
+		//if (peer == dsg->ds->self) {
+			/**/
+			uloga("'%s()' in S%2d: node failure test!\n", __func__, DSG_ID);
+			int i;
+			for (i = oh->peer_id; i < 64; i = i + 4){//16 process fail for Titan & Caliburn compute node
+				set_rpc_server_status(dsg->ds->rpc_s, i, status);//duan node failure
+			}
+			
+			//set_rpc_server_status(dsg->ds->rpc_s, peer_id, status);//duan process failure
+
+			#ifdef DEBUG
+			{
+				char *str;
+				str = alloc_sprintf( "S%2d: peer_id = %d status = %d update to local", DSG_ID, peer_id, status);
+				uloga("'%s()': %s\n", __func__, str);
+				free(str);
+			}
+			#endif
+
+			continue;
+		}
+
+		err = -ENOMEM;
+		msg = msg_buf_alloc(dsg->ds->rpc_s, peer, 1);
+		if (!msg){
+			uloga("'%s()': err 1 \n", __func__);
+			goto err_out;
+		}
+		msg->msg_rpc->cmd = ss_peer_update;
+		msg->msg_rpc->id = DSG_ID;
+
+		oh = (struct hdr_peer_update *) msg->msg_rpc->pad;
+		oh->peer_id = peer_id;
+		oh->status = status;
+		err = rpc_send(dsg->ds->rpc_s, peer, msg);
+		if (err < 0) {
+			free(msg);
+			uloga("'%s()': err 2 \n", __func__);
+			goto err_out;
+		}
+	}
+
+	return 0;
+err_out:
+	ERROR_TRACE();
+}
+
+/*
+Rpc routine to update (add or insert) an object descriptor in the
+dht table.
+*/
+static int dsgrpc_peer_test(struct rpc_server *rpc_s, struct rpc_cmd *cmd)//duan
+{
+	int err;
+	struct hdr_peer_update *oh = (struct hdr_peer_update *) cmd->pad;
+	#ifdef DEBUG
+	{
+		char *str;
+		str = alloc_sprintf( "S%2d: update peer peer_id %d status %d from S%2d",
+			DSG_ID, oh->peer_id, oh->status, cmd->id);
+		uloga("'%s()': %s\n", __func__, str);
+		free(str);
+	}
+	#endif
+
+
+	peer_status_update(dsg, oh->peer_id, oh->status);
+	return 0;
+err_out:
+	ERROR_TRACE();
+}
+
+
 /*
   Rpc routine to update (add or insert) an object descriptor in the
   dht table.
@@ -1275,6 +1439,97 @@ static int dsgrpc_obj_update(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         ERROR_TRACE();
 }
 
+static inline int dsg_which_peer(int peer_id, int peer_id_arr[])//duan
+{
+	int i, j = 0, next_peer_id, peer_ftid, ft_group_id, size_group;
+	struct node_id *peer;
+	peer = ds_get_peer(dsg->ds, peer_id);
+	peer_ftid = peer->ftmap.ftid;
+	size_group = dsg->ds->size_ft_group;
+	ft_group_id = peer_ftid / size_group;
+	for (i = 0; i < size_group; i++){
+		next_peer_id = ft_group_id*size_group + i;
+		peer = ds_get_peer(dsg->ds, next_peer_id);
+		if (peer->ftmap.ns == node_normal){
+			peer_id_arr[j] = next_peer_id;
+			j++;
+		}
+	}
+	return j;
+}
+
+static inline int dsg_which_all_peer(int peer_id, int peer_id_arr[])//duan recovery
+{
+	int i, next_peer_id, peer_ftid, ft_group_id, size_group;
+	struct node_id *peer;
+	peer = ds_get_peer(dsg->ds, peer_id);
+	peer_ftid = peer->ftmap.ftid;
+	size_group = dsg->ds->size_ft_group;
+	ft_group_id = peer_ftid / size_group;
+	for (i = 0; i < size_group; i++){
+		next_peer_id = ft_group_id*size_group + i;
+		peer_id_arr[i] = next_peer_id;
+	}
+	return i;
+}
+
+static inline int dsg_next_peer(int peer_id)//duan
+{
+	int i, next_peer_id, peer_ftid, ft_group_id, size_group, peer_index;
+	struct node_id *peer;
+	peer = ds_get_peer(dsg->ds, peer_id);
+	peer_ftid = peer->ftmap.ftid;
+	size_group = dsg->ds->size_ft_group;
+	ft_group_id = peer_ftid / size_group;
+	peer_index = peer_ftid % size_group;
+	for (i = 0; i < size_group; i++){
+		peer_index = (peer_index + 1 + i) % size_group; //duan
+		next_peer_id = ft_group_id*size_group + peer_index;
+		peer = ds_get_peer(dsg->ds, next_peer_id);
+		if (peer->ftmap.ns == node_normal){
+			return next_peer_id;
+		}
+	}
+	return next_peer_id;
+}
+
+static inline int dsg_which_code_peer(int peer_id, int peer_id_arr[])//duan
+{
+	int i, j = 0, next_peer_id, peer_ftid, ft_group_id, size_group;
+	struct node_id *peer;
+	peer = ds_get_peer(dsg->ds, peer_id);
+	peer_ftid = peer->ftmap.ftid;
+	size_group = dsg->ds->size_ft_code_group;
+	ft_group_id = peer_ftid / size_group;
+	for (i = 0; i < size_group; i++){
+		next_peer_id = ft_group_id*size_group + i;
+		peer = ds_get_peer(dsg->ds, next_peer_id);
+		//if (peer->ftmap.ns == node_normal){
+			peer_id_arr[j] = next_peer_id;
+			j++;
+		//}
+	}
+	return j;
+}
+
+static inline int dsg_number_code_peer(int peer_id)//duan
+{
+	int i, j = 0, next_peer_id, peer_ftid, ft_group_id, size_group;
+	struct node_id *peer;
+	peer = ds_get_peer(dsg->ds, peer_id);
+	peer_ftid = peer->ftmap.ftid;
+	size_group = dsg->ds->size_ft_code_group;
+	ft_group_id = peer_ftid / size_group;
+	for (i = 0; i < size_group; i++){
+		next_peer_id = ft_group_id*size_group + i;
+		peer = ds_get_peer(dsg->ds, next_peer_id);
+		if (peer->ftmap.ns == node_normal){
+			j++;
+		}
+	}
+	return j;
+}
+
 /* 
    Update the DHT metadata with the new obj_descriptor information.
 */
@@ -1301,9 +1556,20 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 	min_rank = dht_tab[0]->rank;
 	/* Update object descriptors on the corresponding nodes. */
 	for (i = 0; i < num_de; i++) {
-		peer = ds_get_peer(dsg->ds, dht_tab[i]->rank);
-		if (peer == dsg->ds->self) {
-			// TODO: check if owner is set properly here.
+
+		int peer_id[DSG_FT_LEVEL] = {0};
+		//int num_peer = dsg_which_peer(dht_tab[i]->rank, peer_id);//duan
+		int num_peer = dsg_which_all_peer(dht_tab[i]->rank, peer_id);//duan
+		int j;//duan
+		for (j = 0; j < num_peer; j++){//duan
+			peer = ds_get_peer(dsg->ds, peer_id[j]);//duan
+
+			if (peer == dsg->ds->self) {
+				// TODO: check if owner is set properly here.
+				/*
+				uloga("Obj desc version %d, for myself ... owner is %d\n",
+				od->obj_desc.version, od->obj_desc.owner);
+			*/
 #ifdef DEBUG
 			char *str;
             
@@ -1353,6 +1619,7 @@ static int obj_put_update_dht(struct ds_gspace *dsg, struct obj_data *od)
 			free(msg);
 			goto err_out;
 		}
+		}
 	}
 
 	return 0;
@@ -1371,12 +1638,1256 @@ static int obj_put_sync_completion(struct rpc_server *rpc_s, struct msg_buf *msg
 }
 #endif
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+Update the DHT metadata with the new obj_descriptor information.duan
+*/
+static int block_put_update_dht(struct ds_gspace *dsg, struct block_data *bd)
+{
+	int i;
+	int err;
+	struct obj_data od;
+
+	copy_obj_desc(&od.obj_desc, bd->obj_desc);//duan
+	od.obj_desc.code_owner = DSG_ID;
+	od.obj_desc.ob_status = encode;
+	memcpy(&od.gdim, &bd->gdim, sizeof(struct global_dimension));
+	obj_put_update_dht(dsg, &od);
+	return 0;
+err_out:
+	ERROR_TRACE();
+}
+
+//encode the block into lsb.duan
+
+static int dsg_block_encode(struct ds_gspace *dsg)
+{
+	struct block_data * bd_data[NUM_DATA_DEVICE], *bd_code[NUM_CODE_DEVICE];
+	struct obj_data od, *alternative_od[MAX_OB_IN_BD];
+	struct obj_descriptor * odsc;
+	int nu_test = 1, i, num_od, num_bd, err;//replication
+	uint64_t size = 0;
+	float replica_percent, size_replica, size_coding;
+	//uloga("'%s()': server %d \n", __func__, DSG_ID);
+	size_replica = dsg->ls->size_obj / (DSG_FT_LEVEL + 0.0);
+	size_coding = NUM_DATA_DEVICE / (NUM_DATA_DEVICE + NUM_CODE_DEVICE + 0.0)*dsg->lsb->size_block;
+	replica_percent = size_replica / (size_replica + size_coding);
+	//uloga("'%s()': server %d replica_percent: %f \n", __func__, DSG_ID, replica_percent);
+	//uloga("'%s()': dsg->ls->num_obj = %d dsg->ls->token = %d\n", __func__, dsg->ls->num_obj, dsg->ls->token);
+	//if (dsg->ls->size_obj > INIT_THRESHOLD && replica_percent > REP_PERCENT &&  dsg->ls->token == token_on){
+	if (dsg->ls->num_obj > INIT_THRESHOLD && (dsg->ls->token == token_on || DSG_ID == dsg_next_peer(DSG_ID))){
+		num_od = 0;
+		for (i = 0; i < nu_test; i++){
+			alternative_od[i] = ls_cold_data_lookup(dsg->ls, i);//duan
+			if (alternative_od[i] == NULL)
+				break;
+			//uloga("'%s()': server %d ls_cold_data_lookup\n", __func__, DSG_ID);
+			num_od++;
+			size += obj_data_size(&alternative_od[i]->obj_desc);
+
+#ifdef DEBUG //duan
+			{
+				char *str;
+				str = alloc_sprintf("S%2d: ls_cold_data_lookup for obj_desc '%s' ver %d for  ",
+					DSG_ID, alternative_od[i]->obj_desc.name, alternative_od[i]->obj_desc.version);
+				str = str_append(str, bbox_sprint(&alternative_od[i]->obj_desc.bb));
+
+				uloga("'%s()': %s\n", __func__, str);
+				free(str);
+			}
+#endif  //duan
+		}
+		dsg->lsb->size_block += size;//duan
+		//uloga("'%s()': server %d block_data_alloc(alternative_od, num_od, size, bd_data, bd_code)\n", __func__, DSG_ID);
+		block_data_alloc(alternative_od, num_od, size, bd_data, bd_code);
+		//uloga("'%s()': server %d block_data_encode(bd_data, bd_code)\n", __func__, DSG_ID);
+		block_data_encode(bd_data, bd_code);
+
+		//	uloga("'%s()': server %d block_data_encode(bd_data, bd_code); done\n", __func__, DSG_ID);
+		odsc = bd_data[0]->obj_desc;
+		//uloga("'%s()': server %d dsg_block_put(bd_data, bd_code); begin\n", __func__, DSG_ID);
+		dsg_block_put(bd_data, bd_code);//duan
+		//uloga("'%s()': server %d dsg_block_put(bd_data, bd_code); done\n", __func__, DSG_ID);
+		/* Wait for transaction to complete. */
+		while (!dsg->num_pending) {
+			err = ds_process(dsg->ds);
+			if (err < 0) {
+				uloga("'%s()': failed with %d.\n", __func__, err);
+				break;
+			}
+		}
+
+		int peer_id[DSG_FT_LEVEL];
+		int num_peer, next_peer_id;
+		num_peer = dsg_which_peer(DSG_ID, peer_id);//duan
+		next_peer_id = dsg_next_peer(DSG_ID);//duan
+		for (i = 0; i < num_peer; i++){//duan
+			od.data = od._data = odsc;
+			copy_obj_desc(&(od.obj_desc), odsc);
+			memcpy(&od.gdim, &alternative_od[0]->gdim, sizeof(struct global_dimension));
+			if (next_peer_id == peer_id[i]){
+				dsg_obj_sync(&od, num_od, token_on, peer_id[i]);//replication 
+			}
+			else{
+				dsg_obj_sync(&od, num_od, token_off, peer_id[i]);//replication 
+			}
+		}
+		/* Wait for transaction to complete. */
+		/*
+		while (!dsg->num_pending) {
+		err = ds_process(dsg->ds);
+		if (err < 0) {
+		uloga("'%s()': failed with %d.\n", __func__, err);
+		break;
+		}
+		}
+		*/
+		for (i = 0; i < num_od; i++){
+			//uloga("'%s()':num_od = %d\n", __func__, num_od);
+			//uloga("'%s()':alternative_od[%d] = %p\n", __func__, i, alternative_od[i]);
+#ifdef DEBUG //duan
+			{
+				char *str;
+				str = alloc_sprintf("S%2d: obj_data_free for obj_desc '%s' ver %d for  ",
+					DSG_ID, alternative_od[i]->obj_desc.name, alternative_od[i]->obj_desc.version);
+				str = str_append(str, bbox_sprint(&alternative_od[i]->obj_desc.bb));
+
+				uloga("'%s()': %s\n", __func__, str);
+				free(str);
+			}
+#endif  //duan
+
+			ls_remove(dsg->ls, alternative_od[i]);
+			obj_data_free(alternative_od[i]);
+		}
+		//uloga("'%s()': done\n", __func__);
+	}
+	return 0;
+}
+
+
+//decode blocks into ls.duan
+
+static int dsg_block_decode(struct ds_gspace *dsg, struct block_data * bd)
+{
+	struct block_data * bd_data[NUM_DATA_DEVICE] = { NULL }, *bd_code[NUM_CODE_DEVICE] = { NULL };
+	struct obj_data *od;
+	int i, j;
+	uint64_t size = 0;
+	int err;
+	struct obj_descriptor odsc;
+	//#ifdef DEBUG //duan
+	//uloga("'%s()': at server %d begin.\n",__func__, DSG_ID);
+	//#endif  //duan
+	dsg_block_get_with_delete(bd_data, bd_code, bd);//duan
+	/*
+	while (!dsg->num_pending) {
+	err = ds_process(dsg->ds);
+	if (err < 0) {
+	uloga("'%s()': failed with %d.\n", __func__, err);
+	break;
+	}
+	}
+	*/
+	//alternative_od = (struct obj_data*) malloc(sizeof(struct obj_data)*MAX_OB_IN_BD);
+	//uloga("'%s()': at server %d before DS_WAIT_COMPLETION(dsg->lsb->f_free == 1), dsg->lsb->f_free == %d.\n", __func__, DSG_ID, dsg->lsb->f_free);
+	//DS_WAIT_COMPLETION(bd->f_free == 1);
+	//uloga("'%s()': at server %d DS_WAIT_COMPLETION(dsg->lsb->f_free == 1), dsg->lsb->f_free == %d.\n", __func__, DSG_ID, dsg->lsb->f_free);
+
+	block_data_decode(bd_data, bd_code);
+
+	//block_data_transform(alternative_od, bd_data);
+
+	//uloga("'%s()': at server %d 6 num_od = %d.\n", __func__, DSG_ID, num_od);
+	copy_obj_desc(&odsc, bd->obj_desc);//duan
+	od = obj_data_alloc(&odsc);
+	memcpy(&od->gdim, &bd->gdim, sizeof(struct global_dimension));
+	od->obj_desc.ob_status = replicate;
+	od->obj_desc.owner = DSG_ID;
+	ls_add_obj(dsg->ls, od);
+	err = obj_put_update_dht(dsg, od);
+	if (err < 0){
+		uloga("'%s()': failed with %d.\n", __func__, err);
+	}
+	//uloga("'%s()': server  dsg_obj_replicate(alternative_od);\n", __func__);
+	dsg_obj_replicate(od);//duan
+
+	//dsg_block_sync(dsg, od);
+	lsb_remove(dsg->lsb, bd);
+	for (j = 0; j < NUM_CODE_DEVICE; j++){
+		//uloga("'%s()': block_data_free(bd_data[j]), bd_data[j]->obj_desc[0].version = NUM_CODE_DEVICE.\n", __func__);
+		//	uloga("'%s()': block_data_free(bd_data[j]), bd_code[%d] %p.\n", __func__, j, bd_code[j]);
+		//block_data_free_without_odsc(bd_code[j]);
+		free(bd_code[j]->data);
+		free(bd_code[j]);
+		//uloga("'%s()': block_data_free(bd_data[j]), bd_code[%d] %p.\n", __func__, j, bd_code[j]);
+	}
+	for (j = 0; j < NUM_DATA_DEVICE; j++){
+		//uloga("'%s()': block_data_free(bd_data[j]), bd_data[%d]->obj_desc[0].version = %d.\n", __func__, j, bd_data[j]->obj_desc[0].version);
+		//uloga("'%s()': block_data_free(bd_data[j]), bd_data[j]->obj_desc[0].version = .\n", __func__);
+		//	if (j==0){
+		//		block_data_free(bd_data[j]);
+		//}
+		if (j == NUM_DATA_DEVICE - 1){
+			//uloga("'%s()': block_data_free(bd_data[j]), bd_data[j]->obj_desc[NUM_DATA_DEVICE - 1] .\n", __func__);
+			block_data_free(bd_data[j]);
+		}
+		else{
+			block_data_free_without_odsc(bd_data[j]);
+		}
+		//	uloga("'%s()': block_data_free(bd_data[j]), bd_data[%d] %p.\n", __func__, j, bd_data[j]);
+	}
+
+
+	return 0;
+err_out:
+	ERROR_TRACE();
+}
+
+
+//decode blocks into ls.duan
+
+static struct obj_data * dsg_block_decode_to_obj(struct ds_gspace *dsg, struct block_data * bd, struct obj_descriptor * odsc)
+{
+	struct block_data * bd_data[NUM_DATA_DEVICE] = { NULL }, *bd_code[NUM_CODE_DEVICE] = { NULL };
+	struct obj_data *od = NULL;
+	int i, j, num_od;
+	uint64_t size = 0;
+	int err;
+
+	//#ifdef DEBUG //duan
+	//uloga("'%s()': at server %d begin.\n",__func__, DSG_ID);
+	//#endif  //duan
+	dsg_block_get_without_delete(bd_data, bd_code, bd);//duan
+	/*
+	while (!dsg->num_pending) {
+	err = ds_process(dsg->ds);
+	if (err < 0) {
+	uloga("'%s()': failed with %d.\n", __func__, err);
+	break;
+	}
+	}
+	*/
+	//alternative_od = (struct obj_data*) malloc(sizeof(struct obj_data)*MAX_OB_IN_BD);
+	//uloga("'%s()': at server %d before DS_WAIT_COMPLETION(dsg->lsb->f_free == 1), dsg->lsb->f_free == %d.\n", __func__, DSG_ID, dsg->lsb->f_free);
+	//DS_WAIT_COMPLETION(bd->f_free == 1);
+	//uloga("'%s()': at server %d DS_WAIT_COMPLETION(dsg->lsb->f_free == 1), dsg->lsb->f_free == %d.\n", __func__, DSG_ID, dsg->lsb->f_free);
+	//uloga("'%s()': at server %d begin1.\n", __func__, DSG_ID);
+	block_data_decode(bd_data, bd_code);
+	//uloga("'%s()': at server %d begin2.\n", __func__, DSG_ID);
+	//num_od = block_data_transform(alternative_od, bd_data);
+
+	//for (i = 0; i < num_od; i++){
+	//uloga("'%s()': server  obj_data_free(od);\n", __func__);
+	//	if (obj_desc_equals_intersect(odsc, &alternative_od[i]->obj_desc)){
+	//	od = alternative_od[i];
+	//	break;
+	//}
+	//}
+
+	for (j = 0; j < NUM_CODE_DEVICE; j++){
+		//uloga("'%s()': block_data_free(bd_data[j]), bd_data[j]->obj_desc[0].version = NUM_CODE_DEVICE.\n", __func__);
+		//	uloga("'%s()': block_data_free(bd_data[j]), bd_code[%d] %p.\n", __func__, j, bd_code[j]);
+		//block_data_free_without_odsc(bd_code[j]);
+		if (bd != bd_code[j]){
+			free(bd_code[j]->data);
+			free(bd_code[j]);
+		}
+		//uloga("'%s()': block_data_free(bd_data[j]), bd_code[%d] %p.\n", __func__, j, bd_code[j]);
+	}
+	for (j = 0; j < NUM_DATA_DEVICE; j++){
+		//uloga("'%s()': block_data_free(bd_data[j]), bd_data[%d]->obj_desc[0].version = %d.\n", __func__, j, bd_data[j]->obj_desc[0].version);
+		//uloga("'%s()': block_data_free(bd_data[j]), bd_data[j]->obj_desc[0].version = .\n", __func__);
+		//	if (j==0){
+		//		block_data_free(bd_data[j]);
+		//}
+		if (bd != bd_data[j]){
+			block_data_free_without_odsc(bd_data[j]);
+		}
+		//	uloga("'%s()': block_data_free(bd_data[j]), bd_data[%d] %p.\n", __func__, j, bd_data[j]);
+	}
+
+	return od;
+err_out:
+	ERROR_TRACE();
+}
+
+
+//Free resources after 'dsg_obj_replicate()' inserts an object in the space.
+static int block_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)//duan
+{
+	struct block_data *bd = msg->private;
+
+	//(*msg->sync_op_id) = 1;
+
+	block_data_free(bd);//duan
+	free(msg);
+
+	//dsg_dec_pending();
+
+#ifdef DEBUG  //duan
+	uloga("'%s()': server %d finished.\n", __func__, DSG_ID);
+#endif  //duan
+
+	return 0;
+}
+
+static int dsg_block_put(struct block_data * bd_data[], struct block_data * bd_code[])//duan
+{
+	struct block_data *bd;
+	struct msg_buf *msg;
+	struct node_id *peer;
+	struct hdr_block_put *hdr;
+	int err = -ENOMEM;
+	uint64_t new_block_size, odsc_size;
+	void * temp_data;
+
+	int peer_id[NUM_DATA_DEVICE + NUM_CODE_DEVICE] = { 0 };
+	int num_peer = dsg_which_code_peer(DSG_ID, peer_id);//duan
+	int i;
+	for (i = 0; i < NUM_DATA_DEVICE + NUM_CODE_DEVICE; i++){//duan
+
+		if (i < NUM_DATA_DEVICE){
+			bd = bd_data[i];//duan
+		}
+		else{
+			bd = bd_code[i - NUM_DATA_DEVICE];
+		}
+
+		if (peer_id[i] == DSG_ID){
+			//bd->obj_desc = (char *)bd->data + bd->block_size;
+			lsb_add_block(dsg->lsb, bd);
+			block_put_update_dht(dsg, bd);
+			continue;
+		}
+		peer = ds_get_peer(dsg->ds, peer_id[i]);
+		if (peer->ftmap.ns != node_normal){
+			continue;
+		}
+
+		msg = msg_buf_alloc(dsg->ds->rpc_s, peer, 1);
+		if (!msg)
+			goto err_out;
+
+		odsc_size = sizeof(struct obj_descriptor);
+		new_block_size = odsc_size + bd->block_size;
+		temp_data = bd->data;
+		bd->_data = bd->data = malloc(new_block_size + 7);
+		ALIGN_ADDR_QUAD_BYTES(bd->data);
+		memcpy(bd->data, bd->obj_desc, odsc_size);
+		memcpy(bd->data + odsc_size, temp_data, bd->block_size);
+		free(temp_data);
+		bd->obj_desc = NULL;
+
+		msg->msg_data = bd->data;
+		msg->size = new_block_size;
+		msg->cb = block_put_completion;
+		msg->private = bd;
+		//uloga("'%s()': server %d new_block_size = %llu, bd->data = %d.\n", __func__, DSG_ID, new_block_size, bd->data);
+		msg->msg_rpc->cmd = ss_block_put;
+		msg->msg_rpc->id = DSG_ID; // dsg->ds->self->id;
+
+		hdr = (struct hdr_block_put *)msg->msg_rpc->pad;
+
+		memcpy(&hdr->gdim, &bd->gdim, sizeof(struct global_dimension));
+		hdr->block_size = bd->block_size;
+		hdr->block_index = bd->block_index;
+		hdr->bd_type = bd->bd_type;
+
+		err = rpc_send(dsg->ds->rpc_s, peer, msg);
+		if (err < 0) {
+			free(msg);
+			goto err_out;
+		}
+		dsg_inc_pending();
+
+	}
+	return 0;
+err_out:
+	uloga("'%s()': failed with %d.\n", __func__, err);
+	return err;
+}
+
+static int block_dsgrpc_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)//duan
+{
+	//uloga("'%s()': server %d finished receiving0.\n", __func__, DSG_ID);
+	int err;
+	void * temp_data;
+	uint64_t odsc_size;
+	struct block_data *bd = msg->private;
+	temp_data = bd->data;
+	odsc_size = sizeof(struct obj_descriptor);
+
+	bd->obj_desc = malloc(odsc_size);
+	memcpy(bd->obj_desc, temp_data, odsc_size);
+
+	bd->_data = bd->data = malloc(bd->block_size + 7);
+	ALIGN_ADDR_QUAD_BYTES(bd->data);
+	memcpy(bd->data, temp_data + odsc_size, bd->block_size);
+	free(temp_data);
+
+	lsb_add_block(dsg->lsb, bd);
+	bd->obj_desc->code_owner = DSG_ID;//duan
+	free(msg);
+
+#ifdef DEBUG //duan
+	{
+		char *str;
+
+		str = alloc_sprintf("S%2d: received block for obj_desc '%s' ver %d with  ",
+			DSG_ID, bd->obj_desc->name, bd->obj_desc->version);
+		str = str_append(str, bbox_sprint(&bd->obj_desc->bb));
+
+		uloga("'%s()': %s\n", __func__, str);
+		free(str);
+	}
+#endif  //duan
+
+	err = block_put_update_dht(dsg, bd);
+	//uloga("'%s()': server %d finished receiving.\n", __func__, DSG_ID);
+	if (err == 0)
+		return 0;
+err_out:
+	uloga("'%s()': failed with %d.\n", __func__, err);
+	return err;
+}
+
+
+static int dsgrpc_block_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)//duan
+{
+	struct hdr_block_put *hdr = (struct hdr_block_put *)cmd->pad;
+	struct obj_descriptor *odsc;
+	struct block_data *bd;
+	struct node_id *peer;
+	struct msg_buf *msg;
+	int err;
+	uint64_t new_block_size, odsc_size;
+
+#ifdef FALSURE_DEBUG
+	{//duan
+		struct node_id *peer;
+		peer = ds_get_peer(dsg->ds, DSG_ID);
+		if (peer->ftmap.ns == failed){
+			uloga("'%s()': simulate falsure.\n", __func__);
+			goto err_out;
+		}
+	}
+#endif
+
+	odsc_size = sizeof(struct obj_descriptor)*hdr->num_odsc;
+	new_block_size = odsc_size + hdr->block_size;
+
+	err = -ENOMEM;
+	peer = ds_get_peer(dsg->ds, cmd->id);
+	bd = block_data_alloc_with_size(odsc, new_block_size);
+	if (!bd)
+		goto err_out;
+
+	memcpy(&bd->gdim, &hdr->gdim, sizeof(struct global_dimension));
+	bd->bd_type = hdr->bd_type;
+	bd->block_index = hdr->block_index;
+	bd->block_size = hdr->block_size;
+
+	msg = msg_buf_alloc(rpc_s, peer, 0);
+	if (!msg)
+		goto err_free_data;
+
+	msg->msg_data = bd->data;
+	msg->size = new_block_size;
+	msg->private = bd;
+	msg->cb = block_dsgrpc_put_completion;
+
+#ifdef DEBUG
+	uloga("'%s()': server %d start receiving.\n",
+		__func__, DSG_ID);
+#endif
+	rpc_mem_info_cache(peer, msg, cmd);
+	err = rpc_receive_direct(rpc_s, peer, msg);
+	rpc_mem_info_reset(peer, msg, cmd);
+
+	if (err < 0)
+		goto err_free_msg;
+
+	// NOTE: This  early update, has  to be protected  by external
+	//locks in the client code. 
+
+	//err = obj_put_update_dht(dsg, bd);qqqq
+	if (err == 0)
+		return 0;
+err_free_msg:
+	free(msg);
+err_free_data:
+	free(bd);
+err_out:
+	uloga("'%s()': failed with %d.\n", __func__, err);
+	return err;
+}
+
+
+//Free resources after 'dsg_obj_replicate()' inserts an object in the space.
+static int block_get_with_delete_completion(struct rpc_server *rpc_s, struct msg_buf *msg)//duan
+{
+	struct block_data *bd = msg->private;
+	void *data = msg->private;
+	free(data);
+	//bd->f_free = 1;
+	//(*msg->sync_op_id) = 1;
+	//bd->refcnt++;
+	//if (bd->refcnt >= NUM_DATA_DEVICE + NUM_CODE_DEVICE){
+	//	bd->f_free = 1;
+	//}
+	free(msg);
+
+	//dsg->lsb->bd_recv++;
+	//if (dsg->lsb->bd_recv >= dsg->lsb->bd_cnt){
+	//	dsg->lsb->f_free = 1;
+	//}
+	//dsg_dec_pending();
+	//uloga("'%s()': at server %d dsg->lsb->bd_recv = %d, dsg->lsb->bd_cnt = %d, dsg->lsb->f_free = %d.\n", __func__, DSG_ID, dsg->lsb->bd_recv, dsg->lsb->bd_cnt, dsg->lsb->f_free);
+	//#ifdef DEBUG  //duan
+	//uloga("'%s()': server %d finished sending  %s, version %d.\n", __func__, DSG_ID, bd->obj_desc.name, bd->obj_desc.version);
+	//#endif  //duan
+
+	return 0;
+}
+
+static int dsg_block_get_with_delete(struct block_data * bd_data[], struct block_data * bd_code[], struct block_data * bd)//duan
+{
+
+	struct block_data * bd_temp;
+	struct msg_buf *msg;
+	struct node_id *peer;
+	struct hdr_obj_get *oh;
+	int i, err;//duan
+	//uloga("'%s()': begin.\n", __func__);
+
+	int peer_id[NUM_DATA_DEVICE + NUM_CODE_DEVICE] = { 0 };
+	int num_peer = dsg_which_code_peer(DSG_ID, peer_id);//duan
+	//dsg->lsb->bd_cnt = num_peer - 1;
+	//dsg->lsb->bd_recv = 0;
+	//dsg->lsb->f_free = 0;
+	bd->refcnt = 1;
+	bd->f_free = 0;
+	for (i = 0; i < NUM_DATA_DEVICE + NUM_CODE_DEVICE; i++){//duan
+
+		peer = ds_get_peer(dsg->ds, peer_id[i]);
+		if (peer_id[i] != DSG_ID){
+			if (peer->ftmap.ns != node_normal || peer->ftmap.start_time > bd->obj_desc->time_stamp){//duan
+				bd_temp = block_data_alloc_copy_no_data(bd, NULL);
+			}
+			else{
+				bd_temp = block_data_alloc_copy(bd);
+			}
+		}
+		else{
+			bd_temp = bd;
+		}
+
+		if (i < NUM_DATA_DEVICE){
+			bd_data[i] = bd_temp;
+		}
+		else{
+			bd_code[i - NUM_DATA_DEVICE] = bd_temp;
+		}
+
+		if (peer_id[i] == DSG_ID){
+			//++dsg->lsb->bd_recv; 
+			continue;
+		}
+
+		if (peer->ftmap.ns != node_normal || peer->ftmap.start_time > bd->obj_desc->time_stamp){//duan
+			continue;
+		}
+
+		err = -ENOMEM;
+		msg = msg_buf_alloc(dsg->ds->rpc_s, peer, 1);
+		if (!msg) {
+			free(bd_temp->data);
+			bd_temp->data = NULL;
+			goto err_out;
+		}
+		//uloga("'%s()': bd_temp %p, bd_temp->data %p, bd_temp->block_size %d.\n", __func__, bd_temp, bd_temp->data, bd_temp->block_size);
+
+		void *temp_data = malloc(bd_temp->block_size + 7);
+		msg->msg_data = temp_data;
+		msg->size = bd_temp->block_size;
+		msg->cb = block_get_with_delete_completion;
+		msg->private = temp_data;
+
+		msg->msg_rpc->cmd = ss_block_get_with_delete;
+		msg->msg_rpc->id = DSG_ID;
+
+		oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
+		copy_obj_desc(&oh->u.o.odsc, bd_temp->obj_desc);//duan
+		memcpy(&oh->gdim, &bd_temp->gdim,
+			sizeof(struct global_dimension));
+
+		err = rpc_receive(dsg->ds->rpc_s, peer, msg);
+		if (err < 0) {
+			free(msg);
+			free(bd_temp->data);
+			bd_temp->data = NULL;
+			goto err_out;
+		}
+		// TODO: uncomment next line ?!
+		//dsg_inc_pending();
+
+	}
+	return 0;
+err_out:
+	uloga("'%s()': failed with %d.\n", __func__, err);
+	return err;
+}
+
+
+
+//Free resources after 'dsg_obj_replicate()' inserts an object in the space.
+static int block_get_without_delete_completion(struct rpc_server *rpc_s, struct msg_buf *msg)//duan
+{
+	struct block_data *bd = msg->private;
+	void *data = msg->private;
+	free(data);
+	//bd->f_free = 1;
+	//(*msg->sync_op_id) = 1;
+	//bd->refcnt++;
+	//if (bd->refcnt >= NUM_DATA_DEVICE + NUM_CODE_DEVICE){
+	//	bd->f_free = 1;
+	//}
+	free(msg);
+
+	//dsg->lsb->bd_recv++;
+	//if (dsg->lsb->bd_recv >= dsg->lsb->bd_cnt){
+	//	dsg->lsb->f_free = 1;
+	//}
+	//dsg_dec_pending();
+	//uloga("'%s()': at server %d dsg->lsb->bd_recv = %d, dsg->lsb->bd_cnt = %d, dsg->lsb->f_free = %d.\n", __func__, DSG_ID, dsg->lsb->bd_recv, dsg->lsb->bd_cnt, dsg->lsb->f_free);
+	//#ifdef DEBUG  //duan
+	//uloga("'%s()': server %d finished sending  %s, version %d.\n", __func__, DSG_ID, bd->obj_desc.name, bd->obj_desc.version);
+	//#endif  //duan
+	//uloga("'%s()': S%2d: end.\n", __func__, DSG_ID);
+	return 0;
+}
+
+static int dsg_block_get_without_delete(struct block_data * bd_data[], struct block_data * bd_code[], struct block_data * bd)//duan
+{
+
+	struct block_data * bd_temp;
+	struct msg_buf *msg;
+	struct node_id *peer;
+	struct hdr_obj_get *oh;
+	int i, err;//duan
+	//uloga("'%s()': begin.\n", __func__);
+
+	int peer_id[NUM_DATA_DEVICE + NUM_CODE_DEVICE] = { 0 };
+	int num_peer = dsg_which_code_peer(DSG_ID, peer_id);//duan
+	//uloga("'%s()': begin0.\n", __func__);
+	//dsg->lsb->bd_cnt = num_peer - 1;
+	//dsg->lsb->bd_recv = 0;
+	//dsg->lsb->f_free = 0;
+	bd->refcnt = 1;
+	bd->f_free = 0;
+	for (i = 0; i < NUM_DATA_DEVICE + NUM_CODE_DEVICE; i++){//duan
+		peer = ds_get_peer(dsg->ds, peer_id[i]);
+		if (peer_id[i] != DSG_ID){
+			if (peer->ftmap.ns != node_normal || peer->ftmap.start_time > bd->obj_desc->time_stamp){//duan
+				bd_temp = block_data_alloc_copy_no_data(bd, NULL);
+			}
+			else{
+				bd_temp = block_data_alloc_copy(bd);
+			}
+		}
+		else{
+			bd_temp = bd;
+		}
+		if (i < NUM_DATA_DEVICE){
+			bd_data[i] = bd_temp;
+		}
+		else{
+			bd_code[i - NUM_DATA_DEVICE] = bd_temp;
+		}
+		if (peer_id[i] == DSG_ID){
+			//++dsg->lsb->bd_recv; 
+			continue;
+		}
+
+		if (peer->ftmap.ns != node_normal || peer->ftmap.start_time > bd->obj_desc->time_stamp){//duan
+			continue;
+		}
+		err = -ENOMEM;
+		msg = msg_buf_alloc(dsg->ds->rpc_s, peer, 1);
+		if (!msg) {
+			free(bd_temp->data);
+			bd_temp->data = NULL;
+			goto err_out;
+		}
+		//uloga("'%s()': bd_temp %p, bd_temp->data %p, bd_temp->block_size %d.\n", __func__, bd_temp, bd_temp->data, bd_temp->block_size);
+
+		void *temp_data = malloc(bd_temp->block_size + 7);
+		msg->msg_data = temp_data;
+		msg->size = bd_temp->block_size;
+		msg->cb = block_get_without_delete_completion;
+		msg->private = temp_data;
+
+		msg->msg_rpc->cmd = ss_block_get_without_delete;
+		msg->msg_rpc->id = DSG_ID;
+
+		oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
+		copy_obj_desc(&oh->u.o.odsc, bd_temp->obj_desc);//duan
+		memcpy(&oh->gdim, &bd_temp->gdim,
+			sizeof(struct global_dimension));
+
+		err = rpc_receive(dsg->ds->rpc_s, peer, msg);
+		if (err < 0) {
+			free(msg);
+			free(bd_temp->data);
+			bd_temp->data = NULL;
+			goto err_out;
+		}
+		// TODO: uncomment next line ?!
+		//dsg_inc_pending();
+
+	}
+	return 0;
+err_out:
+	uloga("'%s()': failed with %d.\n", __func__, err);
+	return err;
+}
+
+
+//Free resources after 'dsg_obj_replicate()' inserts an object in the space.
+static int rpc_block_get_with_delete_completion(struct rpc_server *rpc_s, struct msg_buf *msg)//duan
+{
+	struct block_data *bd = msg->private;
+
+	lsb_remove(dsg->lsb, bd);
+	block_data_free(bd);//temp duan
+	//(*msg->sync_op_id) = 1;
+	free(msg);
+	//dsg_dec_pending();
+#ifdef DEBUG //duan
+	{
+		uloga("'%s()': server %d finished.\n", __func__, DSG_ID);
+	}
+#endif  //duan
+	return 0;
+}
+
+static int dsgrpc_block_get_with_delete(struct rpc_server *rpc_s, struct rpc_cmd *cmd)//duan
+{
+	struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
+	struct node_id *peer;
+	struct msg_buf *msg;
+	struct block_data  *from_bd = NULL;//duan
+	int err, fast_v;
+
+	fast_v = 0; // ERROR: iovec operation fails after Cray Portals
+	// CRITICAL: use version here !!!
+	err = -ENOMEM;
+	peer = ds_get_peer(dsg->ds, cmd->id);
+#ifdef DEBUG //duan
+	{
+		char *str;
+
+		str = alloc_sprintf( "S%2d: request for obj_desc '%s' ver %d from C%2d for  ",
+			DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version, cmd->id);
+		str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
+
+		uloga("'%s()': %s\n", __func__, str);
+		free(str);
+	}
+#endif  //duan
+
+	// CRITICAL: use version here !!!
+	from_bd = lsb_find(dsg->lsb, &oh->u.o.odsc);
+	//uloga("'%s()':from_bd %p\n", __func__, from_bd);
+	//uloga("'%s()': from_bd->data %p.\n", __func__, from_bd->data);
+	//uloga("'%s()': from_bd->block_size %d.\n", __func__, from_bd->block_size);
+	if (!from_bd) {
+		char *str;
+		str = obj_desc_sprint(&oh->u.o.odsc);
+		uloga("'%s()': block data %s is no found\n", __func__, str);//
+		free(str);
+		goto err_out;
+	}
+
+	msg = msg_buf_alloc(rpc_s, peer, 0);
+	if (!msg) {
+		goto err_out;
+	}
+	msg->msg_data = from_bd->data;
+	msg->size = from_bd->block_size;
+	msg->cb = rpc_block_get_with_delete_completion;
+	msg->private = from_bd;
+
+	rpc_mem_info_cache(peer, msg, cmd);
+	err = (fast_v) ? rpc_send_directv(rpc_s, peer, msg) : rpc_send_direct(rpc_s, peer, msg);
+	rpc_mem_info_reset(peer, msg, cmd);
+	if (err == 0){
+		//uloga("'%s()': err == 0\n", __func__);
+		return 0;
+	}
+
+	free(msg);
+err_out:
+	uloga("'%s()': failed with %d.\n", __func__, err);
+	return err;
+}
+
+//Free resources after 'dsg_obj_replicate()' inserts an object in the space.
+static int rpc_block_get_without_delete_completion(struct rpc_server *rpc_s, struct msg_buf *msg)//duan
+{
+	struct block_data *bd = msg->private;
+	//(*msg->sync_op_id) = 1;
+	free(msg);
+	//dsg_dec_pending();
+#ifdef DEBUG //duan
+	{
+		uloga("'%s()': server %d finished.\n", __func__, DSG_ID);
+	}
+#endif  //duan
+	return 0;
+}
+
+static int dsgrpc_block_get_without_delete(struct rpc_server *rpc_s, struct rpc_cmd *cmd)//duan
+{
+	struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
+	struct node_id *peer;
+	struct msg_buf *msg;
+	struct block_data  *from_bd = NULL;//duan
+	int err, fast_v;
+
+	fast_v = 0; // ERROR: iovec operation fails after Cray Portals
+	// CRITICAL: use version here !!!
+	err = -ENOMEM;
+	peer = ds_get_peer(dsg->ds, cmd->id);
+#ifdef DEBUG //duan
+	{
+		char *str;
+
+		str = alloc_sprintf("S%2d: request for obj_desc '%s' ver %d from C%2d for  ",
+			DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version, cmd->id);
+		str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
+
+		uloga("'%s()': %s\n", __func__, str);
+		free(str);
+	}
+#endif  //duan
+
+	// CRITICAL: use version here !!!
+	from_bd = lsb_find(dsg->lsb, &oh->u.o.odsc);
+	//uloga("'%s()':from_bd %p\n", __func__, from_bd);
+	//uloga("'%s()': from_bd->data %p.\n", __func__, from_bd->data);
+	//uloga("'%s()': from_bd->block_size %d.\n", __func__, from_bd->block_size);
+	if (!from_bd) {
+		char *str;
+		str = obj_desc_sprint(&oh->u.o.odsc);
+		uloga("'%s()': block data %s is no found\n", __func__, str);//
+		free(str);
+		goto err_out;
+	}
+
+	msg = msg_buf_alloc(rpc_s, peer, 0);
+	if (!msg) {
+		goto err_out;
+	}
+	msg->msg_data = from_bd->data;
+	msg->size = from_bd->block_size;
+	msg->cb = rpc_block_get_without_delete_completion;
+	msg->private = from_bd;
+
+	rpc_mem_info_cache(peer, msg, cmd);
+	err = (fast_v) ? rpc_send_directv(rpc_s, peer, msg) : rpc_send_direct(rpc_s, peer, msg);
+	rpc_mem_info_reset(peer, msg, cmd);
+	if (err == 0){
+		//uloga("'%s()': err == 0\n", __func__);
+		return 0;
+	}
+
+	free(msg);
+err_out:
+	uloga("'%s()': failed with %d.\n", __func__, err);
+	return err;
+}
+
+//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<duan
+//Free resources after 'dsg_obj_replicate()' inserts an object in the space. synchronize
+static int obj_sync_completion(struct rpc_server *rpc_s, struct msg_buf *msg)//duan
+{
+	struct obj_data *od = msg->private;
+
+	//(*msg->sync_op_id) = 1;
+
+	//obj_data_free(od);
+	free(msg);
+
+	dsg_dec_pending();
+
+#ifdef DEBUG  //duan
+	uloga("'%s()': server %d finished sending  %s, version %d.\n",
+		__func__, DSG_ID, od->obj_desc.name, od->obj_desc.version);
+#endif  //duan
+
+	return 0;
+}
+
+static int dsg_obj_sync(struct obj_data *od, int num_odsc, enum encode_token token, int peer_id)//duan
+{
+	struct msg_buf *msg;
+	struct node_id *peer;
+	struct hdr_obj_syn *hdr;
+	int err = -ENOMEM;
+	if (peer_id == DSG_ID){
+		dsg->ls->token = token;//duan
+		return 0;
+	}
+	peer = ds_get_peer(dsg->ds, peer_id);
+	msg = msg_buf_alloc(dsg->ds->rpc_s, peer, 1);
+	if (!msg)
+		goto err_out;
+
+	msg->msg_data = od->data;
+	msg->size = sizeof(struct obj_descriptor)*num_odsc;
+	msg->cb = obj_sync_completion;
+	msg->private = od;
+
+	msg->msg_rpc->cmd = ss_obj_sync;
+	msg->msg_rpc->id = DSG_ID; // dsg->ds->self->id;
+
+	hdr = (struct hdr_obj_syn *) msg->msg_rpc->pad;
+	hdr->odsc = od->obj_desc;
+	hdr->num_odsc = num_odsc;
+	hdr->token = token;
+	memcpy(&hdr->gdim, &od->gdim, sizeof(struct global_dimension));
+
+	err = rpc_send(dsg->ds->rpc_s, peer, msg);
+	if (err < 0) {
+		free(msg);
+		goto err_out;
+	}
+	dsg_inc_pending();
+
+	return 0;
+err_out:
+	uloga("'%s()': failed with %d.\n", __func__, err);
+	return err;
+}
+
+static int obj_dsgrpc_sync_completion(struct rpc_server *rpc_s, struct msg_buf *msg)//duan
+{
+	struct obj_data *temp_od, *od = msg->private;
+	int i, num_odsc;
+	struct obj_descriptor * odsc_arr;
+
+	num_odsc = od->obj_size;
+	odsc_arr = (struct obj_descriptor *) od->data;
+	for (i = 0; i < num_odsc; i++){
+		temp_od = NULL;
+		temp_od = ls_find(dsg->ls, &(odsc_arr[i]));
+		//uloga("'%s()': server  obj_data_free(od) temp_od = %p;\n", __func__, temp_od);
+		if (temp_od){
+			ls_remove(dsg->ls, temp_od);
+			obj_data_free(temp_od);
+			//uloga("'%s()': server  obj_data_free(od) done;\n", __func__);
+		}
+	}
+	free(msg);
+	obj_data_free(od);
+#ifdef DEBUG
+	uloga("'%s()': server %d finished receiving  %s, version %d.\n",
+		__func__, DSG_ID, od->obj_desc.name, od->obj_desc.version);
+#endif
+
+	return 0;
+}
+
+
+static int dsgrpc_obj_sync(struct rpc_server *rpc_s, struct rpc_cmd *cmd)//duan
+{
+	struct hdr_obj_syn *hdr = (struct hdr_obj_syn *)cmd->pad;
+	struct obj_descriptor *odsc = &(hdr->odsc);
+	struct obj_data *od;
+	struct node_id *peer;
+	struct msg_buf *msg;
+	int err;
+
+#ifdef FALSURE_DEBUG
+	{//duan
+		struct node_id *peer;
+		peer = ds_get_peer(dsg->ds, DSG_ID);
+		if (peer->ftmap.ns == failed){
+			uloga("'%s()': simulate falsure.\n", __func__);
+			goto err_out;
+		}
+	}
+#endif
+#ifdef DEBUG
+	uloga("'%s()': server %d start receiving %s, version %d, hdr->num_odsc  %d.\n",
+		__func__, DSG_ID, odsc->name, odsc->version, hdr->num_odsc);
+#endif
+	odsc->owner = DSG_ID;//duan
+	err = -ENOMEM;
+	peer = ds_get_peer(dsg->ds, cmd->id);
+
+	od = obj_data_alloc_with_size(odsc, sizeof(struct obj_descriptor)*hdr->num_odsc);
+	od->obj_size = hdr->num_odsc;
+
+	if (!od)
+		goto err_out;
+
+	od->obj_desc.owner = DSG_ID;//duan
+	memcpy(&od->gdim, &hdr->gdim, sizeof(struct global_dimension));
+	dsg->ls->token = hdr->token;//duan
+	msg = msg_buf_alloc(rpc_s, peer, 0);
+	if (!msg)
+		goto err_free_data;
+
+	msg->msg_data = od->data;
+	msg->size = sizeof(struct obj_descriptor)*hdr->num_odsc;
+	msg->private = od;
+	msg->cb = obj_dsgrpc_sync_completion;
+
+#ifdef DEBUG
+	uloga("'%s()': server %d start receiving %s, version %d,  hdr->token  %d.\n",
+		__func__, DSG_ID, odsc->name, odsc->version, hdr->token);
+#endif
+	rpc_mem_info_cache(peer, msg, cmd);
+	err = rpc_receive_direct(rpc_s, peer, msg);
+	rpc_mem_info_reset(peer, msg, cmd);
+
+	if (err == 0)
+		return 0;
+err_free_msg:
+	free(msg);
+err_free_data:
+	free(od);
+err_out:
+	uloga("'%s()': failed with %d.\n", __func__, err);
+	return err;
+}
+
+static int dsgrpc_block_sync(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+	struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
+	struct block_data * bd;
+	struct obj_data od;
+	int err;
+
+#ifdef FALSURE_DEBUG
+	{//duan
+		struct node_id *peer;
+		peer = ds_get_peer(dsg->ds, DSG_ID);
+		if (peer->ftmap.ns == failed){
+			uloga("'%s()': simulate falsure.\n", __func__);
+			goto err_out;
+		}
+	}
+#endif
+
+#ifdef DEBUG //duan
+	{
+		char *str;
+
+		str = alloc_sprintf( "S%2d: update obj_desc '%s' ver %d from S%2d for  ",
+			DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version, cmd->id);
+		str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
+
+		uloga("'%s()': %s\n", __func__, str);
+		free(str);
+	}
+#endif //duan
+
+	bd = lsb_find(dsg->lsb, &oh->u.o.odsc);//duan
+	if (bd == NULL){
+		char *str;
+		str = obj_desc_sprint(&oh->u.o.odsc);
+		uloga("'%s()': block data %s is no found\n", __func__, str);//
+		free(str);
+		return 0;
+	}
+	lsb_remove(dsg->lsb, bd);
+	block_data_free(bd);
+	if (err < 0)
+		goto err_out;
+
+	return 0;
+err_out:
+	ERROR_TRACE();
+}
+
+/*
+Update the DHT metadata with the new obj_descriptor information.
+*/
+static int dsg_block_sync(struct ds_gspace *dsg, struct obj_data *od)//duan
+{
+	struct obj_descriptor *odsc = &od->obj_desc;
+	/* TODO: create a separate header structure for object
+	updates; for now just abuse the hdr_obj_get. */
+	struct hdr_obj_get *oh;
+	struct msg_buf *msg;
+	struct node_id *peer;
+	int i, err;
+	int peer_id[NUM_DATA_DEVICE + NUM_CODE_DEVICE] = { 0 };
+	int num_peer = dsg_which_code_peer(DSG_ID, peer_id);//duan
+
+	for (i = 0; i < NUM_DATA_DEVICE + NUM_CODE_DEVICE; i++){//duan
+
+		if (peer_id[i] == DSG_ID){
+			//++dsg->lsb->bd_recv; 
+			continue;
+		}
+
+		peer = ds_get_peer(dsg->ds, peer_id[i]);
+		if (peer->ftmap.ns != node_normal){
+			continue;
+		}
+#ifdef DEBUG
+		{
+			char *str;
+
+			str = alloc_sprintf( "S%2d: fwd obj_desc '%s' to S%2d ver %d for ",
+				DSG_ID, odsc->name, peer->ptlmap.id, odsc->version);
+			str = str_append(str, bbox_sprint(&odsc->bb));
+
+			uloga("'%s()': %s\n", __func__, str);
+			free(str);
+		}
+#endif
+		err = -ENOMEM;
+		msg = msg_buf_alloc(dsg->ds->rpc_s, peer, 1);
+		if (!msg)
+			goto err_out;
+
+		msg->msg_rpc->cmd = ss_block_sync;
+		msg->msg_rpc->id = DSG_ID;
+
+		oh = (struct hdr_obj_get *) msg->msg_rpc->pad;
+		oh->u.o.odsc = *odsc;
+		memcpy(&oh->gdim, &od->gdim, sizeof(struct global_dimension));
+
+		err = rpc_send(dsg->ds->rpc_s, peer, msg);
+		if (err < 0) {
+			free(msg);
+			goto err_out;
+		}
+	}
+	return 0;
+err_out:
+	ERROR_TRACE();
+}
+
+//Free resources after 'dsg_obj_replicate()' inserts an object in the space.
+static int obj_replicate_completion(struct rpc_server *rpc_s, struct msg_buf *msg)//duan
+{
+	struct obj_data *od = msg->private;
+
+	//(*msg->sync_op_id) = 1;
+
+	//obj_data_free(od);
+	free(msg);
+
+	//dsg_dec_pending();
+
+#ifdef DEBUG  //duan
+	uloga("'%s()': server %d finished sending  %s, version %d.\n",
+		__func__, DSG_ID, od->obj_desc.name, od->obj_desc.version);
+#endif  //duan
+
+	return 0;
+}
+
+static int dsg_obj_replicate(struct obj_data *od)//duan
+{
+	struct msg_buf *msg;
+	struct node_id *peer;
+	struct hdr_obj_put *hdr;
+	int err = -ENOMEM;
+	int peer_id[DSG_FT_LEVEL];
+	int num_peer = dsg_which_peer(DSG_ID, peer_id);//duan
+	int i;//duan
+	for (i = 0; i < num_peer; i++){//duan
+		if (peer_id[i] == DSG_ID){ continue; }
+		peer = ds_get_peer(dsg->ds, peer_id[i]);
+		msg = msg_buf_alloc(dsg->ds->rpc_s, peer, 1);
+		if (!msg)
+			goto err_out;
+
+		msg->msg_data = od->data;
+		msg->size = obj_data_size(&od->obj_desc);
+		msg->cb = obj_replicate_completion;
+		msg->private = od;
+
+		msg->msg_rpc->cmd = ss_obj_replicate;
+		msg->msg_rpc->id = DSG_ID; // dsg->ds->self->id;
+
+		hdr = (struct hdr_obj_put *) msg->msg_rpc->pad;
+		hdr->odsc = od->obj_desc;
+		memcpy(&hdr->gdim, &od->gdim, sizeof(struct global_dimension));
+
+		err = rpc_send(dsg->ds->rpc_s, peer, msg);
+		if (err < 0) {
+			free(msg);
+			goto err_out;
+		}
+	}
+	//dsg_inc_pending();
+
+	return 0;
+err_out:
+	uloga("'%s()': failed with %d.\n", __func__, err);
+	return err;
+}
+
 /*
 */
 static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 {
-    struct obj_data *od = msg->private;
-    ls_add_obj(dsg->ls, od);
+
+	//uloga("'%s()': server %d start receiving.\n",__func__, DSG_ID);
+	struct block_data *from_lsb = NULL;
+	struct obj_data *od = msg->private;
+
+	ls_add_obj(dsg->ls, od);
+	//duan
+	///
+	//dsg_block_encode(dsg);//duan replication
+	if (ls_find(dsg->ls, &od->obj_desc) != NULL){
+		obj_put_update_dht(dsg, od);//duan add
+		dsg_obj_replicate(od);//duan replication
+		from_lsb = lsb_find(dsg->lsb, &od->obj_desc);
+		if (from_lsb != NULL){//duan		
+			dsg_block_sync(dsg, od);//duan 
+			lsb_remove(dsg->lsb, from_lsb);
+		}
+		//
+	}
 
 #ifdef DS_SYNC_MSG
     struct msg_buf *msg_ds;
@@ -1420,34 +2931,38 @@ static int obj_put_completion(struct rpc_server *rpc_s, struct msg_buf *msg)
 */
 static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 {
-        struct hdr_obj_put *hdr = (struct hdr_obj_put *)cmd->pad;
-        struct obj_descriptor *odsc = &(hdr->odsc);
-        struct obj_data *od;
-        struct node_id *peer;
-        struct msg_buf *msg;
-        int err;
+	struct hdr_obj_put *hdr = (struct hdr_obj_put *)cmd->pad;
+	struct obj_descriptor *odsc = &(hdr->odsc);
+	struct obj_data *od;
+	struct block_data *from_lsb = NULL; //duan
+	struct node_id *peer;
+	struct msg_buf *msg;
+	int err;
 
-        odsc->owner = DSG_ID;
 
-        err = -ENOMEM;
-        peer = ds_get_peer(dsg->ds, cmd->id);
-        
-        #ifdef SHMEM_OBJECTS
-            od = shmem_obj_data_alloc(odsc, DSG_ID);
-        #endif
 
-        #ifndef SHMEM_OBJECTS
-            od = obj_data_alloc(odsc);
-        #endif
-        if (!od)
-                goto err_out;
+	//uloga("'%s()': sizeof obj_descriptor = %d, sizeof obj_descriptor_orignal = %d\n", __func__, sizeof(struct obj_descriptor), sizeof(struct obj_descriptor_orignal));//duan
+	odsc->owner = DSG_ID;//duan
+	//odsc->num_owner = DSG_FT_LEVEL;//duan
+	err = -ENOMEM;
+	peer = ds_get_peer(dsg->ds, cmd->id);
 
-        od->obj_desc.owner = DSG_ID;
-        memcpy(&od->gdim, &hdr->gdim, sizeof(struct global_dimension));
+#ifdef SHMEM_OBJECTS
+	od = shmem_obj_data_alloc(odsc, DSG_ID);
+#endif
 
-        msg = msg_buf_alloc(rpc_s, peer, 0);
-        if (!msg)
-                goto err_free_data;
+#ifndef SHMEM_OBJECTS
+	od = obj_data_alloc(odsc);
+#endif
+	if (!od)
+		goto err_out;
+	od->obj_desc.owner = DSG_ID;//duan
+	//od->obj_desc.num_owner = DSG_FT_LEVEL;//duan
+	od->obj_desc.ob_status = replicate;//duan
+	memcpy(&od->gdim, &hdr->gdim, sizeof(struct global_dimension));
+	msg = msg_buf_alloc(rpc_s, peer, 0);
+	if (!msg)
+		goto err_free_data;
 
         msg->msg_data = od->data;
         msg->size = obj_data_size(&od->obj_desc);
@@ -1457,36 +2972,185 @@ static int dsgrpc_obj_put(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         msg->sync_op_id = hdr->sync_op_id_ptr; //synchronization lock pointer passed from client
         msg->peer = peer;
 #endif
+	//#ifdef DEBUG //duan
+	{//duan
+		char *str;
+
+		str = alloc_sprintf( "S%2d: dspaces_put obj_desc '%s' ver %d for  ",
+			DSG_ID, odsc->name, odsc->version);
+		str = str_append(str, bbox_sprint(&odsc->bb));
+
+		uloga("'%s()': %s\n", __func__, str);
+		free(str);
+	}
+	//#endif  //duan
+	rpc_mem_info_cache(peer, msg, cmd);
+	err = rpc_receive_direct(rpc_s, peer, msg);
+	rpc_mem_info_reset(peer, msg, cmd);
+
+	if (err < 0)
+		goto err_free_msg;
+
+	/* NOTE: This  early update, has  to be protected  by external
+	locks in the client code. */
+	//from_lsb = lsb_find(dsg->lsb, &hdr->odsc);
+	//if (from_lsb && (dsg->ls->token == token_on || DSG_ID == dsg_next_peer(DSG_ID))){//duan replication
+	//if (from_lsb){//duan replication
+	//dsg_block_decode(dsg, from_lsb);//duan
+	//}//duan
+	//err = obj_put_update_dht(dsg, od);//duan delete
+	//if (from_lsb == NULL){
+	//dsg_block_encode(dsg);//duan
+	//}
+#ifdef DEBUG //duan
+	uloga("'%s()': server %d end receiving %s, version %d.\n",
+		__func__, DSG_ID, odsc->name, odsc->version);
+#endif  //duan
+	if (err == 0)
+		return 0;
+err_free_msg:
+	free(msg);
+err_free_data:
+	free(od);
+err_out:
+	uloga("'%s()': failed with %d.\n", __func__, err);
+	return err;
+}
+
+//duan>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+/*
+
+static int ft_status_update(struct ds_gspace *dsg, struct obj_data *od)
+{
+
+}
+*/
+
+/*
+Rpc routine to update (add or insert) an object descriptor in the
+dht table.
+
+static int dsgrpc_ft_status_update(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
+{
+struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
+struct sspace* ssd = lookup_sspace(dsg, oh->u.o.odsc.name, &oh->gdim);
+struct dht_entry *de = ssd->ent_self;
+int err;
+
+#ifdef DEBUG
+{
+char *str;
+
+str = alloc_sprintf( "S%2d: update obj_desc '%s' ver %d from S%2d for  ",
+DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version, cmd->id);
+str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
+
+uloga("'%s()': %s\n", __func__, str);
+free(str);
+}
+#endif
+oh->u.o.odsc.owner = cmd->id;//duan
+err = dht_add_entry(de, &oh->u.o.odsc);
+if (err < 0)
+goto err_out;
+
+if (DSG_ID == oh->rank) {
+err = cq_check_match(&oh->u.o.odsc);
+if (err == 0)
+return 0;
+}
+return 0;
+err_out:
+ERROR_TRACE();
+}
+*/
+
+
+
+static int obj_dsgrpc_replicate_completion(struct rpc_server *rpc_s, struct msg_buf *msg)//duan
+{
+	struct obj_data *od = msg->private;
+	ls_add_obj(dsg->ls, od);
+
+	//dsg_block_encode(dsg);//duan replication
+
+	if (ls_find(dsg->ls, &od->obj_desc) != NULL){
+		obj_put_update_dht(dsg, od);//duan add
+	}
+	free(msg);
+#ifdef DEBUG
+	uloga("'%s()': server %d finished receiving  %s, version %d.\n",
+		__func__, DSG_ID, od->obj_desc.name, od->obj_desc.version);
+#endif
+
+	return 0;
+}
+
+
+static int dsgrpc_obj_replicate(struct rpc_server *rpc_s, struct rpc_cmd *cmd)//duan
+{
+	struct hdr_obj_put *hdr = (struct hdr_obj_put *)cmd->pad;
+	struct obj_descriptor *odsc = &(hdr->odsc);
+	struct obj_data *od;
+	struct node_id *peer;
+	struct msg_buf *msg;
+	int err;
+
+#ifdef FALSURE_DEBUG
+	{//duan
+		struct node_id *peer;
+		peer = ds_get_peer(dsg->ds, DSG_ID);
+		if (peer->ftmap.ns == failed){
+			uloga("'%s()': simulate falsure.\n", __func__);
+			goto err_out;
+		}
+	}
+#endif
+
+	odsc->owner = DSG_ID;//duan
+	err = -ENOMEM;
+	peer = ds_get_peer(dsg->ds, cmd->id);
+	od = obj_data_alloc(odsc);
+	if (!od)
+		goto err_out;
+	od->obj_desc.owner = DSG_ID;
+	memcpy(&od->gdim, &hdr->gdim, sizeof(struct global_dimension));
+
+	msg = msg_buf_alloc(rpc_s, peer, 0);
+	if (!msg)
+		goto err_free_data;
+
+	msg->msg_data = od->data;
+	msg->size = obj_data_size(&od->obj_desc);
+	msg->private = od;
+	msg->cb = obj_dsgrpc_replicate_completion;
 
 
 #ifdef DEBUG
-        uloga("'%s()': server %d start receiving %s, version %d.\n", 
-            __func__, DSG_ID, odsc->name, odsc->version);
+	uloga("'%s()': server %d start receiving %s, version %d.\n",
+		__func__, DSG_ID, odsc->name, odsc->version);
 #endif
-        rpc_mem_info_cache(peer, msg, cmd); 
-        err = rpc_receive_direct(rpc_s, peer, msg);
-        rpc_mem_info_reset(peer, msg, cmd);
+	rpc_mem_info_cache(peer, msg, cmd);
+	err = rpc_receive_direct(rpc_s, peer, msg);
+	rpc_mem_info_reset(peer, msg, cmd);
 
-        if (err < 0)
-                goto err_free_msg;
+	//if (err < 0)
+	//goto err_free_msg;
 
 	/* NOTE: This  early update, has  to be protected  by external
-	   locks in the client code. */
+	locks in the client code. */
 
-        ulog("server %d updating DHT\n", DSG_ID);
-
-        err = obj_put_update_dht(dsg, od);
-        if (err == 0) {
-        	ulog("server %d finished server side put.\n", DSG_ID);
-	        return 0;
-        }
- err_free_msg:
-        free(msg);
- err_free_data:
-        free(od);
- err_out:
-        uloga("'%s()': failed with %d.\n", __func__, err);
-        return err;
+	//err = obj_put_update_dht(dsg, od);
+	if (err == 0)
+		return 0;
+err_free_msg:
+	free(msg);
+err_free_data:
+	free(od);
+err_out:
+	uloga("'%s()': failed with %d.\n", __func__, err);
+	return err;
 }
 
 static int obj_meta_get_completion_data(struct rpc_server *rpc_s, struct msg_buf *msg)
@@ -1928,6 +3592,52 @@ static int obj_get_desc_completion(struct rpc_server *rpc_s, struct msg_buf *msg
         return 0;
 }
 
+static inline int obj_owner_redirect(struct obj_descriptor *odsc)//duan
+{
+	int i, j, err, peer_id;
+	struct node_id *peer;
+	int peer_id_arr[NUM_DATA_DEVICE + NUM_CODE_DEVICE] = { 0 };
+
+	if (odsc->ob_status == encode || odsc->ob_status == encoding){
+		peer_id = odsc->code_owner;
+		dsg_which_code_peer(peer_id, peer_id_arr);//duan
+		for (i = 0; i < NUM_DATA_DEVICE; i++){
+			peer = ds_get_peer(dsg->ds, peer_id_arr[i]);
+			odsc->code_owner = peer_id_arr[0];//
+			//uloga("'%s()': peer_id = %d, peer->ftmap.ns = %d, peer->ftmap.start_time = %f, odsc->time_stamp = %f, peer->ftmap.start_time > odsc->time_stamp = %d.\n", __func__, peer_id, peer->ftmap.ns, peer->ftmap.start_time, odsc->time_stamp, peer->ftmap.start_time > odsc->time_stamp);
+			if (peer->ftmap.ns != node_normal || peer->ftmap.start_time > odsc->time_stamp){//duan
+				odsc->ob_status = deleting;
+				for (j = 0; j < NUM_DATA_DEVICE + NUM_CODE_DEVICE; j++){
+					peer = ds_get_peer(dsg->ds, peer_id_arr[j]);//duan
+					if (peer->ftmap.ns == node_normal){
+						odsc->owner = peer_id_arr[j];
+						uloga("'%s()': redirect to peer_id = %d.\n", __func__, peer_id_arr[j]);
+						break;
+					}
+				}
+			}
+		}
+	}
+
+#ifdef DEBUG //duan
+	{
+		char *str;
+		str = alloc_sprintf( "S%2d: for obj_desc '%s' ver %d ob_status %d owner %d code_owner %d for  ",
+			DSG_ID, odsc->name, odsc->version, odsc->ob_status, odsc->owner, odsc->code_owner);
+		str = str_append(str, bbox_sprint(&odsc->bb));
+
+		uloga("'%s()': %s\n", __func__, str);
+		free(str);
+	}
+#endif  //duan
+
+	return 0;
+err_out:
+	err = 1;
+	uloga("'%s()': failed with %d.\n", __func__, err);
+	return err;
+}
+
 /*
   RPC  routine to  send the  object  descriptors that  match the  data
   object being queried.
@@ -1984,6 +3694,8 @@ static int dsgrpc_obj_get_desc(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
                 odsc_tab[i+num_odsc] = odsc;
             #endif
             bbox_intersect(&oh->u.o.odsc.bb, &odsc.bb, &odsc.bb);
+			//uloga("'%s()':num_odsc %d\n", __func__, num_odsc);//duan
+			obj_owner_redirect(&odsc);//duan
             odsc_tab[i] = odsc;
 
             //need to prefetch here based on obj_owner for prefetch staging
@@ -2049,7 +3761,10 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         struct hdr_obj_get *oh = (struct hdr_obj_get *) cmd->pad;
         struct node_id *peer;
         struct msg_buf *msg;
-        struct obj_data *od, *from_obj;
+		struct obj_data *od, *from_obj = NULL, *from_ls_obj = NULL;//duan
+		struct obj_data  from_lsb_obj;//duan
+		struct block_data  *from_block = NULL;//duan
+
         int err = -ENOENT; 
 
         peer = ds_get_peer(dsg->ds, cmd->id);
@@ -2066,7 +3781,7 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
 	 free(str);
  }
 #endif
-
+/*
         // CRITICAL: use version here !!!
         from_obj = ls_find(dsg->ls, &oh->u.o.odsc);
         if (!from_obj) {
@@ -2076,9 +3791,13 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
             free(str);
             goto err_out;
         }
-        //TODO:  if required  object is  not  found, I  should send  a
-        //proper error message back, and the remote node should handle
-        //the error.
+*/
+		if(oh->u.o.odsc.ob_status == replicate || oh->u.o.odsc.ob_status == replicating){
+			if (from_obj = ls_find(dsg->ls, &oh->u.o.odsc)) {//duan
+				//uloga("'%s()': S%2d: from_obj = ls_find(dsg->ls, &oh->u.o.odsc)\n", __func__, DSG_ID);
+				//TODO:  if required  object is  not  found, I  should send  a
+				//proper error message back, and the remote node should handle
+				//the error.
 
         /*
           Problem: How can I send  a transfer status together with the
@@ -2109,13 +3828,146 @@ static int dsgrpc_obj_get(struct rpc_server *rpc_s, struct rpc_cmd *cmd)
         msg->cb = obj_get_completion;
         msg->private = od;
 
+				rpc_mem_info_cache(peer, msg, cmd);
+				err = rpc_send_direct(rpc_s, peer, msg);
+				rpc_mem_info_reset(peer, msg, cmd);
+				if (err == 0){
+					return 0;
+				}
+				uloga("'%s()': err != 0\n", __func__);
+			}else{
+				char *str;
+				str = alloc_sprintf( "S%2d is NO object data for obj_desc '%s' ver %d  ",
+					DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version);
+				str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
+				uloga("'%s()': %s\n", __func__, str);
+				free(str);
+				//goto err_out;
 
-        rpc_mem_info_cache(peer, msg, cmd); 
-        err = rpc_send_direct(rpc_s, peer, msg);
-        rpc_mem_info_reset(peer, msg, cmd);
-        if (err == 0)
-                return 0;
+				od = obj_data_alloc_with_size(&oh->u.o.odsc, obj_data_size(&oh->u.o.odsc));
+				if (!od)
+					goto err_out;
 
+
+				msg = msg_buf_alloc(rpc_s, peer, 0);
+				if (!msg) {
+					obj_data_free(od);
+					goto err_out;
+				}
+				//uloga("'%s()': step 12, od %p\n", __func__, od);
+				msg->msg_data = od->data;
+				msg->size = obj_data_size(&od->obj_desc);
+				msg->cb = obj_get_completion;
+				msg->private = od;
+				rpc_mem_info_cache(peer, msg, cmd);
+				err = rpc_send_direct(rpc_s, peer, msg);
+				rpc_mem_info_reset(peer, msg, cmd);
+				if (err == 0)
+					return 0;
+			}
+		}else if(oh->u.o.odsc.ob_status == encode || oh->u.o.odsc.ob_status == encoding){
+			if (from_block = lsb_find(dsg->lsb, &oh->u.o.odsc)){
+
+				//uloga("'%s()': S%2d: from_block = lsb_find(dsg->lsb, &oh->u.o.odsc)\n", __func__, DSG_ID);		
+				//od->obj_ref = from_block;
+				int num_sub_ob = NUM_DATA_DEVICE;
+				od = obj_data_alloc_with_size(&oh->u.o.odsc, obj_data_size(&oh->u.o.odsc) / num_sub_ob);
+				if (!od)
+					goto err_out;
+
+
+				msg = msg_buf_alloc(rpc_s, peer, 0);
+				if (!msg) {
+					obj_data_free(od);
+					goto err_out;
+				}
+				msg->msg_data = od->data;
+				msg->size = obj_data_size(&od->obj_desc) / num_sub_ob;
+				msg->cb = obj_get_completion;
+				msg->private = od;
+				rpc_mem_info_cache(peer, msg, cmd);
+				err = rpc_send_direct(rpc_s, peer, msg);
+				rpc_mem_info_reset(peer, msg, cmd);
+				if (err == 0)
+					return 0;
+			}else{
+				char *str;
+				str = alloc_sprintf( "S%2d is NO block data for obj_desc '%s' ver %d  ",
+					DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version);
+				str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
+				uloga("'%s()': %s\n", __func__, str);
+				free(str);
+				//goto err_out;
+
+				int num_sub_ob = NUM_DATA_DEVICE;
+				//uloga("'%s()': num_sub_ob = %d \n", __func__, num_sub_ob);
+				od = obj_data_alloc_with_size(&oh->u.o.odsc, obj_data_size(&oh->u.o.odsc) / num_sub_ob);
+				if (!od)
+					goto err_out;
+
+
+				msg = msg_buf_alloc(rpc_s, peer, 0);
+				if (!msg) {
+					obj_data_free(od);
+					goto err_out;
+				}
+				//uloga("'%s()': step 12, od %p\n", __func__, od);
+				msg->msg_data = od->data;
+				msg->size = obj_data_size(&od->obj_desc) / num_sub_ob;
+				msg->cb = obj_get_completion;
+				msg->private = od;
+				rpc_mem_info_cache(peer, msg, cmd);
+				err = rpc_send_direct(rpc_s, peer, msg);
+				rpc_mem_info_reset(peer, msg, cmd);
+				if (err == 0)
+					return 0;
+			}
+		}else{
+			if (from_block = lsb_find(dsg->lsb, &oh->u.o.odsc)){
+				if (dsg_number_code_peer(DSG_ID) == NUM_DATA_DEVICE + NUM_CODE_DEVICE){
+					uloga("'%s()': S%2d: lazy recovery\n", __func__, DSG_ID);
+					dsg_block_decode(dsg, from_block);//duan lazy recovery
+				}
+				else{
+					uloga("'%s()': S%2d: degrade reading\n", __func__, DSG_ID);
+					dsg_block_decode_to_obj(dsg, from_block, &oh->u.o.odsc);//duan degrade reading
+				}
+			}
+			else{
+				char *str;
+				str = alloc_sprintf( "S%2d is NO recovery block data for obj_desc '%s' ver %d  ",
+					DSG_ID, oh->u.o.odsc.name, oh->u.o.odsc.version);
+				str = str_append(str, bbox_sprint(&oh->u.o.odsc.bb));
+				uloga("'%s()': %s\n", __func__, str);
+				free(str);
+				//goto err_out;
+			}
+			err = -ENOMEM;
+			// CRITICAL:     experimental    stuff,     assumption    data
+			// representation is the same on both ends.
+			// od = obj_data_alloc(&oh->odsc);
+			od = obj_data_alloc(&oh->u.o.odsc);
+			if (!od)
+				goto err_out;
+
+			//ssd_copy(od, from_obj);
+			//od->obj_ref = from_obj;
+			msg = msg_buf_alloc(rpc_s, peer, 0);
+			if (!msg) {
+				obj_data_free(od);
+				goto err_out;
+			}
+			msg->msg_data = od->data;
+			msg->size = obj_data_size(&od->obj_desc);
+			msg->cb = obj_get_completion;
+			msg->private = od;
+			rpc_mem_info_cache(peer, msg, cmd);
+			err = rpc_send_direct(rpc_s, peer, msg);
+			rpc_mem_info_reset(peer, msg, cmd);
+			if (err == 0)
+				return 0;
+		}
+ 
         obj_data_free(od);
         free(msg);
  err_out:
@@ -2286,7 +4138,15 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name, void *comm)
        	rpc_add_service(ss_obj_get_next_meta, dsgrpc_obj_get_next_meta);
         rpc_add_service(ss_obj_get_latest_meta, dsgrpc_obj_get_latest_meta);
         rpc_add_service(ss_obj_get_var_meta, dsgrpc_obj_get_var_meta);
-	rpc_add_service(ss_obj_update, dsgrpc_obj_update);
+		rpc_add_service(ss_obj_sync, dsgrpc_obj_sync);//duan
+		rpc_add_service(ss_obj_replicate, dsgrpc_obj_replicate);//duan
+		rpc_add_service(ss_block_put, dsgrpc_block_put);//duan
+		rpc_add_service(ss_block_get_with_delete, dsgrpc_block_get_with_delete);//duan
+		rpc_add_service(ss_block_get_without_delete, dsgrpc_block_get_without_delete);//duan
+		rpc_add_service(ss_block_sync, dsgrpc_block_sync);//duan	
+		rpc_add_service(ss_peer_update, dsgrpc_peer_update);//duan
+		rpc_add_service(ss_peer_test, dsgrpc_peer_test);//duan
+        rpc_add_service(ss_obj_update, dsgrpc_obj_update);
         rpc_add_service(ss_obj_filter, dsgrpc_obj_filter);
         rpc_add_service(cp_lock, dsgrpc_lock_service);
         rpc_add_service(cp_remove, dsgrpc_remove_service);
@@ -2300,7 +4160,7 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name, void *comm)
         INIT_LIST_HEAD(&dsg_l->obj_data_req_list);
         INIT_LIST_HEAD(&dsg_l->locks_list);
 
-        dsg_l->ds = ds_alloc(num_sp, num_cp, dsg_l, comm);
+        dsg_l->ds = ds_alloc(num_sp, num_cp, DSG_FT_LEVEL, NUM_DATA_DEVICE + NUM_CODE_DEVICE, dsg_l, comm);//duan
         if (!dsg_l->ds)
                 goto err_free;
 
@@ -2314,9 +4174,17 @@ struct ds_gspace *dsg_alloc(int num_sp, int num_cp, char *conf_name, void *comm)
             uloga("%s(): ERROR ls_alloc() failed\n", __func__);
             goto err_free;
         }
-
-        dsg->kill = 0;
-
+		if (dsg_l->ds->self->ftmap.ftid % dsg_l->ds->size_ft_group == 0){ //duan
+			dsg_l->ls->token = token_on; 
+		}else{
+			dsg_l->ls->token = token_off;
+		}//duan
+		dsg_l->lsb = lsb_alloc(ds_conf.max_versions);//duan
+		if (!dsg_l->lsb) {
+			uloga("%s(): ERROR lsb_alloc() failed\n", __func__);
+			goto err_free;
+		}
+		dsg->kill = 0;
         return dsg_l;
  err_free:
         free(dsg_l);
@@ -2351,6 +4219,9 @@ void dsg_free(struct ds_gspace *dsg)
         ds_free(dsg->ds);
         free_sspace(dsg);
         ls_free(dsg->ls);
+		//uloga("'%s()': server %d before lsb_free(dsg->lsb);\n", __func__, DSG_ID);//duan
+		lsb_free(dsg->lsb);//duan
+		//uloga("'%s()': server %d after lsb_free(dsg->lsb);\n", __func__, DSG_ID);//duan
         free(dsg);
 }
 
