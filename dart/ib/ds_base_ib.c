@@ -676,6 +676,22 @@ static int dsrpc_announce_cp(struct rpc_server *rpc_s, struct rpc_cmd *cmd)	//Do
 	return err;
 }
 
+static int ds_node_ftid_init(struct dart_server *ds)//duan
+{
+	struct node_id *temp_peer;
+	struct rpc_server *temp_rpc_s;
+	temp_rpc_s = ds->rpc_s;
+	list_for_each_entry(temp_peer, &temp_rpc_s->peer_list, struct node_id, peer_entry) {
+		temp_peer->ftmap.ftid = temp_peer->ptlmap.id;
+		temp_peer->ftmap.ns = node_normal;
+
+		struct timeval tv;
+		gettimeofday(&tv, 0);
+		double ret = (double)tv.tv_usec + tv.tv_sec * 1.e6;
+		temp_peer->ftmap.start_time = ret;
+	}
+	return 0;
+}
 
 //Added in IB version
 /*
@@ -1208,7 +1224,7 @@ err_out:
    Allocate and initialize dart server; the server initializes rpc
    server. 
 */
-struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
+struct dart_server *ds_alloc(int num_sp, int num_cp, int ft_level, int ft_code, void *dart_ref, void *comm)//duan
 {
 	struct dart_server *ds = 0;
 	struct node_id *peer;
@@ -1236,6 +1252,8 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 	ds->num_sp = num_sp;
 	ds->num_cp = num_cp;
 	ds->connected = 0;
+	ds->size_ft_group = ft_level; //duan
+	ds->size_ft_code_group = ft_code; //duan
 	INIT_LIST_HEAD(&ds->app_list);
 
 	cp_rank_cnt = num_sp;
@@ -1263,6 +1281,9 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 		ds->f_reg = 1;
 	}
 	err = ds_boot(ds);
+
+	ds_node_ftid_init(ds);//duan
+
 	if(err != 0)
 		goto err_free_dsrv;
 	ds->num_charge = (ds->num_cp / ds->num_sp) + (ds->rpc_s->ptlmap.id < ds->num_cp % ds->num_sp);

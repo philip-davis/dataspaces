@@ -730,6 +730,22 @@ err_out:
 	return 0;
 }
 
+static int dc_node_ftid_init(struct dart_client *dc)//duan
+{
+	struct node_id *temp_peer;
+	struct rpc_server *temp_rpc_s;
+	temp_rpc_s = dc->rpc_s;
+	list_for_each_entry(temp_peer, &temp_rpc_s->peer_list, struct node_id, peer_entry) {
+		temp_peer->ftmap.ftid = temp_peer->ptlmap.id;
+		temp_peer->ftmap.ns = node_normal;
+
+		struct timeval tv;
+		gettimeofday(&tv, 0);
+		double ret = (double)tv.tv_usec + tv.tv_sec * 1.e6;
+		temp_peer->ftmap.start_time = ret;
+	}
+	return 0;
+}
 
 static void *dc_master_listen(void *server)
 {
@@ -1472,6 +1488,7 @@ struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *com
 	//printf("Before dc_boot\n");
 	err = dc_boot(dc, appid);
 	//printf("After dc_boot\n");
+	dc_node_ftid_init(dc);//duan
 	if(err < 0) {
 		rpc_server_free(dc->rpc_s);
 		free(dc);

@@ -48,6 +48,11 @@ struct dart_server {
 	/* Reference for self instance in 'peer_tab'. */
 	struct node_id *self;
 
+	/* List of group member duan*/
+	int		                size_ft_group;//number of nodes in each group duan
+	/* List of group member duan*/
+	int		                size_ft_code_group;//number of nodes in each group duan
+
 	/* 'f_reg' records if registration is complete. */
 	int f_reg;
 	int f_stop;
@@ -66,7 +71,7 @@ struct dart_server {
 
 };	
 
-struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm);
+struct dart_server *ds_alloc(int num_sp, int num_cp, int ft_level, int ft_code, void *dart_ref, void *comm);	// //duan
 void ds_free(struct dart_server *ds);	// //
 int ds_process(struct dart_server *ds);
 
@@ -90,5 +95,15 @@ static inline int ds_stop(struct dart_server *ds)
 {
 	return ds->f_stop;
 }				// //
+
+static inline int ds_get_num_sp(struct dart_server *ds)//duan
+{
+	return ds->num_sp;
+}
+
+static inline int ds_get_num_cp(struct dart_server *ds)//duan
+{
+	return ds->num_cp;
+}
 
 #endif
