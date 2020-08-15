@@ -6,24 +6,15 @@ Contents of this README file:
 About DataSpaces Corec-portal
 =================
 
-This branch package contains the prototype source code of CoREC and staging based silent error detection approach. 
-The branch is developed on master branch verison d25787a on Nov 25, 2019.
-CoREC, a scalable and resilient in-memory data staging runtime for large-scale in-situ workflows. 
-CoREC uses a novel hybrid approach that combines dynamic replication with erasure coding based on data access patterns.
-Staging based silent error detection approach leverages idle computation resource in data staging to enable timely detection and recovery from silent data corruption,
-effectively reducing the propagation of corrupted data and end-to-end workflow execution time in the presence of silent errors. 
-Specifically, this approach  uses a spatial outlier detection approach in staging to detect errors introduced in data transfer and storage. 
-This approach also provides a CPU-GPU hybrid staging framework for error detection in order to achieve faster error identification.
+This branch package contains the prototype source code of CoREC and staging based silent error detection approach. The branch is developed on master branch verison d25787a on Nov 25, 2019. CoREC, a scalable and resilient in-memory data staging runtime for large-scale in-situ workflows. CoREC uses a novel hybrid approach that combines dynamic replication with erasure coding based on data access patterns. 
 
-For more information on CoREC and staging based silent error detection approach, or
-if you have any other questions, please read the original paper reference published in IPDPS'18 and SC'19:
+Staging based silent error detection approach leverages idle computation resource in data staging to enable timely detection and recovery from silent data corruption, effectively reducing the propagation of corrupted data and end-to-end workflow execution time in the presence of silent errors. Specifically, this approach  uses a spatial outlier detection approach in staging to detect errors introduced in data transfer and storage. This approach also provides a CPU-GPU hybrid staging framework for error detection in order to achieve faster error identification.
 
-[1] S. Duan, P. Subedi, K. Teranishi, P. Davis, H. Kolla, M. Gamell, and M. Parashar.
-Scalable data resilience for in-memory data staging. In Proceedings of the 32th IEEE
-International Parallel and Distributed Processing Symposium (IPDPS'18), pages 105-115, May 2018.
+For more information on CoREC and staging based silent error detection approach, or if you have any other questions, please read the original paper reference published in IPDPS'18 and SC'19:
 
-[2] S. Duan, P. Subedi, P. Davis, and M. Parashar, “Addressing data resiliency for staging based scientific workflows,”
-in High Performance Computing, Networking, Storage and Analysis (SC), 2019 International Conference for. ACM, 2019.
+[1] S. Duan, P. Subedi, K. Teranishi, P. Davis, H. Kolla, M. Gamell, and M. Parashar. Scalable data resilience for in-memory data staging. In Proceedings of the 32th IEEE International Parallel and Distributed Processing Symposium (IPDPS'18), pages 105-115, May 2018.
+
+[2] S. Duan, P. Subedi, P. Davis, and M. Parashar, “Addressing data resiliency for staging based scientific workflows,” in High Performance Computing, Networking, Storage and Analysis (SC), 2019 International Conference for. ACM, 2019.
 
 
 Code update and usage instruction
@@ -35,4 +26,5 @@ other_versions/checkpoint: in-disk/bustbuffer checkpoint data version;
 other_versions/detection: staging based error detection approach.
 
 In-memory replication and hybrid erasure coding version are based on this Corec-portal branch. Only replacement resource code files are shown in the coresponding folders.
+
 In-disk/bustbuffer checkpointing and staging based error detection approach version are based on master branch verison d25787a on Nov 25, 2019. Only replacement resource code files are shown in the coresponding folders.
