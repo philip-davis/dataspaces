@@ -25,9 +25,9 @@ other_versions/hybird: in-memory hybrid erasure coding version;
 other_versions/checkpoint: in-disk/bustbuffer checkpoint data version;
 other_versions/detection: staging based error detection approach.
 
-In-memory replication and hybrid erasure coding version are based on this Corec-portal branch. Only replacement resource code files are shown in the coresponding folders.
+In-memory replication, hybrid erasure coding and In-disk/bustbuffer checkpointing version are based on this Corec-portal branch. Only replacement resource code files are shown in the coresponding folders.
 
-In-disk/bustbuffer checkpointing and staging based error detection approach version are based on master branch verison d25787a on Nov 25, 2019. Only replacement resource code files are shown in the coresponding folders.
+ Staging based error detection approach version are based on master branch verison d25787a on Nov 25, 2019. Only replacement resource code files are shown in the coresponding folders.
 
 
 DataSpaces Corec-portal APIs
