@@ -2511,6 +2511,24 @@ uint32_t rpc_server_get_nid(struct rpc_server *rpc_s)
   return rpc_s->ptlmap.nid;
 }
 
+struct node_id *rpc_server_find(struct rpc_server *rpc_s, int peer_id)
+{
+	return rpc_get_peer(rpc_s, peer_id);
+}
+
+int set_rpc_server_status(struct rpc_server *rpc_s, int nodeid, int status)//duan
+{
+	struct node_id *temp_peer;
+	temp_peer = rpc_server_find(rpc_s, nodeid);
+	temp_peer->ftmap.ns = status;
+
+	struct timeval tv;
+	gettimeofday(&tv, 0);
+	double ret = (double)tv.tv_usec + tv.tv_sec * 1.e6;
+	temp_peer->ftmap.start_time = ret;
+	return 0;
+}
+
 void rpc_server_find_local_peers(struct rpc_server *rpc_s, struct node_id **peer_tab, int *num_local_peer, int peer_tab_size)
 {
 

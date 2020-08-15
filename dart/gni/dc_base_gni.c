@@ -347,6 +347,23 @@ err_out:
 
 }
 
+static int dc_node_ftid_init(struct dart_client *dc)//duan
+{
+	int j;
+
+	for (j = 0; j < dc->num_sp; j++){
+		dc->peer_tab[j].ftmap.ftid = dc->peer_tab[j].ptlmap.id;
+		dc->peer_tab[j].ftmap.ns = node_normal;
+
+		struct timeval tv;
+		gettimeofday(&tv, 0);
+		double ret = (double)tv.tv_usec + tv.tv_sec * 1.e6;
+		dc->peer_tab[j].ftmap.start_time = ret;
+	}
+	return 0;
+}
+
+
 /*
 1. collect all app peers ptlmap info, then send APP msg_size + real_msg[all peer ptlmap info] to master server
 2. recv ALL msg_size + real_msg[all peer ptlmap info], set up peer_tab, bcast slave clients

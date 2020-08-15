@@ -979,6 +979,35 @@ err_out:
 	return err;
 }
 
+static int ft_group_init(struct dart_server *ds)//duan
+{
+	int j, temp_group_index, temp_group_id;
+
+	for (j = 0; j < ds->num_sp; j++){
+		temp_group_index = ds->peer_tab[j].ftmap.ftid % ds->size_ft_group;
+		temp_group_id = ds->peer_tab[j].ftmap.ftid / ds->size_ft_group;
+		ds->ft_group_tab[temp_group_id*ds->size_ft_group + temp_group_index].id = ds->peer_tab[j].ptlmap.id;
+	}
+	return 0;
+}
+
+static int ds_node_ftid_init(struct dart_server *ds)//duan
+{
+	int j;
+
+	for (j = 0; j < ds->num_sp; j++){
+		ds->peer_tab[j].ftmap.ftid = ds->peer_tab[j].ptlmap.id;
+		ds->peer_tab[j].ftmap.ns = node_normal;
+
+		struct timeval tv;
+		gettimeofday(&tv, 0);
+		double ret = (double)tv.tv_usec + tv.tv_sec * 1.e6;
+		ds->peer_tab[j].ftmap.start_time = ret;
+	}
+	return 0;
+}
+
+
 // Thread for master server to create listening port, waiting for connection and taking care of application join-in.
 
 /*
@@ -1579,7 +1608,7 @@ static int ds_boot(struct dart_server *ds)
    Allocate and initialize dart server; the server initializes rpc
    server. 
 */
-struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
+struct dart_server *ds_alloc(int num_sp, int num_cp, int ft_level, int ft_code, void *dart_ref, void *comm)//duan
 {
 	struct dart_server *ds = 0;
 	struct node_id *peer;
@@ -1588,7 +1617,7 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 	int i, err;
 	int node_size;
 
-	size = sizeof(struct dart_server) + num_sp * sizeof(struct node_id);
+	size = sizeof(struct dart_server) + (num_sp + num_cp) * sizeof(struct node_id) + (num_sp)* sizeof(struct ft_node);//duan
 	ds = calloc(1, size);
 	if (!ds)
 		goto err_out;
@@ -1599,7 +1628,9 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
 
 	ds->size_sp = num_sp;
 	ds->num_sp = num_sp;
-
+	ds->size_ft_group = ft_level; //duan
+	ds->size_ft_code_group = ft_code; //duan
+	ds->ft_group_tab = (struct ft_node *)(ds->peer_tab + num_cp + num_sp);//duan
 	INIT_LIST_HEAD(&ds->app_list);
 
 	if(comm) {
@@ -1651,6 +1682,10 @@ struct dart_server *ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm)
     rpc_add_service(sp_announce_cp, dsrpc_announce_cp);
 
 	err = ds_boot(ds);
+
+	ds_node_ftid_init(ds);//duan
+	ft_group_init(ds);//duan
+
 	if (err < 0)
 		goto err_free_dsrv;
 

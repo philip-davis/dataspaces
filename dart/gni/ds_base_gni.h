@@ -52,6 +52,11 @@ struct app_info {
 	int	f_reg; //DSaaS: if this app has been registered. 0: not yet; 1: already.
 };
 
+struct ft_node {//duan
+	int			            id;
+	//struct list_head	ft_group_list;       /* List of members in the fault tolerance group */
+};
+
 struct dart_server {
 	struct rpc_server	*rpc_s;
 
@@ -71,6 +76,12 @@ struct dart_server {
 
 	/* Reference for self instance in 'peer_tab'. */
 	struct node_id		*self;
+
+	/* List of group member duan*/
+	int		                size_ft_group;//number of nodes in each group duan
+	struct ft_node          *ft_group_tab;//global ft_group table duan
+	/* List of group member duan*/
+	int		                size_ft_code_group;//number of nodes in each group duan
 
 	/* 'f_reg' records if registration is complete. */
 	int			f_reg:1;
@@ -92,7 +103,7 @@ struct dart_server {
 
 };
 
-struct dart_server* ds_alloc(int num_sp, int num_cp, void *dart_ref, void *comm);
+struct dart_server* ds_alloc(int num_sp, int num_cp, int ft_level, int ft_code, void *dart_ref, void *comm);	// //duan
 void ds_free(struct dart_server *ds);
 int ds_process(struct dart_server *ds);
 
@@ -132,6 +143,27 @@ static inline struct node_id * ds_get_peer(struct dart_server *ds, int peer_id)
 static inline int ds_stop(struct dart_server *ds)
 {
 	return ds->f_stop;
+}
+
+static inline int ds_get_num_sp(struct dart_server *ds)//duan
+{
+	return ds->num_sp;
+}
+
+static inline int ds_get_num_cp(struct dart_server *ds)//duan
+{
+	return ds->num_cp;
+}
+
+static inline int ds_set_node_status(struct dart_server *ds, int peer_id, int node_status)//duan
+{
+	ds->peer_tab[peer_id].ftmap.ns = node_status;
+
+	struct timeval tv;
+	gettimeofday(&tv, 0);
+	double ret = (double)tv.tv_usec + tv.tv_sec * 1.e6;
+	ds->peer_tab[peer_id].ftmap.start_time = ret;
+	return 0;
 }
 
 #endif

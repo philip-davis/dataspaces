@@ -52,7 +52,7 @@
 #include "gni_pub.h"
 #include "utility_functions.h"
 #include <sys/ioctl.h>
-
+#include <sys/time.h>//duan
 #include "config.h"
 #include "list.h"
 
@@ -243,11 +243,19 @@ struct rpc_cmd {
 	unsigned char			pad[RPC_CMD_PAD_SIZE];
 };
 
+enum server_status { node_normal, node_initializing, node_failed }; //duan
+struct ftid_map{//duan
+	int	ftid;
+	enum server_status        ns;
+	double start_time;
+};
+
 struct node_id {
 	struct ptlid_map	ptlmap;
 	int	peer_rank; // used for DSaaS, which is the rank for this peer in its application.
 	int	peer_num; // used for DSaaS, which is the number of peers in this continous peer_tab/application.
 
+	struct ftid_map	    ftmap; //duan
 	struct mdh_addr_t	mdh_addr;
 
 	gni_ep_handle_t		ep_hndl;
@@ -427,6 +435,14 @@ enum cmd_type {
 	cp_lock,
 	// Shared spaces specific.
 	ss_obj_put,
+	ss_block_put, //duan
+	ss_block_get_with_delete, //duan
+	ss_block_get_without_delete, //duan
+	ss_block_sync, //duan
+	ss_obj_sync, //duan
+	ss_obj_replicate, //duan
+	ss_peer_update, //duan
+	ss_peer_test, //duan
 	ss_obj_update,
 	ss_obj_get_dht_peers,
 	ss_obj_get_desc,
@@ -526,6 +542,8 @@ struct msg_buf *msg_buf_alloc(struct rpc_server *rpc_s, const struct node_id *pe
 void rpc_mem_info_cache(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 void rpc_mem_info_reset(struct node_id *peer, struct msg_buf *msg, struct rpc_cmd *cmd);
 
+struct node_id *rpc_server_find(struct rpc_server *rpc_s, int nodeid);//duan
+int set_rpc_server_status(struct rpc_server *rpc_s, int nodeid, int status);//duan
 
 void rpc_server_find_local_peer(struct rpc_server *rpc_s, struct node_id **peer_tab, int *num_local_peer, int peer_tab_size);
 void rpc_server_find_local_peers(struct rpc_server *rpc_s, struct node_id **peer_tab, int *num_local_peer, int peer_tab_size);

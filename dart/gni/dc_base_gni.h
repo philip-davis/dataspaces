@@ -91,6 +91,11 @@ static inline struct dart_client *dc_ref_from_rpc(struct rpc_server *rpc_s)
 	return rpc_s->dart_ref;
 }
 
+static inline int dc_set_node_status(struct dart_client *dc, int peer_id, int node_status)//duan
+{
+	dc->peer_tab[peer_id].ftmap.ns = node_status;
+	return 0;
+}
 struct dart_client *dc_alloc(int num_peers, int appid, void *dart_ref, void *comm);
 void dc_free(struct dart_client *dc);
 int dc_process(struct dart_client *dc);
