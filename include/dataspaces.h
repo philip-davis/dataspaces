@@ -317,6 +317,8 @@ int dspaces_put_sync(void);
  */
 int dspaces_get_num_space_server(void);
 
+int dspaces_server_status_test(int peer_id, int status);//duan test
+
 #ifdef __cplusplus
 }
 #endif

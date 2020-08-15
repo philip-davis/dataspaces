@@ -44,6 +44,10 @@ struct ds_gspace {
         struct sspace           *ssd;
         /* Local in-memory storage. */
         struct ss_storage       *ls;
+
+		/* Local in-memory storage. duan*/
+		struct ssb_storage       *lsb;
+
         /* Default global data domain dimension */
         struct global_dimension default_gdim;
 
@@ -54,6 +58,7 @@ struct ds_gspace {
         struct list_head        cq_list;
         int                     cq_num;
 
+		int                     num_pending;//duan
         /* Pending object descriptors request list. */
         struct list_head        obj_desc_req_list;
 

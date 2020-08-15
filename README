@@ -28,3 +28,9 @@ other_versions/detection: staging based error detection approach.
 In-memory replication and hybrid erasure coding version are based on this Corec-portal branch. Only replacement resource code files are shown in the coresponding folders.
 
 In-disk/bustbuffer checkpointing and staging based error detection approach version are based on master branch verison d25787a on Nov 25, 2019. Only replacement resource code files are shown in the coresponding folders.
+
+
+DataSpaces Corec-portal APIs
+===============
+
+int dspaces_server_status_test(int peer_id, int status);//duan inserting synthetic fail-stop failures

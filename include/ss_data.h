@@ -42,20 +42,41 @@
 #include <sys/shm.h>
 #include <sys/stat.h>
 
+#define ODSC_NAME_SIZE                 118 //duan original 154, 100 for 3D, 154 for 2D in IB, all 126 in Gimni, 118 for recovery in Gimni
+#define ODSC_PAD_SIZE                  2  //duan
+
+
+#define DSG_FT_LEVEL			2				//duan
+#define NUM_DATA_DEVICE			3				//duan
+#define NUM_CODE_DEVICE			1				//duan
+#define MAX_OB_IN_BD            1000            //duan
+#define INIT_THRESHOLD			4				//duan 100, 4, 0
+#define REP_PERCENT				0.5				//duan
+#define CODE_TECH				Reed_Sol_Van	//duan
+#define WORD_SIZE				8				//word size 8, 16, 32 duan
+
+
 typedef struct {
 	void			*iov_base;
 	size_t			iov_len;
 } iovec_t;
 
-enum storage_type {row_major, column_major};
+enum code_technique { No_Coding, Reed_Sol_Van, Reed_Sol_R6_Op, Cauchy_Orig, Cauchy_Good, Liberation, Blaum_Roth, Liber8tion };//duan
+enum block_type { data_block, code_block };//duan
+enum obj_status { replicate, encode, replicating, encoding, deleting };//delete, lock duan
+enum encode_token { token_off, token_on};//delete, loc duan
+
+enum storage_type { row_major, column_major };
 
 struct obj_descriptor {
-        char                    name[154];
+	char                    name[ODSC_NAME_SIZE];
 
-        enum storage_type       st;
-
-        int                     owner;
-        unsigned int            version;
+	enum storage_type       st;
+	enum obj_status         ob_status; //duan
+	int                     owner;
+	int                     code_owner;// there is limitaion for array size duan
+	double					time_stamp;
+	unsigned int            version;
 
         /* Global bounding box descriptor. */
         struct bbox             bb;
@@ -63,7 +84,7 @@ struct obj_descriptor {
         /* Size of one element of a data object. */
         size_t                  size;
 
-        char pad[2];//added by Tong Jin for 4 byte aligned in GEMINI
+		char pad[ODSC_PAD_SIZE];//added by Tong Jin for 4 byte aligned in GEMINI
 } __attribute__((__packed__));
 
 struct global_dimension {
@@ -94,14 +115,57 @@ struct obj_data {
 
         /* Flag to mark if we should free this data object. */
         unsigned int            f_free:1;
+		uint64_t                obj_size;//duan
+		struct block_data		*block_ref;//duan
+};
+
+//duan
+struct block_data {
+	struct list_head        obj_entry;
+
+	struct obj_descriptor   *obj_desc;
+	struct global_dimension gdim;
+
+	void					*_data;		/* Unaligned pointer */
+	void                    *data;		/* Aligned pointer */
+
+	/* Reference to the parent object; used only for sub-objects. */
+	struct obj_data         *obj_ref;
+
+	/* Count how many references are to this data object. */
+	int                     refcnt;
+
+	/* Flag to mark if we should free this data object. */
+	unsigned int            f_free : 1;
+
+	/* Flag to mark if we should free this data object. */
+	uint64_t                block_size;//block data size except for obj_desc duan
+	int						block_index;
+	int						num_data_device;
+	int						num_code_device;
+	int						word_size;
+	enum code_technique     code_tech;
+	enum block_type			bd_type;
 };
 
 struct ss_storage {
         int                     num_obj;
+		uint64_t                size_obj;//duan
+		enum encode_token		token; //duan
         int                     size_hash;
         /* List of data objects. */
         struct list_head        obj_hash[1];
 };
+
+///duan
+struct ssb_storage {
+	int                     num_block;
+	uint64_t                size_block;//duan
+	int                     size_hash;
+	/* List of data objects. */
+	struct list_head        block_hash[1];
+};
+///
 
 struct obj_desc_list {
 	struct list_head	odsc_entry;
@@ -205,6 +269,38 @@ struct hdr_obj_put {
 #endif
 } __attribute__((__packed__));
 
+/* Header structure for obj_get requests. duan */
+struct hdr_obj_syn {
+	int						num_odsc;
+	enum encode_token		token;//only for lock
+	struct obj_descriptor odsc;
+	struct global_dimension gdim;
+} __attribute__((__packed__));
+
+/* Header structure for block_get, block_delete requests. duan*/
+struct hdr_block_get {
+	/* block_id = DSG_ID + current time. */
+	struct				obj_descriptor odsc;
+	int					block_index;
+} __attribute__((__packed__));
+
+/* Header structure for block_get requests. duan*/
+struct hdr_block_put {
+
+	struct					global_dimension gdim;
+	uint64_t                block_size;//duan
+	int						block_index;
+	enum block_type			bd_type;
+	/* size of each odsc, each odsc has the same size. */
+	int                     num_odsc;
+
+} __attribute__((__packed__));
+
+/* Header structure for peer_status_update requests. duan*/
+struct hdr_peer_update {
+	int                     peer_id;
+	int                     status;
+} __attribute__((__packed__));
 
 /* Header structure for meta_get requests. */
 struct hdr_nvars_get {
@@ -258,6 +354,7 @@ struct hdr_bin_result {
 struct sspace* ssd_alloc(const struct bbox *, int, int, enum sspace_hash_version);
 int ssd_init(struct sspace *, int);
 void ssd_free(struct sspace *);
+int ssd_partition(struct obj_data *to_obj, struct obj_data *from_obj, uint64_t size);//duan
 int ssd_copy(struct obj_data *, struct obj_data *);
 int ssd_copy_local(struct obj_data *, struct obj_data *);
 // TODO: ssd_copyv is not supported yet
@@ -284,11 +381,34 @@ struct obj_data * ls_find_next(struct ss_storage *, const struct obj_descriptor 
 struct obj_data * ls_find_latest(struct ss_storage *, const struct obj_descriptor *);
 struct obj_data * ls_find_no_version(struct ss_storage *, struct obj_descriptor *);
 
+///////////////////////////////////////////duan
+struct ssb_storage *lsb_alloc(int max_versions);
+void lsb_free(struct ssb_storage *);
+void lsb_add_block(struct ssb_storage *, struct block_data *);
+struct obj_data* ls_cold_data_lookup(struct ss_storage *ls, int offset);//duan
+void lsb_remove(struct ssb_storage *, struct block_data *);
+void lsb_try_remove_free(struct ssb_storage *, struct block_data *);
+int lsb_find_all(struct ssb_storage *lsb, const struct obj_descriptor *odsc, struct block_data * bd_data[]);//duan
+struct block_data * lsb_find(struct ssb_storage *, struct obj_descriptor *);
+struct block_data * lsb_find_no_version(struct ssb_storage *lsb, struct obj_descriptor *odsc);//duan
+struct block_data *block_data_alloc_with_size(struct obj_descriptor *odsc, uint64_t size);//duan
+struct block_data *block_data_alloc_copy(struct block_data *bd_from);//duan
+struct block_data *block_data_alloc_copy_no_data(struct block_data *bd_from, void *data);//duan
+int block_data_alloc(struct obj_data * od[], int num_od, uint64_t size, struct block_data * bd_data[], struct block_data * bd_code[]);
+void block_data_encode(struct block_data * bd_data[], struct block_data * bd_code[]);//duan
+void block_data_decode(struct block_data * bd_data[], struct block_data * bd_code[]);//duan
+
+void block_data_free(struct block_data *bd); //duan
+void block_data_free_without_odsc(struct block_data *bd);//duan
+int block_obj_intersect(int *ob_index_begin, int * num_bd_in_od, const struct block_data * bd_data);//duan
+////////////////////////////////////////////duan
+
 struct obj_data *obj_data_alloc(struct obj_descriptor *);
 struct obj_data *shmem_obj_data_alloc(struct obj_descriptor *, int);
 struct obj_data *obj_data_allocv(struct obj_descriptor *);
 struct obj_data *obj_data_alloc_no_data(struct obj_descriptor *, void *);
 struct obj_data *obj_data_alloc_with_data(struct obj_descriptor *, const void *);
+struct obj_data *obj_data_alloc_with_size(struct obj_descriptor *odsc, uint64_t  data_size);//duan
 
 void obj_data_free(struct obj_data *od);
 void shmem_obj_data_free(struct obj_data *od);
@@ -302,6 +422,8 @@ int obj_desc_equals_no_owner(const struct obj_descriptor *, const struct obj_des
 
 int obj_desc_equals_intersect(const struct obj_descriptor *odsc1,
                 const struct obj_descriptor *odsc2);
+
+int copy_obj_desc(struct obj_descriptor *odsc1, const struct obj_descriptor *odsc2);//duan
 
 int obj_desc_by_name_intersect(const struct obj_descriptor *odsc1,
                 const struct obj_descriptor *odsc2);
