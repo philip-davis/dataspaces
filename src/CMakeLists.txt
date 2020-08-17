@@ -30,6 +30,8 @@ add_library(dspaces
 
 target_link_libraries(dspaces pthread m rt)
 
+get_target_property(DS_LINK_OPTIONS dspaces LINK_OPTONS)
+
 target_include_directories(dspaces PRIVATE
   $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/dart>
   $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>

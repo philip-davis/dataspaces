@@ -1,4 +1,5 @@
 set(dart_SOURCES)
+set(dart_LINK_LIBRARIES)
 
 if(DSPACES_FABRIC STREQUAL INFINIBAND)
   list(APPEND dart_SOURCES
@@ -14,6 +15,8 @@ elseif(DSPACES_FABRIC STREQUAL GNI)
     gni/dc_base_gni.c
     gni/ds_base_gni.c
   )
+  list(APPEND dart_LINK_LIBRARIES gni::gni)
+    
 else()
   list(APPEND dart_SOURCES
     tcp/dart_rpc_tcp.c
@@ -33,5 +36,7 @@ set_target_properties(dart PROPERTIES
   OUTPUT_NAME dart
   VERSION ${DataSpaces_VERSION}
 )
+
+target_link_libraries(dart PRIVATE ${dart_LINK_LIBRARIES})
 
 install(TARGETS dart)
