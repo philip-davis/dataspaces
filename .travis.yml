@@ -1,13 +1,20 @@
 language: c
-compiler:
-    - gcc
-    - clang
-os:
-    - precise
+os: linux
+jobs:
+  include:
+  - name: "cmake"
+    compiler:
+      - gcc
+      - clang
+    env: BUILD_SYS=cmake
+  - name: "autotools"
+    compiler:
+      - gcc
+      - clang
+    env: BUILD_SYS=autotools
 before_install:
+    - wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | sudo tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
+    - sudo apt-add-repository 'deb https://apt.kitware.com/ubuntu/ xenial-rc main'
     - sudo apt-get update
-    - sudo apt-get install mpich libmpich-dev
-script:
-    - ./autogen.sh
-    - ./configure CC=mpicc FC=mpif90
-    - make
+    - sudo apt-get install mpich libmpich-dev cmake
+script: scripts/ci/build.sh $BUILD_SYS

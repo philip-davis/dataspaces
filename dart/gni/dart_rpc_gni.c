@@ -973,7 +973,7 @@ RESEND:
         if (status == GNI_RC_NOT_DONE) {
             if (rpc_s->cmp_type == DART_SERVER) {
                 uloga("%s(): GNI_RC_NOT_DONE should not happen on server\n",
-                        __func__, peer->num_msg_at_peer);
+                        __func__);
                 return 0;
             } else {
                 peer->num_msg_at_peer = 0;
