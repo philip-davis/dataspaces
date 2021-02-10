@@ -14,7 +14,7 @@ For more information on CoREC and staging based silent error detection approach,
 
 [1] S. Duan, P. Subedi, K. Teranishi, P. Davis, H. Kolla, M. Gamell, and M. Parashar. Scalable data resilience for in-memory data staging. In Proceedings of the 32th IEEE International Parallel and Distributed Processing Symposium (IPDPS'18), pages 105-115, May 2018.
 
-[2] S. Duan, P. Subedi, P. Davis, and M. Parashar, �Addressing data resiliency for staging based scientific workflows,� in High Performance Computing, Networking, Storage and Analysis (SC), 2019 International Conference for. ACM, 2019.
+[2] S. Duan, P. Subedi, P. Davis, and M. Parashar, “Addressing data resiliency for staging based scientific workflows,” in High Performance Computing, Networking, Storage and Analysis (SC), 2019 International Conference for. ACM, 2019.
 
 
 Code update and usage instruction
@@ -32,5 +32,28 @@ In-memory replication, hybrid erasure coding and In-disk/bustbuffer checkpointin
 
 DataSpaces Corec-portal APIs
 ===============
-
 int dspaces_server_status_test(int peer_id, int status);//duan inserting synthetic fail-stop failures
+
+
+DataSpaces Corec-portal parameter setting
+===============
+The parameters for CoREC are set in “include/ss_data.h” file and, most parameter’s names are very straightforward and self-understand. Here is the description for each:
+(1) #define ODSC_NAME_SIZE                 118 
+//the Object Descriptor name size; the original value is 154, but since I add new attribute in the Descriptor, I shrink the name size to keep overall Descriptor constant. NOT need user setting
+(2) #define DSG_FT_LEVEL            2               
+//fault tolerance level: the number of replication for an object including original. For example, two means data object duplication. Need user setting
+(3) #define NUM_DATA_DEVICE         3               
+//number of data device: this parameter from jerasure library which means number of data block for an object. Need user setting
+(4) #define NUM_CODE_DEVICE         1               
+// number of code device: this parameter from jerasure library which means number of code block for an object.
+(5) #define MAX_OB_IN_BD            1000            
+// the maximum number of objects in one block: this parameter indicates the limitation for the total number of objects in one block. NOT need user setting
+(6) #define INIT_THRESHOLD          4               
+// this parameter means initial number of objects in one staging server. That only for synthetic testing in IPDPS’18 paper. NOT need user setting
+(7) #define REP_PERCENT             0.5            
+ // this parameter means percentage of objects in one staging server are encoded. That only for synthetic testing in IPDPS’18 paper. NOT need user setting
+(8) #define CODE_TECH               Reed_Sol_Van    
+// the name of erasure codes scheme: this parameter from jerasure library which means the code scheme has been used. Need user setting
+(9) #define WORD_SIZE               8               
+// number of code device: this parameter from jerasure library which means word size in block. Need user setting
+
